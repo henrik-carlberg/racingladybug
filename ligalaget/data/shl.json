@@ -1,0 +1,392 @@
+{
+  "name": "SHL",
+  "season": "2026/27",
+  "sport": "hockey",
+  "asOf": "2026-09-10",
+  "sourceNote": "Säsongen 2026/27 startar i september – tabellen fylls på från första omgången. Björklöven är uppflyttade, Leksand flyttades ned.",
+  "columns": [
+    "GP",
+    "V",
+    "ÖV",
+    "ÖF",
+    "F",
+    "GM",
+    "IM",
+    "+/-",
+    "P"
+  ],
+  "zones": [
+    {
+      "from": 1,
+      "to": 6,
+      "key": "a",
+      "label": "Direkt till kvartsfinal"
+    },
+    {
+      "from": 7,
+      "to": 10,
+      "key": "b",
+      "label": "Play-in"
+    },
+    {
+      "from": 14,
+      "to": 14,
+      "key": "d",
+      "label": "Kval mot Hockeyallsvenskan"
+    }
+  ],
+  "teams": {
+    "Skellefteå AIK": {
+      "short": "Skellefteå",
+      "city": "Skellefteå",
+      "arena": "Skellefteå Kraft Arena"
+    },
+    "Frölunda HC": {
+      "short": "Frölunda",
+      "city": "Göteborg",
+      "arena": "Scandinavium"
+    },
+    "Växjö Lakers": {
+      "short": "Växjö",
+      "city": "Växjö",
+      "arena": "Vida Arena"
+    },
+    "Rögle BK": {
+      "short": "Rögle",
+      "city": "Ängelholm",
+      "arena": "Catena Arena"
+    },
+    "Färjestad BK": {
+      "short": "Färjestad",
+      "city": "Karlstad",
+      "arena": "Löfbergs Arena"
+    },
+    "Luleå HF": {
+      "short": "Luleå",
+      "city": "Luleå",
+      "arena": "Coop Norrbotten Arena"
+    },
+    "Timrå IK": {
+      "short": "Timrå",
+      "city": "Timrå",
+      "arena": "SCA Arena"
+    },
+    "Brynäs IF": {
+      "short": "Brynäs",
+      "city": "Gävle",
+      "arena": "Monitor ERP Arena"
+    },
+    "HV71": {
+      "short": "HV71",
+      "city": "Jönköping",
+      "arena": "Husqvarna Garden"
+    },
+    "Linköping HC": {
+      "short": "Linköping",
+      "city": "Linköping",
+      "arena": "Saab Arena"
+    },
+    "Malmö Redhawks": {
+      "short": "Malmö",
+      "city": "Malmö",
+      "arena": "Malmö Arena"
+    },
+    "Örebro HK": {
+      "short": "Örebro",
+      "city": "Örebro",
+      "arena": "Behrn Arena"
+    },
+    "Djurgårdens IF": {
+      "short": "Djurgården",
+      "city": "Stockholm",
+      "arena": "Hovet"
+    },
+    "IF Björklöven": {
+      "short": "Björklöven",
+      "city": "Umeå",
+      "arena": "A3 Arena"
+    }
+  },
+  "standings": [
+    [
+      "Skellefteå AIK",
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      "Frölunda HC",
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      "Växjö Lakers",
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      "Rögle BK",
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      "Färjestad BK",
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      "Luleå HF",
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      "Timrå IK",
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      "Brynäs IF",
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      "HV71",
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      "Linköping HC",
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      "Malmö Redhawks",
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      "Örebro HK",
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      "Djurgårdens IF",
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      "IF Björklöven",
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "standingsNote": "Ordningen visar fjolårets sluttabell tills säsongen är igång.",
+  "scorers": [
+    [
+      "Oscar Lindberg",
+      "Skellefteå AIK",
+      67,
+      "30+37"
+    ],
+    [
+      "Rickard Hugg",
+      "Skellefteå AIK",
+      56,
+      "20+36"
+    ],
+    [
+      "Jonathan Dahlén",
+      "Timrå IK",
+      55,
+      "30+25"
+    ]
+  ],
+  "scorersLabel": "Poängliga",
+  "scorersUnit": "p",
+  "scorersMeta": "Grundserien 2025/26",
+  "results": {
+    "label": "Inga matcher spelade ännu",
+    "example": false,
+    "matches": []
+  },
+  "fixtures": {
+    "label": "Premiäromgång",
+    "example": true,
+    "matches": [
+      [
+        "2026-09-12T15:15",
+        "Skellefteå AIK",
+        "IF Björklöven"
+      ],
+      [
+        "2026-09-12T18:00",
+        "Frölunda HC",
+        "Djurgårdens IF"
+      ],
+      [
+        "2026-09-12T18:00",
+        "Färjestad BK",
+        "Rögle BK"
+      ],
+      [
+        "2026-09-12T18:00",
+        "Luleå HF",
+        "Växjö Lakers"
+      ],
+      [
+        "2026-09-12T18:00",
+        "HV71",
+        "Timrå IK"
+      ],
+      [
+        "2026-09-12T18:00",
+        "Malmö Redhawks",
+        "Örebro HK"
+      ],
+      [
+        "2026-09-12T18:00",
+        "Linköping HC",
+        "Brynäs IF"
+      ]
+    ]
+  },
+  "demo": {
+    "home": "Frölunda HC",
+    "away": "Skellefteå AIK",
+    "periods": [
+      "Period 1",
+      "Period 2",
+      "Period 3"
+    ],
+    "periodLen": 20,
+    "events": [
+      [
+        3,
+        "pp",
+        "Powerplay Frölunda – 2 min tripping"
+      ],
+      [
+        7,
+        "goal",
+        "home",
+        "Powerplay-mål",
+        "Direktskott från blålinjen"
+      ],
+      [
+        20,
+        "period",
+        "Slut period 1"
+      ],
+      [
+        26,
+        "goal",
+        "away",
+        "Kontring",
+        "2 mot 1"
+      ],
+      [
+        34,
+        "pp",
+        "Powerplay Skellefteå – 2 min slashing"
+      ],
+      [
+        40,
+        "period",
+        "Slut period 2"
+      ],
+      [
+        49,
+        "goal",
+        "home",
+        "Retur",
+        "Pucken in via skridskon, målet godkänt efter videogranskning"
+      ],
+      [
+        58,
+        "pp",
+        "Skellefteå plockar ut målvakten"
+      ],
+      [
+        59,
+        "goal",
+        "home",
+        "Tom bur",
+        "Skott från egen zon"
+      ],
+      [
+        60,
+        "end",
+        "Slutsignal"
+      ]
+    ]
+  }
+}

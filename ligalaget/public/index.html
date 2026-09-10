@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ligaläget – Allsvenskan &amp; SHL</title>
+<meta name="description" content="Tabell, resultat, spelschema, live och statistik för Allsvenskan och SHL.">
+<meta name="theme-color" content="#1E7F45">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%E2%9A%BD%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#F3F6F4; --surface:#FFFFFF; --surface-2:#E9EEEB; --line:#D5DDD8; --line-strong:#B7C2BC;
+  --ink:#15201B; --ink-2:#4B5A53; --ink-3:#7D8A84;
+  --accent:#1E7F45; --accent-ink:#FFFFFF; --accent-soft:#DDF0E3; --accent-2:#C3352B;
+  --live:#C3352B; --good:#1E7F45; --warn:#B8791A; --bad:#B4362C;
+  --zone-a:#1E7F45; --zone-b:#2E7BC4; --zone-c:#B8791A; --zone-d:#B4362C;
+  --display:"Barlow Condensed","Arial Narrow","Helvetica Neue",Arial,sans-serif;
+  --body:"IBM Plex Sans","Segoe UI",Helvetica,Arial,sans-serif;
+  --radius:6px; --shadow:0 1px 2px rgba(20,32,27,.06),0 8px 24px -12px rgba(20,32,27,.18);
+}
+:root[data-league="shl"]{ --accent:#1F63A8; --accent-soft:#DCE8F6; --zone-a:#1F63A8; --zone-b:#2F8EA8; }
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1412; --surface:#151D19; --surface-2:#1C2622; --line:#263129; --line-strong:#39473F;
+    --ink:#E9EFEB; --ink-2:#AEBBB4; --ink-3:#7A8781;
+    --accent:#3DA867; --accent-ink:#0B130E; --accent-soft:#1B3325; --accent-2:#E0564B;
+    --live:#E0564B; --good:#3DA867; --warn:#D9A04A; --bad:#E0564B;
+    --zone-a:#3DA867; --zone-b:#5A9FE0; --zone-c:#D9A04A; --zone-d:#E0564B;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
+  }
+  :root:not([data-theme="light"])[data-league="shl"]{ --accent:#5A9FE0; --accent-soft:#182A3E; --zone-a:#5A9FE0; --zone-b:#57B3C9; }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1412; --surface:#151D19; --surface-2:#1C2622; --line:#263129; --line-strong:#39473F;
+  --ink:#E9EFEB; --ink-2:#AEBBB4; --ink-3:#7A8781;
+  --accent:#3DA867; --accent-ink:#0B130E; --accent-soft:#1B3325; --accent-2:#E0564B;
+  --live:#E0564B; --good:#3DA867; --warn:#D9A04A; --bad:#E0564B;
+  --zone-a:#3DA867; --zone-b:#5A9FE0; --zone-c:#D9A04A; --zone-d:#E0564B;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
+}
+:root[data-theme="dark"][data-league="shl"]{ --accent:#5A9FE0; --accent-soft:#182A3E; --zone-a:#5A9FE0; --zone-b:#57B3C9; }
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;padding-inline:16px;padding-block:0 84px;}
+a{color:inherit}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+button:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:980px;margin:0 auto}
+
+/* ---------- Header ---------- */
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding-block:18px 10px;flex-wrap:wrap}
+.brand{font-family:var(--display);font-weight:800;font-size:30px;letter-spacing:.01em;line-height:1;text-transform:uppercase}
+.brand small{display:block;font-family:var(--body);font-weight:500;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin-top:6px}
+.updated{font-size:12px;color:var(--ink-3)}
+.updated b{color:var(--ink-2);font-weight:600}
+
+.leagues{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:8px}
+@media (max-width:420px){.league{padding:10px 10px;gap:8px}.league .ico{width:32px;height:32px}.league .name{font-size:19px}}
+.league{position:relative;display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);text-align:left;transition:border-color .15s,background .15s}
+.league{min-width:0}
+.league>span:last-child{display:flex;flex-direction:column;min-width:0}
+.league .ico{width:38px;height:38px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--surface-2)}
+.league .ico svg{width:22px;height:22px}
+.league .name{font-family:var(--display);font-weight:700;font-size:22px;line-height:1;text-transform:uppercase;letter-spacing:.01em}
+.league .sub{font-size:12px;color:var(--ink-3);margin-top:3px}
+.league[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.league[aria-pressed="true"] .ico{background:var(--accent);color:var(--accent-ink)}
+.league[aria-pressed="true"]::after{content:"";position:absolute;left:14px;right:14px;bottom:-1px;height:3px;background:var(--accent);border-radius:2px 2px 0 0}
+
+/* ---------- Section nav ---------- */
+.nav{position:sticky;top:0;z-index:5;display:flex;gap:2px;margin-top:16px;padding:4px;background:var(--surface-2);border-radius:var(--radius)}
+.nav button{flex:1;padding:9px 6px;border-radius:4px;font-family:var(--display);font-weight:600;font-size:17px;letter-spacing:.03em;text-transform:uppercase;color:var(--ink-2);display:flex;align-items:center;justify-content:center;gap:6px}
+.nav button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.nav .dot{width:7px;height:7px;border-radius:50%;background:var(--live);display:none}
+.nav .dot.on{display:inline-block;animation:pulse 1.4s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+@media (max-width:560px){
+  body{padding-block:0 96px}
+  .nav{position:fixed;top:auto;bottom:0;left:0;right:0;margin:0;border-radius:0;padding:6px 8px calc(6px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--surface)}
+  .nav button{font-size:14px;padding:8px 2px;letter-spacing:.01em}
+}
+
+/* ---------- Common blocks ---------- */
+.view{display:none;margin-top:18px}
+.view.on{display:block}
+.section{margin-bottom:26px}
+.h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+.h h2{margin:0;font-family:var(--display);font-weight:700;font-size:24px;line-height:1;text-transform:uppercase;letter-spacing:.02em}
+.h .meta{font-size:12px;color:var(--ink-3)}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;border:1px solid var(--line-strong);color:var(--ink-2);vertical-align:middle}
+.chip.ex{border-style:dashed}
+.chip.live{border-color:var(--live);color:var(--live)}
+.chip.live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--live);animation:pulse 1.4s infinite}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
+.note{font-size:13px;color:var(--ink-2);padding:10px 12px;background:var(--surface-2);border-radius:var(--radius);border-left:3px solid var(--accent)}
+
+/* ---------- Favourite ---------- */
+.fav{display:flex;align-items:center;gap:12px;padding:12px 14px;margin-top:16px;flex-wrap:wrap}
+.fav .lbl{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.fav select{flex:1;min-width:160px;padding:8px 10px;border:1px solid var(--line-strong);border-radius:4px;background:var(--surface);color:var(--ink);font:inherit}
+.fav .next{font-size:13px;color:var(--ink-2);flex-basis:100%}
+.fav .next b{font-family:var(--display);font-size:18px;font-weight:700;color:var(--ink);margin-right:8px}
+
+/* ---------- Table ---------- */
+.tblwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;min-width:560px}
+thead th{font-family:var(--display);font-weight:600;font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);text-align:right;padding:8px 8px;border-bottom:1px solid var(--line-strong);white-space:nowrap}
+thead th.l{text-align:left}
+tbody td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+tbody td.l{text-align:left}
+tbody tr:last-child td{border-bottom:0}
+td.pos{width:44px;position:relative;font-family:var(--display);font-weight:700;font-size:18px;color:var(--ink-2);text-align:left;padding-left:14px}
+td.pos::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:4px;border-radius:2px;background:var(--z,transparent)}
+td.team{font-weight:600}
+td.team .short{display:none}
+td.pts{font-family:var(--display);font-weight:800;font-size:20px}
+td.gd.pos-{color:var(--good)} td.gd.neg-{color:var(--bad)}
+tr.fav-row td{background:var(--accent-soft)}
+tr.sep td{border-bottom:2px dashed var(--line-strong)}
+@media (max-width:560px){
+  table{min-width:0}
+  td.team .full{display:none} td.team .short{display:inline}
+  .col-opt{display:none}
+  thead th,tbody td{padding-inline:5px}
+}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+
+/* ---------- Matches ---------- */
+.round{margin-bottom:18px}
+.round h3{margin:0 0 6px;font-family:var(--display);font-weight:600;font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.match{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line)}
+.match:last-child{border-bottom:0}
+.match .home{text-align:right;font-weight:600}
+.match .away{text-align:left;font-weight:600}
+.match .score{font-family:var(--display);font-weight:800;font-size:24px;line-height:1;min-width:76px;text-align:center;letter-spacing:.02em}
+.match .score.t{font-weight:600;font-size:18px;color:var(--ink-2)}
+.match .score.livec{color:var(--live)}
+.match .info{grid-column:1/-1;display:flex;justify-content:space-between;font-size:12px;color:var(--ink-3);margin-top:-4px}
+.match .info .clock{color:var(--live);font-weight:600}
+
+/* ---------- Live ---------- */
+.livehead{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.toggle{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--line-strong);border-radius:4px;font-weight:600;font-size:13px}
+.toggle[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.board{padding:16px 18px}
+.board .teams{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px}
+.board .tm{font-family:var(--display);font-weight:700;font-size:26px;line-height:1.05;text-transform:uppercase}
+.board .tm.a{text-align:right}
+.board .sc{font-family:var(--display);font-weight:800;font-size:56px;line-height:1;letter-spacing:.03em;text-align:center}
+.board .sub{display:flex;justify-content:center;gap:12px;font-size:13px;color:var(--ink-2);margin-top:6px}
+.board .sub .clock{font-family:var(--display);font-weight:700;font-size:18px;color:var(--live)}
+.events{margin-top:12px;border-top:1px solid var(--line);padding-top:8px;display:flex;flex-direction:column;gap:6px;max-height:280px;overflow:auto}
+.ev{display:grid;grid-template-columns:44px 1fr;gap:8px;font-size:13px;align-items:baseline}
+.ev .t{font-family:var(--display);font-weight:700;color:var(--ink-3)}
+.ev.goal .t{color:var(--accent)}
+.ev.goal b{color:var(--accent)}
+.empty{padding:28px 16px;text-align:center;color:var(--ink-3)}
+.empty b{display:block;font-family:var(--display);font-size:22px;font-weight:700;color:var(--ink-2);text-transform:uppercase;letter-spacing:.02em;margin-bottom:4px}
+
+/* ---------- Stats ---------- */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:640px){.grid2{grid-template-columns:1fr}}
+.rank{list-style:none;margin:0;padding:0}
+.rank li{display:grid;grid-template-columns:28px 1fr auto;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line)}
+.rank li:last-child{border-bottom:0}
+.rank .n{font-family:var(--display);font-weight:700;font-size:17px;color:var(--ink-3)}
+.rank .who{font-weight:600}
+.rank .who small{display:block;font-weight:400;font-size:12px;color:var(--ink-3)}
+.rank .v{font-family:var(--display);font-weight:800;font-size:22px;font-variant-numeric:tabular-nums}
+.rank .v small{font-family:var(--body);font-size:11px;font-weight:500;color:var(--ink-3);margin-left:4px}
+.bars{padding:12px 14px}
+.bar{display:grid;grid-template-columns:120px 1fr 40px;gap:10px;align-items:center;font-size:13px;margin-bottom:7px}
+.bar .tr{height:10px;background:var(--surface-2);border-radius:3px;overflow:hidden}
+.bar .tr i{display:block;height:100%;background:var(--accent);border-radius:3px}
+.bar .val{font-family:var(--display);font-weight:700;font-size:16px;text-align:right;font-variant-numeric:tabular-nums}
+@media (max-width:420px){.bar{grid-template-columns:96px 1fr 36px}}
+
+/* ---------- Annonser ---------- */
+.ad{position:relative;display:flex;align-items:center;justify-content:center;gap:14px;padding:14px 16px;border:1px dashed var(--line-strong);border-radius:var(--radius);background:repeating-linear-gradient(-45deg,transparent 0 10px,var(--surface-2) 10px 12px);color:var(--ink-2);font-size:13px;text-align:center;flex-wrap:wrap}
+.ad::before{content:"Annons";position:absolute;top:-8px;left:12px;padding:0 6px;background:var(--bg);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.ad b{font-family:var(--display);font-size:18px;font-weight:700;text-transform:uppercase;letter-spacing:.02em;color:var(--ink)}
+.ad .cta{padding:7px 12px;border-radius:4px;background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:13px}
+.ad.top{margin-top:16px;min-height:72px}
+.ad.feed{margin:14px 0}
+.slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.slot{padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.slot h4{margin:0;font-family:var(--display);font-size:20px;font-weight:700;text-transform:uppercase;letter-spacing:.02em}
+.slot .where{font-size:13px;color:var(--ink-2)}
+.slot .price{font-family:var(--display);font-size:26px;font-weight:800;margin-top:auto}
+.slot .price small{font-family:var(--body);font-size:12px;font-weight:500;color:var(--ink-3)}
+.slot button{align-self:flex-start;padding:7px 12px;border-radius:4px;background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:13px;margin-top:4px}
+.why{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:22px}
+.why div{padding:12px 14px}
+.why b{display:block;font-family:var(--display);font-size:28px;font-weight:800;line-height:1}
+.why span{font-size:12px;color:var(--ink-2)}
+form.book{padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+form.book label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
+form.book input,form.book select,form.book textarea{font:inherit;font-size:14px;padding:9px 10px;border:1px solid var(--line-strong);border-radius:4px;background:var(--surface);color:var(--ink);text-transform:none;letter-spacing:0;font-weight:400}
+form.book textarea{min-height:80px;resize:vertical}
+form.book .full{grid-column:1/-1}
+form.book .submit{grid-column:1/-1;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+form.book .submit button{padding:11px 18px;border-radius:4px;background:var(--accent);color:var(--accent-ink);font-family:var(--display);font-size:18px;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+form.book .submit span{font-size:12px;color:var(--ink-3)}
+@media (max-width:560px){form.book{grid-template-columns:1fr}}
+
+footer{margin-top:30px;font-size:12px;color:var(--ink-3);border-top:1px solid var(--line);padding-top:12px;line-height:1.6}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">Ligaläget<small>Allsvenskan &amp; SHL</small></div>
+    <div class="updated" id="updated"></div>
+  </header>
+
+  <div class="leagues" role="group" aria-label="Välj liga">
+    <button class="league" id="btn-allsvenskan" aria-pressed="true" data-league="allsvenskan">
+      <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3v4l3.5 2.5-1.3 4.1H9.8L8.5 9.5 12 7M3.6 10l3.9-.5M20.4 10l-3.9-.5M6.2 18.5l3.6-4.9M17.8 18.5l-3.6-4.9"/></svg></span>
+      <span><span class="name">Allsvenskan</span><span class="sub" id="sub-allsvenskan"></span></span>
+    </button>
+    <button class="league" id="btn-shl" aria-pressed="false" data-league="shl">
+      <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l9 12.5M19.5 20.5h-6a3 3 0 0 1-2.4-1.2L10 18"/><ellipse cx="12" cy="20" rx="7" ry="2.2" opacity=".5"/></svg></span>
+      <span><span class="name">SHL</span><span class="sub" id="sub-shl"></span></span>
+    </button>
+  </div>
+
+  <div class="ad top" data-slot="topp"><b>Din annons här</b><span>Toppbanner – syns på varje sidvisning i båda ligorna</span><button class="cta" data-goto="annonsera">Boka från 1 900 kr/vecka</button></div>
+
+  <div class="card fav">
+    <span class="lbl">Ditt lag</span>
+    <select id="fav" aria-label="Välj favoritlag"></select>
+    <div class="next" id="favnext"></div>
+  </div>
+
+  <nav class="nav" role="tablist" aria-label="Sektioner">
+    <button role="tab" aria-selected="true" data-view="tabell">Tabell</button>
+    <button role="tab" aria-selected="false" data-view="matcher">Matcher</button>
+    <button role="tab" aria-selected="false" data-view="live"><span class="dot" id="livedot"></span>Live</button>
+    <button role="tab" aria-selected="false" data-view="statistik">Statistik</button>
+    <button role="tab" aria-selected="false" data-view="annonsera">Annonsera</button>
+  </nav>
+
+  <main>
+    <section class="view on" id="view-tabell">
+      <div class="section">
+        <div class="h"><h2 id="tabell-title"></h2><span class="meta" id="tabell-meta"></span></div>
+        <div class="card tblwrap"><table id="tabell"></table></div>
+        <div class="legend" id="legend"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-matcher">
+      <div class="section">
+        <div class="h"><h2>Senaste resultat</h2><span class="meta" id="res-meta"></span></div>
+        <div id="results"></div>
+      </div>
+      <div class="ad feed" data-slot="matchflode"><b>Matchsponsor</b><span>Syns mellan resultat och kommande matcher</span><button class="cta" data-goto="annonsera">Boka från 1 200 kr/vecka</button></div>
+      <div class="section">
+        <div class="h"><h2>Kommande matcher</h2><span class="meta" id="fix-meta"></span></div>
+        <div id="fixtures"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-live">
+      <div class="section">
+        <div class="h livehead"><h2>Just nu</h2>
+          <button class="toggle" id="demo" aria-pressed="false">Spela upp demo-match</button>
+        </div>
+        <div id="livebox"></div>
+        <p class="note" style="margin-top:12px">Live-vyn uppdateras från datakällan var 30:e sekund när en match pågår. I den här prototypen finns ingen liveström kopplad – demo-matchen visar hur vyn ser ut under en pågående match.</p>
+      </div>
+    </section>
+
+    <section class="view" id="view-statistik">
+      <div class="grid2">
+        <div class="section">
+          <div class="h"><h2 id="scorers-title"></h2><span class="meta" id="scorers-meta"></span></div>
+          <ol class="rank card" id="scorers"></ol>
+        </div>
+        <div class="section">
+          <div class="h"><h2>Lagen i siffror</h2><span class="meta">Ur tabellen</span></div>
+          <div class="card bars" id="teamstats"></div>
+        </div>
+      </div>
+      <div class="ad feed" data-slot="statistik"><b>Statistiksponsor</b><span>Presentera skytteligan och lagstatistiken</span><button class="cta" data-goto="annonsera">Boka från 900 kr/vecka</button></div>
+    </section>
+
+    <section class="view" id="view-annonsera">
+      <div class="section">
+        <div class="h"><h2>Annonsera i Ligaläget</h2><span class="meta">Boka själv – bekräftelse inom en arbetsdag</span></div>
+        <div class="why">
+          <div class="card"><b>2 ligor</b><span>Allsvenskan och SHL i samma app – fotboll på sommaren, hockey på vintern</span></div>
+          <div class="card"><b>Matchdag</b><span>Trafiken toppar när matcherna spelas – din annons syns när engagemanget är som störst</span></div>
+          <div class="card"><b>Lokalt</b><span>Välj liga, eller rikta mot supportrar till ett visst lag</span></div>
+        </div>
+        <div class="h"><h2>Annonsplatser</h2><span class="meta">Priser exkl. moms · vecka = måndag–söndag</span></div>
+        <div class="slots" id="slots"></div>
+      </div>
+      <div class="section">
+        <div class="h"><h2>Boka annonsplats</h2><span class="meta">Fyll i – vi återkommer med bekräftelse och materialspecifikation</span></div>
+        <form class="book card" id="book">
+          <label>Företag<input id="b-company" name="company" required autocomplete="organization"></label>
+          <label>E-post<input id="b-email" name="email" type="email" required autocomplete="email"></label>
+          <label>Annonsplats<select id="b-slot" name="slot"></select></label>
+          <label>Liga<select id="b-league" name="league"><option value="bada">Båda ligorna</option><option value="allsvenskan">Allsvenskan</option><option value="shl">SHL</option></select></label>
+          <label>Startvecka<input id="b-start" name="start" type="week" required></label>
+          <label>Antal veckor<select id="b-weeks" name="weeks"><option>1</option><option>2</option><option selected>4</option><option>8</option><option>12</option><option>26</option></select></label>
+          <label class="full">Meddelande (valfritt)<textarea id="b-msg" name="msg" placeholder="Rikta mot ett lag? Har ni färdigt material?"></textarea></label>
+          <div class="submit"><button type="submit">Skicka bokningsförfrågan</button><span id="b-total"></span></div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer id="foot"></footer>
+</div>
+
+<script>
+/* =========================================================
+   DATALAGER
+   Appen läser data via DataProvider.load(league). I drift
+   pekar API_BASE på en egen proxy (t.ex. /api) som hämtar
+   från en dataleverantör och svarar med samma JSON-schema
+   som snapshot-objekten nedan. Utan API används snapshot.
+   ========================================================= */
+const API_BASE = "/api"; // t.ex. "/api" – null = använd inbäddad snapshot
+
+const SNAPSHOT = {
+  allsvenskan: {
+    name:"Allsvenskan", season:"2026", sport:"football", asOf:"2026-09-06",
+    sourceNote:"Tabell och skytteliga per 6 september 2026.",
+    columns:["S","V","O","F","GM","IM","MS","P"],
+    zones:[
+      {from:1,to:1,key:"a",label:"Champions League-kval"},
+      {from:2,to:3,key:"b",label:"Europakval"},
+      {from:14,to:14,key:"c",label:"Kvalspel"},
+      {from:15,to:16,key:"d",label:"Nedflyttning"}
+    ],
+    teams:{
+      "IK Sirius":{short:"Sirius",city:"Uppsala",arena:"Studenternas IP"},
+      "Hammarby IF":{short:"Hammarby",city:"Stockholm",arena:"3Arena"},
+      "Djurgårdens IF":{short:"Djurgården",city:"Stockholm",arena:"3Arena"},
+      "BK Häcken":{short:"Häcken",city:"Göteborg",arena:"Nordic Wellness Arena"},
+      "IF Elfsborg":{short:"Elfsborg",city:"Borås",arena:"Borås Arena"},
+      "AIK":{short:"AIK",city:"Solna",arena:"Nationalarenan"},
+      "Malmö FF":{short:"Malmö FF",city:"Malmö",arena:"Stadion"},
+      "Västerås SK":{short:"Västerås",city:"Västerås",arena:"Hitachi Energy Arena"},
+      "GAIS":{short:"GAIS",city:"Göteborg",arena:"Gamla Ullevi"},
+      "IF Brommapojkarna":{short:"BP",city:"Stockholm",arena:"Grimsta IP"},
+      "IFK Göteborg":{short:"IFK Göteborg",city:"Göteborg",arena:"Gamla Ullevi"},
+      "Mjällby AIF":{short:"Mjällby",city:"Hällevik",arena:"Strandvallen"},
+      "Kalmar FF":{short:"Kalmar",city:"Kalmar",arena:"Guldfågeln Arena"},
+      "Degerfors IF":{short:"Degerfors",city:"Degerfors",arena:"Stora Valla"},
+      "Örgryte IS":{short:"ÖIS",city:"Göteborg",arena:"Gamla Ullevi"},
+      "Halmstads BK":{short:"Halmstad",city:"Halmstad",arena:"Örjans Vall"}
+    },
+    standings:[
+      ["IK Sirius",20,14,3,3,48,27],["Hammarby IF",20,11,4,5,45,19],["Djurgårdens IF",19,11,2,6,43,19],
+      ["BK Häcken",20,8,8,4,33,29],["IF Elfsborg",20,8,7,5,28,21],["AIK",18,9,4,5,28,27],
+      ["Malmö FF",19,9,2,8,33,30],["Västerås SK",20,8,5,7,28,34],["GAIS",20,7,6,7,25,18],
+      ["IF Brommapojkarna",20,7,6,7,29,32],["IFK Göteborg",19,6,5,8,24,39],["Mjällby AIF",18,5,5,8,24,29],
+      ["Kalmar FF",19,5,4,10,21,29],["Degerfors IF",20,5,4,11,19,31],["Örgryte IS",20,3,6,11,23,43],
+      ["Halmstads BK",20,2,5,13,13,37]
+    ],
+    scorers:[
+      ["Robbie Ure","IK Sirius",15],["Kristian Lien","Djurgårdens IF",15],["Isak Bjerkebo","IK Sirius",13],
+      ["Paulos Abraham","Hammarby IF",12],["Erik Botheim","Malmö FF",10],["Mikkel Ladefoged","Västerås SK",9],
+      ["Gustav Lindgren","BK Häcken",9],["Noah Christoffersson","Örgryte IS",8],["Victor Lind","Hammarby IF",8]
+    ],
+    scorersLabel:"Skytteliga", scorersUnit:"mål",
+    results:{label:"Omgång 20", example:true, matches:[
+      ["2026-09-05T15:00","IK Sirius","Halmstads BK",3,0],
+      ["2026-09-05T17:30","GAIS","Örgryte IS",1,1],
+      ["2026-09-06T14:00","Hammarby IF","Kalmar FF",2,0],
+      ["2026-09-06T16:30","IF Elfsborg","BK Häcken",1,1],
+      ["2026-09-06T19:00","Västerås SK","Degerfors IF",2,1]
+    ]},
+    fixtures:{label:"Omgång 21", example:true, matches:[
+      ["2026-09-12T15:00","Örgryte IS","IF Brommapojkarna"],
+      ["2026-09-12T17:30","Malmö FF","IK Sirius"],
+      ["2026-09-13T14:00","AIK","Hammarby IF"],
+      ["2026-09-13T16:30","IFK Göteborg","Mjällby AIF"],
+      ["2026-09-13T19:00","Djurgårdens IF","IF Elfsborg"]
+    ]},
+    demo:{home:"Örgryte IS",away:"GAIS",periods:["1:a halvlek","2:a halvlek"],periodLen:45,events:[
+      [4,"card","Gult kort – Mjällby-låntagaren i GAIS drar ned Christoffersson"],
+      [17,"goal","home","Noah Christoffersson","Nick efter hörna"],
+      [31,"chance","Stolpskott GAIS"],
+      [45,"period","Halvtid"],
+      [58,"goal","away","Straff","Utjämning på straff"],
+      [74,"sub","Byte ÖIS: dubbelbyte i mittfältet"],
+      [83,"goal","home","Inhoppare","Volley i bortre hörnet"],
+      [90,"end","Slutsignal"]
+    ]}
+  },
+
+  shl: {
+    name:"SHL", season:"2026/27", sport:"hockey", asOf:"2026-09-10",
+    sourceNote:"Säsongen 2026/27 startar i september – tabellen fylls på från första omgången. Björklöven är uppflyttade, Leksand flyttades ned.",
+    columns:["GP","V","ÖV","ÖF","F","GM","IM","+/-","P"],
+    zones:[
+      {from:1,to:6,key:"a",label:"Direkt till kvartsfinal"},
+      {from:7,to:10,key:"b",label:"Play-in"},
+      {from:14,to:14,key:"d",label:"Kval mot Hockeyallsvenskan"}
+    ],
+    teams:{
+      "Skellefteå AIK":{short:"Skellefteå",city:"Skellefteå",arena:"Skellefteå Kraft Arena"},
+      "Frölunda HC":{short:"Frölunda",city:"Göteborg",arena:"Scandinavium"},
+      "Växjö Lakers":{short:"Växjö",city:"Växjö",arena:"Vida Arena"},
+      "Rögle BK":{short:"Rögle",city:"Ängelholm",arena:"Catena Arena"},
+      "Färjestad BK":{short:"Färjestad",city:"Karlstad",arena:"Löfbergs Arena"},
+      "Luleå HF":{short:"Luleå",city:"Luleå",arena:"Coop Norrbotten Arena"},
+      "Timrå IK":{short:"Timrå",city:"Timrå",arena:"SCA Arena"},
+      "Brynäs IF":{short:"Brynäs",city:"Gävle",arena:"Monitor ERP Arena"},
+      "HV71":{short:"HV71",city:"Jönköping",arena:"Husqvarna Garden"},
+      "Linköping HC":{short:"Linköping",city:"Linköping",arena:"Saab Arena"},
+      "Malmö Redhawks":{short:"Malmö",city:"Malmö",arena:"Malmö Arena"},
+      "Örebro HK":{short:"Örebro",city:"Örebro",arena:"Behrn Arena"},
+      "Djurgårdens IF":{short:"Djurgården",city:"Stockholm",arena:"Hovet"},
+      "IF Björklöven":{short:"Björklöven",city:"Umeå",arena:"A3 Arena"}
+    },
+    // GP,V,ÖV,ÖF,F,GM,IM – 0 tills första omgången spelas
+    standings:[
+      ["Skellefteå AIK",0,0,0,0,0,0,0],["Frölunda HC",0,0,0,0,0,0,0],["Växjö Lakers",0,0,0,0,0,0,0],
+      ["Rögle BK",0,0,0,0,0,0,0],["Färjestad BK",0,0,0,0,0,0,0],["Luleå HF",0,0,0,0,0,0,0],
+      ["Timrå IK",0,0,0,0,0,0,0],["Brynäs IF",0,0,0,0,0,0,0],["HV71",0,0,0,0,0,0,0],
+      ["Linköping HC",0,0,0,0,0,0,0],["Malmö Redhawks",0,0,0,0,0,0,0],["Örebro HK",0,0,0,0,0,0,0],
+      ["Djurgårdens IF",0,0,0,0,0,0,0],["IF Björklöven",0,0,0,0,0,0,0]
+    ],
+    standingsNote:"Ordningen visar fjolårets sluttabell tills säsongen är igång.",
+    scorers:[
+      ["Oscar Lindberg","Skellefteå AIK",67,"30+37"],["Rickard Hugg","Skellefteå AIK",56,"20+36"],["Jonathan Dahlén","Timrå IK",55,"30+25"]
+    ],
+    scorersLabel:"Poängliga", scorersUnit:"p", scorersMeta:"Grundserien 2025/26",
+    results:{label:"Inga matcher spelade ännu", example:false, matches:[]},
+    fixtures:{label:"Premiäromgång", example:true, matches:[
+      ["2026-09-12T15:15","Skellefteå AIK","IF Björklöven"],
+      ["2026-09-12T18:00","Frölunda HC","Djurgårdens IF"],
+      ["2026-09-12T18:00","Färjestad BK","Rögle BK"],
+      ["2026-09-12T18:00","Luleå HF","Växjö Lakers"],
+      ["2026-09-12T18:00","HV71","Timrå IK"],
+      ["2026-09-12T18:00","Malmö Redhawks","Örebro HK"],
+      ["2026-09-12T18:00","Linköping HC","Brynäs IF"]
+    ]},
+    demo:{home:"Frölunda HC",away:"Skellefteå AIK",periods:["Period 1","Period 2","Period 3"],periodLen:20,events:[
+      [3,"pp","Powerplay Frölunda – 2 min tripping"],
+      [7,"goal","home","Powerplay-mål","Direktskott från blålinjen"],
+      [20,"period","Slut period 1"],
+      [26,"goal","away","Kontring","2 mot 1"],
+      [34,"pp","Powerplay Skellefteå – 2 min slashing"],
+      [40,"period","Slut period 2"],
+      [49,"goal","home","Retur","Pucken in via skridskon, målet godkänt efter videogranskning"],
+      [58,"pp","Skellefteå plockar ut målvakten"],
+      [59,"goal","home","Tom bur","Skott från egen zon"],
+      [60,"end","Slutsignal"]
+    ]}
+  }
+};
+
+const DataProvider = {
+  async load(league){
+    if(API_BASE){
+      try{
+        const r = await fetch(`${API_BASE}/${league}.json`,{cache:"no-store"});
+        if(r.ok) return await r.json();
+      }catch(e){ /* faller tillbaka på snapshot */ }
+    }
+    return SNAPSHOT[league];
+  }
+};
+
+/* ========================= STATE ========================= */
+const state = { league:"allsvenskan", view:"tabell", data:null, fav:{}, demoTimer:null };
+try{ state.fav = JSON.parse(localStorage.getItem("ligalaget.fav")||"{}"); state.league = localStorage.getItem("ligalaget.league")||"allsvenskan"; }catch(e){}
+if(!SNAPSHOT[state.league]) state.league="allsvenskan";
+
+const $ = s=>document.querySelector(s);
+const esc = s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmtDate = iso=>{ const d=new Date(iso); return d.toLocaleDateString("sv-SE",{weekday:"short",day:"numeric",month:"short"}); };
+const fmtTime = iso=>new Date(iso).toLocaleTimeString("sv-SE",{hour:"2-digit",minute:"2-digit"});
+const fmtAsOf = iso=>new Date(iso+"T12:00").toLocaleDateString("sv-SE",{day:"numeric",month:"long",year:"numeric"});
+
+/* ========================= RENDER ========================= */
+function renderAll(){
+  const d=state.data;
+  document.documentElement.setAttribute("data-league",state.league);
+  document.querySelectorAll(".league").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.league===state.league)));
+  $("#sub-allsvenskan").textContent = `Säsong ${SNAPSHOT.allsvenskan.season} · 16 lag`;
+  $("#sub-shl").textContent = `Säsong ${SNAPSHOT.shl.season} · 14 lag`;
+  $("#updated").innerHTML = `Uppdaterad <b>${esc(fmtAsOf(d.asOf))}</b>`;
+  renderFav(); renderTable(); renderMatches(); renderLive(); renderStats();
+  $("#foot").textContent = `${d.sourceNote} Spelschema och demo-match är exempeldata tills en datakälla är kopplad.`;
+}
+
+function renderFav(){
+  const d=state.data, sel=$("#fav");
+  const names=Object.keys(d.teams).sort((a,b)=>a.localeCompare(b,"sv"));
+  sel.innerHTML = `<option value="">Inget valt</option>`+names.map(n=>`<option value="${esc(n)}"${state.fav[state.league]===n?" selected":""}>${esc(n)}</option>`).join("");
+  const f=state.fav[state.league], box=$("#favnext");
+  if(!f){ box.innerHTML=""; return; }
+  const row=d.standings.findIndex(r=>r[0]===f);
+  const next=d.fixtures.matches.find(m=>m[1]===f||m[2]===f);
+  let s=`<b>${row+1}:a</b> i ${esc(d.name)}`;
+  if(next){ const home=next[1]===f; s+=` · Nästa: ${home?"hemma mot":"borta mot"} <b style="font-size:15px">${esc(d.teams[home?next[2]:next[1]].short)}</b> ${fmtDate(next[0])} ${fmtTime(next[0])}`; }
+  box.innerHTML=s;
+}
+
+function zoneFor(pos){ const z=state.data.zones.find(z=>pos>=z.from&&pos<=z.to); return z?z.key:null; }
+
+function renderTable(){
+  const d=state.data, hockey=d.sport==="hockey";
+  $("#tabell-title").textContent = `${d.name} ${d.season}`;
+  $("#tabell-meta").textContent = d.standingsNote || `Per ${fmtAsOf(d.asOf)}`;
+  const rows=d.standings.map((r,i)=>{
+    let pl,w,ow,ol,l,gf,ga,pts;
+    if(hockey){ [ ,pl,w,ow,ol,l,gf,ga]=r; pts=w*3+ow*2+ol; }
+    else { [ ,pl,w,ow,l,gf,ga]=r; pts=w*3+ow; }
+    return {name:r[0],pl,w,ow,ol,l,gf,ga,gd:gf-ga,pts,pos:i+1};
+  });
+  const head = hockey
+    ? `<th class="l">#</th><th class="l">Lag</th><th>GP</th><th>V</th><th class="col-opt">ÖV</th><th class="col-opt">ÖF</th><th>F</th><th class="col-opt">GM</th><th class="col-opt">IM</th><th>+/-</th><th>P</th>`
+    : `<th class="l">#</th><th class="l">Lag</th><th>S</th><th>V</th><th>O</th><th>F</th><th class="col-opt">GM</th><th class="col-opt">IM</th><th>MS</th><th>P</th>`;
+  const zoneEnds=new Set(d.zones.map(z=>z.to));
+  const body=rows.map(t=>{
+    const z=zoneFor(t.pos), t2=d.teams[t.name]||{short:t.name};
+    const gd=(t.gd>0?"+":"")+t.gd;
+    const cls=[state.fav[state.league]===t.name?"fav-row":"", zoneEnds.has(t.pos)&&t.pos<rows.length?"sep":""].join(" ").trim();
+    const nums = hockey
+      ? `<td>${t.pl}</td><td>${t.w}</td><td class="col-opt">${t.ow}</td><td class="col-opt">${t.ol}</td><td>${t.l}</td><td class="col-opt">${t.gf}</td><td class="col-opt">${t.ga}</td>`
+      : `<td>${t.pl}</td><td>${t.w}</td><td>${t.ow}</td><td>${t.l}</td><td class="col-opt">${t.gf}</td><td class="col-opt">${t.ga}</td>`;
+    return `<tr class="${cls}"><td class="pos" style="--z:${z?`var(--zone-${z})`:"transparent"}">${t.pos}</td>
+      <td class="l team"><span class="full">${esc(t.name)}</span><span class="short">${esc(t2.short)}</span></td>
+      ${nums}<td class="gd ${t.gd>0?"pos-":t.gd<0?"neg-":""}">${gd}</td><td class="pts">${t.pts}</td></tr>`;
+  }).join("");
+  $("#tabell").innerHTML=`<thead><tr>${head}</tr></thead><tbody>${body}</tbody>`;
+  $("#legend").innerHTML=d.zones.map(z=>`<span><i style="background:var(--zone-${z.key})"></i>${esc(z.label)}</span>`).join("");
+}
+
+function matchRow(m,played){
+  const d=state.data, h=d.teams[m[1]]||{short:m[1]}, a=d.teams[m[2]]||{short:m[2]};
+  const score = played ? `<div class="score">${m[3]}–${m[4]}</div>` : `<div class="score t">${fmtTime(m[0])}</div>`;
+  return `<div class="match"><div class="home">${esc(h.short)}</div>${score}<div class="away">${esc(a.short)}</div>
+    <div class="info"><span>${fmtDate(m[0])}</span><span>${esc(h.arena||"")}</span></div></div>`;
+}
+function renderMatches(){
+  const d=state.data;
+  const ex=s=>s.example?` <span class="chip ex">Exempel</span>`:"";
+  $("#res-meta").innerHTML = esc(d.results.label)+ex(d.results);
+  $("#results").innerHTML = d.results.matches.length ? `<div class="card">${d.results.matches.map(m=>matchRow(m,true)).join("")}</div>` : `<div class="card empty"><b>Inga resultat ännu</b>Första omgången spelas i september.</div>`;
+  $("#fix-meta").innerHTML = esc(d.fixtures.label)+ex(d.fixtures);
+  $("#fixtures").innerHTML = `<div class="card">${d.fixtures.matches.map(m=>matchRow(m,false)).join("")}</div>`;
+}
+
+/* ---------- Live / demo ---------- */
+function renderLive(){
+  stopDemo();
+  $("#livebox").innerHTML=`<div class="card empty"><b>Inga matcher pågår</b>Nästa ${state.data.sport==="hockey"?"nedsläpp":"avspark"}: ${fmtDate(state.data.fixtures.matches[0][0])} ${fmtTime(state.data.fixtures.matches[0][0])}.</div>`;
+}
+function stopDemo(){ if(state.demoTimer){clearInterval(state.demoTimer);state.demoTimer=null;} $("#demo").setAttribute("aria-pressed","false"); $("#demo").textContent="Spela upp demo-match"; $("#livedot").classList.remove("on"); }
+function startDemo(){
+  const d=state.data, g=d.demo, hockey=d.sport==="hockey";
+  const H=d.teams[g.home], A=d.teams[g.away];
+  let minute=0, hs=0, as=0, i=0, log=[];
+  $("#demo").setAttribute("aria-pressed","true"); $("#demo").textContent="Stoppa demo"; $("#livedot").classList.add("on");
+  const draw=(ended)=>{
+    const total=g.periods.length*g.periodLen;
+    const pIdx=Math.min(g.periods.length-1,Math.floor(Math.max(0,minute-1)/g.periodLen));
+    const clock = ended?"Slut":(hockey?`${String(Math.floor((minute-1)%g.periodLen)).padStart(2,"0")}:${String((minute*7)%60).padStart(2,"0")}`:`${minute}'`);
+    $("#livebox").innerHTML=`<div class="card board">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span class="chip ${ended?"":"live"}">${ended?"Slutresultat":"Live"}</span><span class="chip ex">Demo</span></div>
+      <div class="teams"><div class="tm a">${esc(H.short)}</div><div class="sc">${hs}–${as}</div><div class="tm">${esc(A.short)}</div></div>
+      <div class="sub"><span class="clock">${clock}</span><span>${ended?"":esc(g.periods[pIdx])}</span><span>${esc(H.arena)}</span></div>
+      <div class="events">${log.slice().reverse().map(e=>`<div class="ev ${e.k}"><span class="t">${e.m}'</span><span>${e.html}</span></div>`).join("")||`<div class="ev"><span class="t">0'</span><span>${hockey?"Nedsläpp":"Avspark"}</span></div>`}</div></div>`;
+  };
+  draw(false);
+  state.demoTimer=setInterval(()=>{
+    minute++;
+    while(i<g.events.length && g.events[i][0]<=minute){
+      const e=g.events[i++]; const [m,k]=e;
+      if(k==="goal"){ if(e[2]==="home") hs++; else as++; log.push({m,k,html:`<b>MÅL! ${esc(e[2]==="home"?H.short:A.short)} ${hs}–${as}</b> · ${esc(e[3])} – ${esc(e[4])}`}); }
+      else if(k==="end"){ log.push({m,k,html:esc(e[2])}); draw(true); stopDemo(); return; }
+      else log.push({m,k,html:esc(e[2])});
+    }
+    draw(false);
+  },700);
+}
+
+/* ---------- Stats ---------- */
+function renderStats(){
+  const d=state.data;
+  $("#scorers-title").textContent=d.scorersLabel;
+  $("#scorers-meta").textContent=d.scorersMeta||`Per ${fmtAsOf(d.asOf)}`;
+  $("#scorers").innerHTML=d.scorers.map((s,i)=>`<li><span class="n">${i+1}</span><span class="who">${esc(s[0])}<small>${esc(s[1])}${s[3]?" · "+esc(s[3]):""}</small></span><span class="v">${s[2]}<small>${esc(d.scorersUnit)}</small></span></li>`).join("");
+  const hockey=d.sport==="hockey";
+  const rows=d.standings.map(r=>({name:d.teams[r[0]].short,gf:hockey?r[6]:r[5],ga:hockey?r[7]:r[6],pl:r[1]}));
+  const played=rows.some(r=>r.pl>0);
+  if(!played){ $("#teamstats").innerHTML=`<div class="empty" style="padding:12px"><b>Inga siffror ännu</b>Anfall och försvar visas när säsongen är igång.</div>`; return; }
+  const att=[...rows].sort((a,b)=>b.gf/b.pl-a.gf/a.pl).slice(0,5);
+  const def=[...rows].sort((a,b)=>a.ga/a.pl-b.ga/b.pl).slice(0,5);
+  const bars=(list,key,max)=>list.map(t=>{const v=t[key]/t.pl;return `<div class="bar"><span>${esc(t.name)}</span><span class="tr"><i style="width:${Math.round(v/max*100)}%"></i></span><span class="val">${v.toFixed(2)}</span></div>`;}).join("");
+  $("#teamstats").innerHTML=`<div style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin-bottom:8px">Mål per match – bästa anfall</div>${bars(att,"gf",att[0].gf/att[0].pl)}
+    <div style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin:16px 0 8px">Insläppta per match – bästa försvar</div>${bars(def,"ga",Math.max(...def.map(t=>t.ga/t.pl)))}`;
+}
+
+/* ========================= ANNONSER =========================
+   AD_SLOTS styr både platshållarna i appen och bokningsflödet.
+   I drift byts platshållaren ut mot annonsörens material (bild/
+   länk) per slot – t.ex. från ett enkelt JSON på /api/ads.json –
+   och bokningen postas till ett backend/CRM i stället för e-post.
+   ============================================================ */
+const AD_CONTACT = "annons@ligalaget.se"; // byt till er adress
+const AD_SLOTS = [
+  {id:"topp",      name:"Toppbanner",        where:"Överst på varje sida, båda ligorna. Format 970×120 / 360×100.", week:1900},
+  {id:"matchflode",name:"Matchsponsor",      where:"I matchflödet mellan resultat och kommande matcher. Format 728×90 / 360×120.", week:1200},
+  {id:"statistik", name:"Statistiksponsor",  where:"Under skytteliga och lagstatistik. Format 728×90 / 360×120.", week:900},
+  {id:"lag",       name:"Lagsponsor",        where:"Visas bara för dem som valt ett visst lag som favorit. Format 360×120.", week:600}
+];
+const kr = n=>n.toLocaleString("sv-SE")+" kr";
+function renderAds(){
+  $("#slots").innerHTML = AD_SLOTS.map(s=>`<div class="card slot"><h4>${esc(s.name)}</h4><span class="where">${esc(s.where)}</span>
+    <span class="price">${kr(s.week)}<small> / vecka</small></span><button type="button" data-book="${s.id}">Boka ${esc(s.name.toLowerCase())}</button></div>`).join("");
+  $("#b-slot").innerHTML = AD_SLOTS.map(s=>`<option value="${s.id}">${esc(s.name)} – ${kr(s.week)}/vecka</option>`).join("");
+  document.querySelectorAll("[data-book]").forEach(b=>b.addEventListener("click",()=>{ $("#b-slot").value=b.dataset.book; updateTotal(); $("#book").scrollIntoView({behavior:"smooth",block:"start"}); $("#b-company").focus({preventScroll:true}); }));
+  // förifyll nästa vecka
+  const d=new Date(); d.setDate(d.getDate()+7-((d.getDay()+6)%7));
+  const jan4=new Date(d.getFullYear(),0,4), wk=Math.round(((d-jan4)/864e5-3+((jan4.getDay()+6)%7))/7)+1;
+  $("#b-start").value = `${d.getFullYear()}-W${String(wk).padStart(2,"0")}`;
+  updateTotal();
+}
+function updateTotal(){
+  const s=AD_SLOTS.find(x=>x.id===$("#b-slot").value), w=+$("#b-weeks").value;
+  const disc = w>=12?0.2:w>=8?0.15:w>=4?0.1:0;
+  const total=Math.round(s.week*w*(1-disc));
+  $("#b-total").textContent = `Totalt ${kr(total)} exkl. moms för ${w} ${w===1?"vecka":"veckor"}${disc?` (${disc*100} % långtidsrabatt)`:""}`;
+}
+function goto(view){ document.querySelector(`.nav [data-view="${view}"]`).click(); window.scrollTo({top:0,behavior:"smooth"}); }
+document.querySelectorAll("[data-goto]").forEach(b=>b.addEventListener("click",()=>goto(b.dataset.goto)));
+["#b-slot","#b-weeks"].forEach(s=>$(s).addEventListener("change",updateTotal));
+$("#book").addEventListener("submit",e=>{
+  e.preventDefault();
+  const s=AD_SLOTS.find(x=>x.id===$("#b-slot").value);
+  const body=[`Företag: ${$("#b-company").value}`,`E-post: ${$("#b-email").value}`,`Annonsplats: ${s.name}`,`Liga: ${$("#b-league").selectedOptions[0].text}`,
+    `Startvecka: ${$("#b-start").value}`,`Antal veckor: ${$("#b-weeks").value}`,``,$("#b-total").textContent,``,$("#b-msg").value].join("\n");
+  location.href=`mailto:${AD_CONTACT}?subject=${encodeURIComponent("Bokning: "+s.name+" – "+$("#b-company").value)}&body=${encodeURIComponent(body)}`;
+  $("#b-total").textContent="Tack! Din e-postklient öppnas med förfrågan ifylld – skicka den så återkommer vi inom en arbetsdag.";
+});
+renderAds();
+
+/* ========================= EVENTS ========================= */
+document.querySelectorAll(".league").forEach(b=>b.addEventListener("click",async()=>{
+  state.league=b.dataset.league; try{localStorage.setItem("ligalaget.league",state.league);}catch(e){}
+  state.data=await DataProvider.load(state.league); renderAll();
+}));
+document.querySelectorAll(".nav [role=tab]").forEach(b=>b.addEventListener("click",()=>{
+  state.view=b.dataset.view;
+  document.querySelectorAll(".nav [role=tab]").forEach(x=>x.setAttribute("aria-selected",String(x===b)));
+  document.querySelectorAll(".view").forEach(v=>v.classList.toggle("on",v.id==="view-"+state.view));
+  if(state.view!=="live") stopDemo(), renderLive();
+}));
+$("#fav").addEventListener("change",e=>{
+  state.fav[state.league]=e.target.value; try{localStorage.setItem("ligalaget.fav",JSON.stringify(state.fav));}catch(e2){}
+  renderFav(); renderTable();
+});
+$("#demo").addEventListener("click",()=>{ if(state.demoTimer){stopDemo();renderLive();} else startDemo(); });
+
+(async()=>{ state.data=await DataProvider.load(state.league); renderAll(); })();
+</script>
+
+</body>
+</html>

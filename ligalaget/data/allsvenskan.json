@@ -1,0 +1,449 @@
+{
+  "name": "Allsvenskan",
+  "season": "2026",
+  "sport": "football",
+  "asOf": "2026-09-06",
+  "sourceNote": "Tabell och skytteliga per 6 september 2026.",
+  "columns": [
+    "S",
+    "V",
+    "O",
+    "F",
+    "GM",
+    "IM",
+    "MS",
+    "P"
+  ],
+  "zones": [
+    {
+      "from": 1,
+      "to": 1,
+      "key": "a",
+      "label": "Champions League-kval"
+    },
+    {
+      "from": 2,
+      "to": 3,
+      "key": "b",
+      "label": "Europakval"
+    },
+    {
+      "from": 14,
+      "to": 14,
+      "key": "c",
+      "label": "Kvalspel"
+    },
+    {
+      "from": 15,
+      "to": 16,
+      "key": "d",
+      "label": "Nedflyttning"
+    }
+  ],
+  "teams": {
+    "IK Sirius": {
+      "short": "Sirius",
+      "city": "Uppsala",
+      "arena": "Studenternas IP"
+    },
+    "Hammarby IF": {
+      "short": "Hammarby",
+      "city": "Stockholm",
+      "arena": "3Arena"
+    },
+    "Djurgårdens IF": {
+      "short": "Djurgården",
+      "city": "Stockholm",
+      "arena": "3Arena"
+    },
+    "BK Häcken": {
+      "short": "Häcken",
+      "city": "Göteborg",
+      "arena": "Nordic Wellness Arena"
+    },
+    "IF Elfsborg": {
+      "short": "Elfsborg",
+      "city": "Borås",
+      "arena": "Borås Arena"
+    },
+    "AIK": {
+      "short": "AIK",
+      "city": "Solna",
+      "arena": "Nationalarenan"
+    },
+    "Malmö FF": {
+      "short": "Malmö FF",
+      "city": "Malmö",
+      "arena": "Stadion"
+    },
+    "Västerås SK": {
+      "short": "Västerås",
+      "city": "Västerås",
+      "arena": "Hitachi Energy Arena"
+    },
+    "GAIS": {
+      "short": "GAIS",
+      "city": "Göteborg",
+      "arena": "Gamla Ullevi"
+    },
+    "IF Brommapojkarna": {
+      "short": "BP",
+      "city": "Stockholm",
+      "arena": "Grimsta IP"
+    },
+    "IFK Göteborg": {
+      "short": "IFK Göteborg",
+      "city": "Göteborg",
+      "arena": "Gamla Ullevi"
+    },
+    "Mjällby AIF": {
+      "short": "Mjällby",
+      "city": "Hällevik",
+      "arena": "Strandvallen"
+    },
+    "Kalmar FF": {
+      "short": "Kalmar",
+      "city": "Kalmar",
+      "arena": "Guldfågeln Arena"
+    },
+    "Degerfors IF": {
+      "short": "Degerfors",
+      "city": "Degerfors",
+      "arena": "Stora Valla"
+    },
+    "Örgryte IS": {
+      "short": "ÖIS",
+      "city": "Göteborg",
+      "arena": "Gamla Ullevi"
+    },
+    "Halmstads BK": {
+      "short": "Halmstad",
+      "city": "Halmstad",
+      "arena": "Örjans Vall"
+    }
+  },
+  "standings": [
+    [
+      "IK Sirius",
+      20,
+      14,
+      3,
+      3,
+      48,
+      27
+    ],
+    [
+      "Hammarby IF",
+      20,
+      11,
+      4,
+      5,
+      45,
+      19
+    ],
+    [
+      "Djurgårdens IF",
+      19,
+      11,
+      2,
+      6,
+      43,
+      19
+    ],
+    [
+      "BK Häcken",
+      20,
+      8,
+      8,
+      4,
+      33,
+      29
+    ],
+    [
+      "IF Elfsborg",
+      20,
+      8,
+      7,
+      5,
+      28,
+      21
+    ],
+    [
+      "AIK",
+      18,
+      9,
+      4,
+      5,
+      28,
+      27
+    ],
+    [
+      "Malmö FF",
+      19,
+      9,
+      2,
+      8,
+      33,
+      30
+    ],
+    [
+      "Västerås SK",
+      20,
+      8,
+      5,
+      7,
+      28,
+      34
+    ],
+    [
+      "GAIS",
+      20,
+      7,
+      6,
+      7,
+      25,
+      18
+    ],
+    [
+      "IF Brommapojkarna",
+      20,
+      7,
+      6,
+      7,
+      29,
+      32
+    ],
+    [
+      "IFK Göteborg",
+      19,
+      6,
+      5,
+      8,
+      24,
+      39
+    ],
+    [
+      "Mjällby AIF",
+      18,
+      5,
+      5,
+      8,
+      24,
+      29
+    ],
+    [
+      "Kalmar FF",
+      19,
+      5,
+      4,
+      10,
+      21,
+      29
+    ],
+    [
+      "Degerfors IF",
+      20,
+      5,
+      4,
+      11,
+      19,
+      31
+    ],
+    [
+      "Örgryte IS",
+      20,
+      3,
+      6,
+      11,
+      23,
+      43
+    ],
+    [
+      "Halmstads BK",
+      20,
+      2,
+      5,
+      13,
+      13,
+      37
+    ]
+  ],
+  "scorers": [
+    [
+      "Robbie Ure",
+      "IK Sirius",
+      15
+    ],
+    [
+      "Kristian Lien",
+      "Djurgårdens IF",
+      15
+    ],
+    [
+      "Isak Bjerkebo",
+      "IK Sirius",
+      13
+    ],
+    [
+      "Paulos Abraham",
+      "Hammarby IF",
+      12
+    ],
+    [
+      "Erik Botheim",
+      "Malmö FF",
+      10
+    ],
+    [
+      "Mikkel Ladefoged",
+      "Västerås SK",
+      9
+    ],
+    [
+      "Gustav Lindgren",
+      "BK Häcken",
+      9
+    ],
+    [
+      "Noah Christoffersson",
+      "Örgryte IS",
+      8
+    ],
+    [
+      "Victor Lind",
+      "Hammarby IF",
+      8
+    ]
+  ],
+  "scorersLabel": "Skytteliga",
+  "scorersUnit": "mål",
+  "results": {
+    "label": "Omgång 20",
+    "example": true,
+    "matches": [
+      [
+        "2026-09-05T15:00",
+        "IK Sirius",
+        "Halmstads BK",
+        3,
+        0
+      ],
+      [
+        "2026-09-05T17:30",
+        "GAIS",
+        "Örgryte IS",
+        1,
+        1
+      ],
+      [
+        "2026-09-06T14:00",
+        "Hammarby IF",
+        "Kalmar FF",
+        2,
+        0
+      ],
+      [
+        "2026-09-06T16:30",
+        "IF Elfsborg",
+        "BK Häcken",
+        1,
+        1
+      ],
+      [
+        "2026-09-06T19:00",
+        "Västerås SK",
+        "Degerfors IF",
+        2,
+        1
+      ]
+    ]
+  },
+  "fixtures": {
+    "label": "Omgång 21",
+    "example": true,
+    "matches": [
+      [
+        "2026-09-12T15:00",
+        "Örgryte IS",
+        "IF Brommapojkarna"
+      ],
+      [
+        "2026-09-12T17:30",
+        "Malmö FF",
+        "IK Sirius"
+      ],
+      [
+        "2026-09-13T14:00",
+        "AIK",
+        "Hammarby IF"
+      ],
+      [
+        "2026-09-13T16:30",
+        "IFK Göteborg",
+        "Mjällby AIF"
+      ],
+      [
+        "2026-09-13T19:00",
+        "Djurgårdens IF",
+        "IF Elfsborg"
+      ]
+    ]
+  },
+  "demo": {
+    "home": "Örgryte IS",
+    "away": "GAIS",
+    "periods": [
+      "1:a halvlek",
+      "2:a halvlek"
+    ],
+    "periodLen": 45,
+    "events": [
+      [
+        4,
+        "card",
+        "Gult kort – Mjällby-låntagaren i GAIS drar ned Christoffersson"
+      ],
+      [
+        17,
+        "goal",
+        "home",
+        "Noah Christoffersson",
+        "Nick efter hörna"
+      ],
+      [
+        31,
+        "chance",
+        "Stolpskott GAIS"
+      ],
+      [
+        45,
+        "period",
+        "Halvtid"
+      ],
+      [
+        58,
+        "goal",
+        "away",
+        "Straff",
+        "Utjämning på straff"
+      ],
+      [
+        74,
+        "sub",
+        "Byte ÖIS: dubbelbyte i mittfältet"
+      ],
+      [
+        83,
+        "goal",
+        "home",
+        "Inhoppare",
+        "Volley i bortre hörnet"
+      ],
+      [
+        90,
+        "end",
+        "Slutsignal"
+      ]
+    ]
+  }
+}
