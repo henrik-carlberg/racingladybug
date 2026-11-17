@@ -5,6 +5,8 @@ import { createVoucher } from '@/lib/server/ledger';
 import { auditBy } from '@/lib/server/audit';
 import { emit } from '@/lib/server/events';
 import { supplierInvoiceLines, supplierPaymentLines, type CostLine } from '@/lib/supplier';
+import { replaceAccount } from '@/lib/ledger-lines';
+import { ACC } from '@/lib/bas';
 import type { Actor } from './actor';
 import { arr, date, has, int, list, optInt, ore, str, type Page } from './input';
 import { insertAttachment, type AttachmentIn } from './vouchers';
@@ -94,7 +96,8 @@ export async function listSupplierInvoices(companyId: number, p: Page, f: { stat
   return { ...res, data: await Promise.all(res.data.map((r) => getSupplierInvoice(companyId, r.id))) };
 }
 
-/** Registrerar och bokför en leverantörsfaktura (faktureringsmetoden). Belopp i öre. */
+/** Registrerar en leverantörsfaktura. Faktureringsmetoden: bokförs direkt. Kontantmetoden: konteringen sparas
+ *  och bokförs när fakturan betalas (eller per bokslutsdagen). Belopp i öre. */
 export async function registerSupplierInvoice(actor: Actor, input: Record<string, unknown>, attachment?: AttachmentIn | null) {
   const supplierId = int(input, 'supplier_id', 'Leverantör');
   const [sup] = await sql<{ name: string; default_account: number }[]>`SELECT name, default_account FROM suppliers WHERE id = ${supplierId} AND company_id = ${actor.companyId}`;
@@ -116,13 +119,14 @@ export async function registerSupplierInvoice(actor: Actor, input: Record<string
       const [{ id }] = await tx<{ id: number }[]>`INSERT INTO supplier_invoices ${tx({
         company_id: actor.companyId, supplier_id: supplierId, invoice_number: invoiceNumber, invoice_date: d,
         due_date: date(input, 'due_date', 'Förfallodatum', false) || d, payment_reference: str(input, 'payment_reference'),
-        description: str(input, 'description'), total, vat, status: 'booked',
+        description: str(input, 'description'), total, vat, status: 'booked', cost_lines: tx.json(costs as never),
       })} RETURNING id`;
-      const v = await createVoucher(tx, {
+      const [{ m }] = await tx<{ m: string }[]>`SELECT accounting_method AS m FROM companies WHERE id = ${actor.companyId}`;
+      const v = m === 'cash' ? null : await createVoucher(tx, {
         actor, date: d, description: `Leverantörsfaktura ${invoiceNumber}, ${sup.name}`, lines, sourceType: 'supplier_invoice', sourceId: id, series: 'C',
       });
-      await tx`UPDATE supplier_invoices SET voucher_id = ${v.id} WHERE id = ${id}`;
-      if (attachment) await insertAttachment(tx, actor, v.id, attachment, id);
+      if (v) await tx`UPDATE supplier_invoices SET voucher_id = ${v.id} WHERE id = ${id}`;
+      if (attachment) await insertAttachment(tx, actor, v?.id ?? null, attachment, id);
       await auditBy(tx, actor, 'register', 'supplier_invoice', id);
       const out = await fetchSI(tx, actor.companyId, id);
       await emit(tx, actor.companyId, 'supplier_invoice.registered', out);
@@ -164,8 +168,8 @@ export async function paySupplierInvoiceTx(tx: Tx, actor: Actor, id: number, inp
   const d = date(input, 'date', 'Betaldatum');
   const bank = optInt(input, 'bank_account', 'Bankkonto') ?? 1930;
   if (bank < 1900 || bank > 1999) throw new ValidationError('Bankkonto måste vara ett 19xx-konto');
-  const [inv] = await tx<{ status: string; total: number; invoice_number: string; supplier: string }[]>`
-    SELECT i.status, i.total, i.invoice_number, s.name AS supplier FROM supplier_invoices i JOIN suppliers s ON s.id = i.supplier_id
+  const [inv] = await tx<{ status: string; total: number; vat: number; invoice_number: string; supplier: string; voucher_id: number | null; cost_lines: CostLine[] | null }[]>`
+    SELECT i.status, i.total, i.vat, i.invoice_number, s.name AS supplier, i.voucher_id, i.cost_lines FROM supplier_invoices i JOIN suppliers s ON s.id = i.supplier_id
     WHERE i.id = ${id} AND i.company_id = ${actor.companyId} FOR UPDATE OF i`;
   if (!inv) throw new NotFoundError('Leverantörsfakturan');
   if (inv.status === 'booked' && opts.autoApprove) {
@@ -174,13 +178,37 @@ export async function paySupplierInvoiceTx(tx: Tx, actor: Actor, id: number, inp
     inv.status = 'approved';
   }
   if (inv.status !== 'approved') throw new ConflictError(`Faktura ${inv.invoice_number} (${inv.supplier}) är inte attesterad`);
+  // Kontantmetoden: fakturan är inte bokförd än – kostnad och moms bokförs direkt mot banken
+  const cash = !inv.voucher_id;
+  if (cash && !inv.cost_lines) throw new ConflictError(`Faktura ${inv.invoice_number} saknar kontering`);
   const v = await createVoucher(tx, {
-    actor, date: d, description: `Betalning leverantörsfaktura ${inv.invoice_number}, ${inv.supplier}`,
-    lines: supplierPaymentLines(inv.total, bank), sourceType: 'supplier_payment', sourceId: id, series: 'C',
+    actor, date: d, description: `Betalning leverantörsfaktura ${inv.invoice_number}, ${inv.supplier}${cash ? ' (kontantmetoden)' : ''}`,
+    lines: cash ? replaceAccount(supplierInvoiceLines(inv.cost_lines!, inv.vat, inv.total), ACC.supplierDebts, bank) : supplierPaymentLines(inv.total, bank),
+    sourceType: 'supplier_payment', sourceId: id, series: 'C',
   });
   await tx`UPDATE supplier_invoices SET status = 'paid', paid_date = ${d}, payment_voucher_id = ${v.id} WHERE id = ${id}`;
+  if (cash) await tx`UPDATE attachments SET voucher_id = ${v.id} WHERE supplier_invoice_id = ${id} AND voucher_id IS NULL`;
   await auditBy(tx, actor, 'pay', 'supplier_invoice', id);
   const o = await fetchSI(tx, actor.companyId, id);
   await emit(tx, actor.companyId, 'supplier_invoice.paid', o);
   return o;
+}
+
+/** Kontantmetoden: bokför obetalda leverantörsfakturor per bokslutsdagen (kostnad och moms mot leverantörsskuld) */
+export async function bookOpenSupplierInvoicesAtYearEnd(tx: Tx, actor: Actor, endDate: string): Promise<number> {
+  const open = await tx<{ id: number; invoice_number: string; supplier: string; total: number; vat: number; cost_lines: CostLine[] | null }[]>`
+    SELECT i.id, i.invoice_number, s.name AS supplier, i.total, i.vat, i.cost_lines FROM supplier_invoices i JOIN suppliers s ON s.id = i.supplier_id
+    WHERE i.company_id = ${actor.companyId} AND i.status IN ('booked', 'approved') AND i.voucher_id IS NULL AND i.invoice_date <= ${endDate}
+    ORDER BY i.invoice_date, i.id FOR UPDATE OF i`;
+  for (const inv of open) {
+    if (!inv.cost_lines) throw new ConflictError(`Faktura ${inv.invoice_number} saknar kontering`);
+    const v = await createVoucher(tx, {
+      actor, date: endDate, description: `Obetald leverantörsfaktura ${inv.invoice_number}, ${inv.supplier} – per bokslutsdagen`,
+      lines: supplierInvoiceLines(inv.cost_lines, inv.vat, inv.total), sourceType: 'supplier_invoice', sourceId: inv.id, series: 'C',
+    });
+    await tx`UPDATE supplier_invoices SET voucher_id = ${v.id} WHERE id = ${inv.id}`;
+    await tx`UPDATE attachments SET voucher_id = ${v.id} WHERE supplier_invoice_id = ${inv.id} AND voucher_id IS NULL`;
+    await auditBy(tx, actor, 'book_yearend', 'supplier_invoice', inv.id);
+  }
+  return open.length;
 }

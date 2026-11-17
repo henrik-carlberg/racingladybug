@@ -38,6 +38,7 @@ export default async function SupplierInvoice({ params, searchParams }: { params
       <p className="small">
         {i.voucher_id && <>Bokförd: <Link href={`${b}/verifikationer/${i.voucher_id}`}>verifikation</Link>. </>}
         {i.payment_voucher_id && <>Betald {i.paid_date}: <Link href={`${b}/verifikationer/${i.payment_voucher_id}`}>verifikation</Link>.</>}
+        {!i.voucher_id && !i.payment_voucher_id && <span className="muted">Kontantmetoden: fakturan bokförs när den betalas (eller per bokslutsdagen om den är obetald vid årets slut).</span>}
       </p>
       {files.length > 0 && <p>Underlag: {files.map((f) => <a key={f.id} href={`${b}/underlag/${f.id}`} target="_blank">{f.filename} </a>)}</p>}
       {i.status === 'booked' && (

@@ -10,8 +10,8 @@ export interface DeadlineStatus extends Deadline { status: 'done' | 'overdue' | 
 /** Deadlines för bolaget med status. Förberedelser som appen ser visas via deadlinePrep. */
 export async function companyDeadlines(companyId: number, opts: { from?: string; to?: string } = {}): Promise<DeadlineStatus[]> {
   const t = today();
-  const [c] = await sql<{ company_type: 'AB' | 'EF'; vat_period: 'month' | 'quarter' | 'year'; f_skatt: boolean; setup: Record<string, unknown>; created: string }[]>`
-    SELECT company_type, vat_period, f_skatt, setup, to_char(created_at,'YYYY-MM-DD') AS created FROM companies WHERE id = ${companyId}`;
+  const [c] = await sql<{ company_type: 'AB' | 'EF'; vat_period: 'month' | 'quarter' | 'year'; f_skatt: boolean; prelskatt_from: string | null; setup: Record<string, unknown>; created: string }[]>`
+    SELECT company_type, vat_period, f_skatt, prelskatt_from, setup, to_char(created_at,'YYYY-MM-DD') AS created FROM companies WHERE id = ${companyId}`;
   const fys = await sql<{ id: number; start: string; end: string; closed: boolean }[]>`
     SELECT id, to_char(start_date,'YYYY-MM-DD') AS start, to_char(end_date,'YYYY-MM-DD') AS end, closed FROM fiscal_years WHERE company_id = ${companyId} ORDER BY start_date`;
   const [{ emp }] = await sql<{ emp: number }[]>`SELECT count(*)::int AS emp FROM employees WHERE company_id = ${companyId}`;
@@ -19,10 +19,10 @@ export async function companyDeadlines(companyId: number, opts: { from?: string;
   // Deadlines som förföll innan bolaget lades upp i appen visas inte (de har skötts på annat sätt)
   const since = [addDays(t, -365), c.created].sort().pop()!;
   const list = computeDeadlines({
-    companyType: c.company_type, vatPeriod: c.vat_period, fSkatt: c.f_skatt, hasEmployees: emp > 0 || c.setup?.has_employees === true,
+    companyType: c.company_type, vatPeriod: c.vat_period, fSkatt: c.f_skatt, fSkattFrom: c.prelskatt_from ?? firstStart.slice(0, 7), hasEmployees: emp > 0 || c.setup?.has_employees === true,
     fiscalYears: fys.map((f) => ({ start: f.start, end: f.end })),
     from: opts.from ?? since, to: opts.to ?? addDays(t, 300),
-  }).filter((d) => !d.periodStart || d.periodStart >= firstStart || d.kind === 'prelskatt');
+  }).filter((d) => !d.periodEnd || d.periodEnd >= firstStart);
 
   const marks = new Map((await sql<{ key: string; name: string; at: string }[]>`
     SELECT m.key, u.name, to_char(m.done_at,'YYYY-MM-DD') AS at FROM deadline_marks m JOIN users u ON u.id = m.done_by WHERE m.company_id = ${companyId}`).map((m) => [m.key, m]));

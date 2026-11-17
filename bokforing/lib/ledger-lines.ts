@@ -35,3 +35,8 @@ export function totals(lines: Line[]) {
 export function reverseLines(lines: Line[]): Line[] {
   return lines.map((l) => ({ ...l, debit: l.credit, credit: l.debit }));
 }
+
+/** Byter ett konto mot ett annat i konteringen, t.ex. kundfordran mot bank vid kontantmetoden */
+export function replaceAccount(lines: Line[], from: number, to: number): Line[] {
+  return lines.map((l) => (l.account === from ? { ...l, account: to } : l));
+}

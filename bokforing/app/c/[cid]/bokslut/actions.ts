@@ -3,7 +3,7 @@ import { amount, attempt, done, str } from '@/lib/server/action';
 import { requireCompany } from '@/lib/server/auth';
 import { requestOrigin } from '@/lib/server/origin';
 import { userActor } from '@/lib/services/actor';
-import { bookTax, carryForward, closeYear } from '@/lib/services/yearend';
+import { bookOpenInvoices, bookTax, carryForward, closeYear } from '@/lib/services/yearend';
 import { createAgmMinutes, saveYearendData } from '@/lib/services/taxreports';
 
 const back = (cid: number, fy: number, sub = '') => `/c/${cid}/bokslut/${fy}${sub}`;
@@ -12,6 +12,13 @@ export async function tax(cid: number, fy: number, fd: FormData) {
   const actor = userActor(await requireCompany(cid));
   await attempt(back(cid, fy), () => bookTax(actor, fy, { amount: amount(fd, 'amount', 'Skatt') ?? undefined }));
   done(back(cid, fy), 'Skatten är bokförd');
+}
+
+export async function openInvoices(cid: number, fy: number) {
+  const actor = userActor(await requireCompany(cid));
+  let n = { customers: 0, suppliers: 0 };
+  await attempt(back(cid, fy), async () => { n = await bookOpenInvoices(actor, fy); });
+  done(back(cid, fy), `${n.customers} kundfakturor och ${n.suppliers} leverantörsfakturor är bokförda per bokslutsdagen`);
 }
 
 export async function close(cid: number, fy: number) {

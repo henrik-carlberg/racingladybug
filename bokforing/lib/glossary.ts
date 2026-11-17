@@ -5,6 +5,7 @@ export const GLOSSARY: Record<string, { title: string; text: string }> = {
   moms: { title: 'Moms', text: 'Utgående moms tar du ut av kunder, ingående moms betalar du till leverantörer. Skillnaden betalar du till (eller får tillbaka från) Skatteverket i momsdeklarationen.' },
   momsavrakning: { title: 'Momsavräkning', text: 'När perioden är slut flyttas momsen från momskontona till konto 2650. Saldot där är det du ska betala eller få tillbaka.' },
   ingaende_balans: { title: 'Ingående balans', text: 'Saldona på bank, fordringar, skulder och eget kapital vid räkenskapsårets början – samma som förra årets utgående balans.' },
+  kontantmetoden: { title: 'Kontantmetoden (bokslutsmetoden)', text: 'Kund- och leverantörsfakturor bokförs först när de betalas, och momsen redovisas då. Fakturor som är obetalda vid räkenskapsårets slut bokförs per bokslutsdagen. Får användas om omsättningen normalt är högst 3 miljoner kr per år.' },
   periodlas: { title: 'Periodlås', text: 'Spärrar bokföring i en avslutad period, t.ex. när momsen är deklarerad, så att inget ändras av misstag.' },
   agi: { title: 'Arbetsgivardeklaration (AGI)', text: 'Månatlig redovisning till Skatteverket av löner, avdragen skatt och arbetsgivaravgifter per anställd. Lämnas och betalas normalt senast den 12:e månaden efter löneutbetalningen.' },
   f_skatt: { title: 'F-skatt', text: 'Företaget betalar själv sin preliminära skatt varje månad till skattekontot. Står på fakturor som "Godkänd för F-skatt".' },

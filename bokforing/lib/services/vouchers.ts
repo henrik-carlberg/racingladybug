@@ -58,7 +58,7 @@ export async function createManualVoucher(actor: Actor, input: Record<string, un
   return getVoucher(actor.companyId, id);
 }
 
-async function insertAttachment(tx: typeof sql | Tx, actor: Actor, voucherId: number, a: AttachmentIn, supplierInvoiceId: number | null = null) {
+async function insertAttachment(tx: typeof sql | Tx, actor: Actor, voucherId: number | null, a: AttachmentIn, supplierInvoiceId: number | null = null) {
   if (a.data.length > 8_000_000) throw new ValidationError('Filen är för stor (max 8 MB)');
   const [r] = await tx<{ id: number }[]>`INSERT INTO attachments (company_id, voucher_id, supplier_invoice_id, filename, mime_type, data, uploaded_by)
     VALUES (${actor.companyId}, ${voucherId}, ${supplierInvoiceId}, ${a.filename}, ${a.mimeType || 'application/octet-stream'}, ${a.data}, ${actor.userId}) RETURNING id`;

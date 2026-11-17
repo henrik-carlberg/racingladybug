@@ -67,6 +67,9 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
             </form>
           </div>
         )}
+        {inv.status === 'booked' && !inv.voucher_id && (
+          <p className="small muted">Kontantmetoden: fakturan bokförs när betalningen registreras (eller per bokslutsdagen om den är obetald vid årets slut).</p>
+        )}
         {(inv.voucher_id || inv.payment_voucher_id) && (
           <p className="small">
             {inv.voucher_id && <>Bokförd: <Link href={`${b}/verifikationer/${inv.voucher_id}`}>verifikation</Link>. </>}

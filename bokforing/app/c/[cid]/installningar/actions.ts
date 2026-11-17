@@ -4,6 +4,7 @@ import { attempt, done, int, str } from '@/lib/server/action';
 import { requireCompany, newToken, sha256 } from '@/lib/server/auth';
 import { audit } from '@/lib/server/audit';
 import { addDays } from '@/lib/format';
+import { fiscalYearError } from '@/lib/fiscal';
 
 const back = (cid: number) => `/c/${cid}/installningar`;
 
@@ -11,12 +12,21 @@ export async function updateCompany(cid: number, fd: FormData) {
   const { company, user } = await requireCompany(cid);
   await attempt(back(cid), async () => {
     const vat = ['month', 'quarter', 'year'].includes(str(fd, 'vat_period')) ? str(fd, 'vat_period') : 'quarter';
+    const method = str(fd, 'accounting_method') === 'cash' ? 'cash' : 'invoice';
+    const prelFrom = str(fd, 'prelskatt_from');
+    if (prelFrom && !/^\d{4}-\d{2}$/.test(prelFrom)) throw new Error('Ange månad som ÅÅÅÅ-MM');
+    if (method !== company.accounting_method) {
+      const [open] = await sql<{ n: number }[]>`SELECT
+        (SELECT count(*) FROM invoices WHERE company_id = ${company.id} AND status = 'booked')::int +
+        (SELECT count(*) FROM supplier_invoices WHERE company_id = ${company.id} AND status IN ('booked', 'approved'))::int AS n`;
+      if (open.n) throw new Error(`Redovisningsmetoden kan inte bytas medan det finns ${open.n} obetalda fakturor. Registrera betalningarna först.`);
+    }
     await sql`UPDATE companies SET
       name = ${str(fd, 'name')}, address = ${str(fd, 'address')}, postal_code = ${str(fd, 'postal_code')}, city = ${str(fd, 'city')},
       email = ${str(fd, 'email')}, phone = ${str(fd, 'phone')}, vat_number = ${str(fd, 'vat_number')},
       bankgiro = ${str(fd, 'bankgiro')}, plusgiro = ${str(fd, 'plusgiro')}, iban = ${str(fd, 'iban')},
       f_skatt = ${fd.get('f_skatt') === 'on'}, invoice_terms = ${int(fd, 'invoice_terms') ?? 30},
-      late_interest = ${str(fd, 'late_interest')}, vat_period = ${vat}
+      late_interest = ${str(fd, 'late_interest')}, vat_period = ${vat}, accounting_method = ${method}, prelskatt_from = ${prelFrom || null}
       WHERE id = ${company.id}`;
     await audit(sql, { companyId: company.id, userId: user.id, action: 'update', entity: 'company', entityId: company.id });
   });
@@ -27,15 +37,63 @@ export async function addFiscalYear(cid: number, fd: FormData) {
   const { company, user } = await requireCompany(cid);
   await attempt(back(cid), async () => {
     const start = str(fd, 'start'), end = str(fd, 'end');
-    if (!start || !end || end <= start) throw new Error('Ange giltigt start- och slutdatum');
+    const err = fiscalYearError(start, end, company.company_type);
+    if (err) throw new Error(err);
     const overlap = await sql`SELECT 1 FROM fiscal_years WHERE company_id = ${company.id} AND start_date <= ${end} AND end_date >= ${start}`;
     if (overlap.length) throw new Error('Räkenskapsåret överlappar ett befintligt år');
-    const days = (Date.parse(end) - Date.parse(start)) / 86400_000;
-    if (days > 548) throw new Error('Ett räkenskapsår får vara högst 18 månader');
     await sql`INSERT INTO fiscal_years (company_id, start_date, end_date) VALUES (${company.id}, ${start}, ${end})`;
     await audit(sql, { companyId: company.id, userId: user.id, action: 'create', entity: 'fiscal_year', details: { start, end } });
   });
   done(back(cid), 'Räkenskapsåret är tillagt');
+}
+
+/** Rätta ett öppet räkenskapsårs datum, t.ex. för att förlänga det första året. Alla verifikationer måste rymmas i de nya datumen. */
+export async function updateFiscalYear(cid: number, fyId: number, fd: FormData) {
+  const { company, user } = await requireCompany(cid, { owner: true });
+  await attempt(back(cid), async () => {
+    const start = str(fd, 'start'), end = str(fd, 'end');
+    const err = fiscalYearError(start, end, company.company_type);
+    if (err) throw new Error(err);
+    await sql.begin(async (tx) => {
+      const [fy] = await tx<{ start: string; end: string; closed: boolean }[]>`
+        SELECT to_char(start_date,'YYYY-MM-DD') AS start, to_char(end_date,'YYYY-MM-DD') AS "end", closed FROM fiscal_years
+        WHERE id = ${fyId} AND company_id = ${company.id} FOR UPDATE`;
+      if (!fy) throw new Error('Räkenskapsåret finns inte');
+      if (fy.closed) throw new Error('Ett stängt räkenskapsår kan inte ändras');
+      const overlap = await tx`SELECT 1 FROM fiscal_years WHERE company_id = ${company.id} AND id <> ${fyId} AND start_date <= ${end} AND end_date >= ${start}`;
+      if (overlap.length) throw new Error('De nya datumen överlappar ett annat räkenskapsår. Ta bort eller ändra det först.');
+      const [outside] = await tx<{ n: number }[]>`SELECT count(*)::int AS n FROM vouchers WHERE company_id = ${company.id}
+        AND fiscal_year_id = ${fyId} AND source_type IS DISTINCT FROM 'opening_balance' AND (date < ${start} OR date > ${end})`;
+      if (outside.n) throw new Error(`${outside.n} verifikationer ligger utanför de nya datumen`);
+      await tx`UPDATE fiscal_years SET start_date = ${start}, end_date = ${end} WHERE id = ${fyId}`;
+      // Ingående balanser dateras räkenskapsårets första dag
+      await tx`UPDATE vouchers SET date = ${start} WHERE company_id = ${company.id} AND fiscal_year_id = ${fyId} AND source_type = 'opening_balance'`;
+      await audit(tx, { companyId: company.id, userId: user.id, action: 'update', entity: 'fiscal_year', entityId: fyId, details: { from: fy, start, end } });
+    });
+  });
+  done(back(cid), 'Räkenskapsåret är ändrat');
+}
+
+/** Ta bort ett tomt räkenskapsår som inte har några verifikationer */
+export async function deleteFiscalYear(cid: number, fyId: number) {
+  const { company, user } = await requireCompany(cid, { owner: true });
+  await attempt(back(cid), async () => {
+    await sql.begin(async (tx) => {
+      const [fy] = await tx<{ start: string; end: string; closed: boolean }[]>`
+        SELECT to_char(start_date,'YYYY-MM-DD') AS start, to_char(end_date,'YYYY-MM-DD') AS "end", closed FROM fiscal_years
+        WHERE id = ${fyId} AND company_id = ${company.id} FOR UPDATE`;
+      if (!fy) throw new Error('Räkenskapsåret finns inte');
+      const [n] = await tx<{ n: number; total: number }[]>`SELECT
+        (SELECT count(*) FROM vouchers WHERE company_id = ${company.id} AND fiscal_year_id = ${fyId})::int AS n,
+        (SELECT count(*) FROM fiscal_years WHERE company_id = ${company.id})::int AS total`;
+      if (n.n) throw new Error('Räkenskapsåret har verifikationer och kan inte tas bort');
+      if (n.total <= 1) throw new Error('Bolaget måste ha minst ett räkenskapsår');
+      await tx`DELETE FROM yearend_reports WHERE fiscal_year_id = ${fyId}`;
+      await tx`DELETE FROM fiscal_years WHERE id = ${fyId}`;
+      await audit(tx, { companyId: company.id, userId: user.id, action: 'delete', entity: 'fiscal_year', entityId: fyId, details: fy });
+    });
+  });
+  done(back(cid), 'Räkenskapsåret är borttaget');
 }
 
 export async function setFiscalYearClosed(cid: number, fyId: number, closed: boolean) {
