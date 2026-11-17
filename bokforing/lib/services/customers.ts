@@ -8,10 +8,10 @@ import { bool, has, list, optInt, str, type Page } from './input';
 
 export interface CustomerOut {
   id: number; object: 'customer'; name: string; orgnr: string; vat_number: string; email: string; address: string;
-  postal_code: string; city: string; country: string; payment_terms: number | null; reverse_charge: boolean; created_at: string;
+  postal_code: string; city: string; country: string; payment_terms: number | null; reverse_charge: boolean; peppol_id: string; created_at: string;
 }
 
-const COLS = () => sql`id, 'customer' AS object, name, orgnr, vat_number, email, address, postal_code, city, country, payment_terms, reverse_charge, created_at`;
+const COLS = () => sql`id, 'customer' AS object, name, orgnr, vat_number, email, address, postal_code, city, country, payment_terms, reverse_charge, peppol_id, created_at`;
 
 export async function getCustomer(companyId: number, id: number): Promise<CustomerOut> {
   const [c] = await sql<CustomerOut[]>`SELECT ${COLS()} FROM customers WHERE id = ${id} AND company_id = ${companyId}`;
@@ -26,7 +26,7 @@ export async function listCustomers(companyId: number, p: Page, f: { q?: string 
   return list([...rows], p);
 }
 
-const FIELDS = ['name', 'orgnr', 'vat_number', 'email', 'address', 'postal_code', 'city', 'country', 'payment_terms', 'reverse_charge'] as const;
+const FIELDS = ['name', 'orgnr', 'vat_number', 'email', 'address', 'postal_code', 'city', 'country', 'payment_terms', 'reverse_charge', 'peppol_id'] as const;
 
 function read(input: Record<string, unknown>, partial: boolean) {
   const f: Record<string, unknown> = {};
@@ -36,6 +36,7 @@ function read(input: Record<string, unknown>, partial: boolean) {
     else if (k === 'reverse_charge') f[k] = bool(input, k);
     else if (k === 'vat_number') f[k] = str(input, k).toUpperCase().replace(/\s/g, '');
     else if (k === 'country') f[k] = (str(input, k) || 'SE').toUpperCase().slice(0, 2);
+    else if (k === 'peppol_id') { const v = str(input, k).replace(/\s/g, ''); if (v && !/^\d{4}:[A-Za-z0-9.-]+$/.test(v)) throw new ValidationError('Peppol-ID anges som schema:id, t.ex. 0007:5560269986'); f[k] = v; }
     else f[k] = str(input, k, { required: k === 'name', label: k === 'name' ? 'Namn' : k });
   }
   return f;

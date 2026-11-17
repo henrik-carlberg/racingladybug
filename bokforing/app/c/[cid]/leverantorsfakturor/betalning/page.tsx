@@ -22,7 +22,7 @@ export default async function Payments({ params, searchParams }: { params: Promi
     <>
       <h1>Betalningsförslag</h1>
       <Flash searchParams={searchParams} />
-      <p className="muted">Attesterade, obetalda leverantörsfakturor. Lägg in betalningarna i internetbanken (eller ladda ner listan) och bokför dem sedan här.
+      <p className="muted">Attesterade, obetalda leverantörsfakturor. Ladda ner betalfilen och ladda upp den i internetbanken (filöverföring, pain.001), eller lägg in betalningarna för hand. Bokför dem sedan här – eller låt bankavstämningen göra det när betalningarna syns på kontot.
         {waiting > 0 && <> {waiting} faktura(or) <Link href={`${b}/leverantorsfakturor?status=booked`}>väntar på attest</Link>.</>}</p>
       <form action={markManyPaid.bind(null, company.id)} className="stack">
         <div className="table-wrap">
@@ -46,7 +46,8 @@ export default async function Payments({ params, searchParams }: { params: Promi
             <label>Betaldatum<input type="date" name="date" defaultValue={today()} required /></label>
             <label>Från konto<select name="bank_account"><option value="1930">1930 Företagskonto</option><option value="1940">1940 Övriga bankkonton</option></select></label>
             <div style={{ flex: '0 0 auto' }}><button>Bokför valda som betalda</button></div>
-            <div style={{ flex: '0 0 auto' }}><a className="btn secondary" href={`${b}/leverantorsfakturor/betalning/fil`}>Ladda ner betalningslista (CSV)</a></div>
+            <div style={{ flex: '0 0 auto' }}><a className="btn secondary" href={`${b}/leverantorsfakturor/betalning/pain001`}>Betalfil till banken (ISO 20022)</a></div>
+            <div style={{ flex: '0 0 auto' }}><a className="btn secondary" href={`${b}/leverantorsfakturor/betalning/fil`}>Lista (CSV)</a></div>
           </div>
         )}
       </form>

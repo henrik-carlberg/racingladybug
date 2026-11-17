@@ -3,6 +3,7 @@ import { amount, attempt, done, str } from '@/lib/server/action';
 import { requireCompany } from '@/lib/server/auth';
 import { userActor } from '@/lib/services/actor';
 import * as svc from '@/lib/services/payroll';
+import { applyToRun } from '@/lib/services/absence';
 
 export async function createRun(cid: number, fd: FormData) {
   const actor = userActor(await requireCompany(cid));
@@ -47,4 +48,11 @@ export async function bookRun(cid: number, runId: number) {
   const actor = userActor(await requireCompany(cid));
   await attempt(`/c/${cid}/lon/${runId}`, () => svc.bookPayrollRun(actor, runId));
   done(`/c/${cid}/lon/${runId}`, 'Lönekörningen är bokförd. Ladda ner AGI-filen och lämna den till Skatteverket (normalt senast den 12:e månaden efter utbetalning, 17:e i januari och augusti).');
+}
+
+export async function applyAbsence(cid: number, runId: number) {
+  const actor = userActor(await requireCompany(cid));
+  let n = 0;
+  await attempt(`/c/${cid}/lon/${runId}`, async () => { n = await applyToRun(actor, runId); });
+  done(`/c/${cid}/lon/${runId}`, n ? `${n} frånvaroperioder är inräknade i lönen` : 'Ingen ny frånvaro att räkna in');
 }

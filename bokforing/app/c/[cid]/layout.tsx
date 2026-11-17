@@ -23,6 +23,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
             <Link href={`${b}/mitt`}>Min sida</Link>
             <Link href={`${b}/tid`}>⏱ Tidrapport</Link>
             {modules.some((m) => m.id === 'utlagg') && <Link href={`${b}/m/utlagg`}>Utlägg och resor</Link>}
+            <Link href={`${b}/mitt/franvaro`}>Frånvaro och semester</Link>
             <Link href={`${b}/mitt/lon`}>Lönespecifikationer</Link>
             <div className="group">Konto</div>
             <Link href="/konto">Mitt konto</Link>
@@ -64,6 +65,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
           <div className="group">Lön</div>
           <Link href={`${b}/lon`}>Lönekörningar</Link>
           <Link href={`${b}/lon/anstallda`}>Anställda</Link>
+          <Link href={`${b}/lon/franvaro`}>Frånvaro och semester</Link>
           <Link href={`${b}/lon/skattetabeller`}>Skattetabeller</Link>
           <div className="group">Rapporter</div>
           <Link href={`${b}/rapporter`}>Resultat &amp; balans</Link>

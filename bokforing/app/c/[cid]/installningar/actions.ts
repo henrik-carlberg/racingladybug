@@ -20,7 +20,8 @@ export async function updateCompany(cid: number, fd: FormData) {
     await sql`UPDATE companies SET
       name = ${str(fd, 'name')}, address = ${str(fd, 'address')}, postal_code = ${str(fd, 'postal_code')}, city = ${str(fd, 'city')},
       email = ${str(fd, 'email')}, phone = ${str(fd, 'phone')}, vat_number = ${str(fd, 'vat_number')},
-      bankgiro = ${str(fd, 'bankgiro')}, plusgiro = ${str(fd, 'plusgiro')}, iban = ${str(fd, 'iban')},
+      bankgiro = ${str(fd, 'bankgiro')}, plusgiro = ${str(fd, 'plusgiro')}, iban = ${str(fd, 'iban')}, bic = ${str(fd, 'bic').toUpperCase()},
+      swish_number = ${str(fd, 'swish_number').replace(/[^\d]/g, '')},
       f_skatt = ${fd.get('f_skatt') === 'on'}, invoice_terms = ${int(fd, 'invoice_terms') ?? 30},
       late_interest = ${str(fd, 'late_interest')}, vat_period = ${vat}, accounting_method = ${method}, prelskatt_from = ${prelFrom || null}
       WHERE id = ${company.id}`;
