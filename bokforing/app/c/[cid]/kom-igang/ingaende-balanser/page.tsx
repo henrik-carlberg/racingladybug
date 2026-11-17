@@ -15,7 +15,7 @@ export default async function OpeningBalances({ params }: { params: Promise<{ ci
     <div style={{ maxWidth: 980 }}>
       <h1>Ingående balanser</h1>
       <p className="muted">Fyll i saldona per räkenskapsårets första dag. De hittar du i förra årets <b>balansräkning</b> (utgående balans) från ditt tidigare bokföringsprogram eller din redovisningskonsult.
-        Ange belopp som positiva tal – tillgångar till vänster, eget kapital och skulder till höger. Kan du exportera en SIE-fil från det gamla programmet, be din konsult om hjälp att föra över den.</p>
+        Ange belopp som positiva tal – tillgångar till vänster, eget kapital och skulder till höger. Har du en SIE-fil från det gamla programmet kan du <Link href={`/c/${company.id}/kom-igang/sie-import`}>importera den</Link> i stället.</p>
       {years.length === 0 ? <p>Det finns inget öppet räkenskapsår. <Link href={`/c/${company.id}/installningar`}>Lägg till ett under Inställningar</Link>.</p> :
         <OpeningBalanceForm action={saveIb.bind(null, company.id)} accounts={openingBalanceTemplate(company.company_type)} years={years} companyType={company.company_type} />}
     </div>

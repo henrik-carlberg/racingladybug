@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { headers } from 'next/headers';
 import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
@@ -27,6 +28,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
   return (
     <>
       <h1>Inställningar</h1>
+      <p className="small"><Link href={`/c/${c.id}/installningar/gdpr`}>Dataskydd (GDPR): personuppgiftsbiträdesavtal och gallring</Link> · <Link href={`/c/${c.id}/kom-igang/sie-import`}>Importera SIE-fil</Link></p>
       <Flash searchParams={searchParams} />
       {sp.invite && (
         <div className="flash ok">

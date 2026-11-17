@@ -14,7 +14,7 @@ export default function Register({ searchParams }: { searchParams: SP }) {
         <label>Namn<input name="name" required autoComplete="name" /></label>
         <label>E-post<input name="email" type="email" required autoComplete="email" /></label>
         <label>Lösenord (minst 10 tecken)<input name="password" type="password" minLength={10} required autoComplete="new-password" /></label>
-        <label className="check"><input type="checkbox" name="terms" required /> Jag godkänner villkoren och att personuppgifter behandlas för att leverera tjänsten (GDPR)</label>
+        <label className="check"><input type="checkbox" name="terms" required /> Jag godkänner <a href="/villkor" target="_blank">villkoren</a> och att personuppgifter behandlas enligt <a href="/integritet" target="_blank">integritetspolicyn</a></label>
         <button>Skapa konto</button>
       </form>
       <p className="muted">Har du redan ett konto? <Link href="/login">Logga in</Link></p>

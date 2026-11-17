@@ -4,15 +4,28 @@ import { attempt, done, str } from '@/lib/server/action';
 import { createSession, destroySession, hashPassword, verifyPassword, sha256 } from '@/lib/server/auth';
 import { audit } from '@/lib/server/audit';
 import { signupOpen } from '@/lib/billing';
+import { completeLogin, startLogin } from '@/lib/server/mfa';
 
 export async function login(fd: FormData) {
+  let next = '/';
   await attempt('/login', async () => {
     const email = str(fd, 'email').toLowerCase();
     const [u] = await sql<{ id: number; password_hash: string }[]>`SELECT id, password_hash FROM users WHERE email = ${email}`;
     if (!u || !(await verifyPassword(str(fd, 'password'), u.password_hash))) throw new Error('Fel e-post eller lösenord');
-    await createSession(u.id);
+    next = await startLogin(u.id);
   });
-  done('/');
+  done(next);
+}
+
+/** Andra steget: engångskod från appen eller en reservkod */
+export async function loginCode(fd: FormData) {
+  let msg = '';
+  await attempt('/login/kod', async () => {
+    const r = await completeLogin(str(fd, 'code'));
+    if (!r.ok) throw new Error('Fel kod – försök igen');
+    if (r.backupUsed) msg = 'Du loggade in med en reservkod. Den kan inte användas igen.';
+  });
+  done('/', msg || undefined);
 }
 
 function checkPassword(pw: string) {
@@ -41,6 +54,7 @@ export async function register(fd: FormData) {
 
 export async function acceptInvite(fd: FormData) {
   const token = str(fd, 'token');
+  let next = '/';
   await attempt(`/invite/${token}`, async () => {
     const userId = await sql.begin(async (tx) => {
       const [inv] = await tx<{ id: number; company_id: number; email: string; role: string; employee_id: number | null }[]>`
@@ -61,9 +75,9 @@ export async function acceptInvite(fd: FormData) {
       await audit(tx, { companyId: inv.company_id, userId: u.id, action: 'accept_invite', entity: 'membership', details: { role: inv.role } });
       return u.id;
     });
-    await createSession(userId);
+    next = await startLogin(userId);
   });
-  done('/');
+  done(next);
 }
 
 export async function logout() {
