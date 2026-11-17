@@ -5,7 +5,7 @@ import { requireUser } from '@/lib/server/auth';
 import { audit } from '@/lib/server/audit';
 import { basAccountsFor } from '@/lib/bas';
 import { normalizeOrgNumber, normalizePersonalNumber } from '@/lib/validate';
-import { addDays } from '@/lib/format';
+import { defaultFiscalEnd, fiscalYearError } from '@/lib/fiscal';
 
 export async function createCompany(fd: FormData) {
   const user = await requireUser();
@@ -16,12 +16,15 @@ export async function createCompany(fd: FormData) {
     const orgnr = type === 'EF' ? (normalizePersonalNumber(raw)?.slice(2).replace(/^(\d{6})/, '$1-') ?? null) : normalizeOrgNumber(raw);
     if (!orgnr) throw new Error(type === 'EF' ? 'Ogiltigt personnummer' : 'Ogiltigt organisationsnummer');
     const start = str(fd, 'fy_start');
-    if (!/^\d{4}-\d{2}-01$/.test(start)) throw new Error('Räkenskapsåret måste börja den 1:a i en månad');
-    const end = addDays(new Date(Date.UTC(Number(start.slice(0, 4)) + 1, Number(start.slice(5, 7)) - 1, 1)).toISOString().slice(0, 10), -1);
+    const end = str(fd, 'fy_end') || defaultFiscalEnd(start, type);
+    const fyErr = fiscalYearError(start, end, type);
+    if (fyErr) throw new Error(fyErr);
+    const vat = ['month', 'quarter', 'year'].includes(str(fd, 'vat_period')) ? str(fd, 'vat_period') : 'quarter';
+    const method = str(fd, 'accounting_method') === 'cash' ? 'cash' : 'invoice';
     await sql.begin(async (tx) => {
       const [c] = await tx<{ id: number }[]>`
-        INSERT INTO companies (name, orgnr, company_type, vat_period)
-        VALUES (${str(fd, 'name')}, ${orgnr}, ${type}, ${str(fd, 'vat_period') || 'quarter'}) RETURNING id`;
+        INSERT INTO companies (name, orgnr, company_type, vat_period, accounting_method)
+        VALUES (${str(fd, 'name')}, ${orgnr}, ${type}, ${vat}, ${method}) RETURNING id`;
       id = c.id;
       await tx`INSERT INTO memberships (user_id, company_id, role) VALUES (${user.id}, ${id}, 'owner')`;
       await tx`INSERT INTO fiscal_years (company_id, start_date, end_date) VALUES (${id}, ${start}, ${end})`;

@@ -15,6 +15,7 @@ export interface Company {
   address: string; postal_code: string; city: string; email: string; phone: string; vat_number: string;
   bankgiro: string; plusgiro: string; iban: string; f_skatt: boolean; invoice_terms: number; late_interest: string;
   locked_until: string | null; next_invoice_no: number;
+  accounting_method: 'invoice' | 'cash'; prelskatt_from: string | null;
 }
 
 export const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');

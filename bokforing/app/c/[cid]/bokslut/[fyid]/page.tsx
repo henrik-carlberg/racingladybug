@@ -7,7 +7,7 @@ import { ink2Due, nextWorkingDay } from '@/lib/deadlines';
 import { Flash, type SP } from '@/components/ui';
 import { Help } from '@/components/Help';
 import { kr } from '@/lib/format';
-import { carry, close, tax } from '../actions';
+import { carry, close, openInvoices, tax } from '../actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +29,7 @@ export default async function YearendYear({ params, searchParams }: { params: Pr
   const y = Number(s.fy.end_date.slice(0, 4));
   const ended = s.fy.end_date < new Date().toISOString().slice(0, 10);
   const issues = [
+    s.cashOpenInvoices && `${s.cashOpenInvoices} obetalda fakturor ska bokföras per ${s.fy.end_date} (kontantmetoden)`,
     s.unreconciledBank && `${s.unreconciledBank} banktransaktioner är inte avstämda`,
     s.draftInvoices && `${s.draftInvoices} fakturautkast är inte bokförda`,
     s.unpaidSupplierInvoicesWithoutApproval && `${s.unpaidSupplierInvoicesWithoutApproval} leverantörsfakturor väntar på attest`,
@@ -47,6 +48,17 @@ export default async function YearendYear({ params, searchParams }: { params: Pr
 
       <Step n={1} title="Stäm av och bokför allt för året" done={issues.length === 0}>
         {issues.length ? <ul className="small">{issues.map((i) => <li key={i}>{i}</li>)}</ul> : <p className="small">Allt ser avstämt ut.</p>}
+        {(s.accountingMethod === 'cash' || s.cashOpenInvoices > 0) && !s.fy.closed && (
+          <div className="stack" style={{ margin: '.5rem 0' }}>
+            <p className="small">Du använder <b>kontantmetoden</b> <Help term="kontantmetoden" />. Registrera först alla betalningar som kommit in eller gått ut till och med {s.fy.end_date}.
+              Sedan bokförs de fakturor som fortfarande är obetalda per bokslutsdagen – gör det <b>innan</b> du bokför årets sista momsavräkning, eftersom momsen på dem hör till året.</p>
+            {s.cashOpenInvoices > 0 && (
+              <form action={openInvoices.bind(null, company.id, s.fy.id)}>
+                <button className="secondary" disabled={!ended}>Bokför {s.cashOpenInvoices} obetalda fakturor per {s.fy.end_date}</button>
+              </form>
+            )}
+          </div>
+        )}
         <p className="small muted">Kontrollera också att bankens saldo per {s.fy.end_date} stämmer med konto 1930, att alla kvitton och fakturor för året är bokförda, och att
           kundfordringar och leverantörsskulder stämmer. <Link href={`${b}/bank`}>Bank</Link> · <Link href={`${b}/rapporter/moms`}>Moms</Link> · <Link href={`${b}/rapporter?fy=${s.fy.id}`}>Balansräkning</Link></p>
       </Step>

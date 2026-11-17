@@ -63,6 +63,8 @@ export interface DeadlineInput {
   fiscalYears: { start: string; end: string }[];
   hasEmployees: boolean;
   fSkatt: boolean;
+  /** Första månad (YYYY-MM) då debiterad preliminärskatt betalas, t.ex. efter uppskov */
+  fSkattFrom?: string;
   from: string; // visa deadlines från och med
   to: string; // till och med
 }
@@ -133,6 +135,7 @@ export function computeDeadlines(o: DeadlineInput): Deadline[] {
   // Debiterad preliminärskatt (F-skatt) – varje månad
   if (o.fSkatt) {
     for (let y = fromY; y <= toY; y++) for (let m = 1; m <= 12; m++) {
+      if (o.fSkattFrom && `${y}-${pad(m)}` < o.fSkattFrom) continue;
       out.push({ key: `prel:${y}-${pad(m)}`, kind: 'prelskatt', title: `Preliminärskatt ${MONTHS[m - 1]} ${y}`, due: twelfth(y, m),
         help: 'Betala månadens debiterade preliminärskatt (F-skatt) till skattekontot. Beloppet står i ditt beslut från Skatteverket.' });
     }

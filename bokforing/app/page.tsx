@@ -49,15 +49,24 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
         </div>
         <div className="row">
           <label>Räkenskapsåret börjar<input name="fy_start" type="date" defaultValue={`${year}-01-01`} required /></label>
+          <label>och slutar<input name="fy_end" type="date" defaultValue={`${year}-12-31`} required /></label>
+        </div>
+        <div className="row">
           <label>Momsredovisning
             <select name="vat_period" defaultValue="quarter">
               <option value="month">Månad</option><option value="quarter">Kvartal</option><option value="year">År</option>
             </select>
           </label>
+          <label>Redovisningsmetod
+            <select name="accounting_method" defaultValue="invoice">
+              <option value="invoice">Faktureringsmetoden</option><option value="cash">Kontantmetoden (bokslutsmetoden)</option>
+            </select>
+          </label>
         </div>
         <button>Skapa bolag</button>
-        <p className="small muted" style={{ margin: 0 }}>Räkenskapsår: oftast kalenderår (1 januari). Momsredovisning: står i ditt registreringsbevis från Skatteverket –
-          de flesta små företag redovisar per kvartal eller år (omsättning under 1 miljon kr). Allt kan ändras senare under Inställningar.</p>
+        <p className="small muted" style={{ margin: 0 }}>Allt står i registerutdraget från Skatteverket. Räkenskapsår: oftast kalenderår. Det första året börjar när verksamheten startar och
+          får förlängas till högst 18 månader (t.ex. 31 oktober–31 december året efter). Momsredovisning: de flesta små företag redovisar per kvartal eller år.
+          Kontantmetoden innebär att fakturor bokförs när de betalas. Allt kan ändras senare under Inställningar.</p>
       </form>
     </div>
   );

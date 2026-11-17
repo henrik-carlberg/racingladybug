@@ -7,6 +7,8 @@ import { fromSigned } from '@/lib/ledger-lines';
 import { addDays } from '@/lib/format';
 import type { Actor } from './actor';
 import { optInt } from './input';
+import { bookOpenInvoicesAtYearEnd } from './invoices';
+import { bookOpenSupplierInvoicesAtYearEnd } from './suppliers';
 
 export const CORPORATE_TAX_RATE = 20.6; // procent, bolagsskatt (gäller sedan 2021)
 /** Konton som normalt inte är avdragsgilla vid inkomstbeskattningen (läggs tillbaka i INK2S) */
@@ -31,11 +33,14 @@ export interface YearStatus {
   draftInvoices: number;
   unpaidSupplierInvoicesWithoutApproval: number;
   vatUnsettled: boolean;
+  accountingMethod: 'invoice' | 'cash';
+  /** Kontantmetoden: obetalda fakturor (kund + leverantör) som ska bokföras per bokslutsdagen */
+  cashOpenInvoices: number;
 }
 
 export async function yearStatus(companyId: number, fyId: number): Promise<YearStatus> {
   const y = await fy(companyId, fyId);
-  const [c] = await sql<{ company_type: 'AB' | 'EF' }[]>`SELECT company_type FROM companies WHERE id = ${companyId}`;
+  const [c] = await sql<{ company_type: 'AB' | 'EF'; accounting_method: 'invoice' | 'cash' }[]>`SELECT company_type, accounting_method FROM companies WHERE id = ${companyId}`;
   const sums = await accountSums(companyId, y.start_date, y.end_date);
   let pl = 0, tax = 0, nonDed = 0;
   for (const [n, v] of sums) {
@@ -47,8 +52,10 @@ export async function yearStatus(companyId: number, fyId: number): Promise<YearS
   const taxable = Math.max(0, resultBeforeTax + nonDed);
   // Skatten avrundas nedåt till hela kronor (approximation – slutlig skatt fastställs i INK2)
   const suggestedTax = c.company_type === 'AB' ? Math.floor((taxable * CORPORATE_TAX_RATE) / 100 / 100) * 100 : 0;
-  const [o] = await sql<{ bank: number; drafts: number; si: number; vat: boolean }[]>`
+  const [o] = await sql<{ bank: number; drafts: number; si: number; vat: boolean; cash: number }[]>`
     SELECT
+      (SELECT count(*) FROM invoices WHERE company_id = ${companyId} AND status = 'booked' AND voucher_id IS NULL AND invoice_date <= ${y.end_date})::int +
+      (SELECT count(*) FROM supplier_invoices WHERE company_id = ${companyId} AND status IN ('booked', 'approved') AND voucher_id IS NULL AND invoice_date <= ${y.end_date})::int AS cash,
       (SELECT count(*) FROM bank_transactions WHERE company_id = ${companyId} AND status = 'unmatched' AND booking_date <= ${y.end_date})::int AS bank,
       (SELECT count(*) FROM invoices WHERE company_id = ${companyId} AND status = 'draft' AND invoice_date <= ${y.end_date})::int AS drafts,
       (SELECT count(*) FROM supplier_invoices WHERE company_id = ${companyId} AND status = 'booked' AND invoice_date <= ${y.end_date})::int AS si,
@@ -57,6 +64,7 @@ export async function yearStatus(companyId: number, fyId: number): Promise<YearS
     fy: y, companyType: c.company_type, resultBeforeTax, taxBooked: tax, nonDeductible: nonDed, suggestedTax,
     resultAfterTax: resultBeforeTax - tax, resultBooked: (sums.get(8999) ?? 0) !== 0,
     unreconciledBank: o.bank, draftInvoices: o.drafts, unpaidSupplierInvoicesWithoutApproval: o.si, vatUnsettled: o.vat,
+    accountingMethod: c.accounting_method, cashOpenInvoices: o.cash,
   };
 }
 
@@ -73,11 +81,24 @@ export async function bookTax(actor: Actor, fyId: number, input: Record<string, 
   }));
 }
 
+/** Kontantmetoden: bokför alla obetalda kund- och leverantörsfakturor per räkenskapsårets sista dag */
+export async function bookOpenInvoices(actor: Actor, fyId: number) {
+  const s = await yearStatus(actor.companyId, fyId);
+  if (!s.cashOpenInvoices) throw new ValidationError('Det finns inga obokförda fakturor');
+  if (s.fy.closed) throw new ConflictError('Räkenskapsåret är stängt');
+  return sql.begin(async (tx) => {
+    const customers = await bookOpenInvoicesAtYearEnd(tx, actor, s.fy.end_date);
+    const suppliers = await bookOpenSupplierInvoicesAtYearEnd(tx, actor, s.fy.end_date);
+    return { customers, suppliers };
+  });
+}
+
 /** Bokför årets resultat (8999 mot 2099 för AB, 2019 för EF) och stänger räkenskapsåret */
 export async function closeYear(actor: Actor, fyId: number) {
   const s = await yearStatus(actor.companyId, fyId);
   if (s.fy.closed) throw new ConflictError('Räkenskapsåret är redan stängt');
   if (s.resultBooked) throw new ConflictError('Årets resultat är redan bokfört');
+  if (s.cashOpenInvoices) throw new ConflictError('Bokför först de obetalda fakturorna per bokslutsdagen (steg 1)');
   const equity = s.companyType === 'AB' ? 2099 : 2019;
   const res = s.resultAfterTax; // vinst positiv
   return sql.begin(async (tx) => {

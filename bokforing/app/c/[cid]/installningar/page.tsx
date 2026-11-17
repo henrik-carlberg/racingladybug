@@ -64,7 +64,17 @@ export default async function Settings({ params, searchParams }: { params: Promi
           </label>
           <label>Text om dröjsmålsränta<input name="late_interest" defaultValue={c.late_interest} /></label>
         </div>
+        <div className="row">
+          <label>Redovisningsmetod <Help term="kontantmetoden" />
+            <select name="accounting_method" defaultValue={c.accounting_method}>
+              <option value="invoice">Faktureringsmetoden</option><option value="cash">Kontantmetoden (bokslutsmetoden)</option>
+            </select>
+          </label>
+          <label>Preliminärskatt betalas från (månad)<input name="prelskatt_from" type="month" defaultValue={c.prelskatt_from ?? ''} placeholder="ÅÅÅÅ-MM" /></label>
+        </div>
         <label className="check"><input type="checkbox" name="f_skatt" defaultChecked={c.f_skatt} /> Godkänd för F-skatt</label>
+        <p className="small muted" style={{ margin: 0 }}>Uppgifterna står i registerutdraget från Skatteverket. Har du fått uppskov med preliminärskatten
+          anger du den första månaden du ska betala, så visas inga tidigare betalningar under Deadlines.</p>
         <div><button>Spara</button></div>
       </form>
 
@@ -74,17 +84,30 @@ export default async function Settings({ params, searchParams }: { params: Promi
         <tbody>
           {years.map((y) => (
             <tr key={y.id}>
-              <td>{y.start_date}</td><td>{y.end_date}</td>
+              <td colSpan={2}>{y.closed || !isOwner ? <>{y.start_date} – {y.end_date}</> : (
+                <form action={a.updateFiscalYear.bind(null, c.id, y.id)} className="row" style={{ alignItems: 'center', gap: '.4rem' }}>
+                  <input name="start" type="date" defaultValue={y.start_date} aria-label="Från" style={{ maxWidth: '11rem' }} />
+                  <input name="end" type="date" defaultValue={y.end_date} aria-label="Till" style={{ maxWidth: '11rem' }} />
+                  <button className="link">Ändra</button>
+                </form>
+              )}</td>
               <td>{y.closed ? <span className="badge">Stängt</span> : <span className="badge ok">Öppet</span>}</td>
               <td className="num">
-                <form action={a.setFiscalYearClosed.bind(null, c.id, y.id, !y.closed)}>
+                <form action={a.setFiscalYearClosed.bind(null, c.id, y.id, !y.closed)} style={{ display: 'inline' }}>
                   <button className="link">{y.closed ? 'Öppna' : 'Stäng'}</button>
                 </form>
+                {isOwner && !y.closed && years.length > 1 && (
+                  <form action={a.deleteFiscalYear.bind(null, c.id, y.id)} style={{ display: 'inline', marginLeft: '.75rem' }}>
+                    <button className="link">Ta bort</button>
+                  </form>
+                )}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+      <p className="small muted">Det första räkenskapsåret får vara kortare eller förlängas till högst 18 månader och ska sluta vid en månads slut
+        {c.company_type === 'EF' ? ' (31 december för enskild firma)' : ''}. Ett öppet år kan ändras så länge alla verifikationer ryms i de nya datumen.</p>
       <form action={a.addFiscalYear.bind(null, c.id)} className="card row" style={{ marginTop: '1rem' }}>
         <label>Nytt räkenskapsår från<input name="start" type="date" required /></label>
         <label>till<input name="end" type="date" required /></label>

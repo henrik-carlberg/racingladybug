@@ -62,6 +62,7 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
       <div className="grid" style={{ marginBottom: '1rem' }}>
         {[
           ['📷', 'Kvitto eller utlägg', 'Fota och bokför', `/c/${id}/kvitto`],
+          ['⏱', 'Rapportera tid', 'Per uppdrag och aktivitet', `/c/${id}/tid`],
           ['🧾', 'Skicka faktura', 'Till en kund', `/c/${id}/fakturor/ny`],
           ['📥', 'Leverantörsfaktura', 'Registrera och betala', `/c/${id}/leverantorsfakturor/ny`],
           ['🏦', 'Stäm av banken', 'Matcha transaktioner', `/c/${id}/bank/avstamning`],
