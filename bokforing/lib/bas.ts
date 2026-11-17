@@ -71,6 +71,7 @@ const ACCOUNTS: Acc[] = [
   [3960, 'Valutakursvinster på fordringar och skulder av rörelsekaraktär'],
   // 4 Varor och material
   [4010, 'Inköp material och varor'],
+  [4960, 'Förändring av lager av handelsvaror'],
   [4535, 'Inköp av tjänster från annat EU-land, 25 %'],
   [4600, 'Legoarbeten och underentreprenader'],
   // 5–6 Övriga externa kostnader
