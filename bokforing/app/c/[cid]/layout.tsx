@@ -48,6 +48,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
           <Link href={`${b}/integrationer`}>Integrationer (API)</Link>
           <Link href={`${b}/historik`}>Behandlingshistorik</Link>
           <Link href="/">Byt bolag</Link>
+          <Link href="/konto">Mitt konto</Link>
         </nav>
       </aside>
       <main>{children}</main>

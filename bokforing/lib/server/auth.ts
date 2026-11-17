@@ -37,6 +37,12 @@ export async function destroySession() {
   c.delete(COOKIE);
 }
 
+/** Loggar ut användarens alla andra sessioner (t.ex. efter lösenordsbyte) */
+export async function destroyOtherSessions(userId: number) {
+  const token = (await cookies()).get(COOKIE)?.value;
+  await sql`DELETE FROM sessions WHERE user_id = ${userId} AND id <> ${token ? sha256(token) : ''}`;
+}
+
 export async function currentUser(): Promise<User | null> {
   const token = (await cookies()).get(COOKIE)?.value;
   if (!token) return null;

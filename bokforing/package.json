@@ -15,9 +15,11 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "vercel-build": "node scripts/migrate.mjs && next build",
-    "test:e2e": "node tests/e2e/flow.cjs && node tests/e2e/api.cjs"
+    "test:e2e": "node tests/e2e/flow.cjs && node tests/e2e/api.cjs && node tests/e2e/passkey.cjs"
   },
   "dependencies": {
+    "@simplewebauthn/browser": "^13.3.0",
+    "@simplewebauthn/server": "^13.3.3",
     "bcryptjs": "^3.0.2",
     "next": "^15.5.29",
     "postgres": "^3.4.7",

@@ -8,6 +8,9 @@ const OUT = process.argv[2] || require('os').tmpdir();
 const XSD = require('path').join(__dirname, '../fixtures/agi/arbetsgivardeklaration_1.1.xsd');
 const log = (...a) => console.log('✔', ...a);
 
+// Väntar på att URL:en innehåller ett visst meddelande (inte bara "ok=", som kan finnas kvar från förra steget)
+const waitMsg = (page, text) => page.waitForURL((u) => decodeURIComponent(u.toString()).includes(text));
+
 async function expectNoError(page, step) {
   const err = await page.locator('.flash.error').first().textContent({ timeout: 300 }).catch(() => null);
   if (err) throw new Error(`${step}: ${err}`);
@@ -64,7 +67,7 @@ async function expectNoError(page, step) {
   await page.click('button:has-text("Spara utkast")');
   await page.waitForURL(/fakturor\/\d+\?ok/);
   await page.click('button:has-text("Bokför faktura")');
-  await page.waitForURL(/ok=/);
+  await waitMsg(page, 'klar att skicka');
   await expectNoError(page, 'bokför faktura');
   const invText = await page.locator('.doc').textContent();
   if (!invText.includes('11 875,00') && !invText.includes('11 875,00')) throw new Error('fel fakturabelopp: ' + invText.slice(0, 400));
@@ -73,7 +76,7 @@ async function expectNoError(page, step) {
   await page.screenshot({ path: OUT + '/faktura.png', fullPage: true });
   await page.fill('input[name=date]', '2026-05-30');
   await page.click('button:has-text("Registrera inbetalning")');
-  await page.waitForURL(/ok=/);
+  await waitMsg(page, 'Inbetalningen är bokförd');
   await expectNoError(page, 'inbetalning');
   log('inbetalning');
 
@@ -96,7 +99,7 @@ async function expectNoError(page, step) {
   await page.waitForURL(/leverantorsfakturor\/\d+\?ok/);
   await expectNoError(page, 'levfaktura');
   await page.click('button:has-text("Attestera")');
-  await page.waitForURL(/ok=/);
+  await waitMsg(page, 'attesterad för betalning');
   await page.goto(B + '/leverantorsfakturor/betalning');
   await page.fill('input[name=date]', '2026-05-29');
   await page.click('button:has-text("Bokför valda som betalda")');
@@ -136,7 +139,7 @@ async function expectNoError(page, step) {
   const runText = await page.locator('main').textContent();
   log('lönespec', runText.match(/Skatt \(Tabell 32, kolumn 1\)([\d\s ,]+)/)?.[1]);
   await page.click('button:has-text("Bokför lönekörning")');
-  await page.waitForURL(/ok=/);
+  await waitMsg(page, 'Lönekörningen är bokförd');
   await expectNoError(page, 'bokför lön');
   await page.screenshot({ path: OUT + '/lon.png', fullPage: true });
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('a:has-text("Ladda ner AGI-fil")')]);
@@ -169,7 +172,7 @@ async function expectNoError(page, step) {
   await page.waitForURL(/verifikationer\/\d+\?ok/);
   await page.fill('input[name=reason]', 'Fel konto');
   await page.click('button:has-text("Bokför rättelse")');
-  await page.waitForURL(/ok=/);
+  await waitMsg(page, 'Rättelseverifikationen');
   await expectNoError(page, 'rättelse');
   log('manuell verifikation + rättelse');
 

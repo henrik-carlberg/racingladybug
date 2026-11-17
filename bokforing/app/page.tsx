@@ -14,13 +14,20 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
     SELECT c.id, c.name, c.orgnr, m.role FROM companies c JOIN memberships m ON m.company_id = c.id
     WHERE m.user_id = ${user.id} ORDER BY c.name`;
   const year = new Date().getFullYear();
+  const [{ n: passkeys }] = await sql<{ n: number }[]>`SELECT count(*)::int AS n FROM passkeys WHERE user_id = ${user.id}`;
   return (
     <div className="center" style={{ maxWidth: 720 }}>
       <div className="header">
         <h1>Mina bolag</h1>
-        <form action={logout}><button className="secondary">Logga ut ({user.name})</button></form>
+        <div className="actions" style={{ margin: 0 }}>
+          <Link className="btn secondary" href="/konto">Mitt konto</Link>
+          <form action={logout}><button className="secondary">Logga ut ({user.name})</button></form>
+        </div>
       </div>
       <Flash searchParams={searchParams} />
+      {passkeys === 0 && (
+        <div className="card small">🔑 Logga in snabbare och säkrare: <Link href="/konto">lägg till en passkey</Link>.</div>
+      )}
       {companies.length > 0 && (
         <table>
           <thead><tr><th>Bolag</th><th>Org.nr</th><th>Roll</th></tr></thead>

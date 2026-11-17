@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { login } from '../auth-actions';
 import { Flash, type SP } from '@/components/ui';
 import { sql } from '@/lib/db';
+import { PasskeyLogin } from '@/components/Passkeys';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,8 +12,9 @@ export default async function Login({ searchParams }: { searchParams: SP }) {
     <div className="center">
       <h1>Logga in</h1>
       <Flash searchParams={searchParams} />
+      <PasskeyLogin />
       <form action={login} className="card stack">
-        <label>E-post<input name="email" type="email" required autoComplete="email" /></label>
+        <label>E-post<input name="email" type="email" required autoComplete="username webauthn" /></label>
         <label>Lösenord<input name="password" type="password" required autoComplete="current-password" /></label>
         <button>Logga in</button>
       </form>

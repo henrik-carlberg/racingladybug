@@ -27,7 +27,7 @@ const receiver = http.createServer((req, res) => {
   await page.goto(BASE + '/login');
   await page.fill('input[name=email]', 'agare@example.com');
   await page.fill('input[name=password]', 'hemligtlosen1');
-  await page.click('button:has-text("Logga in")');
+  await page.click('form button:has-text("Logga in")');
   await page.waitForURL(BASE + '/');
   const B = `${BASE}/c/1`;
 
@@ -182,7 +182,7 @@ const receiver = http.createServer((req, res) => {
   await p2.goto(BASE + '/login');
   await p2.fill('input[name=email]', 'konsult@example.com');
   await p2.fill('input[name=password]', 'konsultlosen1');
-  await p2.click('button:has-text("Logga in")');
+  await p2.click('form button:has-text("Logga in")');
   await p2.waitForURL(BASE + '/');
   await p2.goto(B + '/integrationer');
   assert(await p2.locator('text=Endast bolagets ägare').count() && !(await p2.locator('input[name=scopes]').count()), 'konsult ska inte se nyckelhantering');
