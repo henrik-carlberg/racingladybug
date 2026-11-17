@@ -15,7 +15,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "vercel-build": "node scripts/migrate.mjs && next build",
-    "test:e2e": "node tests/e2e/flow.cjs"
+    "test:e2e": "node tests/e2e/flow.cjs && node tests/e2e/api.cjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

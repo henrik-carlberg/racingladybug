@@ -1,9 +1,12 @@
 import 'server-only';
 import { sql, type Tx } from '@/lib/db';
 import { totals, reverseLines, type Line } from '@/lib/ledger-lines';
-import { audit } from './audit';
+import { auditBy } from './audit';
+import { emit } from './events';
+import type { Actor } from '@/lib/services/actor';
 
-export class BookkeepingError extends Error {}
+import { BookkeepingError } from '@/lib/errors';
+export { BookkeepingError };
 
 export interface FiscalYear { id: number; start_date: string; end_date: string; closed: boolean }
 
@@ -21,8 +24,7 @@ export async function fiscalYearFor(db: Tx | typeof sql, companyId: number, date
 }
 
 export interface VoucherInput {
-  companyId: number;
-  userId: number;
+  actor: Actor;
   date: string;
   description: string;
   lines: Line[];
@@ -37,6 +39,7 @@ export interface VoucherInput {
  * och tilldelar nästa löpnummer i serien (utan luckor).
  */
 export async function createVoucher(tx: Tx, v: VoucherInput): Promise<{ id: number; number: number; series: string }> {
+  const companyId = v.actor.companyId;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v.date)) throw new BookkeepingError('Ogiltigt datum');
   if (!v.description.trim()) throw new BookkeepingError('Verifikationstext saknas');
   const lines = v.lines.filter((l) => l.debit !== 0 || l.credit !== 0);
@@ -48,33 +51,38 @@ export async function createVoucher(tx: Tx, v: VoucherInput): Promise<{ id: numb
   }
 
   const [company] = await tx<{ locked_until: string | null }[]>`
-    SELECT to_char(locked_until,'YYYY-MM-DD') AS locked_until FROM companies WHERE id = ${v.companyId} FOR UPDATE`;
+    SELECT to_char(locked_until,'YYYY-MM-DD') AS locked_until FROM companies WHERE id = ${companyId} FOR UPDATE`;
   if (company.locked_until && v.date <= company.locked_until) {
     throw new BookkeepingError(`Perioden är låst till och med ${company.locked_until}`);
   }
-  const fy = await fiscalYearFor(tx, v.companyId, v.date);
+  const fy = await fiscalYearFor(tx, companyId, v.date);
   if (!fy) throw new BookkeepingError(`Inget räkenskapsår omfattar ${v.date}. Lägg upp räkenskapsåret under Inställningar.`);
   if (fy.closed) throw new BookkeepingError('Räkenskapsåret är stängt');
 
   const numbers = [...new Set(lines.map((l) => l.account))];
   const existing = await tx<{ number: number }[]>`
-    SELECT number FROM accounts WHERE company_id = ${v.companyId} AND number IN ${tx(numbers)} AND active`;
+    SELECT number FROM accounts WHERE company_id = ${companyId} AND number IN ${tx(numbers)} AND active`;
   const missing = numbers.filter((n) => !existing.some((e) => e.number === n));
   if (missing.length) throw new BookkeepingError(`Kontot ${missing.join(', ')} finns inte eller är inaktivt i kontoplanen`);
 
   const series = v.series ?? 'A';
   const [{ next }] = await tx<{ next: number }[]>`
     SELECT COALESCE(MAX(number), 0) + 1 AS next FROM vouchers
-    WHERE company_id = ${v.companyId} AND fiscal_year_id = ${fy.id} AND series = ${series}`;
+    WHERE company_id = ${companyId} AND fiscal_year_id = ${fy.id} AND series = ${series}`;
   const [row] = await tx<{ id: number }[]>`
-    INSERT INTO vouchers (company_id, fiscal_year_id, series, number, date, description, source_type, source_id, corrects_id, created_by)
-    VALUES (${v.companyId}, ${fy.id}, ${series}, ${next}, ${v.date}, ${v.description.trim()}, ${v.sourceType ?? 'manual'},
-            ${v.sourceId ?? null}, ${v.correctsId ?? null}, ${v.userId})
+    INSERT INTO vouchers (company_id, fiscal_year_id, series, number, date, description, source_type, source_id, corrects_id, created_by, api_key_id)
+    VALUES (${companyId}, ${fy.id}, ${series}, ${next}, ${v.date}, ${v.description.trim()}, ${v.sourceType ?? 'manual'},
+            ${v.sourceId ?? null}, ${v.correctsId ?? null}, ${v.actor.userId}, ${v.actor.apiKeyId})
     RETURNING id`;
   await tx`INSERT INTO voucher_lines ${tx(
     lines.map((l) => ({ voucher_id: row.id, account_number: l.account, debit: l.debit, credit: l.credit, description: l.description ?? '' })),
   )}`;
-  await audit(tx, { companyId: v.companyId, userId: v.userId, action: 'create', entity: 'voucher', entityId: row.id, details: { series, number: next, date: v.date } });
+  await auditBy(tx, v.actor, 'create', 'voucher', row.id, { series, number: next, date: v.date });
+  await emit(tx, companyId, 'voucher.created', {
+    id: row.id, object: 'voucher', series, number: next, date: v.date, description: v.description.trim(),
+    source_type: v.sourceType ?? 'manual', source_id: v.sourceId ?? null, corrects_id: v.correctsId ?? null,
+    lines: lines.map((l) => ({ account: l.account, debit: l.debit, credit: l.credit, description: l.description ?? '' })),
+  });
   return { id: row.id, number: next, series };
 }
 
@@ -85,7 +93,8 @@ export async function voucherLines(db: Tx | typeof sql, voucherId: number): Prom
 }
 
 /** Rättelseverifikation (BFL 5 kap 5 §): ny verifikation med omvända belopp som hänvisar till originalet. */
-export async function reverseVoucher(tx: Tx, companyId: number, userId: number, voucherId: number, date: string, reason: string) {
+export async function reverseVoucher(tx: Tx, actor: Actor, voucherId: number, date: string, reason: string) {
+  const companyId = actor.companyId;
   const [orig] = await tx<{ id: number; series: string; number: number; description: string }[]>`
     SELECT id, series, number, description FROM vouchers WHERE id = ${voucherId} AND company_id = ${companyId}`;
   if (!orig) throw new BookkeepingError('Verifikationen finns inte');
@@ -93,7 +102,7 @@ export async function reverseVoucher(tx: Tx, companyId: number, userId: number, 
   if (already.length) throw new BookkeepingError('Verifikationen är redan makulerad med en rättelse');
   const lines = reverseLines(await voucherLines(tx, voucherId));
   return createVoucher(tx, {
-    companyId, userId, date,
+    actor, date,
     description: `Rättelse av ${orig.series}${orig.number}: ${reason || orig.description}`,
     lines, sourceType: 'reversal', correctsId: orig.id,
   });

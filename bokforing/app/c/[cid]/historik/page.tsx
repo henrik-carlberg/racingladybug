@@ -7,9 +7,10 @@ export default async function History({ params }: { params: Promise<{ cid: strin
   const { cid } = await params;
   const { company } = await requireCompany(cid);
   const rows = await sql<{ id: number; at: string; user: string | null; action: string; entity: string; entity_id: number | null; details: unknown }[]>`
-    SELECT a.id, to_char(a.created_at AT TIME ZONE 'Europe/Stockholm', 'YYYY-MM-DD HH24:MI') AS at, u.name AS user,
+    SELECT a.id, to_char(a.created_at AT TIME ZONE 'Europe/Stockholm', 'YYYY-MM-DD HH24:MI') AS at,
+           u.name || COALESCE(' (API: ' || k.name || ')', '') AS user,
            a.action, a.entity, a.entity_id, a.details
-    FROM audit_log a LEFT JOIN users u ON u.id = a.user_id WHERE a.company_id = ${company.id} ORDER BY a.id DESC LIMIT 500`;
+    FROM audit_log a LEFT JOIN users u ON u.id = a.user_id LEFT JOIN api_keys k ON k.id = a.api_key_id WHERE a.company_id = ${company.id} ORDER BY a.id DESC LIMIT 500`;
   return (
     <>
       <h1>Behandlingshistorik</h1>

@@ -2,11 +2,13 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { requireCompany } from '@/lib/server/auth';
 import { ROLE_LABEL } from '@/lib/format';
+import { enabledModules } from '@/lib/modules/enabled';
 
 export default async function CompanyLayout({ children, params }: { children: ReactNode; params: Promise<{ cid: string }> }) {
   const { cid } = await params;
   const { company, role, user } = await requireCompany(cid);
   const b = `/c/${company.id}`;
+  const modules = await enabledModules(company.id);
   return (
     <div className="shell">
       <aside className="side">
@@ -34,8 +36,16 @@ export default async function CompanyLayout({ children, params }: { children: Re
           <Link href={`${b}/rapporter/huvudbok`}>Huvudbok</Link>
           <Link href={`${b}/rapporter/moms`}>Moms</Link>
           <Link href={`${b}/rapporter/export`}>Export (SIE)</Link>
+          {modules.map((m) => (
+            <div key={m.id}>
+              <div className="group">{m.name}</div>
+              {(m.nav ?? [{ label: m.name, path: '' }]).map((n) => <Link key={n.path} href={`${b}/m/${m.id}${n.path ? '/' + n.path : ''}`}>{n.label}</Link>)}
+            </div>
+          ))}
           <div className="group">Bolaget</div>
           <Link href={`${b}/installningar`}>Inställningar</Link>
+          <Link href={`${b}/moduler`}>Moduler</Link>
+          <Link href={`${b}/integrationer`}>Integrationer (API)</Link>
           <Link href={`${b}/historik`}>Behandlingshistorik</Link>
           <Link href="/">Byt bolag</Link>
         </nav>
