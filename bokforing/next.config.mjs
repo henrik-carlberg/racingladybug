@@ -12,6 +12,10 @@ const nextConfig = {
         { key: 'Referrer-Policy', value: 'same-origin' },
         { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
       ],
+    }, {
+      // Fakturor i inkorgen visas i en ram på granskningssidan (samma ursprung)
+      source: '/c/:cid/leverantorsfakturor/inkorg/:id/fil',
+      headers: [{ key: 'X-Frame-Options', value: 'SAMEORIGIN' }],
     }];
   },
 };

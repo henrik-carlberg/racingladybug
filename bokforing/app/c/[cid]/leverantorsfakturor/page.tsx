@@ -17,12 +17,14 @@ export default async function SupplierInvoices({ params, searchParams }: { param
     FROM supplier_invoices i JOIN suppliers s ON s.id = i.supplier_id WHERE i.company_id = ${company.id}
     ${status === 'open' ? sql`AND i.status <> 'paid'` : status === 'all' ? sql`` : sql`AND i.status = ${status}`}
     ORDER BY i.due_date, i.id LIMIT 500`;
+  const [{ inbox }] = await sql<{ inbox: number }[]>`SELECT count(*)::int AS inbox FROM inbox_documents WHERE company_id = ${company.id} AND status IN ('new','ready','failed')`;
   const t = today();
   const b = `/c/${company.id}`;
   return (
     <>
       <Header title="Leverantörsfakturor">
-        <Link className="btn" href={`${b}/leverantorsfakturor/ny`}>Registrera faktura</Link>
+        <Link className="btn" href={`${b}/leverantorsfakturor/inkorg`}>Inkorg{inbox > 0 ? ` (${inbox})` : ''}</Link>
+        <Link className="btn secondary" href={`${b}/leverantorsfakturor/ny`}>Registrera faktura</Link>
         <Link className="btn secondary" href={`${b}/leverantorsfakturor/betalning`}>Betalningsförslag</Link>
       </Header>
       <Flash searchParams={searchParams} />

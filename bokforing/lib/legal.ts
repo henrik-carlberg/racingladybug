@@ -11,7 +11,8 @@ export const SUBPROCESSORS = [
   { name: 'Vercel Inc.', purpose: 'Drift av webbtjänsten', location: 'EU/USA (EU:s standardavtalsklausuler, Data Privacy Framework)' },
   { name: 'Neon Inc.', purpose: 'Databas', location: 'EU (Frankfurt)' },
   { name: 'Stripe Payments Europe Ltd.', purpose: 'Betalning av abonnemang', location: 'EU/Irland' },
-  { name: 'Resend Inc.', purpose: 'Utskick av e-post (fakturor, inbjudningar)', location: 'USA (EU:s standardavtalsklausuler)' },
+  { name: 'Resend Inc.', purpose: 'Utskick och mottagning av e-post (fakturor, inbjudningar, inkorg för leverantörsfakturor)', location: 'USA (EU:s standardavtalsklausuler)' },
+  { name: 'Anthropic PBC', purpose: 'Avläsning av leverantörsfakturor i inkorgen (om påslagen)', location: 'USA (EU:s standardavtalsklausuler)' },
   { name: 'Enable Banking Oy', purpose: 'Bankkoppling (om den används)', location: 'EU/Finland' },
 ];
 

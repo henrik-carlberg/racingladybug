@@ -5,7 +5,8 @@ const log = (...a) => console.log('✔', ...a);
 const assert = (c, m) => { if (!c) throw new Error(m); };
 const waitMsg = (page, text) => page.waitForURL((u) => decodeURIComponent(u.toString()).includes(text), { timeout: 20000 });
 const text = async (page) => { await page.waitForLoadState('networkidle'); await page.waitForSelector('main h1'); return (await page.locator('main').textContent()).replace(/\s+/g, ' '); };
-const day = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm' }); };
+// Dagens datum i Stockholm ± n dagar (räknat på datumet, så sommartid och sena kvällar inte ger fel dag)
+const day = (n) => { const d = new Date(new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm' }) + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 
 (async () => {
   const browser = await chromium.launch();
