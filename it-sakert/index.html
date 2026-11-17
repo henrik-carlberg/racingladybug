@@ -219,6 +219,45 @@
   .int-card h3 { margin: 0 0 8px; font-size: 1.05rem; }
   .int-card p { margin: 0; color: var(--muted); font-size: .95rem; }
 
+  /* Kalkylator */
+  .calc { margin-top: 56px; background: var(--bg); border: 1px solid var(--line); border-radius: 20px; padding: 40px; }
+  .calc-head { max-width: 720px; margin-bottom: 28px; }
+  .calc-head .kicker { color: var(--brand); font-weight: 700; font-size: .85rem; letter-spacing: .08em; text-transform: uppercase; }
+  .calc-head h3 { font-size: clamp(1.4rem, 2.6vw, 1.9rem); letter-spacing: -.02em; line-height: 1.2; margin: 8px 0 10px; }
+  .calc-head p { color: var(--muted); margin: 0; }
+  .calc-body { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; }
+  .calc-inputs { display: grid; gap: 20px; }
+  .calc-inputs fieldset { border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px 6px; margin: 0; background: var(--surface); }
+  .calc-inputs legend { font-weight: 700; padding: 0 6px; }
+  .calc-field { margin-bottom: 16px; }
+  .calc-field label { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: .92rem; font-weight: 500; color: var(--text); margin-bottom: 6px; }
+  .calc-field output { font-weight: 700; color: var(--brand); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .calc-field small { display: block; color: var(--muted); font-size: .8rem; margin-top: 2px; }
+  .calc-field input[type=range] { width: 100%; padding: 0; background: none; border: 0; accent-color: var(--brand); height: 24px; }
+  .calc-result { position: sticky; top: 88px; background: var(--hero-bg); color: var(--hero-text); border-radius: var(--radius); padding: 28px; display: grid; gap: 4px;
+    background-image: radial-gradient(500px 240px at 100% 0%, rgba(77,139,255,.28), transparent 60%); }
+  .calc-total-label { margin: 0; color: var(--hero-muted); font-size: .9rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+  .calc-total { margin: 0; font-size: clamp(2.2rem, 5vw, 3.2rem); font-weight: 800; letter-spacing: -.03em; color: #6ee7b7; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .calc-sub { margin: 0 0 18px; color: var(--hero-muted); font-size: .95rem; }
+  .calc-bars { display: grid; gap: 18px; margin-bottom: 18px; }
+  .bar-title { font-weight: 600; font-size: .92rem; margin-bottom: 6px; }
+  .bar-title span { color: var(--hero-muted); font-weight: 400; }
+  .bar-row { display: grid; grid-template-columns: 76px 1fr 84px; align-items: center; gap: 10px; font-size: .85rem; color: var(--hero-muted); margin-bottom: 6px; }
+  .bar-row b { color: var(--hero-text); text-align: right; font-variant-numeric: tabular-nums; }
+  .bar { height: 12px; background: rgba(255,255,255,.08); border-radius: 99px; overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 99px; transition: width .35s ease; }
+  .bar i.before { background: #f87171; }
+  .bar i.after { background: linear-gradient(90deg, var(--accent), #4d8bff); }
+  .calc-split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 0 20px; }
+  .calc-split div { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 10px; padding: 12px 14px; }
+  .calc-split dt { color: var(--hero-muted); font-size: .8rem; }
+  .calc-split dd { margin: 2px 0 0; font-weight: 700; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+  .calc-result .btn { justify-self: start; }
+  .calc-how { margin-top: 16px; font-size: .85rem; color: var(--hero-muted); }
+  .calc-how summary { cursor: pointer; color: var(--hero-text); font-weight: 600; }
+  .calc-how p { margin: 8px 0 0; }
+  @media (prefers-reduced-motion: reduce) { .bar i { transition: none; } }
+
   /* Process */
   .alt { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
   .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; counter-reset: step; }
@@ -291,6 +330,8 @@
     .course-grid { grid-template-columns: 1fr 1fr; }
     .int-top { grid-template-columns: 1fr; gap: 32px; }
     .int-grid { grid-template-columns: 1fr 1fr; }
+    .calc-body { grid-template-columns: 1fr; }
+    .calc-result { position: static; }
     .courses-head { grid-template-columns: 1fr; gap: 28px; }
     .courses-photo { aspect-ratio: 16 / 9; }
     .steps { grid-template-columns: 1fr 1fr; }
@@ -315,6 +356,10 @@
     .hero-visual .shield-card { position: relative; left: auto; bottom: auto; width: auto; margin: -36px 14px 0; }
     section { padding: 68px 0; }
     .grid-3, .steps, .values, .row, .incident-list, .course-grid, .int-grid { grid-template-columns: 1fr; }
+    .calc { padding: 24px 16px; }
+    .calc-inputs fieldset { padding: 14px 14px 4px; }
+    .calc-result { padding: 22px 18px; }
+    .bar-row { grid-template-columns: 64px 1fr 72px; }
     .wrap { padding: 0 16px; }
   }
 </style>
@@ -482,6 +527,89 @@
           <article class="int-card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></svg></div><h3>Skräddarsydda integrationer</h3><p>Vi bygger kopplingarna mellan era system via API:er, filöverföring eller händelser – anpassat efter hur ni faktiskt arbetar.</p></article>
           <article class="int-card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg></div><h3>Färdiga kopplingar</h3><p>Färdigpaketerade integrationer för vanliga flöden, som order till faktura eller nya medarbetare till alla system. Snabbt på plats och till fast pris.</p></article>
           <article class="int-card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg></div><h3>Drift &amp; övervakning</h3><p>Vi övervakar integrationerna, larmar när något stannar och åtgärdar felet – så att informationen fortsätter flöda.</p></article>
+      </div>
+      <div class="calc" id="kalkyl">
+        <div class="calc-head">
+          <div class="kicker">Räkna på nyttan</div>
+          <h3>Hur mycket kostar det att system inte pratar med varandra?</h3>
+          <p>Dra i reglagen och se vad manuell hantering och felaktiga data kostar er i dag – och vad ni kan spara med integrerade system. Värdena från början är exempel. Byt till era egna.</p>
+        </div>
+        <div class="calc-body">
+          <form class="calc-inputs" id="calc-form" onsubmit="return false">
+            <fieldset>
+              <legend>Manuell hantering</legend>
+              <div class="calc-field">
+                <label for="c-t"><span>Ärenden per månad (order, fakturor, kunder …)</span><output id="o-t" for="c-t"></output></label>
+                <input type="range" id="c-t" name="t" min="20" max="5000" step="10" value="400" data-unit="st">
+                
+              </div>
+              <div class="calc-field">
+                <label for="c-s"><span>Antal system samma uppgift skrivs in i</span><output id="o-s" for="c-s"></output></label>
+                <input type="range" id="c-s" name="s" min="1" max="6" step="1" value="3" data-unit="st">
+                <small>Till exempel e-handel, affärssystem och ekonomi = 3.</small>
+              </div>
+              <div class="calc-field">
+                <label for="c-m"><span>Minuter per registrering</span><output id="o-m" for="c-m"></output></label>
+                <input type="range" id="c-m" name="m" min="1" max="20" step="1" value="4" data-unit="min">
+                
+              </div>
+              <div class="calc-field">
+                <label for="c-k"><span>Timkostnad inklusive sociala avgifter</span><output id="o-k" for="c-k"></output></label>
+                <input type="range" id="c-k" name="k" min="300" max="1200" step="10" value="550" data-unit="kr">
+                
+              </div>
+              <div class="calc-field">
+                <label for="c-a"><span>Andel av flödena som integreras</span><output id="o-a" for="c-a"></output></label>
+                <input type="range" id="c-a" name="a" min="10" max="100" step="5" value="90" data-unit="%">
+                
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend>Fel när data inte stämmer</legend>
+              <div class="calc-field">
+                <label for="c-e"><span>Fel per 100 manuella registreringar</span><output id="o-e" for="c-e"></output></label>
+                <input type="range" id="c-e" name="e" min="0.1" max="5" step="0.1" value="1" data-unit="st">
+                <small>Felskrivna belopp, fel adress, dubbletter …</small>
+              </div>
+              <div class="calc-field">
+                <label for="c-r"><span>Minuter för att hitta och rätta ett fel</span><output id="o-r" for="c-r"></output></label>
+                <input type="range" id="c-r" name="r" min="5" max="240" step="5" value="45" data-unit="min">
+                
+              </div>
+              <div class="calc-field">
+                <label for="c-d"><span>Direkt kostnad per fel</span><output id="o-d" for="c-d"></output></label>
+                <input type="range" id="c-d" name="d" min="0" max="5000" step="50" value="300" data-unit="kr">
+                <small>Kreditnota, ny frakt, rabatt till kunden …</small>
+              </div>
+            </fieldset>
+          </form>
+          <div class="calc-result" aria-live="polite">
+            <p class="calc-total-label">Möjlig besparing per år</p>
+            <p class="calc-total" id="r-total">–</p>
+            <p class="calc-sub" id="r-sub"></p>
+            <div class="calc-bars">
+              <div class="bar-group">
+                <div class="bar-title">Tid för manuell hantering <span>timmar per år</span></div>
+                <div class="bar-row"><span>I dag</span><div class="bar"><i class="before" id="b-h0"></i></div><b id="v-h0"></b></div>
+                <div class="bar-row"><span>Integrerat</span><div class="bar"><i class="after" id="b-h1"></i></div><b id="v-h1"></b></div>
+              </div>
+              <div class="bar-group">
+                <div class="bar-title">Fel som måste rättas <span>per år</span></div>
+                <div class="bar-row"><span>I dag</span><div class="bar"><i class="before" id="b-e0"></i></div><b id="v-e0"></b></div>
+                <div class="bar-row"><span>Integrerat</span><div class="bar"><i class="after" id="b-e1"></i></div><b id="v-e1"></b></div>
+              </div>
+            </div>
+            <dl class="calc-split">
+              <div><dt>Sparad tid</dt><dd id="r-time"></dd></div>
+              <div><dt>Undvikna felkostnader</dt><dd id="r-risk"></dd></div>
+            </dl>
+            <a class="btn" href="#kontakt" data-amne="Systemintegration">Räkna på era egna flöden med oss</a>
+            <details class="calc-how">
+              <summary>Så räknar kalkylatorn</summary>
+              <p>Manuell tid = ärenden × antal system × minuter. Med integration skrivs uppgiften in en gång, och dubbelregistreringen försvinner för den andel av flödena som integreras. Antalet fel följer antalet manuella registreringar, och varje fel kostar rättningstiden gånger timkostnaden plus den direkta kostnaden. En heltidstjänst räknas som 1 600 arbetade timmar per år. Kalkylen är en uppskattning – inte en offert.</p>
+            </details>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -663,6 +791,45 @@
     amne.value = a.dataset.amne;
     visaSystemFalt();
   }));
+
+
+  // Kalkylator: tid och felkostnad med och utan integration
+  (function () {
+    const form = document.getElementById("calc-form");
+    if (!form) return;
+    const nf = (n, d = 0) => new Intl.NumberFormat("sv-SE", { maximumFractionDigits: d, minimumFractionDigits: d }).format(n);
+    const kr = n => nf(Math.round(n / 1000) * 1000) + " kr";
+    const $ = id => document.getElementById(id);
+    const v = n => parseFloat(form.elements[n].value);
+    function update() {
+      form.querySelectorAll("input[type=range]").forEach(i => {
+        const d = i.step.includes(".") ? 1 : 0;
+        $("o-" + i.name).textContent = nf(parseFloat(i.value), d) + " " + i.dataset.unit;
+      });
+      const T = v("t") * 12, S = v("s"), M = v("m"), K = v("k"), A = v("a") / 100;
+      const E = v("e") / 100, R = v("r"), D = v("d");
+      const reg0 = T * S;                          // manuella registreringar per år i dag
+      const reg1 = T * (1 + (S - 1) * (1 - A));     // med integration: en gång + det som inte integreras
+      const h0 = reg0 * M / 60, h1 = reg1 * M / 60;
+      const e0 = reg0 * E, e1 = reg1 * E;
+      const perError = R / 60 * K + D;
+      const timeSaved = (h0 - h1) * K;
+      const riskSaved = (e0 - e1) * perError;
+      const total = timeSaved + riskSaved;
+      $("r-total").textContent = kr(total);
+      const fte = (h0 - h1) / 1600;
+      $("r-sub").textContent = nf(h0 - h1) + " timmar per år" + (fte >= 0.1 ? ", ungefär " + nf(fte, 1) + " heltidstjänst" + (fte >= 1.05 ? "er" : "") : "") + " och " + nf(e0 - e1) + " färre fel att rätta.";
+      $("r-time").textContent = kr(timeSaved);
+      $("r-risk").textContent = kr(riskSaved);
+      const pct = (a, b) => (b > 0 ? Math.max(a / b * 100, a > 0 ? 1.5 : 0) : 0) + "%";
+      $("b-h0").style.width = pct(h0, h0); $("b-h1").style.width = pct(h1, h0);
+      $("b-e0").style.width = pct(e0, e0); $("b-e1").style.width = pct(e1, e0);
+      $("v-h0").textContent = nf(h0) + " h"; $("v-h1").textContent = nf(h1) + " h";
+      $("v-e0").textContent = nf(e0); $("v-e1").textContent = nf(e1);
+    }
+    form.addEventListener("input", update);
+    update();
+  })();
 
   function sendForm(e) {
     e.preventDefault();
