@@ -6,6 +6,7 @@
 <title>IT-Säkert</title>
 <meta name="description" content="IT-Säkert hjälper företag att skydda sina system, sin data och sina medarbetare – med säkerhetsgranskningar, drift och utbildning.">
 <link rel="icon" href="logo/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="logo/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -72,7 +73,8 @@
   }
   .nav { display: flex; align-items: center; justify-content: space-between; height: 68px; }
   .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.2rem; text-decoration: none; letter-spacing: -.01em; }
-  .logo svg { width: 30px; height: 30px; }
+  .logo svg { width: 32px; height: 32px; }
+  .logo .mark { color: #7fb0ff; font-weight: 800; }
   .nav ul { list-style: none; display: flex; gap: 28px; margin: 0; padding: 0; }
   .nav ul a { text-decoration: none; color: var(--hero-muted); font-weight: 500; font-size: .95rem; }
   .nav ul a:hover { color: var(--hero-text); }
@@ -210,7 +212,8 @@
   footer { padding: 40px 0 48px; color: var(--muted); font-size: .9rem; }
   .foot { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 28px; }
   .foot .logo { color: var(--text); font-size: 1.05rem; }
-  .foot .logo svg { width: 24px; height: 24px; }
+  .foot .logo svg { width: 26px; height: 26px; }
+  .foot .logo .mark { color: var(--brand); }
 
   /* Responsive */
   @media (max-width: 920px) {
@@ -242,11 +245,13 @@
 <header class="site">
   <nav class="wrap nav" id="nav">
     <a href="#top" class="logo" aria-label="IT-Säkert – till startsidan">
-      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
-        <path d="M16 2 4 6.5v8.2c0 7.3 5.1 13.6 12 15.3 6.9-1.7 12-8 12-15.3V6.5L16 2Z" fill="#0b5fff"/>
-        <path d="m10.5 16 3.8 3.8 7.4-7.6" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <defs><linearGradient id="lg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4d8bff"/><stop offset="1" stop-color="#0b4fdb"/></linearGradient></defs>
+        <path d="M32 4 9 12.5v16.2C9 43.5 18.8 55.9 32 60c13.2-4.1 23-16.5 23-31.3V12.5L32 4Z" fill="url(#lg1)"/>
+        <g fill="#0f1b2d"><rect x="18" y="18" width="28" height="11" rx="3"/><path d="M26.5 26h11l1.6 21a3 3 0 0 1-3 3.2h-8.2a3 3 0 0 1-3-3.2Z"/></g>
+        <g fill="#fff"><circle cx="32" cy="23.5" r="3.1"/><rect x="29.8" y="31" width="4.4" height="15" rx="2.2"/></g>
       </svg>
-      IT-Säkert
+      <span>IT-<b class="mark">Säkert</b></span>
     </a>
     <ul>
       <li><a href="#tjanster">Tjänster</a></li>
@@ -433,11 +438,13 @@
 <footer>
   <div class="wrap foot">
     <a href="#top" class="logo">
-      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
-        <path d="M16 2 4 6.5v8.2c0 7.3 5.1 13.6 12 15.3 6.9-1.7 12-8 12-15.3V6.5L16 2Z" fill="#0b5fff"/>
-        <path d="m10.5 16 3.8 3.8 7.4-7.6" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <defs><linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4d8bff"/><stop offset="1" stop-color="#0b4fdb"/></linearGradient></defs>
+        <path d="M32 4 9 12.5v16.2C9 43.5 18.8 55.9 32 60c13.2-4.1 23-16.5 23-31.3V12.5L32 4Z" fill="url(#lg2)"/>
+        <g fill="#0f1b2d"><rect x="18" y="18" width="28" height="11" rx="3"/><path d="M26.5 26h11l1.6 21a3 3 0 0 1-3 3.2h-8.2a3 3 0 0 1-3-3.2Z"/></g>
+        <g fill="#fff"><circle cx="32" cy="23.5" r="3.1"/><rect x="29.8" y="31" width="4.4" height="15" rx="2.2"/></g>
       </svg>
-      IT-Säkert
+      <span>IT-<b class="mark">Säkert</b></span>
     </a>
     <span>© <span id="year"></span> IT-Säkert. Alla rättigheter förbehållna.</span>
   </div>
