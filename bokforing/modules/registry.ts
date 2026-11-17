@@ -1,6 +1,7 @@
 import type { ModuleDefinition } from '@/lib/modules/types';
 import { crm } from './crm';
 import { hrModule } from './hr';
+import { lonerevision } from './lonerevision';
 
 /**
  * Alla tillgängliga tilläggsmoduler. För att lägga till en ny modul (t.ex. ERP, lager, projekt):
@@ -9,6 +10,6 @@ import { hrModule } from './hr';
  *   3. Lägg till modulen i listan nedan
  * Modulen aktiveras sedan per bolag under Inställningar → Moduler.
  */
-export const MODULES: ModuleDefinition[] = [crm, hrModule];
+export const MODULES: ModuleDefinition[] = [crm, hrModule, lonerevision];
 
 export const getModule = (id: string) => MODULES.find((m) => m.id === id);
