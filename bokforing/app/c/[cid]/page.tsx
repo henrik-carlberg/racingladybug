@@ -5,6 +5,8 @@ import { kr, today } from '@/lib/format';
 import { Flash, type SP } from '@/components/ui';
 import { getSetup } from '@/lib/services/setup';
 import { companyDeadlines } from '@/lib/services/deadlines';
+import { companyTodos } from '@/lib/services/todo';
+import { enabledModules } from '@/lib/modules/enabled';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +17,7 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
   const id = company.id;
   const setup = await getSetup(id, ctx.user.id);
   const upcoming = (await companyDeadlines(id)).filter((d) => d.status !== 'done').slice(0, 3);
+  const todos = await companyTodos(id, { modules: (await enabledModules(id)).map((m) => m.id), owner: ctx.role === 'owner', userId: ctx.user.id });
   const t = today();
   const [bank] = await sql<{ v: number }[]>`
     SELECT COALESCE(SUM(l.debit - l.credit), 0)::bigint AS v FROM voucher_lines l JOIN vouchers v ON v.id = l.voucher_id
@@ -44,6 +47,18 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
             <div><b>Kom igång</b> – {setup.done} av {setup.total} steg klara. Nästa: {setup.steps.find((x) => !x.done && !x.skipped)?.title}</div>
             <Link className="btn" href={`/c/${id}/kom-igang`}>Fortsätt</Link>
           </div>
+        </div>
+      )}
+      {todos.length > 0 && (
+        <div className="card">
+          <b>Att göra</b>
+          {todos.map((x) => (
+            <div key={x.key} className="row small" style={{ alignItems: 'center', padding: '.25rem 0' }}>
+              <span style={{ flex: '0 0 40px' }}><span className={`badge ${x.level === 'danger' ? 'danger' : x.level === 'warn' ? 'warn' : ''}`}>{x.count}</span></span>
+              <span style={{ flex: '3 1 300px' }}>{x.title}</span>
+              <Link href={x.href} style={{ flex: '0 0 auto' }}>Öppna</Link>
+            </div>
+          ))}
         </div>
       )}
       {upcoming.length > 0 && (

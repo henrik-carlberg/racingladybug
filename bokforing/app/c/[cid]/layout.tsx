@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { requireCompany } from '@/lib/server/auth';
 import { ROLE_LABEL } from '@/lib/format';
 import { enabledModules } from '@/lib/modules/enabled';
+import { companyTodos, urgentCount } from '@/lib/services/todo';
 
 export default async function CompanyLayout({ children, params }: { children: ReactNode; params: Promise<{ cid: string }> }) {
   const { cid } = await params;
@@ -34,6 +35,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
       </div>
     );
   }
+  const urgent = urgentCount(await companyTodos(company.id, { modules: modules.map((m) => m.id), owner: role === 'owner', userId: user.id }).catch(() => []));
   return (
     <div className="shell">
       <aside className="side">
@@ -42,7 +44,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
         <input type="checkbox" id="navtoggle" className="navtoggle" aria-hidden="true" />
         <label htmlFor="navtoggle" className="navbtn btn secondary">☰ Meny</label>
         <nav>
-          <Link href={b}>Översikt</Link>
+          <Link href={b}>Översikt{urgent > 0 && <span className="badge warn" style={{ marginLeft: '.4rem' }} title="Saker som väntar på dig">{urgent}</span>}</Link>
           <Link href={`${b}/kom-igang`}>Kom igång</Link>
           <Link href={`${b}/kvitto`}>📷 Nytt kvitto</Link>
           <Link href={`${b}/deadlines`}>Deadlines</Link>
@@ -81,6 +83,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
           ))}
           <div className="group">Bolaget</div>
           <Link href={`${b}/installningar`}>Inställningar</Link>
+          <Link href={`${b}/installningar/gdpr`}>Dataskydd (GDPR)</Link>
           <Link href={`${b}/dokument`}>Dokument &amp; e-signering</Link>
           <Link href={`${b}/moduler`}>Moduler</Link>
           <Link href={`${b}/abonnemang`}>Abonnemang</Link>

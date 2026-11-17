@@ -1,16 +1,26 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
+import QRCode from 'qrcode';
+import { sql } from '@/lib/db';
+import { otpauthUri } from '@/lib/totp';
+import { cancelTotp, confirmTotp, disableTotp, regenerateCodes, startTotp } from '../mfa-actions';
 import { requireUser } from '@/lib/server/auth';
 import { listPasskeys } from '@/lib/server/passkeys';
 import { Flash, type SP } from '@/components/ui';
 import { AddPasskey } from '@/components/Passkeys';
 import { changePassword, removePasskey } from '../passkey-actions';
 import { logout } from '../auth-actions';
+import { removeAccount } from '../gdpr-actions';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Account({ searchParams }: { searchParams: SP }) {
   const user = await requireUser();
   const passkeys = await listPasskeys(user.id);
+  const [mfa] = await sql<{ secret: string | null; on: string | null; codes: number }[]>`
+    SELECT totp_secret AS secret, to_char(totp_enabled_at,'YYYY-MM-DD') AS on, cardinality(backup_codes)::int AS codes FROM users WHERE id = ${user.id}`;
+  const setupQr = mfa.secret && !mfa.on ? await QRCode.toString(otpauthUri(mfa.secret, user.email), { type: 'svg', margin: 1, width: 180 }) : null;
+  const shown = (await cookies()).get('backup_codes')?.value.split(' ').filter(Boolean) ?? [];
   return (
     <div className="center" style={{ maxWidth: 760 }}>
       <div className="header">
@@ -45,6 +55,42 @@ export default async function Account({ searchParams }: { searchParams: SP }) {
       <div style={{ marginTop: '1rem' }}><AddPasskey /></div>
       <p className="small muted">Om du tar bort en passkey här, ta gärna bort den även i enhetens lösenordshanterare.</p>
 
+      <h2 id="tvasteg">Tvåstegsverifiering</h2>
+      <p className="muted small">Med tvåstegsverifiering krävs både lösenordet och en engångskod från en app i telefonen (t.ex. Microsoft Authenticator, Google Authenticator eller 1Password). Inloggning med passkey räknas redan som tvåstegs.</p>
+      {mfa.on ? (
+        <div className="card stack">
+          <div><span className="badge ok">På</span> sedan {mfa.on} · {mfa.codes} oanvända reservkoder</div>
+          {shown.length > 0 && (
+            <div className="card" style={{ margin: 0, borderColor: 'var(--accent)' }}>
+              <b>Dina reservkoder</b> – spara dem på ett säkert ställe. Varje kod kan användas en gång om du inte har telefonen. De visas bara nu.
+              <pre className="backup-codes" style={{ columns: 2, margin: '.5rem 0 0' }}>{shown.join('\n')}</pre>
+            </div>
+          )}
+          <form action={regenerateCodes} className="row">
+            <label>Lösenord<input type="password" name="password" required autoComplete="current-password" /></label>
+            <div style={{ flex: '0 0 auto', alignSelf: 'end' }}><button className="secondary">Skapa nya reservkoder</button></div>
+          </form>
+          <form action={disableTotp} className="row">
+            <label>Lösenord<input type="password" name="password" required autoComplete="current-password" /></label>
+            <div style={{ flex: '0 0 auto', alignSelf: 'end' }}><button className="secondary">Stäng av tvåstegsverifiering</button></div>
+          </form>
+        </div>
+      ) : setupQr ? (
+        <div className="card stack">
+          <div className="row" style={{ alignItems: 'center' }}>
+            <div style={{ width: 180, height: 180, flex: '0 0 auto' }} dangerouslySetInnerHTML={{ __html: setupQr }} />
+            <div className="small" style={{ flex: '1 1 260px' }}>1. Skanna QR-koden med autentiseringsappen.<br />Går det inte? Ange nyckeln manuellt:<br /><code className="totp-secret">{mfa.secret!.match(/.{1,4}/g)!.join(' ')}</code><br />2. Skriv in koden som appen visar.</div>
+          </div>
+          <form action={confirmTotp} className="row">
+            <label>Kod från appen<input name="code" inputMode="numeric" autoComplete="one-time-code" required /></label>
+            <div style={{ flex: '0 0 auto', alignSelf: 'end' }}><button>Slå på</button></div>
+          </form>
+          <form action={cancelTotp}><button className="link">Avbryt</button></form>
+        </div>
+      ) : (
+        <form action={startTotp}><button className="secondary">Slå på tvåstegsverifiering</button></form>
+      )}
+
       <h2>Byt lösenord</h2>
       <form action={changePassword} className="card stack">
         <div className="row">
@@ -54,6 +100,19 @@ export default async function Account({ searchParams }: { searchParams: SP }) {
         <div><button className="secondary">Byt lösenord</button></div>
         <p className="small muted" style={{ margin: 0 }}>Dina andra inloggade sessioner loggas ut.</p>
       </form>
+
+      <h2 id="gdpr">Mina personuppgifter</h2>
+      <p className="muted small">Du kan när som helst ladda ner de uppgifter som finns om dig (registerutdrag). Läs mer i <Link href="/integritet">integritetspolicyn</Link>.</p>
+      <p><a className="btn secondary" href="/konto/export">Ladda ner mina uppgifter (JSON)</a></p>
+      <details className="card">
+        <summary>Radera mitt konto</summary>
+        <p className="small">Kontot, dina passkeys och inloggningar tas bort och du lämnar alla bolag. Det du har bokfört finns kvar i bolagens bokföring (det kräver bokföringslagen) men visas som "Raderad användare". Är du ensam ägare av ett bolag måste du först bjuda in en ny ägare.</p>
+        <form action={removeAccount} className="row">
+          <label>Lösenord<input type="password" name="password" required autoComplete="current-password" /></label>
+          <label>Skriv RADERA<input name="confirm" required autoComplete="off" /></label>
+          <div style={{ flex: '0 0 auto', alignSelf: 'end' }}><button className="danger">Radera kontot</button></div>
+        </form>
+      </details>
     </div>
   );
 }

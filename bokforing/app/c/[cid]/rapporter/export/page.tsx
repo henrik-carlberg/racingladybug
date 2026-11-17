@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { requireCompany } from '@/lib/server/auth';
 import { fiscalYears } from '@/lib/server/ledger';
 
@@ -20,6 +21,8 @@ export default async function Export({ params }: { params: Promise<{ cid: string
           ))}
         </tbody>
       </table>
+      <h2>Import</h2>
+      <p>Byter du från ett annat bokföringsprogram? <Link href={`/c/${company.id}/kom-igang/sie-import`}>Importera en SIE-fil</Link> med kontoplan, ingående balanser och verifikationer.</p>
     </>
   );
 }
