@@ -315,6 +315,47 @@
   .calc-how p { margin: 8px 0 0; }
   @media (prefers-reduced-motion: reduce) { .bar i { transition: none; } }
 
+  /* Timbank */
+  .tb-uses { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 32px; }
+  .tb-uses div { border-left: 3px solid var(--brand); padding: 4px 0 4px 14px; }
+  .tb-uses b { display: block; }
+  .tb-uses span { color: var(--muted); font-size: .9rem; line-height: 1.45; display: block; }
+  .plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: stretch; }
+  .plan { position: relative; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px; transition: border-color .2s, box-shadow .2s; }
+  .plan.rec { border: 2px solid var(--brand); box-shadow: 0 18px 50px color-mix(in srgb, var(--brand) 18%, transparent); }
+  .plan.match { outline: 3px solid var(--accent); outline-offset: 3px; }
+  .plan-badge { position: absolute; top: -13px; left: 24px; background: var(--brand); color: var(--brand-ink); font-size: .75rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 4px 12px; border-radius: 99px; }
+  .plan h3 { margin: 0; font-size: 1.15rem; }
+  .plan-hours { margin: 6px 0 4px; color: var(--muted); }
+  .plan-hours b { font-size: 2.6rem; color: var(--text); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+  .plan-who { margin: 0 0 18px; color: var(--muted); font-size: .95rem; }
+  .plan ul { list-style: none; margin: 0 0 22px; padding: 0; display: grid; gap: 10px; }
+  .plan li { display: flex; gap: 10px; align-items: flex-start; font-size: .95rem; }
+  .plan li svg { width: 18px; height: 18px; color: var(--accent); flex: none; margin-top: 3px; }
+  .plan-price { margin: auto 0 14px; font-weight: 600; color: var(--muted); font-size: .9rem; }
+  .plan .btn { justify-content: center; }
+  .btn.ghost-dark { background: transparent; color: var(--brand); border: 1.5px solid var(--brand); }
+  .tb-guide { margin-top: 40px; display: grid; grid-template-columns: 1.2fr .8fr; gap: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 32px; }
+  .tb-guide h3 { margin: 0 0 4px; font-size: 1.3rem; }
+  .tb-guide-q > p { margin: 0 0 18px; color: var(--muted); }
+  .rq { border: 0; padding: 0; margin: 0 0 16px; }
+  .rq legend { font-weight: 600; font-size: .95rem; margin-bottom: 8px; padding: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { display: inline-flex; color: var(--text); font-size: .9rem; font-weight: 500; }
+  .chip input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .chip span { padding: 8px 14px; border: 1.5px solid var(--line); border-radius: 99px; cursor: pointer; transition: all .15s; background: var(--bg); }
+  .chip input:checked + span { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
+  .chip input:focus-visible + span { outline: 2px solid var(--brand); outline-offset: 2px; }
+  .tb-guide-r { background: var(--hero-bg); color: var(--hero-text); border-radius: var(--radius); padding: 26px; display: grid; gap: 6px; align-content: start;
+    background-image: radial-gradient(400px 200px at 100% 0%, rgba(77,139,255,.28), transparent 60%); }
+  .tb-r-label { margin: 0; color: var(--hero-muted); font-size: .85rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+  .tb-r-name { margin: 0; font-size: 1.6rem; font-weight: 800; }
+  .tb-r-hours { margin: 0; color: var(--hero-muted); }
+  .tb-r-hours b { font-size: 2.6rem; color: #6ee7b7; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+  .tb-r-why { margin: 4px 0 12px; color: var(--hero-muted); font-size: .93rem; }
+  .tb-guide-r .btn { justify-self: start; }
+  .tb-guide-r small { color: var(--hero-muted); font-size: .8rem; margin-top: 8px; }
+
   /* Process */
   .alt { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
   .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; counter-reset: step; }
@@ -389,6 +430,10 @@
     .int-grid { grid-template-columns: 1fr 1fr; }
     .calc-body { grid-template-columns: 1fr; }
     .flow-cols { grid-template-columns: 1fr; }
+    .tb-uses { grid-template-columns: repeat(3, 1fr); }
+    .plans { grid-template-columns: 1fr; max-width: 520px; }
+    .plan.rec { order: -1; }
+    .tb-guide { grid-template-columns: 1fr; }
     .calc-result { position: static; }
     .courses-head { grid-template-columns: 1fr; gap: 28px; }
     .courses-photo { aspect-ratio: 16 / 9; }
@@ -416,6 +461,9 @@
     .grid-3, .steps, .values, .row, .incident-list, .course-grid, .int-grid { grid-template-columns: 1fr; }
     .calc { padding: 24px 16px; }
     .mesh-cols { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .tb-uses { grid-template-columns: 1fr 1fr; }
+    .tb-guide { padding: 20px 16px; }
+    .plan { padding: 24px 20px; }
     .mesh-card { padding: 10px 8px 14px; }
     .mesh-card figcaption b { font-size: 1.7rem; }
     .mesh-card figcaption span { font-size: .85rem; }
@@ -443,6 +491,7 @@
     <ul>
       <li><a href="#tjanster">Tjänster</a></li>
       <li><a href="#integrationer">Integrationer</a></li>
+      <li><a href="#timbank">Timbank</a></li>
       <li><a href="#utbildningar">Utbildningar</a></li>
       <li><a href="#sa-arbetar-vi">Så arbetar vi</a></li>
       <li><a href="#om-oss">Om oss</a></li>
@@ -471,7 +520,7 @@
         <div class="hero-points">
           <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg>Incidentjour dygnet runt</div>
           <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg>Svensktalande support</div>
-          <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg>Fasta månadspriser</div>
+          <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg>Pris efter offert</div>
           <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg>GDPR &amp; NIS2</div>
         </div>
       </div>
@@ -730,6 +779,67 @@
     </div>
   </section>
 
+
+  <section id="timbank">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">Timbank</div>
+        <h2>Köp timmar i förväg – och få hjälp när ni behöver den</h2>
+        <p>Med en timbank har ni alltid tid hos oss reserverad. Ni slipper ta in en ny offert för varje fråga, och budgeten blir förutsägbar. Timmarna kan användas till allt vi gör – säkerhet, integrationer, utbildning och hjälp vid incidenter.</p>
+      </div>
+      <div class="tb-uses">
+        <div><b>Säkerhet</b><span>Genomgångar, inställningar, policyer och riskbedömningar</span></div>
+        <div><b>Incidenter</b><span>Snabb hjälp när något har hänt – dygnet runt</span></div>
+        <div><b>Integrationer</b><span>Justeringar, nya flöden och felsökning</span></div>
+        <div><b>Utbildning</b><span>Korta pass för personal och ledning</span></div>
+        <div><b>Regelefterlevnad</b><span>Cybersäkerhetslagen, NIS2, GDPR och ISO 27001</span></div>
+      </div>
+      <div class="plans">
+          <article class="plan" data-hours="10">
+            
+            <div class="plan-top"><h3>Bas</h3><p class="plan-hours"><b>10</b> timmar</p><p class="plan-who">För mindre företag som vill ha någon att ringa.</p></div>
+            <ul><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg><span>Snabba svar på säkerhetsfrågor</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg><span>Kontroll av inställningar, till exempel tvåfaktorsinloggning och backup</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg><span>Hjälp vid enstaka problem och misstänkta incidenter</span></li></ul>
+            <p class="plan-price">Pris enligt offert</p>
+            <a class="btn ghost-dark" href="#kontakt" data-amne="Timbank – 10 timmar">Beställ 10 timmar</a>
+          </article>
+          <article class="plan rec" data-hours="20">
+            <span class="plan-badge">Rekommenderad nivå</span>
+            <div class="plan-top"><h3>Standard</h3><p class="plan-hours"><b>20</b> timmar</p><p class="plan-who">För företag som vill arbeta förebyggande hela året.</p></div>
+            <ul><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg><span>Allt i Bas</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg><span>Säkerhetsgenomgång varje kvartal med åtgärdslista</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg><span>Kort utbildning för personalen, till exempel om nätfiske</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg><span>Mindre justeringar av integrationer</span></li></ul>
+            <p class="plan-price">Pris enligt offert</p>
+            <a class="btn" href="#kontakt" data-amne="Timbank – 20 timmar">Beställ 20 timmar</a>
+          </article>
+          <article class="plan" data-hours="40">
+            
+            <div class="plan-top"><h3>Plus</h3><p class="plan-hours"><b>40</b> timmar</p><p class="plan-who">För verksamheter med krav från cybersäkerhetslagen eller många integrationer.</p></div>
+            <ul><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg><span>Allt i Standard</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg><span>Löpande stöd i arbetet med cybersäkerhetslagen (NIS2) eller ISO 27001</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg><span>Förvaltning och vidareutveckling av integrationer</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg><span>Stöd vid internrevision och inför tillsyn</span></li></ul>
+            <p class="plan-price">Pris enligt offert</p>
+            <a class="btn ghost-dark" href="#kontakt" data-amne="Timbank – 40 timmar">Beställ 40 timmar</a>
+          </article>
+      </div>
+        <div class="tb-guide" id="timbank-guide">
+          <div class="tb-guide-q">
+            <h3>Vilken nivå passar er?</h3>
+            <p>Svara på fyra frågor så får ni vår rekommendation.</p>
+            <form id="tb-form" onsubmit="return false">
+              <fieldset class="rq"><legend>Hur många arbetar hos er?</legend><div class="chips"><label class="chip"><input type="radio" name="size" value="8" checked><span>1–9</span></label><label class="chip"><input type="radio" name="size" value="16"><span>10–49</span></label><label class="chip"><input type="radio" name="size" value="32"><span>50–249</span></label><label class="chip"><input type="radio" name="size" value="60"><span>250 eller fler</span></label></div></fieldset>
+              <fieldset class="rq"><legend>Omfattas ni av cybersäkerhetslagen (NIS2)?</legend><div class="chips"><label class="chip"><input type="radio" name="nis2" value="0" checked><span>Nej</span></label><label class="chip"><input type="radio" name="nis2" value="6"><span>Vet inte</span></label><label class="chip"><input type="radio" name="nis2" value="16"><span>Ja</span></label></div></fieldset>
+              <fieldset class="rq"><legend>Har ni integrationer som behöver förvaltas?</legend><div class="chips"><label class="chip"><input type="radio" name="integ" value="0" checked><span>Nej</span></label><label class="chip"><input type="radio" name="integ" value="6"><span>Några</span></label><label class="chip"><input type="radio" name="integ" value="14"><span>Många</span></label></div></fieldset>
+              <fieldset class="rq"><legend>Vill ni utbilda personalen återkommande?</legend><div class="chips"><label class="chip"><input type="radio" name="edu" value="0" checked><span>Nej</span></label><label class="chip"><input type="radio" name="edu" value="6"><span>Ja</span></label></div></fieldset>
+            </form>
+          </div>
+          <div class="tb-guide-r" aria-live="polite">
+            <p class="tb-r-label">Vår rekommendation</p>
+            <p class="tb-r-name" id="tb-name">Bas</p>
+            <p class="tb-r-hours"><b id="tb-hours">10</b> timmar</p>
+            <p class="tb-r-why" id="tb-why"></p>
+            <a class="btn" id="tb-cta" href="#kontakt" data-amne="Timbank – 10 timmar">Beställ 10 timmar</a>
+            <small>Rekommendationen är en utgångspunkt. Vi stämmer av behovet med er innan offerten.</small>
+          </div>
+        </div>
+    </div>
+  </section>
+
   <section id="utbildningar" class="courses">
     <div class="wrap">
       <div class="courses-head">
@@ -853,6 +963,10 @@
               <option>Övervakning &amp; larm</option>
               <option>Backup &amp; återställning</option>
               <option>Systemintegration</option>
+              <option>Timbank – 10 timmar</option>
+              <option>Timbank – 20 timmar</option>
+              <option>Timbank – 40 timmar</option>
+              <option>Timbank – större behov</option>
               <option>Utbildning på plats</option>
               <option>Onlinekurser via Studieplaner.se</option>
               <option>GDPR / NIS2</option>
@@ -909,6 +1023,39 @@
   }));
 
 
+
+
+  // Timbank: rekommenderad nivå
+  (function () {
+    const f = document.getElementById("tb-form");
+    if (!f) return;
+    const LV = [[10, "Bas"], [20, "Standard"], [40, "Plus"]];
+    function update() {
+      const val = n => +f.querySelector(`input[name="${n}"]:checked`).value;
+      const need = val("size") + val("nis2") + val("integ") + val("edu");
+      const name = document.getElementById("tb-name"), hrs = document.getElementById("tb-hours"),
+            why = document.getElementById("tb-why"), cta = document.getElementById("tb-cta");
+      document.querySelectorAll(".plan").forEach(p => p.classList.remove("match"));
+      if (need > 52) {
+        name.textContent = "Plus eller större";
+        hrs.textContent = "40+";
+        why.textContent = `Ert behov uppskattas till cirka ${need} timmar per år. Börja med Plus, eller låt oss ta fram en timbank som passar er storlek.`;
+        cta.textContent = "Kontakta oss om större behov";
+        cta.dataset.amne = "Timbank – större behov";
+        document.querySelector('.plan[data-hours="40"]').classList.add("match");
+        return;
+      }
+      const [h, n] = LV.find(([h]) => need <= h * 1.3) || LV[2];
+      name.textContent = n;
+      hrs.textContent = h;
+      why.textContent = `Ert behov uppskattas till cirka ${need} timmar per år – ${n} ger utrymme för det förebyggande arbetet och marginal för det oväntade.`;
+      cta.textContent = `Beställ ${h} timmar`;
+      cta.dataset.amne = `Timbank – ${h} timmar`;
+      document.querySelector(`.plan[data-hours="${h}"]`).classList.add("match");
+    }
+    f.addEventListener("change", update);
+    update();
+  })();
 
   // Spaghetti eller nav: antal kopplingar
   (function () {
