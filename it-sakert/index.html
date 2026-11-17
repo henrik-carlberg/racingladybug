@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IT-Säkert</title>
+<meta name="description" content="IT-Säkert hjälper företag att skydda sina system, sin data och sina medarbetare – med säkerhetsgranskningar, drift och utbildning.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f8fb;
+    --surface: #ffffff;
+    --text: #0f1b2d;
+    --muted: #5a6779;
+    --line: #e2e7ef;
+    --brand: #0b5fff;
+    --brand-ink: #ffffff;
+    --brand-soft: #e6eeff;
+    --accent: #12b981;
+    --hero-bg: #0b1626;
+    --hero-text: #eef3fb;
+    --hero-muted: #9fb0c8;
+    --radius: 14px;
+    --max: 1120px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0a121e;
+      --surface: #111c2c;
+      --text: #e8eef7;
+      --muted: #97a6bb;
+      --line: #1f2c40;
+      --brand: #4d8bff;
+      --brand-soft: #16264a;
+      --hero-bg: #060c16;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0a121e;
+    --surface: #111c2c;
+    --text: #e8eef7;
+    --muted: #97a6bb;
+    --line: #1f2c40;
+    --brand: #4d8bff;
+    --brand-soft: #16264a;
+    --hero-bg: #060c16;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 20px; }
+
+  /* Header */
+  header.site {
+    position: sticky; top: 0; z-index: 50;
+    background: color-mix(in srgb, var(--hero-bg) 92%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    color: var(--hero-text);
+  }
+  .nav { display: flex; align-items: center; justify-content: space-between; height: 68px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.2rem; text-decoration: none; letter-spacing: -.01em; }
+  .logo svg { width: 30px; height: 30px; }
+  .nav ul { list-style: none; display: flex; gap: 28px; margin: 0; padding: 0; }
+  .nav ul a { text-decoration: none; color: var(--hero-muted); font-weight: 500; font-size: .95rem; }
+  .nav ul a:hover { color: var(--hero-text); }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--brand); color: var(--brand-ink);
+    padding: 12px 20px; border-radius: 10px; border: 0;
+    font: inherit; font-weight: 600; text-decoration: none; cursor: pointer;
+    transition: transform .15s ease, filter .15s ease;
+  }
+  .btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+  .btn.ghost { background: transparent; color: var(--hero-text); border: 1px solid rgba(255,255,255,.22); }
+  .nav .btn { padding: 9px 16px; font-size: .92rem; }
+  .menu-toggle { display: none; background: none; border: 0; color: var(--hero-text); padding: 8px; cursor: pointer; }
+
+  /* Hero */
+  .hero {
+    background:
+      radial-gradient(900px 420px at 85% -10%, rgba(77,139,255,.35), transparent 60%),
+      radial-gradient(600px 300px at 0% 110%, rgba(18,185,129,.18), transparent 60%),
+      var(--hero-bg);
+    color: var(--hero-text);
+    padding: 96px 0 110px;
+    overflow: hidden;
+  }
+  .hero-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 56px; align-items: center; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: .82rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+    color: #8fd9bd; background: rgba(18,185,129,.12); border: 1px solid rgba(18,185,129,.3);
+    padding: 6px 12px; border-radius: 999px;
+  }
+  .eyebrow::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgba(18,185,129,.25); }
+  h1 { font-size: clamp(2.2rem, 5vw, 3.6rem); line-height: 1.08; letter-spacing: -.03em; margin: 22px 0 18px; font-weight: 800; }
+  h1 span { color: #7fb0ff; }
+  .lead { font-size: 1.15rem; color: var(--hero-muted); max-width: 560px; margin: 0 0 32px; }
+  .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+  .hero-points { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 36px; color: var(--hero-muted); font-size: .93rem; }
+  .hero-points div { display: flex; align-items: center; gap: 8px; }
+  .hero-points svg { width: 18px; height: 18px; color: var(--accent); flex: none; }
+
+  .shield-card {
+    position: relative;
+    background: linear-gradient(160deg, rgba(255,255,255,.07), rgba(255,255,255,.02));
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 20px; padding: 28px;
+    box-shadow: 0 30px 80px rgba(0,0,0,.35);
+  }
+  .shield-card h3 { margin: 0 0 4px; font-size: 1rem; }
+  .shield-card .sub { color: var(--hero-muted); font-size: .85rem; margin-bottom: 20px; }
+  .status-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-top: 1px solid rgba(255,255,255,.08); font-size: .93rem; }
+  .pill { font-size: .75rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: rgba(18,185,129,.15); color: #6ee7b7; }
+  .pill.warn { background: rgba(251,191,36,.15); color: #fcd34d; }
+  .meter { height: 8px; background: rgba(255,255,255,.08); border-radius: 99px; overflow: hidden; margin: 6px 0 18px; }
+  .meter i { display: block; height: 100%; width: 92%; background: linear-gradient(90deg, var(--accent), #4d8bff); border-radius: 99px; }
+  .score { display: flex; align-items: baseline; gap: 8px; }
+  .score b { font-size: 2.4rem; letter-spacing: -.03em; }
+  .score span { color: var(--hero-muted); font-size: .9rem; }
+
+  /* Sections */
+  section { padding: 96px 0; }
+  .section-head { max-width: 680px; margin-bottom: 52px; }
+  .section-head .kicker { color: var(--brand); font-weight: 700; font-size: .85rem; letter-spacing: .08em; text-transform: uppercase; }
+  h2 { font-size: clamp(1.8rem, 3.4vw, 2.5rem); letter-spacing: -.025em; line-height: 1.15; margin: 10px 0 14px; }
+  .section-head p { color: var(--muted); font-size: 1.08rem; margin: 0; }
+
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 28px; transition: border-color .2s, transform .2s, box-shadow .2s;
+  }
+  .card:hover { border-color: color-mix(in srgb, var(--brand) 45%, var(--line)); transform: translateY(-3px); box-shadow: 0 14px 40px rgba(15,27,45,.08); }
+  .icon {
+    width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center;
+    background: var(--brand-soft); color: var(--brand); margin-bottom: 18px;
+  }
+  .icon svg { width: 24px; height: 24px; }
+  .card h3 { margin: 0 0 8px; font-size: 1.12rem; letter-spacing: -.01em; }
+  .card p { margin: 0; color: var(--muted); font-size: .97rem; }
+
+  /* Process */
+  .alt { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; counter-reset: step; }
+  .step { position: relative; padding-top: 58px; }
+  .step::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; top: 0; left: 0; width: 40px; height: 40px; border-radius: 50%;
+    display: grid; place-items: center; font-weight: 700;
+    background: var(--brand); color: var(--brand-ink);
+  }
+  .step::after { content: ""; position: absolute; top: 20px; left: 52px; right: -12px; height: 2px; background: var(--line); }
+  .step:last-child::after { display: none; }
+  .step h3 { margin: 0 0 6px; font-size: 1.05rem; }
+  .step p { margin: 0; color: var(--muted); font-size: .95rem; }
+
+  /* About */
+  .about { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
+  .about p { color: var(--muted); font-size: 1.05rem; }
+  .checklist { list-style: none; padding: 0; margin: 24px 0 0; display: grid; gap: 12px; }
+  .checklist li { display: flex; gap: 12px; align-items: flex-start; }
+  .checklist svg { width: 22px; height: 22px; color: var(--accent); flex: none; margin-top: 2px; }
+  .values { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .value { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; }
+  .value b { display: block; font-size: 1.05rem; margin-bottom: 4px; }
+  .value span { color: var(--muted); font-size: .93rem; }
+
+  /* CTA + contact */
+  .contact-wrap {
+    display: grid; grid-template-columns: .9fr 1.1fr; gap: 48px;
+    background: var(--hero-bg); color: var(--hero-text);
+    border-radius: 22px; padding: 56px;
+    background-image: radial-gradient(600px 300px at 100% 0%, rgba(77,139,255,.3), transparent 60%);
+  }
+  .contact-wrap h2 { color: var(--hero-text); margin-top: 0; }
+  .contact-wrap p { color: var(--hero-muted); }
+  .contact-info { list-style: none; padding: 0; margin: 28px 0 0; display: grid; gap: 14px; }
+  .contact-info li { display: flex; gap: 12px; align-items: center; }
+  .contact-info svg { width: 20px; height: 20px; color: #7fb0ff; flex: none; }
+  .contact-info a { text-decoration: none; }
+  .contact-info a:hover { text-decoration: underline; }
+  form { display: grid; gap: 14px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  label { display: grid; gap: 6px; font-size: .88rem; font-weight: 500; color: var(--hero-muted); }
+  input, textarea, select {
+    font: inherit; color: var(--hero-text);
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14);
+    border-radius: 10px; padding: 12px 14px; width: 100%;
+  }
+  select option { color: #0f1b2d; }
+  input:focus, textarea:focus, select:focus { outline: 2px solid #4d8bff; outline-offset: 1px; border-color: transparent; }
+  textarea { min-height: 120px; resize: vertical; }
+  .form-note { font-size: .82rem; color: var(--hero-muted); margin: 0; }
+  .form-ok { display: none; padding: 14px 16px; border-radius: 10px; background: rgba(18,185,129,.15); color: #6ee7b7; font-weight: 500; }
+
+  footer { padding: 40px 0 48px; color: var(--muted); font-size: .9rem; }
+  .foot { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 28px; }
+  .foot .logo { color: var(--text); font-size: 1.05rem; }
+  .foot .logo svg { width: 24px; height: 24px; }
+
+  /* Responsive */
+  @media (max-width: 920px) {
+    .hero-grid, .about, .contact-wrap { grid-template-columns: 1fr; }
+    .grid-3 { grid-template-columns: 1fr 1fr; }
+    .steps { grid-template-columns: 1fr 1fr; }
+    .step::after { display: none; }
+    .contact-wrap { padding: 36px 24px; }
+  }
+  @media (max-width: 720px) {
+    .menu-toggle { display: block; }
+    .nav ul, .nav > .btn { display: none; }
+    .nav.open ul {
+      display: flex; flex-direction: column; gap: 0;
+      position: absolute; top: 68px; left: 0; right: 0;
+      background: var(--hero-bg); border-bottom: 1px solid rgba(255,255,255,.08);
+      padding: 8px 20px 16px;
+    }
+    .nav.open ul a { display: block; padding: 12px 0; }
+    .hero { padding: 64px 0 72px; }
+    section { padding: 68px 0; }
+    .grid-3, .steps, .values, .row { grid-template-columns: 1fr; }
+    .wrap { padding: 0 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site">
+  <nav class="wrap nav" id="nav">
+    <a href="#top" class="logo" aria-label="IT-Säkert – till startsidan">
+      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <path d="M16 2 4 6.5v8.2c0 7.3 5.1 13.6 12 15.3 6.9-1.7 12-8 12-15.3V6.5L16 2Z" fill="#0b5fff"/>
+        <path d="m10.5 16 3.8 3.8 7.4-7.6" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      IT-Säkert
+    </a>
+    <ul>
+      <li><a href="#tjanster">Tjänster</a></li>
+      <li><a href="#sa-arbetar-vi">Så arbetar vi</a></li>
+      <li><a href="#om-oss">Om oss</a></li>
+      <li><a href="#kontakt">Kontakt</a></li>
+    </ul>
+    <a href="#kontakt" class="btn">Boka möte</a>
+    <button class="menu-toggle" aria-label="Öppna meny" aria-expanded="false" onclick="toggleMenu(this)">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+  </nav>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <span class="eyebrow">IT-säkerhet för små och medelstora företag</span>
+        <h1>Tryggare IT. <span>Färre överraskningar.</span></h1>
+        <p class="lead">Vi hjälper ert företag att skydda system, data och medarbetare – från säkerhetsgranskning och övervakning till utbildning och NIS2-anpassning. Begripligt, personligt och utan krångel.</p>
+        <div class="hero-actions">
+          <a href="#kontakt" class="btn">Kostnadsfri säkerhetskoll
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+          </a>
+          <a href="#tjanster" class="btn ghost">Se våra tjänster</a>
+        </div>
+        <div class="hero-points">
+          <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg>Svensktalande support</div>
+          <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg>Fasta månadspriser</div>
+          <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg>GDPR &amp; NIS2</div>
+        </div>
+      </div>
+
+      <div class="shield-card" aria-hidden="true">
+        <h3>Säkerhetsöversikt</h3>
+        <div class="sub">Exempel på månadsrapport</div>
+        <div class="score"><b>92</b><span>/ 100 säkerhetspoäng</span></div>
+        <div class="meter"><i></i></div>
+        <div class="status-row">Brandvägg &amp; nätverk <span class="pill">Skyddad</span></div>
+        <div class="status-row">Säkerhetskopiering <span class="pill">Verifierad</span></div>
+        <div class="status-row">Tvåfaktorsinloggning <span class="pill">Aktiv</span></div>
+        <div class="status-row">Uppdateringar <span class="pill warn">3 väntar</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tjanster">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">Tjänster</div>
+        <h2>Allt ni behöver för en säker IT-miljö</h2>
+        <p>Välj enskilda tjänster eller låt oss ta helhetsansvaret. Vi anpassar upplägget efter er verksamhet och budget.</p>
+      </div>
+      <div class="grid-3">
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></div>
+          <h3>Säkerhetsgranskning</h3>
+          <p>Vi kartlägger er IT-miljö, hittar sårbarheter och ger en tydlig, prioriterad åtgärdsplan.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.4 8.6 8 9.8 4.6-1.2 8-4.8 8-9.8V6l-8-3Z"/><path d="M9 12h6M12 9v6"/></svg></div>
+          <h3>Penetrationstester</h3>
+          <p>Kontrollerade intrångsförsök mot webb, nätverk och system – så ni vet var en angripare skulle lyckas.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></div>
+          <h3>Övervakning &amp; incidenthantering</h3>
+          <p>Löpande bevakning av era system och snabb hjälp när något händer – innan det blir en kris.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg></div>
+          <h3>Backup &amp; återställning</h3>
+          <p>Automatisk, krypterad säkerhetskopiering som testas regelbundet – skydd mot ransomware och olyckor.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M21 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg></div>
+          <h3>Utbildning för personal</h3>
+          <p>Praktiska utbildningar om nätfiske, lösenord och säkert distansarbete – människan är ofta första försvarslinjen.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5M9 14l2 2 4-4"/></svg></div>
+          <h3>GDPR &amp; NIS2</h3>
+          <p>Vi hjälper er att förstå och uppfylla kraven – policyer, riskanalyser och dokumentation som håller.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="sa-arbetar-vi" class="alt">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">Så arbetar vi</div>
+        <h2>Från första samtal till trygg vardag</h2>
+        <p>Ett tydligt arbetssätt där ni alltid vet vad som händer och varför.</p>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <h3>Kostnadsfritt möte</h3>
+          <p>Vi lär känna er verksamhet, era system och vad som är viktigast att skydda.</p>
+        </div>
+        <div class="step">
+          <h3>Nulägesanalys</h3>
+          <p>Vi går igenom er IT-miljö och identifierar risker och brister.</p>
+        </div>
+        <div class="step">
+          <h3>Åtgärdsplan</h3>
+          <p>Ni får en prioriterad plan med tydliga kostnader – inga dolda avgifter.</p>
+        </div>
+        <div class="step">
+          <h3>Löpande skydd</h3>
+          <p>Vi genomför åtgärderna och följer upp kontinuerligt med enkla rapporter.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="om-oss">
+    <div class="wrap about">
+      <div>
+        <div class="section-head" style="margin-bottom:0">
+          <div class="kicker">Om oss</div>
+          <h2>En trygg partner för er IT</h2>
+        </div>
+        <p>IT-Säkert grundades med en enkel idé: alla företag ska ha råd med god IT-säkerhet – inte bara de stora. Vi förklarar på ren svenska, tar ansvar för helheten och finns nära till hands när ni behöver oss.</p>
+        <ul class="checklist">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg><span>Personlig kontakt – ni får en egen ansvarig konsult</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg><span>Lösningar anpassade efter er storlek och bransch</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg><span>Tydliga avtal och förutsägbara kostnader</span></li>
+        </ul>
+      </div>
+      <div class="values">
+        <div class="value"><b>Förebyggande</b><span>Vi stoppar problemen innan de uppstår.</span></div>
+        <div class="value"><b>Begripligt</b><span>Inget tekniskt fikonspråk – bara raka besked.</span></div>
+        <div class="value"><b>Pålitligt</b><span>Vi gör det vi lovar, när vi lovat det.</span></div>
+        <div class="value"><b>Nära</b><span>Snabb kontakt med någon som känner er miljö.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="kontakt" style="padding-top:0">
+    <div class="wrap">
+      <div class="contact-wrap">
+        <div>
+          <h2>Boka en kostnadsfri säkerhetskoll</h2>
+          <p>Berätta kort om ert företag så hör vi av oss inom en arbetsdag. Helt utan förpliktelser.</p>
+          <ul class="contact-info">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg><a href="mailto:info@itsakert.se">info@itsakert.se</a></li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z"/></svg><a href="tel:+46000000000">070-000 00 00</a></li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="10" r="2.5"/></svg>Ort, Sverige</li>
+          </ul>
+        </div>
+        <form id="contact-form" onsubmit="return sendForm(event)">
+          <div class="row">
+            <label>Namn<input name="namn" required autocomplete="name"></label>
+            <label>Företag<input name="foretag" autocomplete="organization"></label>
+          </div>
+          <div class="row">
+            <label>E-post<input type="email" name="epost" required autocomplete="email"></label>
+            <label>Telefon<input type="tel" name="telefon" autocomplete="tel"></label>
+          </div>
+          <label>Vad gäller det?
+            <select name="amne">
+              <option>Kostnadsfri säkerhetskoll</option>
+              <option>Säkerhetsgranskning</option>
+              <option>Penetrationstest</option>
+              <option>Övervakning &amp; incidenthantering</option>
+              <option>Backup &amp; återställning</option>
+              <option>Utbildning</option>
+              <option>GDPR / NIS2</option>
+              <option>Annat</option>
+            </select>
+          </label>
+          <label>Meddelande<textarea name="meddelande" placeholder="Berätta kort om er verksamhet och vad ni behöver hjälp med."></textarea></label>
+          <button class="btn" type="submit">Skicka förfrågan</button>
+          <p class="form-ok" id="form-ok">Tack! Ditt e-postprogram öppnas med meddelandet ifyllt – skicka det så hör vi av oss.</p>
+          <p class="form-note">Vi behandlar dina uppgifter enligt GDPR och använder dem endast för att besvara din förfrågan.</p>
+        </form>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <a href="#top" class="logo">
+      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <path d="M16 2 4 6.5v8.2c0 7.3 5.1 13.6 12 15.3 6.9-1.7 12-8 12-15.3V6.5L16 2Z" fill="#0b5fff"/>
+        <path d="m10.5 16 3.8 3.8 7.4-7.6" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      IT-Säkert
+    </a>
+    <span>© <span id="year"></span> IT-Säkert. Alla rättigheter förbehållna.</span>
+  </div>
+</footer>
+
+<script>
+  // Byt till företagets riktiga e-postadress
+  const CONTACT_EMAIL = "info@itsakert.se";
+
+  document.getElementById("year").textContent = new Date().getFullYear();
+
+  function toggleMenu(btn) {
+    const nav = document.getElementById("nav");
+    const open = nav.classList.toggle("open");
+    btn.setAttribute("aria-expanded", open);
+  }
+  document.querySelectorAll(".nav ul a").forEach(a =>
+    a.addEventListener("click", () => document.getElementById("nav").classList.remove("open"))
+  );
+
+  function sendForm(e) {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const subject = `${f.get("amne")} – ${f.get("foretag") || f.get("namn")}`;
+    const body =
+      `Namn: ${f.get("namn")}\nFöretag: ${f.get("foretag")}\nE-post: ${f.get("epost")}\n` +
+      `Telefon: ${f.get("telefon")}\n\n${f.get("meddelande")}`;
+    window.location.href =
+      `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    document.getElementById("form-ok").style.display = "block";
+    return false;
+  }
+</script>
+</body>
+</html>
