@@ -1,4 +1,4 @@
-// Strikt HTML-sanering för dokument (vitlista). Alla attribut tas bort utom colspan/rowspan,
+// Strikt HTML-sanering för dokument (vitlista). Alla attribut tas bort utom colspan/rowspan och text-align,
 // så att skript, händelsehanterare, länkar och inbäddat innehåll inte kan köras.
 const ALLOWED = new Set(['p', 'br', 'h1', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'b', 'strong', 'i', 'em', 'u', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'div', 'span', 'hr', 'small', 'blockquote']);
 const DROP_WITH_CONTENT = /<(script|style|iframe|object|embed|template|noscript|svg|math|textarea|select|title|head)\b[\s\S]*?<\/\1\s*>/gi;
@@ -11,7 +11,8 @@ export function sanitizeHtml(html: string): string {
       const t = tag.toLowerCase();
       if (!ALLOWED.has(t)) return '';
       if (m.startsWith('</')) return `</${t}>`;
-      const keep = [...attrs.matchAll(/\b(colspan|rowspan)\s*=\s*["']?(\d{1,2})["']?/gi)].map((a) => ` ${a[1].toLowerCase()}="${a[2]}"`).join('');
+      const keep = [...attrs.matchAll(/\b(colspan|rowspan)\s*=\s*["']?(\d{1,2})["']?/gi)].map((a) => ` ${a[1].toLowerCase()}="${a[2]}"`).join('')
+        + (/\bstyle\s*=\s*"\s*text-align\s*:\s*(left|right|center)\s*;?\s*"/i.test(attrs) ? ` style="text-align:${attrs.match(/text-align\s*:\s*(left|right|center)/i)![1].toLowerCase()}"` : '');
       return `<${t}${keep}>`;
     })
     .replace(/<(?![a-z/])/gi, '&lt;');

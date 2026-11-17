@@ -36,10 +36,11 @@ async function expectNoError(page, step) {
   await page.fill('input[name=orgnr]', '5560269986');
   await page.fill('input[name=fy_start]', '2026-01-01');
   await page.click('button:has-text("Skapa bolag")');
-  await page.waitForURL(/installningar/);
+  await page.waitForURL(/kom-igang/);
   await expectNoError(page, 'bolag');
   const cid = page.url().match(/\/c\/(\d+)/)[1];
   const B = `${BASE}/c/${cid}`;
+  await page.goto(B + '/installningar');
   await page.fill('input[name=address]', 'Storgatan 1');
   await page.fill('input[name=postal_code]', '111 22');
   await page.fill('input[name=city]', 'Stockholm');

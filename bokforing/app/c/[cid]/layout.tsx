@@ -14,6 +14,8 @@ export default async function CompanyLayout({ children, params }: { children: Re
       <aside className="side">
         <div className="brand"><Link href="/">Bokföring</Link></div>
         <div className="company">{company.name}<br />{user.name} · {ROLE_LABEL[role]}</div>
+        <input type="checkbox" id="navtoggle" className="navtoggle" aria-hidden="true" />
+        <label htmlFor="navtoggle" className="navbtn btn secondary">☰ Meny</label>
         <nav>
           <Link href={b}>Översikt</Link>
           <Link href={`${b}/kom-igang`}>Kom igång</Link>
