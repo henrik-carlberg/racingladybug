@@ -273,6 +273,7 @@
   select option { color: #0f1b2d; }
   input:focus, textarea:focus, select:focus { outline: 2px solid #4d8bff; outline-offset: 1px; border-color: transparent; }
   textarea { min-height: 120px; resize: vertical; }
+  label[hidden] { display: none; }
   .form-note { font-size: .82rem; color: var(--hero-muted); margin: 0; }
   .form-ok { display: none; padding: 14px 16px; border-radius: 10px; background: rgba(18,185,129,.15); color: #6ee7b7; font-weight: 500; }
 
@@ -614,6 +615,7 @@
               <option>Annat</option>
             </select>
           </label>
+          <label id="system-falt" hidden>Vilka system vill ni koppla ihop?<input name="system" placeholder="T.ex. ekonomisystem, CRM, e-handel, HR – gärna med namn"></label>
           <label>Meddelande<textarea name="meddelande" placeholder="Berätta kort om er verksamhet och vad ni behöver hjälp med."></textarea></label>
           <button class="btn" type="submit">Skicka förfrågan</button>
           <p class="form-ok" id="form-ok">Tack! Ditt e-postprogram öppnas med meddelandet ifyllt – skicka det så hör vi av oss.</p>
@@ -653,9 +655,13 @@
     a.addEventListener("click", () => document.getElementById("nav").classList.remove("open"))
   );
 
+  const amne = document.querySelector('select[name="amne"]');
+  const systemFalt = document.getElementById("system-falt");
+  const visaSystemFalt = () => { systemFalt.hidden = amne.value !== "Systemintegration"; };
+  amne.addEventListener("change", visaSystemFalt);
   document.querySelectorAll("[data-amne]").forEach(a => a.addEventListener("click", () => {
-    const s = document.querySelector('select[name="amne"]');
-    if (s) s.value = a.dataset.amne;
+    amne.value = a.dataset.amne;
+    visaSystemFalt();
   }));
 
   function sendForm(e) {
@@ -664,7 +670,9 @@
     const subject = `${f.get("amne")} – ${f.get("foretag") || f.get("namn")}`;
     const body =
       `Namn: ${f.get("namn")}\nFöretag: ${f.get("foretag")}\nE-post: ${f.get("epost")}\n` +
-      `Telefon: ${f.get("telefon")}\n\n${f.get("meddelande")}`;
+      `Telefon: ${f.get("telefon")}\n` +
+      (f.get("amne") === "Systemintegration" && f.get("system") ? `System att koppla ihop: ${f.get("system")}\n` : "") +
+      `\n${f.get("meddelande")}`;
     window.location.href =
       `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     document.getElementById("form-ok").style.display = "block";
