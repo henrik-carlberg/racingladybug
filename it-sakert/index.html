@@ -219,6 +219,63 @@
   .int-card h3 { margin: 0 0 8px; font-size: 1.05rem; }
   .int-card p { margin: 0; color: var(--muted); font-size: .95rem; }
 
+  /* Visualiseringar */
+  .viz { margin-top: 56px; }
+  .viz-head { max-width: 720px; margin-bottom: 24px; }
+  .viz-head .kicker { color: var(--brand); font-weight: 700; font-size: .85rem; letter-spacing: .08em; text-transform: uppercase; }
+  .viz-head h3 { font-size: clamp(1.4rem, 2.6vw, 1.9rem); letter-spacing: -.02em; line-height: 1.2; margin: 8px 0 10px; }
+  .viz-head p { color: var(--muted); margin: 0; }
+  .viz-note { color: var(--muted); font-size: .88rem; margin: 14px 0 0; }
+  .flow-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .flow-col { border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; background: var(--bg); }
+  .flow-col.before { border-color: color-mix(in srgb, #ef4444 30%, var(--line)); }
+  .flow-col.after { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+  .flow-title { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 2px 12px; margin-bottom: 16px; }
+  .flow-title span { font-weight: 700; font-size: 1.1rem; }
+  .flow-title strong { font-size: 1.8rem; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .flow-col.before .flow-title strong { color: #dc2626; }
+  .flow-col.after .flow-title strong { color: var(--accent); }
+  .flow-title small { grid-column: 1 / -1; color: var(--muted); font-size: .85rem; }
+  .steps-flow { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; position: relative; }
+  .steps-flow::before { content: ""; position: absolute; left: 19px; top: 20px; bottom: 20px; width: 2px; background: var(--line); }
+  .fstep { position: relative; display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px 10px 0; }
+  .step-ic { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; margin-left: -1px; position: relative; z-index: 1; }
+  .step-ic svg { width: 20px; height: 20px; }
+  .fstep.start .step-ic { background: var(--brand-soft); color: var(--brand); }
+  .fstep.manual .step-ic { background: color-mix(in srgb, #ef4444 14%, var(--surface)); color: #dc2626; }
+  .fstep.auto .step-ic { background: color-mix(in srgb, var(--accent) 16%, var(--surface)); color: var(--accent); }
+  .fstep div { display: grid; line-height: 1.3; }
+  .fstep b { font-size: .95rem; }
+  .fstep div span { color: var(--muted); font-size: .85rem; }
+  .fstep em { font-style: normal; font-weight: 700; font-size: .9rem; font-variant-numeric: tabular-nums; }
+  .fstep.manual em { color: #dc2626; }
+  .fstep.auto em { color: var(--accent); }
+  .fstep.start em { color: var(--muted); font-weight: 600; }
+  .fstep .risk { position: absolute; right: 12px; top: -9px; font-style: normal; font-size: .68rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; background: #fee2e2; color: #b91c1c; padding: 2px 7px; border-radius: 99px; }
+  .fstep.auto { animation: pulse 2.8s ease-in-out infinite; animation-delay: var(--d); }
+  @keyframes pulse { 0%, 70%, 100% { box-shadow: 0 0 0 0 transparent; } 15% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); } }
+  @media (prefers-reduced-motion: reduce) { .fstep.auto { animation: none; } }
+
+  .mesh-control { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; font-weight: 600; }
+  .mesh-control label { display: block; color: var(--text); font-size: 1rem; font-weight: 600; }
+  .mesh-control output { color: var(--brand); font-variant-numeric: tabular-nums; }
+  .mesh-control input { flex: 1 1 220px; max-width: 360px; accent-color: var(--brand); padding: 0; border: 0; background: none; }
+  .mesh-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .mesh-card { margin: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); padding: 16px 16px 20px; display: grid; justify-items: center; }
+  .mesh-card svg { width: 100%; max-width: 320px; height: auto; }
+  .mesh-card .ln { stroke-width: 1.4; opacity: .55; }
+  .mesh-card.bad .ln { stroke: #ef4444; }
+  .mesh-card.good .ln { stroke: var(--brand); stroke-width: 2; opacity: .7; }
+  .mesh-card .nd { fill: var(--surface); stroke: var(--text); stroke-width: 2; }
+  .mesh-card .hubnd { fill: var(--hero-bg); }
+  .mesh-card .hubtx { fill: #fff; font-size: 11px; font-weight: 700; text-anchor: middle; }
+  .mesh-card figcaption { display: grid; justify-items: center; text-align: center; gap: 2px; }
+  .mesh-card figcaption b { font-size: 2.2rem; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .mesh-card.bad figcaption b { color: #dc2626; }
+  .mesh-card.good figcaption b { color: var(--brand); }
+  .mesh-card figcaption span { font-weight: 600; }
+  .mesh-card figcaption small { color: var(--muted); font-size: .85rem; }
+
   /* Kalkylator */
   .calc { margin-top: 56px; background: var(--bg); border: 1px solid var(--line); border-radius: 20px; padding: 40px; }
   .calc-head { max-width: 720px; margin-bottom: 28px; }
@@ -331,6 +388,7 @@
     .int-top { grid-template-columns: 1fr; gap: 32px; }
     .int-grid { grid-template-columns: 1fr 1fr; }
     .calc-body { grid-template-columns: 1fr; }
+    .flow-cols { grid-template-columns: 1fr; }
     .calc-result { position: static; }
     .courses-head { grid-template-columns: 1fr; gap: 28px; }
     .courses-photo { aspect-ratio: 16 / 9; }
@@ -357,6 +415,11 @@
     section { padding: 68px 0; }
     .grid-3, .steps, .values, .row, .incident-list, .course-grid, .int-grid { grid-template-columns: 1fr; }
     .calc { padding: 24px 16px; }
+    .mesh-cols { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .mesh-card { padding: 10px 8px 14px; }
+    .mesh-card figcaption b { font-size: 1.7rem; }
+    .mesh-card figcaption span { font-size: .85rem; }
+    .flow-col { padding: 16px 12px; }
     .calc-inputs fieldset { padding: 14px 14px 4px; }
     .calc-result { padding: 22px 18px; }
     .bar-row { grid-template-columns: 64px 1fr 72px; }
@@ -527,6 +590,59 @@
           <article class="int-card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></svg></div><h3>Skräddarsydda integrationer</h3><p>Vi bygger kopplingarna mellan era system via API:er, filöverföring eller händelser – anpassat efter hur ni faktiskt arbetar.</p></article>
           <article class="int-card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg></div><h3>Färdiga kopplingar</h3><p>Färdigpaketerade integrationer för vanliga flöden, som order till faktura eller nya medarbetare till alla system. Snabbt på plats, med pris enligt offert.</p></article>
           <article class="int-card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg></div><h3>Drift &amp; övervakning</h3><p>Vi övervakar integrationerna, larmar när något stannar och åtgärdar felet – så att informationen fortsätter flöda.</p></article>
+      </div>
+      <div class="viz" id="order-flode">
+        <div class="viz-head">
+          <div class="kicker">Exempel</div>
+          <h3>En order – i dag och med integrerade system</h3>
+          <p>Samma order ska finnas i fem system. Utan integration flyttar någon informationen för hand, ett steg i taget. Med integration sker det automatiskt i samma sekund som ordern läggs.</p>
+        </div>
+        <div class="flow-cols">
+          <div class="flow-col before">
+            <div class="flow-title"><span>I dag</span><strong>15 min</strong><small>handpåläggning per order – och 5 tillfällen att skriva fel</small></div>
+            <ol class="steps-flow">
+              <li class="fstep start"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg></span><div><b>E-handeln</b><span>En kund lägger en order</span></div><em>Start</em></li>
+              <li class="fstep manual"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></span><div><b>Affärssystemet</b><span>Ordern skrivs av för hand</span></div><em>4 min</em><i class="risk" title="Risk för fel">Risk för fel</i></li>
+              <li class="fstep manual"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></span><div><b>CRM</b><span>Kunden läggs upp eller uppdateras</span></div><em>3 min</em><i class="risk" title="Risk för fel">Risk för fel</i></li>
+              <li class="fstep manual"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></span><div><b>Ekonomisystemet</b><span>Fakturan skapas</span></div><em>4 min</em><i class="risk" title="Risk för fel">Risk för fel</i></li>
+              <li class="fstep manual"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></span><div><b>Lagret</b><span>Saldot justeras</span></div><em>2 min</em><i class="risk" title="Risk för fel">Risk för fel</i></li>
+              <li class="fstep manual"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></span><div><b>Kunden</b><span>Orderbekräftelse skickas</span></div><em>2 min</em><i class="risk" title="Risk för fel">Risk för fel</i></li>
+            </ol>
+          </div>
+          <div class="flow-col after">
+            <div class="flow-title"><span>Integrerat</span><strong>0 min</strong><small>per order – personalen hanterar bara undantag när ett larm går</small></div>
+            <ol class="steps-flow">
+              <li class="fstep start"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg></span><div><b>E-handeln</b><span>En kund lägger en order</span></div><em>Start</em></li>
+              <li class="fstep auto" style="--d:0.00s"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/></svg></span><div><b>Affärssystemet</b><span>Ordern skapas automatiskt</span></div><em>0 min</em></li>
+              <li class="fstep auto" style="--d:0.35s"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/></svg></span><div><b>CRM</b><span>Kunden uppdateras automatiskt</span></div><em>0 min</em></li>
+              <li class="fstep auto" style="--d:0.70s"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/></svg></span><div><b>Ekonomisystemet</b><span>Fakturan skapas automatiskt</span></div><em>0 min</em></li>
+              <li class="fstep auto" style="--d:1.05s"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/></svg></span><div><b>Lagret</b><span>Saldot justeras automatiskt</span></div><em>0 min</em></li>
+              <li class="fstep auto" style="--d:1.40s"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/></svg></span><div><b>Kunden</b><span>Bekräftelsen skickas automatiskt</span></div><em>0 min</em></li>
+            </ol>
+          </div>
+        </div>
+        <p class="viz-note">Tiderna är exempel. Med 400 order i månaden blir 15 minuter per order ungefär 1 200 timmar om året.</p>
+      </div>
+      <div class="viz" id="spaghetti">
+        <div class="viz-head">
+          <div class="kicker">Varför ett gemensamt språk?</div>
+          <h3>Punkt-till-punkt eller gemensamt nav</h3>
+          <p>Kopplar man ihop systemen två och två växer antalet kopplingar snabbt – och varje koppling ska byggas, testas, säkras och underhållas. Med ett gemensamt nav kopplas varje system bara en gång.</p>
+        </div>
+        <div class="mesh-control">
+          <label for="mesh-n">Antal system: <output id="mesh-n-out">6</output></label>
+          <input type="range" id="mesh-n" min="3" max="12" step="1" value="6">
+        </div>
+        <div class="mesh-cols">
+          <figure class="mesh-card bad">
+            <svg id="mesh-p2p" viewBox="0 0 300 300" role="img" aria-label="Punkt-till-punkt: alla system kopplade till varandra"></svg>
+            <figcaption><b id="mesh-p2p-n">15</b><span>kopplingar punkt-till-punkt</span><small id="mesh-p2p-add">Nytt system: +6 kopplingar</small></figcaption>
+          </figure>
+          <figure class="mesh-card good">
+            <svg id="mesh-hub" viewBox="0 0 300 300" role="img" aria-label="Gemensamt nav: varje system kopplat en gång till navet"></svg>
+            <figcaption><b id="mesh-hub-n">6</b><span>kopplingar via gemensamt nav</span><small id="mesh-hub-add">Nytt system: +1 koppling</small></figcaption>
+          </figure>
+        </div>
       </div>
       <div class="calc" id="kalkyl">
         <div class="calc-head">
@@ -792,6 +908,33 @@
     visaSystemFalt();
   }));
 
+
+
+  // Spaghetti eller nav: antal kopplingar
+  (function () {
+    const r = document.getElementById("mesh-n");
+    if (!r) return;
+    const NS = "http://www.w3.org/2000/svg";
+    const el = (n, a) => { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); return e; };
+    function pts(n) { return Array.from({ length: n }, (_, i) => { const t = -Math.PI / 2 + i * 2 * Math.PI / n; return [150 + 118 * Math.cos(t), 150 + 118 * Math.sin(t)]; }); }
+    function draw() {
+      const n = +r.value, p = pts(n);
+      const a = document.getElementById("mesh-p2p"), b = document.getElementById("mesh-hub");
+      a.replaceChildren(); b.replaceChildren();
+      for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) a.append(el("line", { class: "ln", x1: p[i][0], y1: p[i][1], x2: p[j][0], y2: p[j][1] }));
+      p.forEach(q => b.append(el("line", { class: "ln", x1: 150, y1: 150, x2: q[0], y2: q[1] })));
+      p.forEach(q => { a.append(el("circle", { class: "nd", cx: q[0], cy: q[1], r: 11 })); b.append(el("circle", { class: "nd", cx: q[0], cy: q[1], r: 11 })); });
+      b.append(el("circle", { class: "hubnd", cx: 150, cy: 150, r: 34 }));
+      const t = el("text", { class: "hubtx", x: 150, y: 154 }); t.textContent = "Nav"; b.append(t);
+      const p2p = n * (n - 1) / 2;
+      document.getElementById("mesh-n-out").textContent = n;
+      document.getElementById("mesh-p2p-n").textContent = p2p;
+      document.getElementById("mesh-hub-n").textContent = n;
+      document.getElementById("mesh-p2p-add").textContent = "Nytt system: +" + n + " kopplingar";
+    }
+    r.addEventListener("input", draw);
+    draw();
+  })();
 
   // Kalkylator: tid och felkostnad med och utan integration
   (function () {
