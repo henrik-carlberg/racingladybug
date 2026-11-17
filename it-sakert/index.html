@@ -316,6 +316,7 @@
   @media (prefers-reduced-motion: reduce) { .bar i { transition: none; } }
 
   /* Timbank */
+  .tb-jour { margin: 14px 0 0; padding: 10px 14px; border-radius: 10px; background: var(--brand-soft); font-size: .93rem; color: var(--text); }
   .tb-uses { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 32px; }
   .tb-uses div { border-left: 3px solid var(--brand); padding: 4px 0 4px 14px; }
   .tb-uses b { display: block; }
@@ -786,10 +787,11 @@
         <div class="kicker">Timbank</div>
         <h2>Köp timmar i förväg – och få hjälp när ni behöver den</h2>
         <p>Med en timbank har ni alltid tid hos oss reserverad. Ni slipper ta in en ny offert för varje fråga, och budgeten blir förutsägbar. Timmarna gäller i 12 månader. Timmarna kan användas till allt vi gör – säkerhet, integrationer, utbildning och hjälp vid incidenter.</p>
+        <p class="tb-jour"><b>Jourtid:</b> Arbete på kvällar, nätter och helger räknas med påslag 2,0 – en timme på jourtid drar två timmar från timbanken.</p>
       </div>
       <div class="tb-uses">
         <div><b>Säkerhet</b><span>Genomgångar, inställningar, policyer och riskbedömningar</span></div>
-        <div><b>Incidenter</b><span>Snabb hjälp när något har hänt – dygnet runt</span></div>
+        <div><b>Incidenter</b><span>Snabb hjälp när något har hänt – dygnet runt (jourtid med påslag 2,0)</span></div>
         <div><b>Integrationer</b><span>Justeringar, nya flöden och felsökning</span></div>
         <div><b>Utbildning</b><span>Korta pass för personal och ledning</span></div>
         <div><b>Regelefterlevnad</b><span>Cybersäkerhetslagen, NIS2, GDPR och ISO 27001</span></div>
@@ -834,7 +836,7 @@
             <p class="tb-r-hours"><b id="tb-hours">10</b> timmar</p>
             <p class="tb-r-why" id="tb-why"></p>
             <a class="btn" id="tb-cta" href="#kontakt" data-amne="Timbank – 10 timmar">Beställ 10 timmar</a>
-            <small>Timmarna gäller i 12 månader. Rekommendationen är en utgångspunkt. Vi stämmer av behovet med er innan offerten.</small>
+            <small>Timmarna gäller i 12 månader. Jourtid räknas med påslag 2,0. Rekommendationen är en utgångspunkt. Vi stämmer av behovet med er innan offerten.</small>
           </div>
         </div>
     </div>
