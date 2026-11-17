@@ -56,6 +56,8 @@ export default async function Settings({ params, searchParams }: { params: Promi
           <label>Bankgiro<input name="bankgiro" defaultValue={c.bankgiro} /></label>
           <label>Plusgiro<input name="plusgiro" defaultValue={c.plusgiro} /></label>
           <label>IBAN<input name="iban" defaultValue={c.iban} /></label>
+          <label>BIC (för betalfil)<input name="bic" defaultValue={c.bic} placeholder="T.ex. SWEDSESS" /></label>
+          <label>Swishnummer (på fakturan)<input name="swish_number" defaultValue={c.swish_number} placeholder="123 456 78 90" /></label>
         </div>
         <div className="row">
           <label>Betalningsvillkor (dagar)<input name="invoice_terms" type="number" min={0} defaultValue={c.invoice_terms} /></label>

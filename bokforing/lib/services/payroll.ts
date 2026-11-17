@@ -18,12 +18,12 @@ export interface EmployeeOut {
   address: string; postal_code: string; city: string; bank_clearing: string; bank_account: string;
   employment_start: string | null; employment_end: string | null; monthly_salary: number;
   tax_mode: 'table' | 'percent'; tax_table: number | null; tax_column: number; tax_percent: number | null;
-  fee_override: number | null; active: boolean; created_at: string;
+  fee_override: number | null; active: boolean; vacation_days: number; hours_per_week: number; created_at: string;
 }
 
 const ECOLS = () => sql`id, 'employee' AS object, first_name, last_name, personal_number, email, address, postal_code, city,
   bank_clearing, bank_account, to_char(employment_start,'YYYY-MM-DD') AS employment_start, to_char(employment_end,'YYYY-MM-DD') AS employment_end,
-  monthly_salary, tax_mode, tax_table, tax_column, tax_percent::float8 AS tax_percent, fee_override::float8 AS fee_override, active, created_at`;
+  monthly_salary, tax_mode, tax_table, tax_column, tax_percent::float8 AS tax_percent, fee_override::float8 AS fee_override, active, vacation_days, hours_per_week::float8 AS hours_per_week, created_at`;
 
 export async function getEmployee(companyId: number, id: number): Promise<EmployeeOut> {
   const [e] = await sql<EmployeeOut[]>`SELECT ${ECOLS()} FROM employees WHERE id = ${id} AND company_id = ${companyId}`;
@@ -69,6 +69,8 @@ function readEmployee(input: Record<string, unknown>, cur?: EmployeeOut) {
   if (want('tax_percent')) f.tax_percent = num(input, 'tax_percent', 'Skattesats');
   if (want('fee_override')) f.fee_override = num(input, 'fee_override', 'Arbetsgivaravgift');
   if (want('active')) f.active = has(input, 'active') ? bool(input, 'active') : true;
+  if (has(input, 'vacation_days') && input.vacation_days !== '') { const v = optInt(input, 'vacation_days', 'Semesterdagar'); if (v == null || v < 0 || v > 60) throw new ValidationError('Ogiltigt antal semesterdagar'); f.vacation_days = v; }
+  if (has(input, 'hours_per_week') && input.hours_per_week !== '') { const h = num(input, 'hours_per_week', 'Arbetstid'); if (h == null || h <= 0 || h > 60) throw new ValidationError('Ogiltig arbetstid'); f.hours_per_week = h; }
   const m = { ...cur, ...f } as Record<string, unknown>;
   if (m.tax_mode === 'table' && (!m.tax_table || (m.tax_table as number) < 29 || (m.tax_table as number) > 42)) throw new ValidationError('Ange skattetabell (29–42)');
   if (m.tax_mode === 'percent' && (m.tax_percent == null || (m.tax_percent as number) < 0 || (m.tax_percent as number) > 100)) throw new ValidationError('Ange skattesats i procent');

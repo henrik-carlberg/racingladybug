@@ -1,7 +1,7 @@
 export type EmployeeRow = {
   id: number; first_name: string; last_name: string; personal_number: string; email: string; address: string; postal_code: string; city: string;
   bank_clearing: string; bank_account: string; employment_start: string | null; employment_end: string | null; monthly_salary: number;
-  tax_mode: 'table' | 'percent'; tax_table: number | null; tax_column: number; tax_percent: string | null; fee_override: string | null; active: boolean;
+  tax_mode: 'table' | 'percent'; tax_table: number | null; tax_column: number; tax_percent: string | null; fee_override: string | null; active: boolean; vacation_days: number; hours_per_week: number;
 };
 
 export function EmployeeFields({ e }: { e?: Partial<EmployeeRow> }) {
@@ -40,6 +40,8 @@ export function EmployeeFields({ e }: { e?: Partial<EmployeeRow> }) {
       </div>
       <div className="row">
         <label>Avvikande arbetsgivaravgift % (t.ex. växa-stöd, tomt = automatisk)<input name="fee_override" defaultValue={e?.fee_override ?? ''} /></label>
+        <label>Semesterdagar per år<input name="vacation_days" type="number" min={0} max={60} defaultValue={e?.vacation_days ?? 25} /></label>
+        <label>Arbetstid timmar/vecka<input name="hours_per_week" inputMode="decimal" defaultValue={e?.hours_per_week ?? 40} /></label>
         <label className="check"><input type="checkbox" name="active" defaultChecked={e?.active ?? true} /> Aktiv (tas med i lönekörningar)</label>
       </div>
       <p className="muted small" style={{ margin: 0 }}>Skattetabell och kolumn framgår av den anställdes skattebesked (Skatteverket). Kolumn 1 gäller för de flesta löntagare. Saknas A-skattsedel/skattebesked ska 30 % dras.</p>

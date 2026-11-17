@@ -8,6 +8,7 @@ import { today } from '@/lib/format';
 import { bookInvoice, creditInvoice, deleteDraft, registerPayment, sendInvoice } from '../actions';
 import { PrintButton } from '@/components/PrintButton';
 import { InvoiceDoc } from '@/components/InvoiceDoc';
+import { peppolCheck } from '@/lib/services/einvoice';
 import { listTimeEntries } from '@/lib/services/time';
 
 export const dynamic = 'force-dynamic';
@@ -35,6 +36,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
   const [orig] = inv.credit_of_id ? await sql<{ id: number; invoice_number: number }[]>`SELECT id, invoice_number FROM invoices WHERE id = ${inv.credit_of_id}` : [];
   const isCredit = !!inv.credit_of_id;
   const time = await listTimeEntries(co.id, { invoice_id: inv.id });
+  const peppol = inv.status !== 'draft' ? await peppolCheck(co.id, inv.id).catch(() => null) : null;
   const b = `/c/${co.id}`;
   const t0 = today();
 
@@ -67,6 +69,13 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
             <span className="small muted">{inv.sent_local ? `Skickad ${inv.sent_local} till ${inv.sent_to}. ` : ''}Kunden får en länk där fakturan kan visas, skrivas ut och sparas som PDF.
               {inv.public_token && <> Länk: <a href={`/f/${inv.public_token}`} target="_blank">/f/{inv.public_token.slice(0, 8)}…</a></>}</span>
           </form>
+        )}
+        {peppol && (
+          <div className="card small">
+            <b>E-faktura (Peppol BIS 3)</b>{' '}
+            {peppol.errors.length ? <span style={{ color: 'var(--danger)' }}>saknar uppgifter: {peppol.errors.join('; ')}.</span>
+              : <><a href={`${b}/fakturor/${inv.id}/peppol`}>Ladda ner e-faktura (XML)</a> <span className="muted">– skicka via din Peppol-operatör till {peppol.data.buyer.endpoint}.</span></>}
+          </div>
         )}
         {inv.status === 'booked' && (
           <div className="card stack">

@@ -32,6 +32,9 @@ export default async function MyPage({ params, searchParams }: { params: Promise
         {utlagg && <Link href={`${b}/m/utlagg`} className="card" style={{ display: 'block', margin: 0, color: 'var(--text)' }}>
           <div style={{ fontSize: '1.4rem' }}>🧾</div><b>Utlägg och resor</b><div className="small muted">{claims.length ? `${claims.length} pågående` : 'Kvitton, milersättning, traktamente'}</div>
         </Link>}
+        <Link href={`${b}/mitt/franvaro`} className="card" style={{ display: 'block', margin: 0, color: 'var(--text)' }}>
+          <div style={{ fontSize: '1.4rem' }}>🌴</div><b>Frånvaro och semester</b><div className="small muted">Sjukanmälan, VAB, semesteransökan</div>
+        </Link>
         <Link href={`${b}/mitt/lon`} className="card" style={{ display: 'block', margin: 0, color: 'var(--text)' }}>
           <div style={{ fontSize: '1.4rem' }}>💰</div><b>Lönespecifikationer</b><div className="small muted">{slips[0] ? `Senast ${slips[0].period}: ${kr(Number(slips[0].net_pay))} kr` : 'Inga ännu'}</div>
         </Link>

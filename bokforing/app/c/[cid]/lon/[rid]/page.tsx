@@ -5,7 +5,7 @@ import { requireCompany } from '@/lib/server/auth';
 import { Flash, type SP } from '@/components/ui';
 import { kr } from '@/lib/format';
 import { PAY_ITEM_LABELS, type PayItem } from '@/lib/payroll';
-import { addEmployee, bookRun, deleteRun, removeSlip, saveSlip } from '../actions';
+import { addEmployee, bookRun, deleteRun, removeSlip, saveSlip, applyAbsence } from '../actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -111,6 +111,10 @@ export default async function Run({ params, searchParams }: { params: Promise<{ 
               <div style={{ flex: '0 0 auto' }}><button className="secondary">Lägg till</button></div>
             </form>
           )}
+          <form action={applyAbsence.bind(null, company.id, run.id)} className="card actions">
+            <button className="secondary">Räkna in frånvaro</button>
+            <span className="muted small">Sjukfrånvaro (sjuklön 80 % och karensavdrag), semestertillägg och löneavdrag för VAB och ledighet som avslutats före {run.period}. <a href={`/c/${company.id}/lon/franvaro`}>Frånvaro och semester</a></span>
+          </form>
           <div className="card actions">
             <form action={bookRun.bind(null, company.id, run.id)}><button>Bokför lönekörning</button></form>
             <form action={deleteRun.bind(null, company.id, run.id)}><button className="link">Ta bort utkast</button></form>

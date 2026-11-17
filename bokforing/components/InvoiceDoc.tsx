@@ -3,6 +3,8 @@ import { computeInvoice, lineNet } from '@/lib/invoice';
 import { kr } from '@/lib/format';
 import { fmtHours, monthName } from '@/lib/time';
 import type { Company } from '@/lib/server/auth';
+import QRCode from 'qrcode';
+import { formatSwish, swishQrData } from '@/lib/pain001';
 
 export interface InvoiceDocData {
   invoice_number: number | null; invoice_date: string; due_date: string; delivery_date: string; ocr: string | null;
@@ -12,12 +14,15 @@ export interface InvoiceDocData {
 }
 
 /** Fakturans dokument (används i appen, i utskrift och på kundens länk) */
-export function InvoiceDoc({ inv, lines, co, orig, isCredit, time }: {
+export async function InvoiceDoc({ inv, lines, co, orig, isCredit, time }: {
   inv: InvoiceDocData; lines: InvoiceLineInput[]; co: Company; orig?: { invoice_number: number } | null; isCredit: boolean;
   time: { id: number; date: string; activity_name: string; description: string; user_name: string; minutes: number }[];
 }) {
   const t = computeInvoice(lines, { reverseCharge: inv.reverse_charge });
   const hb = inv.hour_bank;
+  const swish = co.swish_number && !isCredit && t.total > 0
+    ? { data: swishQrData(co.swish_number, t.total, inv.ocr ?? String(inv.invoice_number ?? '')), svg: '' } : null;
+  if (swish) swish.svg = await QRCode.toString(swish.data, { type: 'svg', margin: 1, width: 120 });
   return (
         <div className="doc">
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '2rem' }}>
@@ -111,6 +116,12 @@ export function InvoiceDoc({ inv, lines, co, orig, isCredit, time }: {
             <div>{co.bankgiro && <>Bankgiro {co.bankgiro}<br /></>}{co.plusgiro && <>Plusgiro {co.plusgiro}<br /></>}{co.iban && <>IBAN {co.iban}</>}</div>
             <div>{co.email}<br />{co.phone}</div>
           </div>
+          {swish && (
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginTop: '1rem', border: '1px solid #ddd', borderRadius: 6, padding: '.6rem .8rem', maxWidth: 420 }}>
+              <div style={{ width: 120, height: 120, flex: '0 0 auto' }} dangerouslySetInnerHTML={{ __html: swish.svg }} />
+              <div className="small"><b>Betala med Swish</b><br />Swishnummer {formatSwish(co.swish_number)}<br />Belopp {kr(t.total)} kr<br />Meddelande {inv.ocr ?? inv.invoice_number}</div>
+            </div>
+          )}
           {!isCredit && <p className="small" style={{ marginTop: '1rem' }}>{co.late_interest}</p>}
         </div>
   );
