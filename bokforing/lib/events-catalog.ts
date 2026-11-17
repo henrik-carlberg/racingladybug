@@ -22,4 +22,12 @@ export const CORE_EVENTS: EventType[] = [
   { type: 'payroll_run.created', description: 'En lönekörning har skapats' },
   { type: 'payroll_run.booked', description: 'En lönekörning har bokförts' },
   { type: 'vat.settled', description: 'En momsavräkning har bokförts' },
+  { type: 'bank.connected', description: 'En bank har kopplats via Open Banking' },
+  { type: 'bank.transactions.imported', description: 'Nya banktransaktioner har hämtats eller importerats' },
+  { type: 'bank.transaction.matched', description: 'En banktransaktion har stämts av (matchad, bokförd eller ignorerad)' },
+  { type: 'document.sent', description: 'Ett dokument har skickats för signering' },
+  { type: 'document.signed', description: 'En undertecknare har signerat ett dokument' },
+  { type: 'document.declined', description: 'En undertecknare har avböjt att signera' },
+  { type: 'document.completed', description: 'Alla har signerat – dokumentet är klart och förseglat' },
+  { type: 'document.cancelled', description: 'Ett dokument har återkallats' },
 ];

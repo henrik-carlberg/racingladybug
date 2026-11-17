@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 
 const SOURCE: Record<string, string> = {
   invoice: 'Kundfaktura', invoice_payment: 'Inbetalning kundfaktura', supplier_invoice: 'Leverantörsfaktura',
-  supplier_payment: 'Betalning leverantörsfaktura', payroll: 'Lönekörning', vat: 'Momsavräkning', manual: 'Manuell', reversal: 'Rättelse',
+  supplier_payment: 'Betalning leverantörsfaktura', payroll: 'Lönekörning', vat: 'Momsavräkning', bank: 'Bankavstämning', manual: 'Manuell', reversal: 'Rättelse',
 };
 
 export default async function VoucherPage({ params, searchParams }: { params: Promise<{ cid: string; vid: string }>; searchParams: SP }) {

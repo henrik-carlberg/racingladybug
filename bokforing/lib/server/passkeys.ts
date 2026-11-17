@@ -1,5 +1,5 @@
 import 'server-only';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { cookies, headers } from 'next/headers';
 import {
   generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse,
@@ -34,25 +34,25 @@ export async function relyingParty(): Promise<{ rpID: string; origin: string }> 
   return { rpID, origin };
 }
 
-async function storeChallenge(challenge: string, purpose: 'register' | 'login', userId: number | null) {
+async function storeChallenge(challenge: string, purpose: 'register' | 'login' | 'sign', userId: number | null, ref: string | null = null) {
   const id = randomBytes(24).toString('base64url');
   await sql`DELETE FROM webauthn_challenges WHERE expires_at < now()`;
-  await sql`INSERT INTO webauthn_challenges (id, challenge, purpose, user_id, expires_at)
-    VALUES (${id}, ${challenge}, ${purpose}, ${userId}, ${new Date(Date.now() + CHALLENGE_TTL_MS)})`;
+  await sql`INSERT INTO webauthn_challenges (id, challenge, purpose, user_id, ref, expires_at)
+    VALUES (${id}, ${challenge}, ${purpose}, ${userId}, ${ref}, ${new Date(Date.now() + CHALLENGE_TTL_MS)})`;
   (await cookies()).set(CHALLENGE_COOKIE, id, {
     httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', path: '/', maxAge: CHALLENGE_TTL_MS / 1000,
   });
 }
 
 /** Hämtar och förbrukar challengen (engångs). */
-async function takeChallenge(purpose: 'register' | 'login', userId: number | null): Promise<string> {
+async function takeChallenge(purpose: 'register' | 'login' | 'sign', userId: number | null, ref: string | null = null): Promise<string> {
   const c = await cookies();
   const id = c.get(CHALLENGE_COOKIE)?.value;
   c.delete(CHALLENGE_COOKIE);
   if (!id) throw new PasskeyError('Passkey-förfrågan saknas eller har gått ut. Försök igen.');
   const [row] = await sql<{ challenge: string }[]>`
     DELETE FROM webauthn_challenges WHERE id = ${id} AND purpose = ${purpose} AND expires_at > now()
-      AND user_id IS NOT DISTINCT FROM ${userId}
+      AND user_id IS NOT DISTINCT FROM ${userId} AND ref IS NOT DISTINCT FROM ${ref}
     RETURNING challenge`;
   if (!row) throw new PasskeyError('Passkey-förfrågan har gått ut. Försök igen.');
   return row.challenge;
@@ -151,4 +151,52 @@ export async function listPasskeys(userId: number) {
 export async function deletePasskey(userId: number, id: string) {
   const r = await sql`DELETE FROM passkeys WHERE id = ${id} AND user_id = ${userId} RETURNING name`;
   if (r.length) await audit(sql, { companyId: null, userId, action: 'remove', entity: 'passkey', details: { name: r[0].name } });
+}
+
+// ---------- Signering av dokument med passkey ----------
+
+/**
+ * Challenge för signering binds till dokumentets hash: SHA-256(dokumenthash | undertecknare | slump).
+ * Passkey-signaturen bevisar därmed att just denna användare godkände just detta innehåll.
+ */
+export async function signingOptions(user: User, ref: string, documentHash: string): Promise<PublicKeyCredentialRequestOptionsJSON> {
+  const { rpID } = await relyingParty();
+  const creds = await sql<{ id: string; transports: string[] }[]>`SELECT id, transports FROM passkeys WHERE user_id = ${user.id}`;
+  if (creds.length === 0) throw new PasskeyError('Du har ingen passkey. Lägg till en under Mitt konto eller signera med lösenord.');
+  const challenge = createHash('sha256').update(`${documentHash}|${ref}|${randomBytes(16).toString('hex')}`).digest();
+  const options = await generateAuthenticationOptions({
+    rpID, challenge, userVerification: 'required',
+    allowCredentials: creds.map((c) => ({ id: c.id, transports: c.transports as AuthenticatorTransportFuture[] })),
+  });
+  await storeChallenge(options.challenge, 'sign', user.id, ref);
+  return options;
+}
+
+/** Verifierar signeringen och returnerar bevis (kan verifieras i efterhand med passkeyns publika nyckel) */
+export async function verifySigning(user: User, ref: string, response: AuthenticationResponseJSON) {
+  const expectedChallenge = await takeChallenge('sign', user.id, ref);
+  const { rpID, origin } = await relyingParty();
+  const [pk] = await sql<{ id: string; public_key: Buffer; counter: number; transports: string[] }[]>`
+    SELECT id, public_key, counter, transports FROM passkeys WHERE id = ${response.id} AND user_id = ${user.id}`;
+  if (!pk) throw new PasskeyError('Passkeyn tillhör inte dig');
+  let v;
+  try {
+    v = await verifyAuthenticationResponse({
+      response, expectedChallenge, expectedOrigin: origin, expectedRPID: rpID, requireUserVerification: true,
+      credential: { id: pk.id, publicKey: new Uint8Array(pk.public_key), counter: pk.counter, transports: pk.transports as AuthenticatorTransportFuture[] },
+    });
+  } catch (e) {
+    throw new PasskeyError(`Signeringen kunde inte verifieras: ${e instanceof Error ? e.message : e}`);
+  }
+  if (!v.verified) throw new PasskeyError('Signeringen kunde inte verifieras');
+  await sql`UPDATE passkeys SET counter = ${v.authenticationInfo.newCounter}, last_used_at = now() WHERE id = ${pk.id}`;
+  return {
+    credential_id: pk.id,
+    public_key: Buffer.from(pk.public_key).toString('base64url'),
+    challenge: expectedChallenge,
+    client_data_json: response.response.clientDataJSON,
+    authenticator_data: response.response.authenticatorData,
+    signature: response.response.signature,
+    user_verified: v.authenticationInfo.userVerified,
+  };
 }

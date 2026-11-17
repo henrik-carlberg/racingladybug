@@ -76,27 +76,30 @@ function readEmployee(input: Record<string, unknown>, cur?: EmployeeOut) {
   return f;
 }
 
-export async function createEmployee(actor: Actor, input: Record<string, unknown>) {
+export async function createEmployee(actor: Actor, input: Record<string, unknown>, db?: Tx): Promise<EmployeeOut> {
   const f = readEmployee(input);
-  return sql.begin(async (tx) => {
+  const run = async (tx: Tx) => {
     const [{ id }] = await tx<{ id: number }[]>`INSERT INTO employees ${tx({ ...f, company_id: actor.companyId })} RETURNING id`;
     const [e] = await tx<EmployeeOut[]>`SELECT ${ECOLS()} FROM employees WHERE id = ${id}`;
     await auditBy(tx, actor, 'create', 'employee', id);
     await emit(tx, actor.companyId, 'employee.created', e);
     return e;
-  });
+  };
+  return db ? run(db) : sql.begin(run);
 }
 
-export async function updateEmployee(actor: Actor, id: number, input: Record<string, unknown>) {
-  const cur = await getEmployee(actor.companyId, id);
+export async function updateEmployee(actor: Actor, id: number, input: Record<string, unknown>, db?: Tx): Promise<EmployeeOut> {
+  const [cur] = await (db ?? sql)<EmployeeOut[]>`SELECT ${ECOLS()} FROM employees WHERE id = ${id} AND company_id = ${actor.companyId}`;
+  if (!cur) throw new NotFoundError('Den anställda');
   const f = readEmployee(input, cur);
-  return sql.begin(async (tx) => {
+  const run = async (tx: Tx) => {
     if (Object.keys(f).length) await tx`UPDATE employees SET ${tx(f)} WHERE id = ${id} AND company_id = ${actor.companyId}`;
     const [e] = await tx<EmployeeOut[]>`SELECT ${ECOLS()} FROM employees WHERE id = ${id}`;
     await auditBy(tx, actor, 'update', 'employee', id, Object.keys(f));
     await emit(tx, actor.companyId, 'employee.updated', e);
     return e;
-  });
+  };
+  return db ? run(db) : sql.begin(run);
 }
 
 // ---------- Lönekörningar ----------

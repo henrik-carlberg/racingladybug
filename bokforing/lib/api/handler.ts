@@ -76,7 +76,9 @@ export async function handleApi(req: Request, pathParts: string[]): Promise<Resp
     };
 
     try {
-      const result = await route.handler({ actor: who.actor, params, query: new URL(req.url).searchParams, body });
+      const url = new URL(req.url);
+      const origin = process.env.APP_ORIGIN ?? `${req.headers.get('x-forwarded-proto') ?? url.protocol.replace(':', '')}://${req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? url.host}`;
+      const result = await route.handler({ actor: who.actor, params, query: url.searchParams, body, origin });
       if (result instanceof Response) return result;
       return finish(route.status ?? 200, result);
     } catch (e) {

@@ -7,6 +7,7 @@ export interface ApiContext {
   params: Record<string, string>;
   query: URLSearchParams;
   body: Record<string, unknown>;
+  origin: string; // appens bas-URL, t.ex. för signeringslänkar
 }
 
 /** JSON Schema (förenklat) för dokumentation i OpenAPI */

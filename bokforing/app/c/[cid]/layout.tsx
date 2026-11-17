@@ -27,6 +27,9 @@ export default async function CompanyLayout({ children, params }: { children: Re
           <Link href={`${b}/leverantorsfakturor`}>Leverantörsfakturor</Link>
           <Link href={`${b}/leverantorsfakturor/betalning`}>Betalningar</Link>
           <Link href={`${b}/leverantorer`}>Leverantörer</Link>
+          <div className="group">Bank</div>
+          <Link href={`${b}/bank`}>Bankkonton</Link>
+          <Link href={`${b}/bank/avstamning`}>Bankavstämning</Link>
           <div className="group">Lön</div>
           <Link href={`${b}/lon`}>Lönekörningar</Link>
           <Link href={`${b}/lon/anstallda`}>Anställda</Link>
@@ -44,6 +47,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
           ))}
           <div className="group">Bolaget</div>
           <Link href={`${b}/installningar`}>Inställningar</Link>
+          <Link href={`${b}/dokument`}>Dokument &amp; e-signering</Link>
           <Link href={`${b}/moduler`}>Moduler</Link>
           <Link href={`${b}/integrationer`}>Integrationer (API)</Link>
           <Link href={`${b}/historik`}>Behandlingshistorik</Link>

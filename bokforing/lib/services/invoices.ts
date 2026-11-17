@@ -142,26 +142,29 @@ export async function deleteDraft(actor: Actor, invoiceId: number) {
 
 /** Registrera inbetalning (hela beloppet): bank mot kundfordran */
 export async function registerPayment(actor: Actor, invoiceId: number, input: Record<string, unknown>): Promise<InvoiceOut> {
-  return sql.begin(async (tx) => {
-    const [inv] = await tx<{ status: string; total: number; invoice_number: number }[]>`
-      SELECT status, total, invoice_number FROM invoices WHERE id = ${invoiceId} AND company_id = ${actor.companyId} FOR UPDATE`;
-    if (!inv) throw new NotFoundError('Fakturan');
-    if (inv.status !== 'booked') throw new ConflictError('Endast bokförda, obetalda fakturor kan registreras som betalda');
-    const amount = optInt(input, 'amount', 'Belopp') ?? inv.total;
-    if (amount !== inv.total) throw new ValidationError('Delbetalningar stöds inte ännu – beloppet måste vara fakturans totalbelopp');
-    const d = date(input, 'date', 'Betaldatum');
-    const bank = optInt(input, 'bank_account', 'Bankkonto') ?? 1930;
-    if (bank < 1900 || bank > 1999) throw new ValidationError('Bankkonto måste vara ett 19xx-konto');
-    const v = await createVoucher(tx, {
-      actor, date: d, description: `Inbetalning kundfaktura ${inv.invoice_number}`,
-      lines: invoicePaymentLines(amount, bank), sourceType: 'invoice_payment', sourceId: invoiceId, series: 'B',
-    });
-    await tx`UPDATE invoices SET status = 'paid', paid_date = ${d}, payment_voucher_id = ${v.id} WHERE id = ${invoiceId}`;
-    await auditBy(tx, actor, 'paid', 'invoice', invoiceId);
-    const out = await fetchInvoice(tx, actor.companyId, invoiceId);
-    await emit(tx, actor.companyId, 'invoice.paid', out);
-    return out;
+  return sql.begin((tx) => registerPaymentTx(tx, actor, invoiceId, input));
+}
+
+/** Som registerPayment men i en befintlig transaktion (används av bankavstämningen) */
+export async function registerPaymentTx(tx: Tx, actor: Actor, invoiceId: number, input: Record<string, unknown>): Promise<InvoiceOut> {
+  const [inv] = await tx<{ status: string; total: number; invoice_number: number }[]>`
+    SELECT status, total, invoice_number FROM invoices WHERE id = ${invoiceId} AND company_id = ${actor.companyId} FOR UPDATE`;
+  if (!inv) throw new NotFoundError('Fakturan');
+  if (inv.status !== 'booked') throw new ConflictError('Endast bokförda, obetalda fakturor kan registreras som betalda');
+  const amount = optInt(input, 'amount', 'Belopp') ?? inv.total;
+  if (amount !== inv.total) throw new ValidationError('Delbetalningar stöds inte ännu – beloppet måste vara fakturans totalbelopp');
+  const d = date(input, 'date', 'Betaldatum');
+  const bank = optInt(input, 'bank_account', 'Bankkonto') ?? 1930;
+  if (bank < 1900 || bank > 1999) throw new ValidationError('Bankkonto måste vara ett 19xx-konto');
+  const v = await createVoucher(tx, {
+    actor, date: d, description: `Inbetalning kundfaktura ${inv.invoice_number}`,
+    lines: invoicePaymentLines(amount, bank), sourceType: 'invoice_payment', sourceId: invoiceId, series: 'B',
   });
+  await tx`UPDATE invoices SET status = 'paid', paid_date = ${d}, payment_voucher_id = ${v.id} WHERE id = ${invoiceId}`;
+  await auditBy(tx, actor, 'paid', 'invoice', invoiceId);
+  const out = await fetchInvoice(tx, actor.companyId, invoiceId);
+  await emit(tx, actor.companyId, 'invoice.paid', out);
+  return out;
 }
 
 /** Kreditera en bokförd, obetald faktura. Returnerar kreditfakturan. */

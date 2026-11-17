@@ -151,27 +151,36 @@ export async function approveSupplierInvoice(actor: Actor, id: number) {
 /** Bokför betalning av en eller flera attesterade fakturor (i en transaktion) */
 export async function paySupplierInvoices(actor: Actor, ids: number[], input: Record<string, unknown>) {
   if (ids.length === 0) throw new ValidationError('Välj minst en faktura');
+  return sql.begin(async (tx) => {
+    const out: SupplierInvoiceOut[] = [];
+    for (const id of ids) out.push(await paySupplierInvoiceTx(tx, actor, id, input));
+    return out;
+  });
+}
+
+/** Betalning av en leverantörsfaktura i en befintlig transaktion. autoApprove används av bankavstämningen
+ *  när betalningen redan har gjorts i banken (attesten loggas då på den som stämmer av). */
+export async function paySupplierInvoiceTx(tx: Tx, actor: Actor, id: number, input: Record<string, unknown>, opts: { autoApprove?: boolean } = {}) {
   const d = date(input, 'date', 'Betaldatum');
   const bank = optInt(input, 'bank_account', 'Bankkonto') ?? 1930;
   if (bank < 1900 || bank > 1999) throw new ValidationError('Bankkonto måste vara ett 19xx-konto');
-  return sql.begin(async (tx) => {
-    const out: SupplierInvoiceOut[] = [];
-    for (const id of ids) {
-      const [inv] = await tx<{ status: string; total: number; invoice_number: string; supplier: string }[]>`
-        SELECT i.status, i.total, i.invoice_number, s.name AS supplier FROM supplier_invoices i JOIN suppliers s ON s.id = i.supplier_id
-        WHERE i.id = ${id} AND i.company_id = ${actor.companyId} FOR UPDATE OF i`;
-      if (!inv) throw new NotFoundError('Leverantörsfakturan');
-      if (inv.status !== 'approved') throw new ConflictError(`Faktura ${inv.invoice_number} (${inv.supplier}) är inte attesterad`);
-      const v = await createVoucher(tx, {
-        actor, date: d, description: `Betalning leverantörsfaktura ${inv.invoice_number}, ${inv.supplier}`,
-        lines: supplierPaymentLines(inv.total, bank), sourceType: 'supplier_payment', sourceId: id, series: 'C',
-      });
-      await tx`UPDATE supplier_invoices SET status = 'paid', paid_date = ${d}, payment_voucher_id = ${v.id} WHERE id = ${id}`;
-      await auditBy(tx, actor, 'pay', 'supplier_invoice', id);
-      const o = await fetchSI(tx, actor.companyId, id);
-      await emit(tx, actor.companyId, 'supplier_invoice.paid', o);
-      out.push(o);
-    }
-    return out;
+  const [inv] = await tx<{ status: string; total: number; invoice_number: string; supplier: string }[]>`
+    SELECT i.status, i.total, i.invoice_number, s.name AS supplier FROM supplier_invoices i JOIN suppliers s ON s.id = i.supplier_id
+    WHERE i.id = ${id} AND i.company_id = ${actor.companyId} FOR UPDATE OF i`;
+  if (!inv) throw new NotFoundError('Leverantörsfakturan');
+  if (inv.status === 'booked' && opts.autoApprove) {
+    await tx`UPDATE supplier_invoices SET status = 'approved', approved_by = ${actor.userId}, approved_at = now() WHERE id = ${id}`;
+    await auditBy(tx, actor, 'approve', 'supplier_invoice', id, { via: 'bank_reconciliation' });
+    inv.status = 'approved';
+  }
+  if (inv.status !== 'approved') throw new ConflictError(`Faktura ${inv.invoice_number} (${inv.supplier}) är inte attesterad`);
+  const v = await createVoucher(tx, {
+    actor, date: d, description: `Betalning leverantörsfaktura ${inv.invoice_number}, ${inv.supplier}`,
+    lines: supplierPaymentLines(inv.total, bank), sourceType: 'supplier_payment', sourceId: id, series: 'C',
   });
+  await tx`UPDATE supplier_invoices SET status = 'paid', paid_date = ${d}, payment_voucher_id = ${v.id} WHERE id = ${id}`;
+  await auditBy(tx, actor, 'pay', 'supplier_invoice', id);
+  const o = await fetchSI(tx, actor.companyId, id);
+  await emit(tx, actor.companyId, 'supplier_invoice.paid', o);
+  return o;
 }

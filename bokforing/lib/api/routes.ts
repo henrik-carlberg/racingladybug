@@ -10,6 +10,8 @@ import * as invoices from '@/lib/services/invoices';
 import * as suppliers from '@/lib/services/suppliers';
 import * as payroll from '@/lib/services/payroll';
 import * as reports from '@/lib/services/reports';
+import * as bank from '@/lib/services/bank';
+import * as docs from '@/lib/services/documents';
 
 export const CORE_SCOPES = [
   { scope: 'accounting:read', description: 'Läsa kontoplan, verifikationer, saldon och momsrapporter' },
@@ -20,6 +22,10 @@ export const CORE_SCOPES = [
   { scope: 'purchasing:write', description: 'Registrera, attestera och betala leverantörsfakturor' },
   { scope: 'payroll:read', description: 'Läsa anställda (inkl. personnummer), lönekörningar och AGI' },
   { scope: 'payroll:write', description: 'Ändra anställda och lönekörningar, bokföra lön' },
+  { scope: 'bank:read', description: 'Läsa bankkonton och banktransaktioner' },
+  { scope: 'bank:write', description: 'Stämma av banktransaktioner, importera kontoutdrag och synka banken' },
+  { scope: 'documents:read', description: 'Läsa dokument och signeringsstatus' },
+  { scope: 'documents:write', description: 'Skapa dokument och skicka dem för e-signering' },
   { scope: 'events:read', description: 'Läsa händelseloggen' },
 ];
 
@@ -192,6 +198,48 @@ export const CORE_ROUTES: ApiRoute[] = [
       const { filename, xml } = await payroll.buildAgiForRun(actor, id(params));
       return new Response(xml, { headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Content-Disposition': `attachment; filename="${filename}"` } });
     } },
+
+  // Bank
+  { method: 'GET', path: '/bank/accounts', scope: 'bank:read', tag: 'Bank', summary: 'Bankkonton med saldo och antal ej avstämda transaktioner',
+    handler: async ({ actor }) => ({ object: 'list', data: await bank.listBankAccounts(actor.companyId), has_more: false }) },
+  { method: 'POST', path: '/bank/accounts/:id/sync', scope: 'bank:write', tag: 'Bank', summary: 'Hämta nya transaktioner från banken (Open Banking)',
+    handler: ({ actor, params }) => bank.syncAccount(actor, id(params)) },
+  { method: 'POST', path: '/bank/accounts/:id/import', scope: 'bank:write', tag: 'Bank', summary: 'Importera kontoutdrag (camt.053 XML eller CSV)',
+    body: { type: 'object', required: ['content'], properties: { filename: { type: 'string' }, content: { type: 'string', description: 'Filens innehåll som text' } } },
+    handler: ({ actor, params, body }) => bank.importFile(actor, id(params), String(body.filename ?? 'fil'), String(body.content ?? '')) },
+  { method: 'GET', path: '/bank/transactions', scope: 'bank:read', tag: 'Bank', summary: 'Banktransaktioner med matchningsförslag',
+    query: [{ name: 'status', description: 'unmatched, matched eller ignored' }, { name: 'account_id', description: 'Bankkonto' }, { name: 'limit', description: 'Max antal (standard 200)', type: 'integer' }],
+    handler: async ({ actor, query }) => ({ object: 'list', has_more: false, data: await bank.listTransactions(actor.companyId, {
+      status: q(query, 'status'), account_id: qn(query, 'account_id'), limit: qn(query, 'limit'), withSuggestions: true }) }) },
+  { method: 'POST', path: '/bank/transactions/:id/reconcile', scope: 'bank:write', tag: 'Bank', summary: 'Stäm av en banktransaktion',
+    description: 'type: invoice (id = kundfaktura), supplier_invoice (id), voucher (id = befintlig verifikation), account (account, vat_rate, description) eller ignore.',
+    body: { type: 'object', required: ['type'], properties: { type: { type: 'string', enum: ['invoice', 'supplier_invoice', 'voucher', 'account', 'ignore'] },
+      id: { type: 'integer' }, account: { type: 'integer' }, vat_rate: { type: 'integer', enum: [0, 6, 12, 25] }, description: { type: 'string' } } },
+    handler: ({ actor, params, body }) => bank.reconcile(actor, id(params), body) },
+  { method: 'POST', path: '/bank/transactions/:id/reopen', scope: 'bank:write', tag: 'Bank', summary: 'Ångra ignorering eller koppling',
+    handler: ({ actor, params }) => bank.reopen(actor, id(params)) },
+  { method: 'POST', path: '/bank/auto-match', scope: 'bank:write', tag: 'Bank', summary: 'Stäm av automatiskt där OCR och belopp stämmer exakt',
+    handler: async ({ actor }) => ({ matched: await bank.autoMatch(actor) }) },
+
+  // Dokument och e-signering
+  { method: 'GET', path: '/documents', scope: 'documents:read', tag: 'Dokument', summary: 'Lista dokument', query: PAGING,
+    handler: ({ actor, query }) => docs.listDocuments(actor.companyId, page(query)) },
+  { method: 'GET', path: '/documents/:id', scope: 'documents:read', tag: 'Dokument', summary: 'Hämta dokument med undertecknare och händelser',
+    handler: ({ actor, params, origin }) => docs.getDocument(actor.companyId, id(params), origin) },
+  { method: 'POST', path: '/documents', scope: 'documents:write', tag: 'Dokument', status: 201, summary: 'Skapa dokument (och skicka för signering med send: true)',
+    description: 'Ange html (dokumenttext) eller pdf_base64. Undertecknare med user_id signerar inloggade (passkey/lösenord); övriga får en personlig länk (signing_url i svaret när dokumentet skickats).',
+    body: { type: 'object', required: ['title', 'signers'], properties: {
+      title: { type: 'string' }, html: { type: 'string' }, pdf_base64: { type: 'string' }, filename: { type: 'string' }, message: { type: 'string' },
+      send: { type: 'boolean' }, signers: { type: 'array', items: { type: 'object', required: ['name'], properties: {
+        name: { type: 'string' }, email: { type: 'string' }, user_id: { type: 'integer' } } } } } },
+    handler: async ({ actor, body, origin }) => {
+      const d = await docs.createDocument(actor, body);
+      return body.send === true ? docs.sendDocument(actor, d.id, origin) : d;
+    } },
+  { method: 'POST', path: '/documents/:id/send', scope: 'documents:write', tag: 'Dokument', summary: 'Skicka för signering (returnerar signeringslänkar)',
+    handler: ({ actor, params, origin }) => docs.sendDocument(actor, id(params), origin) },
+  { method: 'POST', path: '/documents/:id/cancel', scope: 'documents:write', tag: 'Dokument', summary: 'Återkalla dokument',
+    handler: ({ actor, params }) => docs.cancelDocument(actor, id(params)) },
 
   // Händelser
   { method: 'GET', path: '/events', scope: 'events:read', tag: 'Händelser', summary: 'Händelselogg (alternativ till webhooks)',
