@@ -3,6 +3,7 @@ import { sql } from '@/lib/db';
 import { attempt, done, str } from '@/lib/server/action';
 import { createSession, destroySession, hashPassword, verifyPassword, sha256 } from '@/lib/server/auth';
 import { audit } from '@/lib/server/audit';
+import { signupOpen } from '@/lib/billing';
 
 export async function login(fd: FormData) {
   await attempt('/login', async () => {
@@ -18,11 +19,15 @@ function checkPassword(pw: string) {
   if (pw.length < 10) throw new Error('Lösenordet måste vara minst 10 tecken');
 }
 
-/** Endast första användaren får registrera sig fritt. Övriga bjuds in. */
+/** Fri registrering (sätt ALLOW_SIGNUP=false för att bara tillåta det första kontot och inbjudningar) */
 export async function register(fd: FormData) {
   await attempt('/register', async () => {
     const [{ count }] = await sql<{ count: number }[]>`SELECT count(*)::int AS count FROM users`;
-    if (count > 0) throw new Error('Registrering är stängd. Be ägaren om en inbjudan.');
+    if (count > 0 && !signupOpen()) throw new Error('Registrering är stängd. Be ägaren om en inbjudan.');
+    const email = str(fd, 'email').toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error('Ogiltig e-postadress');
+    if ((await sql`SELECT 1 FROM users WHERE email = ${email}`).length) throw new Error('Det finns redan ett konto med den e-postadressen – logga in i stället');
+    if (fd.get('terms') !== 'on') throw new Error('Godkänn villkoren för att skapa konto');
     const pw = str(fd, 'password');
     checkPassword(pw);
     const [u] = await sql<{ id: number }[]>`
@@ -38,8 +43,8 @@ export async function acceptInvite(fd: FormData) {
   const token = str(fd, 'token');
   await attempt(`/invite/${token}`, async () => {
     const userId = await sql.begin(async (tx) => {
-      const [inv] = await tx<{ id: number; company_id: number; email: string; role: string }[]>`
-        SELECT id, company_id, email, role FROM invites
+      const [inv] = await tx<{ id: number; company_id: number; email: string; role: string; employee_id: number | null }[]>`
+        SELECT id, company_id, email, role, employee_id FROM invites
         WHERE token_hash = ${sha256(token)} AND accepted_at IS NULL AND expires_at > now() FOR UPDATE`;
       if (!inv) throw new Error('Inbjudan är ogiltig eller har gått ut');
       let [u] = await tx<{ id: number; password_hash: string }[]>`SELECT id, password_hash FROM users WHERE email = ${inv.email}`;
@@ -51,6 +56,7 @@ export async function acceptInvite(fd: FormData) {
         [u] = await tx`INSERT INTO users (email, name, password_hash) VALUES (${inv.email}, ${str(fd, 'name')}, ${await hashPassword(pw)}) RETURNING id, password_hash`;
       }
       await tx`INSERT INTO memberships (user_id, company_id, role) VALUES (${u.id}, ${inv.company_id}, ${inv.role}) ON CONFLICT DO NOTHING`;
+      if (inv.employee_id) await tx`UPDATE employees SET user_id = ${u.id} WHERE id = ${inv.employee_id} AND company_id = ${inv.company_id} AND user_id IS NULL`;
       await tx`UPDATE invites SET accepted_at = now() WHERE id = ${inv.id}`;
       await audit(tx, { companyId: inv.company_id, userId: u.id, action: 'accept_invite', entity: 'membership', details: { role: inv.role } });
       return u.id;

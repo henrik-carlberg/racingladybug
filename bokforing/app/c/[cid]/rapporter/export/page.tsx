@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function Export({ params }: { params: Promise<{ cid: string }> }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { allowLocked: true });
   const years = await fiscalYears(company.id);
   return (
     <>

@@ -1,4 +1,5 @@
 'use server';
+import { syncPrice } from '@/lib/services/billing';
 import { revalidatePath } from 'next/cache';
 import { attempt, done, str } from '@/lib/server/action';
 import { requireCompany } from '@/lib/server/auth';
@@ -71,6 +72,9 @@ export async function retry(cid: number, webhookId: number, deliveryId: number) 
 
 export async function toggleModule(cid: number, moduleId: string, enabled: boolean) {
   const actor = await owner(cid);
-  await attempt(`/c/${cid}/moduler`, () => integ.setModuleEnabled(actor, moduleId, enabled));
+  await attempt(`/c/${cid}/moduler`, async () => {
+    await integ.setModuleEnabled(actor, moduleId, enabled);
+    await syncPrice(actor.companyId).catch((e) => console.error('stripe sync', e));
+  });
   done(`/c/${cid}/moduler`, enabled ? 'Modulen är aktiverad' : 'Modulen är avaktiverad');
 }

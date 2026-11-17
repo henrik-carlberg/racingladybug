@@ -4,6 +4,8 @@ import { enabledModules } from '@/lib/modules/enabled';
 import { MODULES } from '@/modules/registry';
 import { Flash, type SP } from '@/components/ui';
 import { toggleModule } from '../integrationer/actions';
+import { FREE_MODULES, MODULE_PRICE } from '@/lib/billing';
+import { kr } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +28,7 @@ export default async function Modules({ params, searchParams }: { params: Promis
                 {on ? <span className="badge ok">Aktiv</span> : <span className="badge">Inaktiv</span>}
               </div>
               <p style={{ margin: 0 }}>{m.description}</p>
+              <div className="small"><b>{FREE_MODULES.includes(m.id) ? 'Ingår i grundpriset' : `${kr(MODULE_PRICE)} kr/mån`}</b></div>
               <div className="small muted">
                 Version {m.version}
                 {m.api?.length ? <> · {m.api.length} API-endpoints under <span className="mono">/api/v1/m/{m.id}</span></> : null}

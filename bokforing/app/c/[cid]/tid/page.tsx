@@ -13,12 +13,12 @@ const DAYS = ['Måndag', 'Tisdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lördag', 'S�
 
 export default async function TimePage({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company, user } = await requireCompany(cid);
+  const { company, user, role } = await requireCompany(cid, { employee: true });
   const sp = await searchParams;
   const t = today();
   const week = weekStart(/^\d{4}-\d{2}-\d{2}$/.test(String(sp.week ?? '')) ? String(sp.week) : t);
   const end = addDays(week, 6);
-  const all = sp.all === '1';
+  const all = sp.all === '1' && role !== 'employee';
   const projects = (await listProjects(company.id, { active: true })).filter((p) => p.activities.some((a) => a.active));
   const entries = await listTimeEntries(company.id, { from: week, to: end, user_id: all ? undefined : user.id });
   const b = `/c/${company.id}`;
@@ -43,7 +43,7 @@ export default async function TimePage({ params, searchParams }: { params: Promi
       {projects.length === 0 ? (
         <div className="card">
           <p>Lägg först upp ett <b>uppdrag</b> för en kund med de aktiviteter du arbetar med. Sedan rapporterar du tid här.</p>
-          <Link className="btn" href={`${b}/uppdrag`}>Lägg upp uppdrag</Link>
+          {role !== 'employee' && <Link className="btn" href={`${b}/uppdrag`}>Lägg upp uppdrag</Link>}
         </div>
       ) : (
         <form action={addTime.bind(null, company.id, week)} className="card stack">
@@ -73,8 +73,8 @@ export default async function TimePage({ params, searchParams }: { params: Promi
         <div className="card stat"><div className="label">Varav debiterbart</div><div className="value">{fmtHours(billable)}</div></div>
       </div>
       <p className="small">
-        {all ? <Link href={`${b}/tid?week=${week}`}>Visa bara min tid</Link> : <Link href={`${b}/tid?week=${week}&all=1`}>Visa allas tid</Link>}
-        {' · '}<Link href={`${b}/uppdrag`}>Uppdrag och fakturering</Link>
+        {role !== 'employee' && <>{all ? <Link href={`${b}/tid?week=${week}`}>Visa bara min tid</Link> : <Link href={`${b}/tid?week=${week}&all=1`}>Visa allas tid</Link>}
+        {' · '}<Link href={`${b}/uppdrag`}>Uppdrag och fakturering</Link></>}
       </p>
 
       <div className="table-wrap">
@@ -91,13 +91,13 @@ export default async function TimePage({ params, searchParams }: { params: Promi
                 ...rows.map((e) => (
                   <tr key={e.id}>
                     <td></td>
-                    <td>{e.customer_name} – <Link href={`${b}/uppdrag/${e.project_id}`}>{e.project_name}</Link></td>
+                    <td>{e.customer_name} – {role === 'employee' ? e.project_name : <Link href={`${b}/uppdrag/${e.project_id}`}>{e.project_name}</Link>}</td>
                     <td>{e.activity_name}{!e.billable && <span className="badge" style={{ marginLeft: '.3rem' }}>Ej debiterbar</span>}</td>
                     <td className="small">{e.description}</td>
                     {all && <td className="small">{e.user_name}</td>}
                     <td className="num">{fmtHours(e.minutes)}</td>
                     <td className="num">{e.invoice_id
-                      ? <Link className="small" href={`${b}/fakturor/${e.invoice_id}`}>Fakturerad</Link>
+                      ? (role === 'employee' ? <span className="small muted">Fakturerad</span> : <Link className="small" href={`${b}/fakturor/${e.invoice_id}`}>Fakturerad</Link>)
                       : <form action={removeTime.bind(null, company.id, week, e.id)}><button className="link" aria-label="Ta bort">Ta bort</button></form>}</td>
                   </tr>
                 )),

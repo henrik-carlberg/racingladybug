@@ -3,6 +3,7 @@ import { login } from '../auth-actions';
 import { Flash, type SP } from '@/components/ui';
 import { sql } from '@/lib/db';
 import { PasskeyLogin } from '@/components/Passkeys';
+import { signupOpen } from '@/lib/billing';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +19,7 @@ export default async function Login({ searchParams }: { searchParams: SP }) {
         <label>Lösenord<input name="password" type="password" required autoComplete="current-password" /></label>
         <button>Logga in</button>
       </form>
-      {count === 0 && <p className="muted">Första gången? <Link href="/register">Skapa ägarkonto</Link></p>}
+      {(count === 0 || signupOpen()) && <p className="muted">Ny här? <Link href="/register">Skapa konto och prova gratis</Link></p>}
     </div>
   );
 }

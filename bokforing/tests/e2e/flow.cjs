@@ -27,6 +27,7 @@ async function expectNoError(page, step) {
   await page.fill('input[name=name]', 'Ägare Testsson');
   await page.fill('input[name=email]', 'agare@example.com');
   await page.fill('input[name=password]', 'hemligtlosen1');
+  await page.check('input[name=terms]');
   await page.click('button:has-text("Skapa konto")');
   await page.waitForURL(BASE + '/');
   log('registrerad');
@@ -205,14 +206,14 @@ async function expectNoError(page, step) {
   await p2.goto(B + '/verifikationer');
   const n = await p2.locator('tbody tr').count();
   log('konsult inloggad, ser', n, 'verifikationer, kan inte bjuda in');
-  // Fri registrering ska vara stängd
-  await p2.goto(BASE + '/register');
+  // Fri registrering: samma e-post kan inte registreras två gånger
   const ctx3 = await browser.newContext(); const p3 = await ctx3.newPage();
   await p3.goto(BASE + '/register');
-  await p3.fill('input[name=name]', 'X'); await p3.fill('input[name=email]', 'x@example.com'); await p3.fill('input[name=password]', 'xxxxxxxxxxxx');
+  await p3.fill('input[name=name]', 'X'); await p3.fill('input[name=email]', 'agare@example.com'); await p3.fill('input[name=password]', 'xxxxxxxxxxxx');
+  await p3.check('input[name=terms]');
   await p3.click('button:has-text("Skapa konto")');
   await p3.waitForURL(/error=/);
-  log('registrering stängd för nya');
+  log('registrering med befintlig e-post nekas');
   // Konsult kommer inte åt annat bolags id
   const resp = await p2.goto(`${BASE}/c/9999`);
   log('okänt bolag ->', resp.status());

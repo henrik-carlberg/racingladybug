@@ -4,11 +4,12 @@ import { redirect, notFound } from 'next/navigation';
 import { createHash, randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { sql } from '@/lib/db';
+import { access, billingEnforced, type Access } from '@/lib/billing';
 
 const COOKIE = 'bok_session';
 const SESSION_DAYS = 14;
 
-export type Role = 'owner' | 'accountant';
+export type Role = 'owner' | 'accountant' | 'employee';
 export interface User { id: number; email: string; name: string }
 export interface Company {
   id: number; name: string; orgnr: string; company_type: 'AB' | 'EF'; vat_period: 'month' | 'quarter' | 'year';
@@ -59,20 +60,40 @@ export async function requireUser(): Promise<User> {
   return u;
 }
 
-export interface Ctx { user: User; company: Company; role: Role }
+export interface Ctx { user: User; company: Company; role: Role; billing: Access; employeeId: number | null }
 
-/** Kräver inloggning och medlemskap i bolaget. */
-export async function requireCompany(companyId: number | string, opts: { owner?: boolean } = {}): Promise<Ctx> {
+/** Åtkomst enligt abonnemanget (alltid öppet om betalning inte är påslagen) */
+export async function companyAccess(companyId: number): Promise<Access> {
+  const [r] = await sql<{ exempt: boolean; status: string | null; trial: string | null; period: string | null; created: string }[]>`
+    SELECT c.billing_exempt AS exempt, s.status, to_char(s.trial_ends_at,'YYYY-MM-DD') AS trial, to_char(s.current_period_end,'YYYY-MM-DD') AS period,
+      to_char(c.created_at + interval '30 days','YYYY-MM-DD') AS created
+    FROM companies c LEFT JOIN subscriptions s ON s.company_id = c.id WHERE c.id = ${companyId}`;
+  if (!r) return { state: 'locked' };
+  const a = access({ exempt: r.exempt, status: r.status, trialEndsAt: r.trial ?? r.created, periodEnd: r.period, today: new Date().toISOString().slice(0, 10) });
+  return billingEnforced() || a.state !== 'locked' ? a : { state: 'active' };
+}
+
+/**
+ * Kräver inloggning och medlemskap i bolaget.
+ * - owner: bara ägaren
+ * - employee: sidan är öppen även för anställda (självservice); annars skickas de till Min sida
+ * - allowLocked: sidan fungerar även när abonnemanget har gått ut (abonnemang, export)
+ */
+export async function requireCompany(companyId: number | string, opts: { owner?: boolean; employee?: boolean; allowLocked?: boolean } = {}): Promise<Ctx> {
   const user = await requireUser();
   const id = Number(companyId);
   if (!Number.isInteger(id)) notFound();
-  const rows = await sql<(Company & { role: Role })[]>`
-    SELECT c.*, to_char(c.locked_until, 'YYYY-MM-DD') AS locked_until, m.role
+  const rows = await sql<(Company & { role: Role; employee_id: number | null })[]>`
+    SELECT c.*, to_char(c.locked_until, 'YYYY-MM-DD') AS locked_until, m.role,
+      (SELECT e.id FROM employees e WHERE e.company_id = c.id AND e.user_id = ${user.id} LIMIT 1) AS employee_id
     FROM companies c JOIN memberships m ON m.company_id = c.id
     WHERE c.id = ${id} AND m.user_id = ${user.id}`;
   const row = rows[0];
   if (!row) notFound();
-  const { role, ...company } = row;
+  const { role, employee_id, ...company } = row;
+  if (role === 'employee' && !opts.employee) redirect(`/c/${id}/mitt`);
   if (opts.owner && role !== 'owner') throw new Error('Endast ägare får göra detta');
-  return { user, company: company as Company, role };
+  const billing = await companyAccess(id);
+  if (billing.state === 'locked' && !opts.allowLocked) redirect(`/c/${id}/abonnemang`);
+  return { user, company: company as Company, role, billing, employeeId: employee_id };
 }

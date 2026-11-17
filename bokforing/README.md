@@ -8,7 +8,8 @@ Appen är byggd med Next.js och Postgres och är gjord för att köras på Verce
 
 | Område | Innehåll |
 |---|---|
-| **Användare och behörighet** | Flera bolag per användare. Rollerna är *Ägare* och *Redovisningskonsult*. Konsulten kan göra allt utom att hantera användare och låsa upp perioder eller räkenskapsår. Inbjudan sker via länk. Bara det allra första kontot kan registreras fritt. |
+| **SaaS** | Fri registrering och 30 dagars provperiod utan kort. Abonnemanget kostar ett grundpris per bolag plus ett pris per tilläggsmodul (`lib/billing.ts`) och betalas med kort via Stripe Checkout. Kunden hanterar kort, kvitton och uppsägning i Stripes kundportal. Priset justeras automatiskt när moduler slås på eller av. När abonnemanget har gått ut spärras bolaget, men export till SIE är alltid öppen, och API:t svarar 402. Användare kostar inget. |
+| **Användare och behörighet** | Flera bolag per användare. Rollerna är *Ägare*, *Redovisningskonsult* och *Anställd* (självservice: egen tidrapport, egna utlägg och lönespecifikationer). Konsulten kan göra allt utom att hantera användare och låsa upp perioder eller räkenskapsår. Inbjudan sker via länk. Bara det allra första kontot kan registreras fritt. |
 | **Inloggning med passkey** | Logga in med Face ID, Touch ID, Windows Hello eller en säkerhetsnyckel (WebAuthn), via knappen eller direkt via autofyll i e-postfältet. Passkeys hanteras under **Mitt konto**, där man också kan byta lösenord. |
 | **Bokföring** | Dubbel bokföring med BAS-kontoplan. Verifikationsserierna är A (manuell), B (kundfakturor), C (leverantörsfakturor) och L (lön), med löpnummer utan luckor. Verifikationer kan inte ändras eller raderas, utan rättas med en rättelseverifikation (BFL 5 kap). Det går att ladda upp underlag (PDF/bild). Appen har periodlås, räkenskapsår och behandlingshistorik. |
 | **Kundfakturor** | Kunder, fakturautkast, bokföring med fakturanummer och OCR (med längd- och kontrollsiffra), öresavrundning, momssatserna 25/12/6/0 % och omvänd skattskyldighet för EU-tjänster. Fakturan kan skrivas ut eller sparas som PDF. Inbetalningar och krediteringar bokförs automatiskt. |
@@ -221,6 +222,11 @@ tests/e2e/run-all.sh   # alla sviter, inklusive fejkad bank
 | `ENABLEBANKING_APP_ID`, `ENABLEBANKING_PRIVATE_KEY` | Open Banking via Enable Banking (se Bankkoppling) |
 | `RESEND_API_KEY`, `MAIL_FROM` | Valfritt: e-postutskick av signeringslänkar via Resend |
 | `CRON_SECRET` | Skyddar `/api/cron/webhooks`. Vercel skickar den automatiskt till cron-jobb. |
+| `ALLOW_SIGNUP` | `false` stänger fri registrering (då kan bara det första kontot registreras och övriga bjuds in). Standard: öppen. |
+| `BILLING_ENFORCED` | `true` spärrar bolag vars provperiod eller abonnemang har gått ut. Bolag som fanns innan abonnemangen infördes är undantagna. |
+| `STRIPE_SECRET_KEY` | Stripes hemliga nyckel för abonnemang (Checkout och kundportal). |
+| `STRIPE_WEBHOOK_SECRET` | Webhook-hemligheten för `https://<domän>/api/stripe/webhook`. Skicka händelserna `checkout.session.completed`, `customer.subscription.*` och `invoice.payment_failed`. |
+| `STRIPE_TAX_RATE_ID` | (Valfritt) Skattesats i Stripe, t.ex. 25 % moms, som läggs på abonnemanget. |
 | `WEBHOOK_ALLOW_INSECURE` | `1` tillåter http och interna adresser för webhooks. **Endast för lokal utveckling och test.** |
 
 ## Viktigt att veta
