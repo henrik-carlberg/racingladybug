@@ -29,5 +29,5 @@ export async function createCompany(fd: FormData) {
       await audit(tx, { companyId: id, userId: user.id, action: 'create', entity: 'company', entityId: id });
     });
   });
-  done(`/c/${id}/installningar`, 'Bolaget är skapat. Fyll i adress- och betalningsuppgifter.');
+  done(`/c/${id}/kom-igang`, 'Bolaget är skapat! Följ stegen nedan för att komma igång.');
 }

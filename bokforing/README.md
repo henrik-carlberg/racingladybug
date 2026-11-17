@@ -22,6 +22,12 @@ Appen är byggd med Next.js och Postgres och är gjord för att köras på Verce
 | **Webhooks** | Signerade (HMAC-SHA256) och skickas om automatiskt vid fel. Appen har en leveranslogg, testhändelser och SSRF-skydd. Händelserna kan även hämtas via `GET /api/v1/events`. |
 | **Moduler** | Ett pluggbart system för t.ex. CRM, ERP och lager. En modul kan ha egna sidor, menyval, API-endpoints, scopes, händelser, databastabeller och lyssnare. Två moduler följer med: **CRM** och **HR**. |
 | **HR-modul** | Onboarding, förflyttning och offboarding med checklistor (ansvarig och förfallodag), avtalsmallar som e-signeras (anställningsavtal enligt LAS 6 c §, ändring av villkor, bekräftelse av upphörande) och automatisk överföring till lönen när processen slutförs. |
+| **Kom igång-guide** | Nya bolag får en checklista: bolagsuppgifter, ingående balanser (med mall per bolagsform och knapp för aktiekapital 25 000 kr), bank, bjud in konsult, passkey, lön och första kund. Översikten visar hur långt man kommit, nästa deadlines och de vanligaste uppgifterna. |
+| **Kvitton och utlägg** | Fota kvittot med mobilen och välj vad det gäller bland 26 vanliga kategorier. Appen väljer konto och moms (inklusive reglerna för representation) och visar hur det bokförs innan man sparar. Privata utlägg bokförs mot skuld till ägaren (AB) eller eget kapital (EF). |
+| **Deadlines** | Alla datum utifrån bolagsform, momsperiod, räkenskapsår och om bolaget har anställda eller F-skatt: moms, arbetsgivardeklaration, preliminärskatt, inkomstdeklaration, årsstämma och årsredovisning. Datumen flyttas enligt helgdagsreglerna. Varje deadline kan bockas av. |
+| **Bokslut och deklaration** | Steg-för-steg-bokslut: avstämning, bokslutsposter, bolagsskatt (AB, 20,6 %), stäng året och för över resultatet. Appen tar fram INK2 med INK2R/INK2S (AB) eller NE-bilaga (EF), och SRU-filer som kan laddas upp i Skatteverkets filöverföring. |
+| **Årsredovisning** | AB: utkast till årsredovisning enligt K2 med förvaltningsberättelse, flerårsöversikt, förändringar i eget kapital, resultatdisposition, noter och fastställelseintyg. Årsstämmoprotokollet kan skickas för e-signering. EF: förenklat årsbokslut. |
+| **Hjälp** | Frågetecken vid svåra begrepp förklarar dem på enkel svenska. |
 
 ## Kom igång lokalt
 
@@ -211,7 +217,9 @@ tests/e2e/run-all.sh   # alla sviter, inklusive fejkad bank
 - **Faktureringsmetoden.** Kund- och leverantörsfakturor bokförs när de registreras. Kontantmetoden stöds inte.
 - **Webhook-hemligheter** lagras i klartext i databasen, eftersom de behövs för att signera. Ägaren kan rotera dem.
 - **Bankkopplingen** har testats mot en simulerad Enable Banking-server enligt deras dokumentation, men inte mot en riktig bank. Gör en första koppling med Enable Bankings sandbox innan skarp användning.
-- **Ännu inte stöd för:** betalningar via Open Banking (PIS), avancerad e-signatur med BankID, inloggning med enbart passkey (det går inte att stänga av lösenordet ännu), begränsning av anropsfrekvens i API:t och vid inloggning, delbetalningar, inläsning av bankfil (Bankgirots LB/ISO 20022), utskick av fakturor via e-post, semesterlöneskuld, sjuklön med karensavdrag, årsbokslut och årsredovisning, SIE-import samt valutor.
+- **Ännu inte stöd för:** betalningar via Open Banking (PIS), avancerad e-signatur med BankID, inloggning med enbart passkey (det går inte att stänga av lösenordet ännu), begränsning av anropsfrekvens i API:t och vid inloggning, delbetalningar, inläsning av bankfil (Bankgirots LB/ISO 20022), utskick av fakturor via e-post, semesterlöneskuld, sjuklön med karensavdrag, SIE-import samt valutor.
+- **Bokslut och deklaration.** INK2-, NE- och SRU-underlaget räknas fram från BAS-kontona och ska granskas innan det lämnas in. Schablonintäkt på periodiseringsfonder, NE-rutorna R12–R48 och andra skattemässiga justeringar måste fyllas i för hand. Reglerna gäller företag med högst 40 Mkr i omsättning och utan EU-handel.
+- **Årsredovisningen** kräver avancerad e-signatur vid digital inlämning. Skriv ut och signera den, eller signera via Bolagsverkets e-tjänst. Appens e-signering används bara för stämmoprotokollet.
 - **Underlag** sparas i databasen, med högst 8 MB per fil. Bokföringslagen kräver att räkenskapsinformation sparas i 7 år. Se till att databasen säkerhetskopieras (Neon har point-in-time restore).
 
 ## Struktur

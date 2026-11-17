@@ -3,13 +3,18 @@ import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
 import { kr, today } from '@/lib/format';
 import { Flash, type SP } from '@/components/ui';
+import { getSetup } from '@/lib/services/setup';
+import { companyDeadlines } from '@/lib/services/deadlines';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Dashboard({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid);
+  const ctx = await requireCompany(cid);
+  const { company } = ctx;
   const id = company.id;
+  const setup = await getSetup(id, ctx.user.id);
+  const upcoming = (await companyDeadlines(id)).filter((d) => d.status !== 'done').slice(0, 3);
   const t = today();
   const [bank] = await sql<{ v: number }[]>`
     SELECT COALESCE(SUM(l.debit - l.credit), 0)::bigint AS v FROM voucher_lines l JOIN vouchers v ON v.id = l.voucher_id
@@ -33,6 +38,41 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
     <>
       <h1>{company.name}</h1>
       <Flash searchParams={searchParams} />
+      {!setup.complete && (
+        <div className="card" style={{ borderColor: 'var(--accent)' }}>
+          <div className="header" style={{ margin: 0 }}>
+            <div><b>Kom igång</b> – {setup.done} av {setup.total} steg klara. Nästa: {setup.steps.find((x) => !x.done && !x.skipped)?.title}</div>
+            <Link className="btn" href={`/c/${id}/kom-igang`}>Fortsätt</Link>
+          </div>
+        </div>
+      )}
+      {upcoming.length > 0 && (
+        <div className="card">
+          <div className="header" style={{ marginBottom: '.5rem' }}><b>Nästa deadlines</b><Link href={`/c/${id}/deadlines`} className="small">Visa alla</Link></div>
+          {upcoming.map((d) => (
+            <div key={d.key} className="row small" style={{ alignItems: 'center', padding: '.25rem 0' }}>
+              <span style={{ flex: '0 0 110px', color: d.status === 'overdue' ? 'var(--danger)' : undefined }}><b>{d.due}</b></span>
+              <span style={{ flex: '3 1 300px' }}>{d.title} {d.status === 'overdue' && <span className="badge danger">Försenad</span>}</span>
+              <Link href={d.href} style={{ flex: '0 0 auto' }}>Öppna</Link>
+            </div>
+          ))}
+        </div>
+      )}
+      <h2 style={{ marginTop: 0 }}>Vad vill du göra?</h2>
+      <div className="grid" style={{ marginBottom: '1rem' }}>
+        {[
+          ['📷', 'Kvitto eller utlägg', 'Fota och bokför', `/c/${id}/kvitto`],
+          ['🧾', 'Skicka faktura', 'Till en kund', `/c/${id}/fakturor/ny`],
+          ['📥', 'Leverantörsfaktura', 'Registrera och betala', `/c/${id}/leverantorsfakturor/ny`],
+          ['🏦', 'Stäm av banken', 'Matcha transaktioner', `/c/${id}/bank/avstamning`],
+          ['💰', 'Kör lön', 'Lönespecar och AGI', `/c/${id}/lon`],
+          ['📅', 'Deadlines', 'Moms, AGI, bokslut', `/c/${id}/deadlines`],
+        ].map(([icon, title, sub, href]) => (
+          <Link key={href} href={href} className="card" style={{ display: 'block', margin: 0, color: 'var(--text)' }}>
+            <div style={{ fontSize: '1.4rem' }}>{icon}</div><b>{title}</b><div className="small muted">{sub}</div>
+          </Link>
+        ))}
+      </div>
       <div className="grid">
         <div className="card stat"><div className="label">Bank och kassa</div><div className="value">{kr(bank.v)}</div></div>
         <div className="card stat"><div className="label">Resultat i år</div><div className="value">{kr(res.v)}</div></div>

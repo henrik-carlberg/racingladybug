@@ -75,3 +75,14 @@ button.link { background: none; border: none; color: var(--accent); padding: 0; 
   body { background: #fff; }
   .doc { border: none; padding: 0; }
 }
+details.help > summary::-webkit-details-marker { display: none; }
+
+/* Hopfällbar meny på mobil */
+.navtoggle, .navbtn { display: none; }
+@media (max-width: 800px) {
+  .side { padding: .75rem 16px; border-right: none; border-bottom: 1px solid var(--border); }
+  .side .company { margin-bottom: .5rem; }
+  .navbtn { display: inline-block; }
+  .side nav { display: none; margin-top: .5rem; }
+  .navtoggle:checked ~ nav { display: block; }
+}

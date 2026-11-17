@@ -14,8 +14,13 @@ export default async function CompanyLayout({ children, params }: { children: Re
       <aside className="side">
         <div className="brand"><Link href="/">Bokföring</Link></div>
         <div className="company">{company.name}<br />{user.name} · {ROLE_LABEL[role]}</div>
+        <input type="checkbox" id="navtoggle" className="navtoggle" aria-hidden="true" />
+        <label htmlFor="navtoggle" className="navbtn btn secondary">☰ Meny</label>
         <nav>
           <Link href={b}>Översikt</Link>
+          <Link href={`${b}/kom-igang`}>Kom igång</Link>
+          <Link href={`${b}/kvitto`}>📷 Nytt kvitto</Link>
+          <Link href={`${b}/deadlines`}>Deadlines</Link>
           <div className="group">Bokföring</div>
           <Link href={`${b}/verifikationer`}>Verifikationer</Link>
           <Link href={`${b}/verifikationer/ny`}>Ny verifikation</Link>
@@ -39,6 +44,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
           <Link href={`${b}/rapporter/huvudbok`}>Huvudbok</Link>
           <Link href={`${b}/rapporter/moms`}>Moms</Link>
           <Link href={`${b}/rapporter/export`}>Export (SIE)</Link>
+          <Link href={`${b}/bokslut`}>Bokslut &amp; deklaration</Link>
           {modules.map((m) => (
             <div key={m.id}>
               <div className="group">{m.name}</div>

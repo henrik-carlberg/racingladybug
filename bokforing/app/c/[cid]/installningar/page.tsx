@@ -5,6 +5,7 @@ import { fiscalYears } from '@/lib/server/ledger';
 import { Flash, type SP } from '@/components/ui';
 import { ROLE_LABEL } from '@/lib/format';
 import * as a from './actions';
+import { Help } from '@/components/Help';
 
 export const dynamic = 'force-dynamic';
 
@@ -90,7 +91,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
         <div style={{ flex: '0 0 auto' }}><button>Lägg till</button></div>
       </form>
 
-      <h2>Periodlås</h2>
+      <h2>Periodlås <Help term="periodlas" /></h2>
       <p className="muted small">Inga verifikationer kan bokföras på eller före låsdatumet. Lås perioden när momsen är redovisad.</p>
       <form action={a.setLock.bind(null, c.id)} className="card row">
         <label>Låst till och med<input name="locked_until" type="date" defaultValue={c.locked_until ?? ''} /></label>

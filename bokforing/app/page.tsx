@@ -43,7 +43,7 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
         <label>Företagsnamn<input name="name" required /></label>
         <div className="row">
           <label>Bolagsform
-            <select name="company_type"><option value="AB">Aktiebolag</option><option value="EF">Enskild firma</option></select>
+            <select name="company_type"><option value="AB">Aktiebolag (AB)</option><option value="EF">Enskild firma (enskild näringsidkare)</option></select>
           </label>
           <label>Org.nr (AB) / personnummer (EF)<input name="orgnr" required placeholder="556677-8899" /></label>
         </div>
@@ -56,6 +56,8 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
           </label>
         </div>
         <button>Skapa bolag</button>
+        <p className="small muted" style={{ margin: 0 }}>Räkenskapsår: oftast kalenderår (1 januari). Momsredovisning: står i ditt registreringsbevis från Skatteverket –
+          de flesta små företag redovisar per kvartal eller år (omsättning under 1 miljon kr). Allt kan ändras senare under Inställningar.</p>
       </form>
     </div>
   );
