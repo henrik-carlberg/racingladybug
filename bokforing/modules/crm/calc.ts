@@ -53,3 +53,13 @@ export function analysis(deals: DealLite[]) {
     owners: [...owners.entries()].map(([owner, o]) => ({ owner, ...o, winRate: Math.round((o.won / (o.won + o.lost)) * 1000) / 10 })).sort((a, b) => b.value - a.value),
   };
 }
+
+/** Mallar för nya pipelines. Varje pipeline får alltid en Vunnen- och en Förlorad-fas. */
+export const PIPELINE_TEMPLATES: Record<string, { label: string; stages: { name: string; probability: number }[] }> = {
+  sales: { label: 'Nyförsäljning', stages: DEFAULT_STAGES.filter((s) => s.kind === 'open') },
+  upsell: { label: 'Merförsäljning till befintliga kunder', stages: [{ name: 'Idé', probability: 20 }, { name: 'Förslag presenterat', probability: 50 }, { name: 'Beslut hos kund', probability: 75 }] },
+  renewal: { label: 'Avtalsförnyelse', stages: [{ name: 'Förnyelse närmar sig', probability: 60 }, { name: 'Förhandling', probability: 75 }, { name: 'Avtal skickat', probability: 90 }] },
+  partner: { label: 'Partner och återförsäljare', stages: [{ name: 'Kontakt', probability: 10 }, { name: 'Utvärdering', probability: 30 }, { name: 'Avtal', probability: 70 }] },
+  tender: { label: 'Upphandling/anbud', stages: [{ name: 'Förfrågan', probability: 10 }, { name: 'Anbud lämnat', probability: 30 }, { name: 'Tilldelning', probability: 70 }] },
+  empty: { label: 'Tom (lägg till egna faser)', stages: [{ name: 'Ny', probability: 10 }] },
+};

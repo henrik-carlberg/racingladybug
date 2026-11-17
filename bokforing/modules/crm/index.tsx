@@ -114,18 +114,25 @@ export const crm: ModuleDefinition = {
     { type: 'crm.deal.lost', description: 'En affär har förlorats' },
   ],
   api: [
-    { method: 'GET', path: '/deals', scope: 'crm:read', tag: 'CRM', summary: 'Lista affärer', query: [{ name: 'kind', description: 'open, won eller lost' }],
-      handler: async ({ actor, query }) => ({ object: 'list', has_more: false, data: await pl.listDeals(actor.companyId, { kind: query.get('kind') ?? undefined }) }) },
+    { method: 'GET', path: '/pipelines', scope: 'crm:read', tag: 'CRM', summary: 'Lista pipelines med faser',
+      handler: async ({ actor }) => {
+        const [pipes, st] = await Promise.all([pl.pipelines(sql, actor.companyId), pl.stages(sql, actor.companyId)]);
+        return { object: 'list', has_more: false, data: pipes.map((x) => ({ ...x, object: 'crm.pipeline', stages: st.filter((s) => s.pipeline_id === x.id) })) };
+      } },
+    { method: 'GET', path: '/deals', scope: 'crm:read', tag: 'CRM', summary: 'Lista affärer', query: [{ name: 'kind', description: 'open, won eller lost' }, { name: 'pipeline_id', description: 'Pipeline' }],
+      handler: async ({ actor, query }) => ({ object: 'list', has_more: false, data: await pl.listDeals(actor.companyId, {
+        kind: query.get('kind') ?? undefined, pipeline_id: query.get('pipeline_id') ? Number(query.get('pipeline_id')) : undefined }) }) },
     { method: 'GET', path: '/deals/:id', scope: 'crm:read', tag: 'CRM', summary: 'Hämta affär med offertrader', handler: ({ actor, params }) => pl.getDeal(actor.companyId, Number(params.id)) },
     { method: 'POST', path: '/deals', scope: 'crm:write', tag: 'CRM', status: 201, summary: 'Skapa affär',
       body: { type: 'object', required: ['title'], properties: { title: { type: 'string' }, customer_id: { type: 'integer' }, prospect_name: { type: 'string' }, contact_name: { type: 'string' },
-        contact_email: { type: 'string' }, value: { type: 'integer', description: 'öre exkl. moms' }, expected_close: { type: 'string', format: 'date' }, stage_id: { type: 'integer' },
+        contact_email: { type: 'string' }, value: { type: 'integer', description: 'öre exkl. moms' }, expected_close: { type: 'string', format: 'date' }, pipeline_id: { type: 'integer' }, stage_id: { type: 'integer' },
         owner_user_id: { type: 'integer' }, source: { type: 'string' }, next_step: { type: 'string' } } },
       handler: ({ actor, body }) => pl.createDeal(actor, body) },
     { method: 'POST', path: '/deals/:id/stage', scope: 'crm:write', tag: 'CRM', summary: 'Flytta affär till steg (lost_reason krävs för förlorad)',
       body: { type: 'object', required: ['stage_id'], properties: { stage_id: { type: 'integer' }, lost_reason: { type: 'string' } } },
       handler: ({ actor, params, body }) => pl.moveDeal(actor, Number(params.id), body) },
-    { method: 'GET', path: '/pipeline/report', scope: 'crm:read', tag: 'CRM', summary: 'Prognos per månad, vinstandel och förlustorsaker', handler: ({ actor }) => pl.report(actor.companyId) },
+    { method: 'GET', path: '/pipeline/report', scope: 'crm:read', tag: 'CRM', summary: 'Prognos per månad, vinstandel och förlustorsaker', query: [{ name: 'pipeline_id', description: 'Pipeline (tomt = alla)' }],
+      handler: ({ actor, query }) => pl.report(actor.companyId, 6, query.get('pipeline_id') ? Number(query.get('pipeline_id')) : undefined) },
     {
       method: 'GET', path: '/activities', scope: 'crm:read', tag: 'CRM', summary: 'Lista aktiviteter',
       query: [{ name: 'customer_id', description: 'Filtrera på kund' }, { name: 'open_tasks', description: 'true = endast öppna uppgifter' }],

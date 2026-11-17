@@ -12,23 +12,64 @@ import { createCustomer } from '@/lib/services/customers';
 import { saveDraftTx } from '@/lib/services/invoices';
 import { createProject } from '@/lib/services/time';
 import { createDocument, sendDocument } from '@/lib/services/documents';
-import { DEFAULT_STAGES, analysis, forecast, weighted, type DealLite } from './calc';
+import { DEFAULT_STAGES, PIPELINE_TEMPLATES, analysis, forecast, weighted, type DealLite } from './calc';
 
 type Db = Tx | typeof sql;
 
-// ---------- Steg ----------
+// ---------- Pipelines och faser ----------
 
-export interface Stage { id: number; name: string; probability: number; position: number; kind: 'open' | 'won' | 'lost'; active: boolean }
+export interface Pipeline { id: number; name: string; position: number; active: boolean }
+export interface Stage { id: number; pipeline_id: number; pipeline: string; name: string; probability: number; position: number; kind: 'open' | 'won' | 'lost'; active: boolean }
 
-export async function stages(db: Db, companyId: number): Promise<Stage[]> {
-  const rows = await db<Stage[]>`SELECT id, name, probability, position, kind, active FROM crm_stages WHERE company_id = ${companyId} ORDER BY position, id`;
+async function insertPipeline(db: Db, companyId: number, name: string, open: { name: string; probability: number }[], position: number) {
+  const [{ id }] = await db<{ id: number }[]>`INSERT INTO crm_pipelines (company_id, name, position) VALUES (${companyId}, ${name}, ${position}) RETURNING id`;
+  const all = [...open.map((x) => ({ ...x, kind: 'open' })), { name: 'Vunnen', probability: 100, kind: 'won' }, { name: 'Förlorad', probability: 0, kind: 'lost' }];
+  await db`INSERT INTO crm_stages ${db(all.map((x, i) => ({ ...x, company_id: companyId, pipeline_id: id, position: (i + 1) * 10 })))}`;
+  return id;
+}
+
+export async function pipelines(db: Db, companyId: number): Promise<Pipeline[]> {
+  const rows = await db<Pipeline[]>`SELECT id, name, position, active FROM crm_pipelines WHERE company_id = ${companyId} ORDER BY position, id`;
   if (rows.length) return rows;
-  await db`SELECT pg_advisory_xact_lock(${companyId}, 31)`.catch(() => undefined);
-  const again = await db<Stage[]>`SELECT id FROM crm_stages WHERE company_id = ${companyId}`;
-  if (!again.length) {
-    await db`INSERT INTO crm_stages ${db(DEFAULT_STAGES.map((s, i) => ({ ...s, company_id: companyId, position: (i + 1) * 10 })))}`;
+  try {
+    await insertPipeline(db, companyId, 'Försäljning', DEFAULT_STAGES.filter((x) => x.kind === 'open'), 10);
+  } catch (e) {
+    if (!String((e as Error).message).includes('crm_pipelines_company_id_name_key')) throw e; // skapad samtidigt av annan förfrågan
   }
-  return db<Stage[]>`SELECT id, name, probability, position, kind, active FROM crm_stages WHERE company_id = ${companyId} ORDER BY position, id`;
+  return db<Pipeline[]>`SELECT id, name, position, active FROM crm_pipelines WHERE company_id = ${companyId} ORDER BY position, id`;
+}
+
+/** Alla faser i alla pipelines, i pipelinens och fasens ordning */
+export async function stages(db: Db, companyId: number): Promise<Stage[]> {
+  await pipelines(db, companyId);
+  return db<Stage[]>`SELECT s.id, s.pipeline_id, p.name AS pipeline, s.name, s.probability, s.position, s.kind, s.active
+    FROM crm_stages s JOIN crm_pipelines p ON p.id = s.pipeline_id WHERE s.company_id = ${companyId} ORDER BY p.position, p.id, s.position, s.id`;
+}
+
+export async function createPipeline(actor: Actor, input: Record<string, unknown>) {
+  const name = str(input, 'name', { required: true, label: 'Namn' });
+  const tpl = PIPELINE_TEMPLATES[str(input, 'template') || 'empty'] ?? PIPELINE_TEMPLATES.empty;
+  const list = await pipelines(sql, actor.companyId);
+  try {
+    const id = await sql.begin((tx) => insertPipeline(tx, actor.companyId, name, tpl.stages, (Math.max(0, ...list.map((x) => x.position)) + 10)));
+    await auditBy(sql, actor, 'create', 'crm.pipeline', id);
+    return id;
+  } catch (e) {
+    if (String((e as Error).message).includes('crm_pipelines_company_id_name_key')) throw new ConflictError('Det finns redan en pipeline med det namnet');
+    throw e;
+  }
+}
+
+export async function savePipeline(actor: Actor, id: number, input: Record<string, unknown>) {
+  const active = input.active === true || input.active === 'on';
+  if (!active) {
+    const [n] = await sql<{ n: number }[]>`SELECT count(*)::int AS n FROM crm_pipelines WHERE company_id = ${actor.companyId} AND active AND id <> ${id}`;
+    if (!n.n) throw new ValidationError('Minst en pipeline måste vara aktiv');
+  }
+  const r = await sql`UPDATE crm_pipelines SET name = ${str(input, 'name', { required: true, label: 'Namn' })}, position = ${optInt(input, 'position', 'Ordning') ?? 0}, active = ${active}
+    WHERE id = ${id} AND company_id = ${actor.companyId} RETURNING id`;
+  if (!r.length) throw new NotFoundError('Pipelinen');
+  await auditBy(sql, actor, 'update', 'crm.pipeline', id);
 }
 
 export async function saveStage(actor: Actor, id: number | null, input: Record<string, unknown>) {
@@ -38,10 +79,12 @@ export async function saveStage(actor: Actor, id: number | null, input: Record<s
     active: input.active == null ? true : input.active === true || input.active === 'on' };
   if (id) {
     const r = await sql`UPDATE crm_stages SET ${sql(f)} WHERE id = ${id} AND company_id = ${actor.companyId} RETURNING kind`;
-    if (!r.length) throw new NotFoundError('Steget');
+    if (!r.length) throw new NotFoundError('Fasen');
   } else {
-    await stages(sql, actor.companyId);
-    await sql`INSERT INTO crm_stages ${sql({ ...f, company_id: actor.companyId, kind: 'open' })}`;
+    const pipelineId = int(input, 'pipeline_id', 'Pipeline');
+    const [p] = await sql`SELECT 1 FROM crm_pipelines WHERE id = ${pipelineId} AND company_id = ${actor.companyId}`;
+    if (!p) throw new ValidationError('Pipelinen finns inte');
+    await sql`INSERT INTO crm_stages ${sql({ ...f, company_id: actor.companyId, pipeline_id: pipelineId, kind: 'open' })}`;
   }
   await auditBy(sql, actor, id ? 'update' : 'create', 'crm.stage', id ?? 0);
 }
@@ -51,18 +94,18 @@ export async function saveStage(actor: Actor, id: number | null, input: Record<s
 export interface QuoteLine { description: string; quantity: number; unit: string; unit_price: number; vat_rate: number }
 export interface DealOut {
   id: number; object: 'crm.deal'; title: string; customer_id: number | null; customer_name: string | null; prospect_name: string; contact_name: string; contact_email: string;
-  account: string; value: number; stage_id: number; stage: string; kind: 'open' | 'won' | 'lost'; probability: number; weighted: number;
+  account: string; value: number; pipeline_id: number; pipeline: string; stage_id: number; stage: string; kind: 'open' | 'won' | 'lost'; probability: number; weighted: number;
   expected_close: string | null; owner_user_id: number | null; owner: string | null; source: string; next_step: string; lost_reason: string; closed_at: string | null;
   quote_valid_to: string | null; quote_notes: string; document_id: number | null; document_status: string | null; invoice_id: number | null; project_id: number | null;
   created_at: string; updated_at: string; lines: QuoteLine[]; quote: { net: number; vat: number; total: number };
 }
 
 const DCOLS = (db: Db) => db`d.id, 'crm.deal' AS object, d.title, d.customer_id, c.name AS customer_name, d.prospect_name, d.contact_name, d.contact_email,
-  d.value::bigint AS value, d.stage_id, s.name AS stage, s.kind, COALESCE(d.probability, s.probability) AS probability,
+  d.value::bigint AS value, s.pipeline_id, pl.name AS pipeline, d.stage_id, s.name AS stage, s.kind, COALESCE(d.probability, s.probability) AS probability,
   to_char(d.expected_close,'YYYY-MM-DD') AS expected_close, d.owner_user_id, u.name AS owner, d.source, d.next_step, d.lost_reason,
   to_char(d.closed_at,'YYYY-MM-DD') AS closed_at, to_char(d.quote_valid_to,'YYYY-MM-DD') AS quote_valid_to, d.quote_notes, d.document_id, doc.status AS document_status,
   d.invoice_id, d.project_id, to_char(d.created_at,'YYYY-MM-DD') AS created_at, to_char(d.updated_at,'YYYY-MM-DD') AS updated_at`;
-const DFROM = (db: Db) => db`crm_deals d JOIN crm_stages s ON s.id = d.stage_id LEFT JOIN customers c ON c.id = d.customer_id
+const DFROM = (db: Db) => db`crm_deals d JOIN crm_stages s ON s.id = d.stage_id JOIN crm_pipelines pl ON pl.id = s.pipeline_id LEFT JOIN customers c ON c.id = d.customer_id
   LEFT JOIN users u ON u.id = d.owner_user_id LEFT JOIN documents doc ON doc.id = d.document_id`;
 
 type Row = Omit<DealOut, 'account' | 'weighted' | 'lines' | 'quote'>;
@@ -79,18 +122,19 @@ export async function getDeal(companyId: number, id: number, db: Db = sql): Prom
   return shape(r, lines);
 }
 
-export async function listDeals(companyId: number, f: { kind?: string; owner?: number; customer_id?: number; since?: string } = {}): Promise<DealOut[]> {
+export async function listDeals(companyId: number, f: { kind?: string; owner?: number; customer_id?: number; since?: string; pipeline_id?: number } = {}): Promise<DealOut[]> {
   await stages(sql, companyId);
   const rows = await sql<Row[]>`SELECT ${DCOLS(sql)} FROM ${DFROM(sql)} WHERE d.company_id = ${companyId}
     ${f.kind ? sql`AND s.kind = ${f.kind}` : sql``} ${f.owner ? sql`AND d.owner_user_id = ${f.owner}` : sql``}
-    ${f.customer_id ? sql`AND d.customer_id = ${f.customer_id}` : sql``} ${f.since ? sql`AND (s.kind = 'open' OR d.closed_at >= ${f.since})` : sql``}
+    ${f.customer_id ? sql`AND d.customer_id = ${f.customer_id}` : sql``} ${f.pipeline_id ? sql`AND s.pipeline_id = ${f.pipeline_id}` : sql``} ${f.since ? sql`AND (s.kind = 'open' OR d.closed_at >= ${f.since})` : sql``}
     ORDER BY d.expected_close NULLS LAST, d.id`;
   return rows.map((r) => shape(r));
 }
 
 async function stageOf(db: Db, companyId: number, id: number) {
-  const [s] = await db<Stage[]>`SELECT id, name, probability, position, kind, active FROM crm_stages WHERE id = ${id} AND company_id = ${companyId}`;
-  if (!s) throw new ValidationError('Steget finns inte');
+  const [s] = await db<Stage[]>`SELECT s.id, s.pipeline_id, p.name AS pipeline, s.name, s.probability, s.position, s.kind, s.active
+    FROM crm_stages s JOIN crm_pipelines p ON p.id = s.pipeline_id WHERE s.id = ${id} AND s.company_id = ${companyId}`;
+  if (!s) throw new ValidationError('Fasen finns inte');
   return s;
 }
 
@@ -124,9 +168,12 @@ export async function createDeal(actor: Actor, input: Record<string, unknown>): 
     }
     await assertUser(tx, actor.companyId, f.owner_user_id);
     const st = await stages(tx, actor.companyId);
-    const stageId = optInt(input, 'stage_id', 'Steg') ?? st.find((s) => s.kind === 'open' && s.active)!.id;
+    const pid = optInt(input, 'pipeline_id', 'Pipeline');
+    const first = st.find((s) => s.kind === 'open' && s.active && (!pid || s.pipeline_id === pid));
+    if (!first && !input.stage_id) throw new ValidationError('Pipelinen saknar aktiva faser');
+    const stageId = optInt(input, 'stage_id', 'Fas') ?? first!.id;
     const s = await stageOf(tx, actor.companyId, stageId);
-    if (s.kind !== 'open') throw new ValidationError('En ny affär måste börja i ett öppet steg');
+    if (s.kind !== 'open') throw new ValidationError('En ny affär måste börja i en öppen fas');
     const [{ id }] = await tx<{ id: number }[]>`INSERT INTO crm_deals ${tx({ ...f, stage_id: stageId, owner_user_id: f.owner_user_id ?? actor.userId, company_id: actor.companyId, created_by: actor.userId })} RETURNING id`;
     await tx`INSERT INTO crm_stage_history (deal_id, to_stage, changed_by) VALUES (${id}, ${stageId}, ${actor.userId})`;
     await auditBy(tx, actor, 'create', 'crm.deal', id);
@@ -160,7 +207,7 @@ export async function moveDeal(actor: Actor, id: number, input: Record<string, u
 async function moveDealTx(tx: Tx, actor: Actor, id: number, input: Record<string, unknown>): Promise<DealOut> {
   await tx`SELECT id FROM crm_deals WHERE id = ${id} AND company_id = ${actor.companyId} FOR UPDATE`;
   const d = await getDeal(actor.companyId, id, tx);
-  const s = await stageOf(tx, actor.companyId, int(input, 'stage_id', 'Steg'));
+  const s = await stageOf(tx, actor.companyId, int(input, 'stage_id', 'Fas'));
   if (s.id === d.stage_id) return d;
   let customerId = d.customer_id;
   if (s.kind === 'won' && !customerId) {
@@ -172,7 +219,7 @@ async function moveDealTx(tx: Tx, actor: Actor, id: number, input: Record<string
   await tx`UPDATE crm_deals SET stage_id = ${s.id}, customer_id = ${customerId}, probability = NULL, lost_reason = ${s.kind === 'lost' ? reason : ''},
     closed_at = ${s.kind === 'open' ? null : today()}, updated_at = now() WHERE id = ${id}`;
   await tx`INSERT INTO crm_stage_history (deal_id, from_stage, to_stage, changed_by) VALUES (${id}, ${d.stage_id}, ${s.id}, ${actor.userId})`;
-  await logDeal(tx, actor, { id, customer_id: customerId }, `Affären "${d.title}" flyttad till ${s.name}${s.kind === 'lost' ? ` (${reason})` : ''}`);
+  await logDeal(tx, actor, { id, customer_id: customerId }, `Affären "${d.title}" flyttad till ${s.pipeline_id !== d.pipeline_id ? `${s.pipeline} – ` : ''}${s.name}${s.kind === 'lost' ? ` (${reason})` : ''}`);
   await auditBy(tx, actor, 'move', 'crm.deal', id, { to: s.name });
   const out = await getDeal(actor.companyId, id, tx);
   if (s.kind !== 'open') await emit(tx, actor.companyId, s.kind === 'won' ? 'crm.deal.won' : 'crm.deal.lost', out);
@@ -232,7 +279,7 @@ export async function sendQuote(actor: Actor, id: number, origin: string): Promi
       signers: [{ name: d.contact_name, email: d.contact_email }],
     }, tx);
     await sendDocument(actor, doc.id, origin, tx);
-    const sent = (await stages(tx, actor.companyId)).find((s) => s.kind === 'open' && s.name.toLowerCase().includes('offert'));
+    const sent = (await stages(tx, actor.companyId)).find((s) => s.pipeline_id === d.pipeline_id && s.kind === 'open' && s.name.toLowerCase().includes('offert'));
     await tx`UPDATE crm_deals SET document_id = ${doc.id}, updated_at = now() WHERE id = ${id}`;
     await logDeal(tx, actor, d, `Offert skickad för signering till ${d.contact_name} (${formatAmount(d.quote.total)} kr inkl. moms)`);
     if (sent && sent.id !== d.stage_id) await moveDealTx(tx, actor, id, { stage_id: sent.id });
@@ -242,10 +289,10 @@ export async function sendQuote(actor: Actor, id: number, origin: string): Promi
 
 /** Lyssnare: signerad offert → affären vunnen */
 export async function onQuoteSigned(tx: Tx, companyId: number, dealId: number) {
-  const [d] = await tx<{ id: number; created_by: number; kind: string }[]>`SELECT d.id, d.created_by, s.kind FROM crm_deals d JOIN crm_stages s ON s.id = d.stage_id
+  const [d] = await tx<{ id: number; created_by: number; kind: string; pipeline_id: number }[]>`SELECT d.id, d.created_by, s.kind, s.pipeline_id FROM crm_deals d JOIN crm_stages s ON s.id = d.stage_id
     WHERE d.id = ${dealId} AND d.company_id = ${companyId}`;
   if (!d || d.kind !== 'open') return;
-  const won = (await stages(tx, companyId)).find((s) => s.kind === 'won');
+  const won = (await stages(tx, companyId)).find((s) => s.kind === 'won' && s.pipeline_id === d.pipeline_id);
   if (!won) return;
   await moveDealTx(tx, { companyId, userId: d.created_by, apiKeyId: null, role: 'owner' }, dealId, { stage_id: won.id });
 }
@@ -297,10 +344,10 @@ export async function addDealActivity(actor: Actor, id: number, input: Record<st
 
 const lite = (d: DealOut): DealLite => ({ value: d.value, probability: d.probability, kind: d.kind, expected_close: d.expected_close, created: d.created_at, closed_at: d.closed_at, lost_reason: d.lost_reason, owner: d.owner });
 
-export async function report(companyId: number, months = 6) {
+export async function report(companyId: number, months = 6, pipelineId?: number) {
   const t = today();
   const since = `${Number(t.slice(0, 4)) - 1}${t.slice(4)}`;
-  const deals = await listDeals(companyId, { since });
+  const deals = await listDeals(companyId, { since, pipeline_id: pipelineId });
   const open = deals.filter((d) => d.kind === 'open');
   return {
     open: open.length, pipeline: open.reduce((s, d) => s + d.value, 0), weighted: open.reduce((s, d) => s + d.weighted, 0),

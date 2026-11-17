@@ -83,13 +83,13 @@ const text = async (page) => { await page.waitForLoadState('networkidle'); await
   await page.fill('input[name=expected_close]', '2027-01-20');
   await page.click('button:has-text("Skapa affär")');
   await waitMsg(page, 'Affären är skapad');
-  const lostStage = await page.locator('.card:has(b:text-is("Steg")) select[name=stage_id] option:text-is("Förlorad")').getAttribute('value');
-  await page.selectOption('.card:has(b:text-is("Steg")) select[name=stage_id]', lostStage);
-  await page.click('.card:has(b:text-is("Steg")) button:has-text("Flytta")');
+  const lostStage = await page.locator('.card:has(b:text-is("Fas")) select[name=stage_id] option:text-is("Förlorad")').getAttribute('value');
+  await page.selectOption('.card:has(b:text-is("Fas")) select[name=stage_id]', lostStage);
+  await page.click('.card:has(b:text-is("Fas")) button:has-text("Flytta")');
   await waitMsg(page, 'Ange varför affären förlorades');
-  await page.selectOption('.card:has(b:text-is("Steg")) select[name=stage_id]', lostStage);
-  await page.selectOption('.card:has(b:text-is("Steg")) select[name=lost_reason]', 'Pris');
-  await page.click('.card:has(b:text-is("Steg")) button:has-text("Flytta")');
+  await page.selectOption('.card:has(b:text-is("Fas")) select[name=stage_id]', lostStage);
+  await page.selectOption('.card:has(b:text-is("Fas")) select[name=lost_reason]', 'Pris');
+  await page.click('.card:has(b:text-is("Fas")) button:has-text("Flytta")');
   await waitMsg(page, 'Affären är flyttad');
   assert((await text(page)).includes('Förlorad') && (await text(page)).includes(': Pris'), 'förlorad med orsak');
   log('förlorad affär kräver orsak (Pris)');
@@ -109,11 +109,40 @@ const text = async (page) => { await page.waitForLoadState('networkidle'); await
 
   await page.goto(M + '/steg');
   await page.fill('input[placeholder="T.ex. Demo genomförd"]', 'Demo genomförd');
-  await page.click('button:has-text("Lägg till")');
-  await waitMsg(page, 'Steget är sparat');
+  await page.click('button:has-text("Lägg till fas")');
+  await waitMsg(page, 'Fasen är sparad');
   await page.goto(M + '/pipeline');
-  assert((await text(page)).includes('Demo genomförd'), 'nytt steg i pipelinen');
-  log('eget pipelinesteg');
+  assert((await text(page)).includes('Demo genomförd'), 'ny fas i pipelinen');
+  log('egen fas i pipelinen');
+
+  // Flera pipelines
+  await page.goto(M + '/steg');
+  await page.fill('form:has(button:has-text("Skapa pipeline")) input[name=name]', 'Avtalsförnyelse');
+  await page.selectOption('select[name=template]', 'renewal');
+  await page.click('button:has-text("Skapa pipeline")');
+  await waitMsg(page, 'Pipelinen är skapad');
+  t = await text(page);
+  assert(t.includes('Säljpipeline: Avtalsförnyelse') && t.includes('Förnyelse närmar sig') && t.includes('Avtal skickat') && !t.includes('Behovsanalys'), 'ny pipeline: ' + t.slice(0, 800));
+  await page.selectOption('form:has(button:has-text("Skapa affär")) select[name=customer_id]', { index: 1 });
+  await page.fill('input[name=title]', 'Förnyelse supportavtal');
+  await page.fill('input[name=value]', '30000');
+  await page.click('button:has-text("Skapa affär")');
+  await waitMsg(page, 'Affären är skapad');
+  t = await text(page);
+  assert(t.includes('Avtalsförnyelse: Förnyelse närmar sig') && t.includes('60 %'), 'affär i ny pipeline: ' + t.slice(0, 600));
+  const target = await page.locator('.card:has(b:text-is("Fas")) optgroup[label="Försäljning"] option:text-is("Förhandling")').getAttribute('value');
+  await page.selectOption('.card:has(b:text-is("Fas")) select[name=stage_id]', target);
+  await page.click('.card:has(b:text-is("Fas")) button:has-text("Flytta")');
+  await waitMsg(page, 'Affären är flyttad');
+  assert((await text(page)).includes('Försäljning: Förhandling'), 'flyttad till annan pipeline');
+  await page.goto(M + '/pipeline');
+  t = await text(page);
+  assert(t.includes('Avtalsförnyelse') && t.includes('Förnyelse supportavtal'), 'flikar och flyttad affär i Försäljning');
+  await page.goto(M + '/prognos');
+  await page.click('a:text-is("Avtalsförnyelse")');
+  await page.waitForURL(/prognos\?p=/);
+  assert((await text(page)).includes('Öppen pipeline0,00'), 'prognos per pipeline');
+  log('flera pipelines: mall för avtalsförnyelse, affär flyttad mellan pipelines, prognos per pipeline');
 
   await browser.close();
 })().catch((e) => { console.error('FEL:', e.message); process.exit(1); });

@@ -44,12 +44,13 @@ const dealFields = (fd: FormData) => ({
   title: str(fd, 'title'), customer_id: str(fd, 'customer_id'), prospect_name: str(fd, 'prospect_name'), contact_name: str(fd, 'contact_name'),
   contact_email: str(fd, 'contact_email'), value: amount(fd, 'value', 'Värde') ?? 0, probability: str(fd, 'probability'), expected_close: str(fd, 'expected_close'),
   owner_user_id: str(fd, 'owner_user_id'), source: str(fd, 'source'), next_step: str(fd, 'next_step'), stage_id: str(fd, 'stage_id') || undefined,
+  pipeline_id: str(fd, 'pipeline_id') || undefined,
 });
 
 export async function createDeal(cid: number, fd: FormData) {
   const actor = await ctx(cid);
   let id = 0;
-  await attempt(`/c/${cid}/m/crm/pipeline`, async () => { id = (await pl.createDeal(actor, dealFields(fd))).id; });
+  await attempt(`/c/${cid}/m/crm/pipeline${str(fd, 'pipeline_id') ? `?p=${str(fd, 'pipeline_id')}` : ''}`, async () => { id = (await pl.createDeal(actor, dealFields(fd))).id; });
   done(deal(cid, id), 'Affären är skapad');
 }
 
@@ -106,6 +107,20 @@ export async function dealActivity(cid: number, id: number, fd: FormData) {
 
 export async function saveStage(cid: number, id: number | null, fd: FormData) {
   const actor = await ctx(cid);
-  await attempt(`/c/${cid}/m/crm/steg`, () => pl.saveStage(actor, id, { name: str(fd, 'name'), probability: str(fd, 'probability'), position: str(fd, 'position'), active: id ? fd.get('active') === 'on' : true }));
-  done(`/c/${cid}/m/crm/steg`, 'Steget är sparat');
+  await attempt(`/c/${cid}/m/crm/steg`, () => pl.saveStage(actor, id, { name: str(fd, 'name'), probability: str(fd, 'probability'), position: str(fd, 'position'),
+    active: id ? fd.get('active') === 'on' : true, pipeline_id: str(fd, 'pipeline_id') }));
+  done(`/c/${cid}/m/crm/steg`, 'Fasen är sparad');
+}
+
+export async function createPipeline(cid: number, fd: FormData) {
+  const actor = await ctx(cid);
+  let id = 0;
+  await attempt(`/c/${cid}/m/crm/steg`, async () => { id = await pl.createPipeline(actor, { name: str(fd, 'name'), template: str(fd, 'template') }); });
+  done(`/c/${cid}/m/crm/pipeline?p=${id}`, 'Pipelinen är skapad');
+}
+
+export async function savePipeline(cid: number, id: number, fd: FormData) {
+  const actor = await ctx(cid);
+  await attempt(`/c/${cid}/m/crm/steg`, () => pl.savePipeline(actor, id, { name: str(fd, 'name'), position: str(fd, 'position'), active: fd.get('active') === 'on' }));
+  done(`/c/${cid}/m/crm/steg`, 'Pipelinen är sparad');
 }

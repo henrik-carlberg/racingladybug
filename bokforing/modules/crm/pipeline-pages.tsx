@@ -5,7 +5,7 @@ import { PrintButton } from '@/components/PrintButton';
 import { kr, today } from '@/lib/format';
 import * as pl from './pipeline';
 import * as a from './actions';
-import { LOST_REASONS } from './calc';
+import { LOST_REASONS, PIPELINE_TEMPLATES } from './calc';
 import { KINDS } from './service';
 
 const krIn = (ore: number) => (ore ? (ore / 100).toFixed(2).replace('.', ',').replace(/,00$/, '') : '');
@@ -14,14 +14,17 @@ const MONTHS = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', '
 const KIND_BADGE: Record<string, string> = { open: 'warn', won: 'ok', lost: '' };
 
 export function Nav({ basePath }: { basePath: string }) {
-  return <p className="small"><Link href={`${basePath}/pipeline`}>Säljpipeline</Link> · <Link href={`${basePath}/prognos`}>Prognos och analys</Link> · <Link href={basePath}>Kunder</Link> · <Link href={`${basePath}/steg`}>Pipelinesteg</Link></p>;
+  return <p className="small"><Link href={`${basePath}/pipeline`}>Säljpipeline</Link> · <Link href={`${basePath}/prognos`}>Prognos och analys</Link> · <Link href={basePath}>Kunder</Link> · <Link href={`${basePath}/steg`}>Pipelines och faser</Link></p>;
 }
 
 function MoveForm({ companyId, d, stages, back }: { companyId: number; d: pl.DealOut; stages: pl.Stage[]; back?: string }) {
   return (
     <form action={a.moveDeal.bind(null, companyId, d.id, back ?? null)} style={{ display: 'flex', gap: '.3rem', flexWrap: 'wrap', marginTop: '.4rem' }}>
       <select name="stage_id" defaultValue={d.stage_id} aria-label={`Steg för ${d.title}`} style={{ flex: '1 1 120px', fontSize: '.85rem', padding: '.25rem' }}>
-        {stages.filter((s) => s.active || s.id === d.stage_id).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        {[...new Set(stages.map((s) => s.pipeline_id))].map((pid) => {
+          const list = stages.filter((s) => s.pipeline_id === pid && (s.active || s.id === d.stage_id));
+          return <optgroup key={pid} label={list[0]?.pipeline ?? ''}>{list.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</optgroup>;
+        })}
       </select>
       <select name="lost_reason" defaultValue="" aria-label="Förlustorsak" style={{ flex: '1 1 110px', fontSize: '.85rem', padding: '.25rem' }}>
         <option value="">Orsak om förlorad</option>{LOST_REASONS.map((r) => <option key={r}>{r}</option>)}
@@ -31,7 +34,7 @@ function MoveForm({ companyId, d, stages, back }: { companyId: number; d: pl.Dea
   );
 }
 
-function DealFields({ d, customers, users, stages, isNew }: { d?: pl.DealOut; customers: { id: number; name: string }[]; users: { id: number; name: string }[]; stages: pl.Stage[]; isNew?: boolean }) {
+function DealFields({ d, customers, users, stages, isNew, pipelineId }: { d?: pl.DealOut; customers: { id: number; name: string }[]; users: { id: number; name: string }[]; stages: pl.Stage[]; isNew?: boolean; pipelineId?: number }) {
   return (<>
     <div className="row">
       <label style={{ flex: '2 1 240px' }}>Affär<input name="title" defaultValue={d?.title} required placeholder="T.ex. Ny webbplats" /></label>
@@ -46,7 +49,8 @@ function DealFields({ d, customers, users, stages, isNew }: { d?: pl.DealOut; cu
     </div>
     <div className="row">
       <label>Säljansvarig<select name="owner_user_id" defaultValue={d?.owner_user_id ?? ''}><option value="">Jag</option>{users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></label>
-      {isNew && <label>Steg<select name="stage_id">{stages.filter((s) => s.kind === 'open' && s.active).map((s) => <option key={s.id} value={s.id}>{s.name} ({s.probability} %)</option>)}</select></label>}
+      {isNew && <input type="hidden" name="pipeline_id" value={pipelineId} />}
+      {isNew && <label>Fas<select name="stage_id">{stages.filter((s) => s.kind === 'open' && s.active && s.pipeline_id === pipelineId).map((s) => <option key={s.id} value={s.id}>{s.name} ({s.probability} %)</option>)}</select></label>}
       {!isNew && <label>Egen sannolikhet (%)<input name="probability" defaultValue={d && d.probability !== stages.find((s) => s.id === d.stage_id)?.probability ? d.probability : ''} placeholder="Stegets" inputMode="numeric" /></label>}
       <label>Källa<input name="source" defaultValue={d?.source} placeholder="T.ex. rekommendation, webb, mässa" /></label>
     </div>
@@ -56,18 +60,26 @@ function DealFields({ d, customers, users, stages, isNew }: { d?: pl.DealOut; cu
 
 export async function Pipeline({ companyId, basePath, searchParams }: ModulePageProps) {
   const owner = Number(searchParams.saljare) || undefined;
+  const pipes = (await pl.pipelines(sql, companyId)).filter((x) => x.active);
+  const current = pipes.find((x) => x.id === Number(searchParams.p)) ?? pipes[0];
   const [deals, stages, customers, users] = await Promise.all([
-    pl.listDeals(companyId, { kind: 'open', owner }), pl.stages(sql, companyId),
+    pl.listDeals(companyId, { kind: 'open', owner, pipeline_id: current.id }), pl.stages(sql, companyId),
     sql<{ id: number; name: string }[]>`SELECT id, name FROM customers WHERE company_id = ${companyId} ORDER BY name`, pl.users(companyId),
   ]);
-  const open = stages.filter((s) => s.kind === 'open' && s.active);
+  const open = stages.filter((s) => s.kind === 'open' && s.active && s.pipeline_id === current.id);
   const t = today();
-  const back = `${basePath}/pipeline${owner ? `?saljare=${owner}` : ''}`;
+  const back = `${basePath}/pipeline?p=${current.id}${owner ? `&saljare=${owner}` : ''}`;
   return (
     <>
-      <div className="header"><h1>Säljpipeline</h1></div>
+      <div className="header"><h1>Säljpipeline: {current.name}</h1></div>
       <Nav basePath={basePath} />
+      {pipes.length > 1 && (
+        <div className="actions" style={{ marginBottom: '.5rem' }}>
+          {pipes.map((x) => <Link key={x.id} className={`btn ${x.id === current.id ? '' : 'secondary'}`} href={`${basePath}/pipeline?p=${x.id}${owner ? `&saljare=${owner}` : ''}`}>{x.name}</Link>)}
+        </div>
+      )}
       <form className="row" style={{ marginBottom: '.5rem' }}>
+        <input type="hidden" name="p" value={current.id} />
         <label style={{ flex: '0 1 240px' }}>Säljare<select name="saljare" defaultValue={owner ?? ''}><option value="">Alla</option>{users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></label>
         <div style={{ flex: '0 0 auto', alignSelf: 'end' }}><button className="secondary">Visa</button></div>
         <span className="small muted" style={{ alignSelf: 'end' }}>{deals.length} öppna affärer · {kr(deals.reduce((s, d) => s + d.value, 0))} kr · viktat {kr(deals.reduce((s, d) => s + d.weighted, 0))} kr</span>
@@ -93,9 +105,9 @@ export async function Pipeline({ companyId, basePath, searchParams }: ModulePage
           );
         })}
       </div>
-      <h2>Ny affär</h2>
+      <h2>Ny affär i {current.name}</h2>
       <form action={a.createDeal.bind(null, companyId)} className="card stack">
-        <DealFields customers={customers} users={users} stages={stages} isNew />
+        <DealFields customers={customers} users={users} stages={stages} isNew pipelineId={current.id} />
         <div><button>Skapa affär</button></div>
       </form>
     </>
@@ -115,8 +127,8 @@ export async function Deal({ companyId, basePath, params }: ModulePageProps) {
     <>
       <div className="no-print">
         <div className="header">
-          <h1>{d.title} <span className={`badge ${KIND_BADGE[d.kind]}`}>{d.stage}</span></h1>
-          <div className="actions" style={{ margin: 0 }}><Link className="btn secondary" href={`${basePath}/pipeline`}>Pipeline</Link>{d.lines.length > 0 && <PrintButton />}</div>
+          <h1>{d.title} <span className={`badge ${KIND_BADGE[d.kind]}`}>{d.pipeline}: {d.stage}</span></h1>
+          <div className="actions" style={{ margin: 0 }}><Link className="btn secondary" href={`${basePath}/pipeline?p=${d.pipeline_id}`}>Pipeline</Link>{d.lines.length > 0 && <PrintButton />}</div>
         </div>
         <Nav basePath={basePath} />
         <p className="small">{d.customer_id ? <Link href={`${basePath}/kund/${d.customer_id}`}>{d.account}</Link> : <>{d.account} <span className="badge">Prospekt</span></>}
@@ -134,7 +146,7 @@ export async function Deal({ companyId, basePath, params }: ModulePageProps) {
             {d.project_id ? <Link href={`/c/${companyId}/uppdrag/${d.project_id}`}>Visa projekt</Link> : <form action={a.projectFromDeal.bind(null, companyId, d.id)}><button className="secondary">Skapa projekt</button></form>}
           </div>
         )}
-        <div className="card"><b>Steg</b><MoveForm companyId={companyId} d={d} stages={stages} /></div>
+        <div className="card"><b>Fas</b> <span className="small muted">(välj en fas i en annan pipeline för att flytta affären dit)</span><MoveForm companyId={companyId} d={d} stages={stages} /></div>
 
         <h2>Offert</h2>
         {d.document_status && <p className="small">Offerten är {d.document_status === 'completed' ? <b>signerad av kunden</b> : d.document_status === 'pending' ? 'skickad och väntar på signering' : d.document_status}.{' '}
@@ -190,14 +202,19 @@ export async function Deal({ companyId, basePath, params }: ModulePageProps) {
   );
 }
 
-export async function Forecast({ companyId, basePath }: ModulePageProps) {
-  const r = await pl.report(companyId);
+export async function Forecast({ companyId, basePath, searchParams }: ModulePageProps) {
+  const pipes = await pl.pipelines(sql, companyId);
+  const pid = Number(searchParams.p) || undefined;
+  const r = await pl.report(companyId, 6, pid);
   const max = Math.max(1, ...r.forecast.map((f) => f.value));
   const an = r.analysis;
   return (
     <>
       <h1>Prognos och analys</h1>
       <Nav basePath={basePath} />
+      <p className="small">{[{ id: 0, name: 'Alla pipelines' }, ...pipes].map((x, i) => (
+        <span key={x.id}>{i > 0 && ' · '}{(pid ?? 0) === x.id ? <b>{x.name}</b> : <Link href={`${basePath}/prognos${x.id ? `?p=${x.id}` : ''}`}>{x.name}</Link>}</span>
+      ))}</p>
       <div className="grid">
         <div className="card stat"><div className="label">Öppen pipeline</div><div className="value">{kr(r.pipeline)}</div><div className="small muted">{r.open} affärer</div></div>
         <div className="card stat"><div className="label">Viktad pipeline</div><div className="value">{kr(r.weighted)}</div></div>
@@ -239,33 +256,52 @@ export async function Forecast({ companyId, basePath }: ModulePageProps) {
 }
 
 export async function Stages({ companyId, basePath }: ModulePageProps) {
-  const stages = await pl.stages(sql, companyId);
-  const kindLabel = { open: 'Öppet', won: 'Vunnen', lost: 'Förlorad' };
+  const [pipes, stages] = await Promise.all([pl.pipelines(sql, companyId), pl.stages(sql, companyId)]);
+  const kindLabel = { open: 'Öppen', won: 'Vunnen', lost: 'Förlorad' };
   return (
     <>
-      <h1>Pipelinesteg</h1>
+      <h1>Pipelines och faser</h1>
       <Nav basePath={basePath} />
-      <p className="small">Anpassa stegen efter er säljprocess. Sannolikheten används för viktad prognos. Stegen Vunnen och Förlorad finns alltid.</p>
-      <div className="table-wrap"><table>
-        <thead><tr><th>Ordning</th><th>Namn</th><th>Sannolikhet</th><th>Typ</th><th>Aktivt</th><th></th></tr></thead>
-        <tbody>{stages.map((s) => (
-          <tr key={s.id}><td colSpan={6}>
-            <form action={a.saveStage.bind(null, companyId, s.id)} className="row" style={{ alignItems: 'center' }}>
-              <input name="position" defaultValue={s.position} inputMode="numeric" aria-label="Ordning" style={{ maxWidth: '5rem' }} />
-              <input name="name" defaultValue={s.name} aria-label="Namn" style={{ flex: 2 }} />
-              <input name="probability" defaultValue={s.probability} inputMode="numeric" aria-label="Sannolikhet" style={{ maxWidth: '5rem' }} />
-              <span className="small">{kindLabel[s.kind]}</span>
-              <label className="check"><input type="checkbox" name="active" defaultChecked={s.active} disabled={s.kind !== 'open'} /> Aktivt</label>
-              <button className="link">Spara</button>
-            </form>
-          </td></tr>
-        ))}</tbody>
-      </table></div>
-      <form action={a.saveStage.bind(null, companyId, null)} className="card row" style={{ marginTop: '.5rem' }}>
-        <label>Ordning<input name="position" inputMode="numeric" defaultValue={35} /></label>
-        <label style={{ flex: '2 1 240px' }}>Nytt steg<input name="name" required placeholder="T.ex. Demo genomförd" /></label>
-        <label>Sannolikhet (%)<input name="probability" inputMode="numeric" defaultValue={40} /></label>
-        <div style={{ flex: '0 0 auto', alignSelf: 'end' }}><button className="secondary">Lägg till</button></div>
+      <p className="small">Ha en pipeline per typ av försäljning, till exempel nyförsäljning, merförsäljning, avtalsförnyelse eller upphandlingar, var och en med egna faser.
+        Sannolikheten per fas används i den viktade prognosen. Varje pipeline har alltid faserna Vunnen och Förlorad.</p>
+      {pipes.map((pp) => (
+        <div key={pp.id} className="card stack" style={pp.active ? undefined : { opacity: 0.6 }}>
+          <form action={a.savePipeline.bind(null, companyId, pp.id)} className="row" style={{ alignItems: 'center' }}>
+            <input name="position" defaultValue={pp.position} inputMode="numeric" aria-label="Ordning" style={{ maxWidth: '5rem' }} />
+            <input name="name" defaultValue={pp.name} aria-label="Pipelinens namn" style={{ flex: 2, fontWeight: 600 }} />
+            <label className="check"><input type="checkbox" name="active" defaultChecked={pp.active} /> Aktiv</label>
+            <button className="link">Spara pipeline</button>
+            <Link className="small" href={`${basePath}/pipeline?p=${pp.id}`}>Öppna</Link>
+          </form>
+          <div className="table-wrap"><table>
+            <thead><tr><th>Ordning</th><th>Fas</th><th>Sannolikhet %</th><th>Typ</th><th>Aktiv</th><th></th></tr></thead>
+            <tbody>{stages.filter((x) => x.pipeline_id === pp.id).map((x) => (
+              <tr key={x.id}><td colSpan={6}>
+                <form action={a.saveStage.bind(null, companyId, x.id)} className="row" style={{ alignItems: 'center' }}>
+                  <input name="position" defaultValue={x.position} inputMode="numeric" aria-label="Ordning" style={{ maxWidth: '5rem' }} />
+                  <input name="name" defaultValue={x.name} aria-label="Fas" style={{ flex: 2 }} />
+                  <input name="probability" defaultValue={x.probability} inputMode="numeric" aria-label="Sannolikhet" style={{ maxWidth: '5rem' }} />
+                  <span className="small">{kindLabel[x.kind]}</span>
+                  <label className="check"><input type="checkbox" name="active" defaultChecked={x.active} disabled={x.kind !== 'open'} /> Aktiv</label>
+                  <button className="link">Spara</button>
+                </form>
+              </td></tr>
+            ))}</tbody>
+          </table></div>
+          <form action={a.saveStage.bind(null, companyId, null)} className="row">
+            <input type="hidden" name="pipeline_id" value={pp.id} />
+            <label>Ordning<input name="position" inputMode="numeric" defaultValue={35} /></label>
+            <label style={{ flex: '2 1 240px' }}>Ny fas i {pp.name}<input name="name" required placeholder="T.ex. Demo genomförd" /></label>
+            <label>Sannolikhet (%)<input name="probability" inputMode="numeric" defaultValue={40} /></label>
+            <div style={{ flex: '0 0 auto', alignSelf: 'end' }}><button className="secondary">Lägg till fas</button></div>
+          </form>
+        </div>
+      ))}
+      <h2>Ny pipeline</h2>
+      <form action={a.createPipeline.bind(null, companyId)} className="card row">
+        <label style={{ flex: '2 1 240px' }}>Namn<input name="name" required placeholder="T.ex. Avtalsförnyelse" /></label>
+        <label style={{ flex: '2 1 240px' }}>Börja från mall<select name="template">{Object.entries(PIPELINE_TEMPLATES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></label>
+        <div style={{ flex: '0 0 auto', alignSelf: 'end' }}><button>Skapa pipeline</button></div>
       </form>
     </>
   );
