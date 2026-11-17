@@ -48,7 +48,7 @@ export default async function YearendYear({ params, searchParams }: { params: Pr
 
       <Step n={1} title="Stäm av och bokför allt för året" done={issues.length === 0}>
         {issues.length ? <ul className="small">{issues.map((i) => <li key={i}>{i}</li>)}</ul> : <p className="small">Allt ser avstämt ut.</p>}
-        {s.accountingMethod === 'cash' && !s.fy.closed && (
+        {(s.accountingMethod === 'cash' || s.cashOpenInvoices > 0) && !s.fy.closed && (
           <div className="stack" style={{ margin: '.5rem 0' }}>
             <p className="small">Du använder <b>kontantmetoden</b> <Help term="kontantmetoden" />. Registrera först alla betalningar som kommit in eller gått ut till och med {s.fy.end_date}.
               Sedan bokförs de fakturor som fortfarande är obetalda per bokslutsdagen – gör det <b>innan</b> du bokför årets sista momsavräkning, eftersom momsen på dem hör till året.</p>

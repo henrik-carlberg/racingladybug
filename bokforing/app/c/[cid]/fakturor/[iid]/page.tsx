@@ -8,6 +8,8 @@ import { computeInvoice, lineNet } from '@/lib/invoice';
 import { kr, today } from '@/lib/format';
 import { bookInvoice, creditInvoice, deleteDraft, registerPayment } from '../actions';
 import { PrintButton } from '@/components/PrintButton';
+import { listTimeEntries } from '@/lib/services/time';
+import { fmtHours, monthName } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +17,7 @@ interface Inv {
   id: number; invoice_number: number | null; invoice_date: string; due_date: string; delivery_date: string; status: string; ocr: string | null;
   our_reference: string; your_reference: string; notes: string; reverse_charge: boolean; total: number; rounding: number;
   voucher_id: number | null; payment_voucher_id: number | null; paid_date: string | null; credit_of_id: number | null;
+  hour_bank: { period: string; purchased: number; drawn_before: number; used_now: number; drawn: number; overage: number; remaining: number } | null;
   c_name: string; c_orgnr: string; c_vat: string; c_address: string; c_postal: string; c_city: string; c_country: string;
 }
 
@@ -31,6 +34,8 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
   const t = computeInvoice(lines, { reverseCharge: inv.reverse_charge });
   const [orig] = inv.credit_of_id ? await sql<{ id: number; invoice_number: number }[]>`SELECT id, invoice_number FROM invoices WHERE id = ${inv.credit_of_id}` : [];
   const isCredit = !!inv.credit_of_id;
+  const time = await listTimeEntries(co.id, { invoice_id: inv.id });
+  const hb = inv.hour_bank;
   const b = `/c/${co.id}`;
   const t0 = today();
 
@@ -135,6 +140,34 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
         </table>
         {inv.reverse_charge && <p><b>Omvänd betalningsskyldighet</b> (Reverse charge, art. 196 Directive 2006/112/EC). Köparens momsreg.nr: {inv.c_vat}</p>}
         {inv.notes && <p>{inv.notes}</p>}
+        {hb && (
+          <div style={{ border: '1px solid #ccc', borderRadius: 6, padding: '.75rem 1rem', margin: '1rem 0', maxWidth: 420 }}>
+            <b>Timbank – avräkning {monthName(hb.period)}</b>
+            <table className="small" style={{ marginTop: '.4rem' }}>
+              <tbody>
+                <tr><td>Köpta timmar totalt</td><td className="num">{fmtHours(hb.purchased)}</td></tr>
+                <tr><td>Använt tidigare</td><td className="num">{fmtHours(hb.drawn_before)}</td></tr>
+                <tr><td>Använt {monthName(hb.period)}</td><td className="num">{fmtHours(hb.used_now)}</td></tr>
+                {hb.overage > 0 && <tr><td>Varav utöver timbanken (faktureras)</td><td className="num">{fmtHours(hb.overage)}</td></tr>}
+                <tr className="sum"><td><b>Kvar i timbanken</b></td><td className="num"><b>{fmtHours(hb.remaining)}</b></td></tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+        {time.length > 0 && (
+          <div style={{ marginTop: '1.5rem' }}>
+            <b>Tidsspecifikation</b>
+            <table className="small" style={{ marginTop: '.4rem' }}>
+              <thead><tr><th>Datum</th><th>Aktivitet</th><th>Beskrivning</th><th>Utförd av</th><th className="num">Tid</th></tr></thead>
+              <tbody>
+                {time.map((e) => (
+                  <tr key={e.id}><td>{e.date}</td><td>{e.activity_name}</td><td>{e.description}</td><td>{e.user_name}</td><td className="num">{fmtHours(e.minutes)}</td></tr>
+                ))}
+                <tr className="sum"><td colSpan={4}>Summa</td><td className="num">{fmtHours(time.reduce((s, e) => s + e.minutes, 0))}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        )}
         <hr style={{ margin: '2rem 0 1rem', border: 0, borderTop: '1px solid #ddd' }} />
         <div className="small" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
           <div>{co.name}<br />{co.address}<br />{co.postal_code} {co.city}</div>

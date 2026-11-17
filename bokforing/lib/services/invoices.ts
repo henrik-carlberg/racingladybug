@@ -68,9 +68,14 @@ function parseLines(input: Record<string, unknown>, reverseCharge: boolean): Inv
 
 /** Skapar eller uppdaterar ett fakturautkast */
 export async function saveDraft(actor: Actor, invoiceId: number | null, input: Record<string, unknown>): Promise<InvoiceOut> {
-  const [company] = await sql<{ invoice_terms: number }[]>`SELECT invoice_terms FROM companies WHERE id = ${actor.companyId}`;
+  return sql.begin((tx) => saveDraftTx(tx, actor, invoiceId, input));
+}
+
+/** Som saveDraft men i en befintlig transaktion (används av tidrapporteringen) */
+export async function saveDraftTx(tx: Tx, actor: Actor, invoiceId: number | null, input: Record<string, unknown>): Promise<InvoiceOut> {
+  const [company] = await tx<{ invoice_terms: number }[]>`SELECT invoice_terms FROM companies WHERE id = ${actor.companyId}`;
   const customerId = int(input, 'customer_id', 'Kund');
-  const [cust] = await sql<{ reverse_charge: boolean; payment_terms: number | null }[]>`
+  const [cust] = await tx<{ reverse_charge: boolean; payment_terms: number | null }[]>`
     SELECT reverse_charge, payment_terms FROM customers WHERE id = ${customerId} AND company_id = ${actor.companyId}`;
   if (!cust) throw new ValidationError('Kunden finns inte');
   const lines = parseLines(input, cust.reverse_charge);
@@ -82,7 +87,7 @@ export async function saveDraft(actor: Actor, invoiceId: number | null, input: R
     our_reference: str(input, 'our_reference'), your_reference: str(input, 'your_reference'), notes: str(input, 'notes'),
     reverse_charge: cust.reverse_charge, total_net: t.net, total_vat: t.vat, rounding: t.rounding, total: t.total,
   };
-  return sql.begin(async (tx) => {
+  {
     let id = invoiceId ?? 0;
     if (invoiceId) {
       const r = await tx`UPDATE invoices SET ${tx(head)} WHERE id = ${invoiceId} AND company_id = ${actor.companyId} AND status = 'draft' RETURNING id`;
@@ -99,7 +104,7 @@ export async function saveDraft(actor: Actor, invoiceId: number | null, input: R
     const out = await fetchInvoice(tx, actor.companyId, id);
     await emit(tx, actor.companyId, invoiceId ? 'invoice.updated' : 'invoice.created', out);
     return out;
-  });
+  }
 }
 
 async function nextInvoiceNumber(tx: Tx, companyId: number): Promise<number> {
@@ -124,11 +129,13 @@ export async function bookInvoice(actor: Actor, invoiceId: number): Promise<Invo
     const no = await nextInvoiceNumber(tx, actor.companyId);
     const lines = await loadLines(tx, invoiceId);
     const t = computeInvoice(lines, { reverseCharge: inv.reverse_charge });
-    const v = (await accountingMethod(tx, actor.companyId)) === 'cash' ? null : await createVoucher(tx, {
+    // En faktura på 0 kr (t.ex. timbanksavräkning utan övertid) bokförs inte och är direkt reglerad
+    const zero = t.total === 0 && t.net === 0;
+    const v = zero || (await accountingMethod(tx, actor.companyId)) === 'cash' ? null : await createVoucher(tx, {
       actor, date: inv.invoice_date, description: `Kundfaktura ${no}, ${inv.customer}`,
       lines: invoiceBookingLines(lines, t), sourceType: 'invoice', sourceId: invoiceId, series: 'B',
     });
-    await tx`UPDATE invoices SET status = 'booked', invoice_number = ${no}, ocr = ${makeOcr(no)}, voucher_id = ${v?.id ?? null},
+    await tx`UPDATE invoices SET status = ${zero ? 'paid' : 'booked'}, paid_date = ${zero ? inv.invoice_date : null}, invoice_number = ${no}, ocr = ${makeOcr(no)}, voucher_id = ${v?.id ?? null},
       total_net = ${t.net}, total_vat = ${t.vat}, rounding = ${t.rounding}, total = ${t.total} WHERE id = ${invoiceId}`;
     await auditBy(tx, actor, 'book', 'invoice', invoiceId, { number: no });
     const out = await fetchInvoice(tx, actor.companyId, invoiceId);
@@ -184,11 +191,11 @@ export async function registerPaymentTx(tx: Tx, actor: Actor, invoiceId: number,
 /** Kreditera en bokförd, obetald faktura. Returnerar kreditfakturan. */
 export async function creditInvoice(actor: Actor, invoiceId: number, input: Record<string, unknown>): Promise<InvoiceOut> {
   return sql.begin(async (tx) => {
-    const [inv] = await tx<{ status: string; customer_id: number; invoice_number: number; reverse_charge: boolean; customer: string; voucher_id: number | null }[]>`
-      SELECT i.status, i.customer_id, i.invoice_number, i.reverse_charge, c.name AS customer, i.voucher_id
+    const [inv] = await tx<{ status: string; customer_id: number; invoice_number: number; reverse_charge: boolean; customer: string; voucher_id: number | null; total: number }[]>`
+      SELECT i.status, i.customer_id, i.invoice_number, i.reverse_charge, c.name AS customer, i.voucher_id, i.total
       FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.id = ${invoiceId} AND i.company_id = ${actor.companyId} FOR UPDATE OF i`;
     if (!inv) throw new NotFoundError('Fakturan');
-    if (inv.status !== 'booked') throw new ConflictError('Endast bokförda, obetalda fakturor kan krediteras');
+    if (inv.status !== 'booked' && !(inv.status === 'paid' && inv.total === 0)) throw new ConflictError('Endast bokförda, obetalda fakturor kan krediteras');
     const lines = (await loadLines(tx, invoiceId)).map((l) => ({ ...l, quantity: -l.quantity }));
     const t = computeInvoice(lines, { reverseCharge: inv.reverse_charge });
     const d = date(input, 'date', 'Datum');
@@ -212,6 +219,8 @@ export async function creditInvoice(actor: Actor, invoiceId: number, input: Reco
       await tx`UPDATE invoices SET voucher_id = ${v.id} WHERE id = ${creditId}`;
     }
     await tx`UPDATE invoices SET status = 'credited' WHERE id = ${invoiceId}`;
+    // Tidrader på fakturan blir åter ofakturerade (kan tas med i ett nytt underlag eller en ny avräkning)
+    await tx`UPDATE time_entries SET invoice_id = NULL WHERE invoice_id = ${invoiceId}`;
     await auditBy(tx, actor, 'credit', 'invoice', invoiceId, { credit_invoice: no });
     const out = await fetchInvoice(tx, actor.companyId, creditId);
     await emit(tx, actor.companyId, 'invoice.credited', out);

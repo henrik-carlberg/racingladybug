@@ -12,12 +12,15 @@ import * as payroll from '@/lib/services/payroll';
 import * as reports from '@/lib/services/reports';
 import * as bank from '@/lib/services/bank';
 import * as docs from '@/lib/services/documents';
+import * as time from '@/lib/services/time';
 
 export const CORE_SCOPES = [
   { scope: 'accounting:read', description: 'Läsa kontoplan, verifikationer, saldon och momsrapporter' },
   { scope: 'accounting:write', description: 'Bokföra verifikationer, rättelser, konton och momsavräkning' },
   { scope: 'sales:read', description: 'Läsa kunder och kundfakturor' },
   { scope: 'sales:write', description: 'Skapa/ändra kunder och fakturor, bokföra, registrera betalning, kreditera' },
+  { scope: 'time:read', description: 'Läsa uppdrag, aktiviteter, tidrader och timbanker' },
+  { scope: 'time:write', description: 'Rapportera tid, skapa uppdrag och skapa fakturaunderlag och timbanksavräkningar' },
   { scope: 'purchasing:read', description: 'Läsa leverantörer och leverantörsfakturor' },
   { scope: 'purchasing:write', description: 'Registrera, attestera och betala leverantörsfakturor' },
   { scope: 'payroll:read', description: 'Läsa anställda (inkl. personnummer), lönekörningar och AGI' },
@@ -143,6 +146,39 @@ export const CORE_ROUTES: ApiRoute[] = [
     handler: ({ actor, params, body }) => invoices.creditInvoice(actor, id(params), body) },
 
   // Inköp
+  { method: 'GET', path: '/projects', scope: 'time:read', tag: 'Tid', summary: 'Lista uppdrag med aktiviteter, ofakturerad tid och timbank',
+    query: [{ name: 'active', description: 'true eller false' }, { name: 'customer_id', description: 'Kund' }],
+    handler: async ({ actor, query }) => ({ object: 'list', data: await time.listProjects(actor.companyId, {
+      active: q(query, 'active') == null ? undefined : q(query, 'active') === 'true', customer_id: qn(query, 'customer_id') }), has_more: false }) },
+  { method: 'GET', path: '/projects/:id', scope: 'time:read', tag: 'Tid', summary: 'Hämta uppdrag',
+    handler: ({ actor, params }) => time.getProject(actor.companyId, id(params)) },
+  { method: 'POST', path: '/projects', scope: 'time:write', tag: 'Tid', status: 201, summary: 'Skapa uppdrag',
+    body: { type: 'object', required: ['customer_id', 'name'], properties: {
+      customer_id: { type: 'integer' }, name: { type: 'string' }, billing: { type: 'string', enum: ['hourly', 'hour_bank', 'fixed', 'internal'] },
+      hourly_rate: { type: 'integer', description: 'Öre per timme exkl. moms' }, vat_rate: { type: 'integer', enum: [0, 6, 12, 25] },
+      activities: { type: 'array', items: { type: 'string' } }, notes: { type: 'string' } } },
+    handler: ({ actor, body }) => time.createProject(actor, body) },
+  { method: 'GET', path: '/time-entries', scope: 'time:read', tag: 'Tid', summary: 'Lista tidrader',
+    query: [{ name: 'from', description: 'Datum från' }, { name: 'to', description: 'Datum till' }, { name: 'project_id', description: 'Uppdrag' },
+      { name: 'user_id', description: 'Användare' }, { name: 'unbilled', description: 'true = bara ofakturerad debiterbar tid' }],
+    handler: async ({ actor, query }) => ({ object: 'list', has_more: false, data: await time.listTimeEntries(actor.companyId, {
+      from: q(query, 'from'), to: q(query, 'to'), project_id: qn(query, 'project_id'), user_id: qn(query, 'user_id'), unbilled: q(query, 'unbilled') === 'true' }) }) },
+  { method: 'POST', path: '/time-entries', scope: 'time:write', tag: 'Tid', status: 201, summary: 'Rapportera tid (som API-nyckelns användare)',
+    body: { type: 'object', required: ['activity_id', 'date'], properties: {
+      activity_id: { type: 'integer' }, date: DATE, minutes: { type: 'integer' }, hours: { type: 'string', description: 'Alternativ till minutes, t.ex. "1,5" eller "1:30"' },
+      description: { type: 'string' }, billable: { type: 'boolean' } } },
+    handler: ({ actor, body }) => time.createTimeEntry(actor, body) },
+  { method: 'DELETE', path: '/time-entries/:id', scope: 'time:write', tag: 'Tid', summary: 'Ta bort ofakturerad tidrad',
+    handler: ({ actor, params }) => time.deleteTimeEntry(actor, id(params)) },
+  { method: 'POST', path: '/projects/:id/invoice', scope: 'time:write', tag: 'Tid', status: 201, summary: 'Fakturaunderlag: ofakturerad tid blir fakturautkast',
+    body: { type: 'object', required: ['to'], properties: { from: DATE, to: DATE, invoice_date: DATE } },
+    handler: ({ actor, params, body }) => time.invoiceTime(actor, id(params), body) },
+  { method: 'POST', path: '/projects/:id/hour-bank', scope: 'time:write', tag: 'Tid', status: 201, summary: 'Köp av timbank (fakturautkast)',
+    body: { type: 'object', required: ['hours'], properties: { hours: { type: 'string' }, hourly_rate: { type: 'integer' }, date: DATE } },
+    handler: ({ actor, params, body }) => time.buyHourBank(actor, id(params), body) },
+  { method: 'POST', path: '/projects/:id/hour-bank/statements', scope: 'time:write', tag: 'Tid', status: 201, summary: 'Månadsavräkning av timbank (fakturautkast)',
+    body: { type: 'object', required: ['period'], properties: { period: { type: 'string', description: 'ÅÅÅÅ-MM' }, invoice_date: DATE } },
+    handler: ({ actor, params, body }) => time.bankStatementInvoice(actor, id(params), body) },
   { method: 'GET', path: '/suppliers', scope: 'purchasing:read', tag: 'Inköp', summary: 'Lista leverantörer', query: PAGING,
     handler: ({ actor, query }) => suppliers.listSuppliers(actor.companyId, page(query)) },
   { method: 'GET', path: '/suppliers/:id', scope: 'purchasing:read', tag: 'Inköp', summary: 'Hämta leverantör',

@@ -15,12 +15,6 @@ export async function updateCompany(cid: number, fd: FormData) {
     const method = str(fd, 'accounting_method') === 'cash' ? 'cash' : 'invoice';
     const prelFrom = str(fd, 'prelskatt_from');
     if (prelFrom && !/^\d{4}-\d{2}$/.test(prelFrom)) throw new Error('Ange månad som ÅÅÅÅ-MM');
-    if (method !== company.accounting_method) {
-      const [open] = await sql<{ n: number }[]>`SELECT
-        (SELECT count(*) FROM invoices WHERE company_id = ${company.id} AND status = 'booked')::int +
-        (SELECT count(*) FROM supplier_invoices WHERE company_id = ${company.id} AND status IN ('booked', 'approved'))::int AS n`;
-      if (open.n) throw new Error(`Redovisningsmetoden kan inte bytas medan det finns ${open.n} obetalda fakturor. Registrera betalningarna först.`);
-    }
     await sql`UPDATE companies SET
       name = ${str(fd, 'name')}, address = ${str(fd, 'address')}, postal_code = ${str(fd, 'postal_code')}, city = ${str(fd, 'city')},
       email = ${str(fd, 'email')}, phone = ${str(fd, 'phone')}, vat_number = ${str(fd, 'vat_number')},

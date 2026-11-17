@@ -12,6 +12,8 @@ export const CORE_EVENTS: EventType[] = [
   { type: 'invoice.booked', description: 'En kundfaktura har bokförts och fått fakturanummer' },
   { type: 'invoice.paid', description: 'En inbetalning på en kundfaktura har bokförts' },
   { type: 'invoice.credited', description: 'En kundfaktura har krediterats (data = kreditfakturan)' },
+  { type: 'project.created', description: 'Ett uppdrag (för tidrapportering) har skapats' },
+  { type: 'time_entry.created', description: 'Tid har rapporterats på ett uppdrag' },
   { type: 'supplier.created', description: 'En leverantör har skapats' },
   { type: 'supplier.updated', description: 'En leverantör har uppdaterats' },
   { type: 'supplier_invoice.registered', description: 'En leverantörsfaktura har registrerats och bokförts' },

@@ -84,7 +84,7 @@ export async function bookTax(actor: Actor, fyId: number, input: Record<string, 
 /** Kontantmetoden: bokför alla obetalda kund- och leverantörsfakturor per räkenskapsårets sista dag */
 export async function bookOpenInvoices(actor: Actor, fyId: number) {
   const s = await yearStatus(actor.companyId, fyId);
-  if (s.accountingMethod !== 'cash') throw new ValidationError('Gäller bara kontantmetoden');
+  if (!s.cashOpenInvoices) throw new ValidationError('Det finns inga obokförda fakturor');
   if (s.fy.closed) throw new ConflictError('Räkenskapsåret är stängt');
   return sql.begin(async (tx) => {
     const customers = await bookOpenInvoicesAtYearEnd(tx, actor, s.fy.end_date);
