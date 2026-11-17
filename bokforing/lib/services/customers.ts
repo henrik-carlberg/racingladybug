@@ -1,0 +1,69 @@
+import 'server-only';
+import { sql } from '@/lib/db';
+import { NotFoundError, ValidationError } from '@/lib/errors';
+import { auditBy } from '@/lib/server/audit';
+import { emit } from '@/lib/server/events';
+import type { Actor } from './actor';
+import { bool, has, list, optInt, str, type Page } from './input';
+
+export interface CustomerOut {
+  id: number; object: 'customer'; name: string; orgnr: string; vat_number: string; email: string; address: string;
+  postal_code: string; city: string; country: string; payment_terms: number | null; reverse_charge: boolean; created_at: string;
+}
+
+const COLS = () => sql`id, 'customer' AS object, name, orgnr, vat_number, email, address, postal_code, city, country, payment_terms, reverse_charge, created_at`;
+
+export async function getCustomer(companyId: number, id: number): Promise<CustomerOut> {
+  const [c] = await sql<CustomerOut[]>`SELECT ${COLS()} FROM customers WHERE id = ${id} AND company_id = ${companyId}`;
+  if (!c) throw new NotFoundError('Kunden');
+  return c;
+}
+
+export async function listCustomers(companyId: number, p: Page, f: { q?: string } = {}) {
+  const rows = await sql<CustomerOut[]>`SELECT ${COLS()} FROM customers WHERE company_id = ${companyId}
+    ${f.q ? sql`AND (name ILIKE ${'%' + f.q + '%'} OR orgnr = ${f.q} OR email ILIKE ${f.q})` : sql``}
+    ${p.startingAfter ? sql`AND id > ${p.startingAfter}` : sql``} ORDER BY id LIMIT ${p.limit + 1}`;
+  return list([...rows], p);
+}
+
+const FIELDS = ['name', 'orgnr', 'vat_number', 'email', 'address', 'postal_code', 'city', 'country', 'payment_terms', 'reverse_charge'] as const;
+
+function read(input: Record<string, unknown>, partial: boolean) {
+  const f: Record<string, unknown> = {};
+  for (const k of FIELDS) {
+    if (partial && !has(input, k)) continue;
+    if (k === 'payment_terms') f[k] = optInt(input, k, 'Betalningsvillkor');
+    else if (k === 'reverse_charge') f[k] = bool(input, k);
+    else if (k === 'vat_number') f[k] = str(input, k).toUpperCase().replace(/\s/g, '');
+    else if (k === 'country') f[k] = (str(input, k) || 'SE').toUpperCase().slice(0, 2);
+    else f[k] = str(input, k, { required: k === 'name', label: k === 'name' ? 'Namn' : k });
+  }
+  return f;
+}
+
+export async function createCustomer(actor: Actor, input: Record<string, unknown>) {
+  const f = read(input, false);
+  if (f.reverse_charge && !f.vat_number) throw new ValidationError('Omvänd skattskyldighet kräver kundens momsregistreringsnummer');
+  return sql.begin(async (tx) => {
+    const [{ id }] = await tx<{ id: number }[]>`INSERT INTO customers ${tx({ ...f, company_id: actor.companyId })} RETURNING id`;
+    const [c] = await tx<CustomerOut[]>`SELECT ${COLS()} FROM customers WHERE id = ${id}`;
+    await auditBy(tx, actor, 'create', 'customer', id);
+    await emit(tx, actor.companyId, 'customer.created', c);
+    return c;
+  });
+}
+
+export async function updateCustomer(actor: Actor, id: number, input: Record<string, unknown>) {
+  const f = read(input, true);
+  return sql.begin(async (tx) => {
+    const [cur] = await tx<CustomerOut[]>`SELECT ${COLS()} FROM customers WHERE id = ${id} AND company_id = ${actor.companyId} FOR UPDATE`;
+    if (!cur) throw new NotFoundError('Kunden');
+    const merged = { ...cur, ...f };
+    if (merged.reverse_charge && !merged.vat_number) throw new ValidationError('Omvänd skattskyldighet kräver kundens momsregistreringsnummer');
+    if (Object.keys(f).length) await tx`UPDATE customers SET ${tx(f)} WHERE id = ${id}`;
+    const [c] = await tx<CustomerOut[]>`SELECT ${COLS()} FROM customers WHERE id = ${id}`;
+    await auditBy(tx, actor, 'update', 'customer', id, Object.keys(f));
+    await emit(tx, actor.companyId, 'customer.updated', c);
+    return c;
+  });
+}

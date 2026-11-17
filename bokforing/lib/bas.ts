@@ -1,0 +1,161 @@
+// Urval ur BAS-kontoplanen för mindre företag. Fler konton kan läggas till under Kontoplan.
+// Konton markerade med AB/EF läggs bara upp för respektive bolagsform.
+
+type Acc = [number, string, ('AB' | 'EF')?];
+
+const ACCOUNTS: Acc[] = [
+  // 1 Tillgångar
+  [1220, 'Inventarier och verktyg'],
+  [1229, 'Ackumulerade avskrivningar på inventarier och verktyg'],
+  [1250, 'Datorer'],
+  [1259, 'Ackumulerade avskrivningar på datorer'],
+  [1460, 'Lager av handelsvaror'],
+  [1510, 'Kundfordringar'],
+  [1610, 'Kortfristiga fordringar hos anställda'],
+  [1630, 'Avräkning för skatter och avgifter (skattekonto)'],
+  [1650, 'Momsfordran'],
+  [1680, 'Andra kortfristiga fordringar'],
+  [1710, 'Förutbetalda hyreskostnader'],
+  [1790, 'Övriga förutbetalda kostnader och upplupna intäkter'],
+  [1910, 'Kassa'],
+  [1930, 'Företagskonto / affärskonto'],
+  [1940, 'Övriga bankkonton'],
+  // 2 Eget kapital och skulder
+  [2010, 'Eget kapital', 'EF'],
+  [2013, 'Övriga egna uttag', 'EF'],
+  [2017, 'Årets kapitaltillskott', 'EF'],
+  [2018, 'Övriga egna insättningar', 'EF'],
+  [2019, 'Årets resultat', 'EF'],
+  [2081, 'Aktiekapital', 'AB'],
+  [2091, 'Balanserad vinst eller förlust', 'AB'],
+  [2098, 'Vinst eller förlust från föregående år', 'AB'],
+  [2099, 'Årets resultat', 'AB'],
+  [2110, 'Periodiseringsfonder', 'AB'],
+  [2150, 'Ackumulerade överavskrivningar', 'AB'],
+  [2350, 'Andra långfristiga skulder till kreditinstitut'],
+  [2393, 'Lån från närstående personer', 'AB'],
+  [2440, 'Leverantörsskulder'],
+  [2510, 'Skatteskulder', 'AB'],
+  [2512, 'Beräknad inkomstskatt', 'AB'],
+  [2514, 'Beräknad särskild löneskatt på pensionskostnader'],
+  [2518, 'Betald F-skatt', 'AB'],
+  [2611, 'Utgående moms på försäljning inom Sverige, 25 %'],
+  [2614, 'Utgående moms omvänd skattskyldighet, 25 %'],
+  [2621, 'Utgående moms på försäljning inom Sverige, 12 %'],
+  [2631, 'Utgående moms på försäljning inom Sverige, 6 %'],
+  [2641, 'Debiterad ingående moms'],
+  [2645, 'Beräknad ingående moms på förvärv från utlandet'],
+  [2650, 'Redovisningskonto för moms'],
+  [2710, 'Personalskatt'],
+  [2731, 'Avräkning lagstadgade sociala avgifter'],
+  [2732, 'Avräkning särskild löneskatt'],
+  [2820, 'Kortfristiga skulder till anställda'],
+  [2890, 'Övriga kortfristiga skulder'],
+  [2893, 'Skulder till närstående personer, kortfristig del', 'AB'],
+  [2898, 'Outtagen vinstutdelning', 'AB'],
+  [2920, 'Upplupna semesterlöner'],
+  [2940, 'Upplupna lagstadgade sociala och andra avgifter'],
+  [2990, 'Övriga upplupna kostnader och förutbetalda intäkter'],
+  // 3 Intäkter
+  [3001, 'Försäljning inom Sverige, 25 % moms'],
+  [3002, 'Försäljning inom Sverige, 12 % moms'],
+  [3003, 'Försäljning inom Sverige, 6 % moms'],
+  [3004, 'Försäljning inom Sverige, momsfri'],
+  [3105, 'Försäljning varor till land utanför EU'],
+  [3106, 'Försäljning varor till annat EU-land, momsfri'],
+  [3305, 'Försäljning tjänster till land utanför EU'],
+  [3308, 'Försäljning tjänster till annat EU-land'],
+  [3231, 'Försäljning inom byggsektorn, omvänd skattskyldighet'],
+  [3740, 'Öres- och kronutjämning'],
+  [3900, 'Övriga rörelseintäkter'],
+  [3960, 'Valutakursvinster på fordringar och skulder av rörelsekaraktär'],
+  // 4 Varor och material
+  [4010, 'Inköp material och varor'],
+  [4535, 'Inköp av tjänster från annat EU-land, 25 %'],
+  [4600, 'Legoarbeten och underentreprenader'],
+  // 5–6 Övriga externa kostnader
+  [5010, 'Lokalhyra'],
+  [5020, 'El för belysning'],
+  [5060, 'Städning och renhållning'],
+  [5410, 'Förbrukningsinventarier'],
+  [5420, 'Programvaror'],
+  [5460, 'Förbrukningsmaterial'],
+  [5611, 'Drivmedel för personbilar'],
+  [5615, 'Leasing av personbilar'],
+  [5800, 'Resekostnader'],
+  [5810, 'Biljetter'],
+  [5831, 'Kost och logi i Sverige'],
+  [5910, 'Annonsering'],
+  [6071, 'Representation, avdragsgill'],
+  [6072, 'Representation, ej avdragsgill'],
+  [6110, 'Kontorsmateriel'],
+  [6212, 'Mobiltelefon'],
+  [6230, 'Datakommunikation'],
+  [6250, 'Porto'],
+  [6310, 'Företagsförsäkringar'],
+  [6530, 'Redovisningstjänster'],
+  [6540, 'IT-tjänster'],
+  [6550, 'Konsultarvoden'],
+  [6570, 'Bankkostnader'],
+  [6900, 'Övriga externa kostnader'],
+  [6970, 'Tidningar, tidskrifter och facklitteratur'],
+  [6981, 'Föreningsavgifter, avdragsgilla'],
+  [6982, 'Föreningsavgifter, ej avdragsgilla'],
+  // 7 Personal
+  [7210, 'Löner till tjänstemän'],
+  [7220, 'Löner till företagsledare', 'AB'],
+  [7290, 'Förändring av semesterlöneskuld'],
+  [7321, 'Skattefria traktamenten, Sverige'],
+  [7331, 'Skattefria bilersättningar'],
+  [7385, 'Kostnader för fri bil'],
+  [7389, 'Övriga kostnader för förmåner'],
+  [7410, 'Pensionsförsäkringspremier'],
+  [7510, 'Arbetsgivaravgifter'],
+  [7519, 'Sociala avgifter för semester- och löneskulder'],
+  [7530, 'Särskild löneskatt'],
+  [7631, 'Personalrepresentation, avdragsgill'],
+  [7690, 'Övriga personalkostnader'],
+  [7832, 'Avskrivningar på inventarier och verktyg'],
+  [7833, 'Avskrivningar på datorer'],
+  // 8 Finansiella poster och bokslutsdispositioner
+  [8310, 'Ränteintäkter från omsättningstillgångar'],
+  [8314, 'Skattefria ränteintäkter'],
+  [8410, 'Räntekostnader för långfristiga skulder'],
+  [8423, 'Räntekostnader för skatter och avgifter'],
+  [8811, 'Avsättning till periodiseringsfond', 'AB'],
+  [8910, 'Skatt som belastar årets resultat', 'AB'],
+  [8999, 'Årets resultat'],
+];
+
+export function basAccountsFor(type: 'AB' | 'EF'): { number: number; name: string }[] {
+  return ACCOUNTS.filter(([, , only]) => !only || only === type).map(([number, name]) => ({ number, name }));
+}
+
+/** Kontoklass för rapporter */
+export function accountClass(n: number): 'asset' | 'equity_liability' | 'revenue' | 'expense' | 'financial' {
+  if (n < 2000) return 'asset';
+  if (n < 3000) return 'equity_liability';
+  if (n < 4000) return 'revenue';
+  if (n < 8000) return 'expense';
+  return 'financial';
+}
+
+export const isBalanceAccount = (n: number) => n < 3000;
+
+/** Standardkonton som appen använder vid automatkontering */
+export const ACC = {
+  bank: 1930,
+  customerReceivables: 1510,
+  employeeReceivables: 1610,
+  supplierDebts: 2440,
+  vatOut: { 25: 2611, 12: 2621, 6: 2631 } as Record<number, number>,
+  vatIn: 2641,
+  vatSettlement: 2650,
+  personalTax: 2710,
+  employerFeeDebt: 2731,
+  salaries: 7210,
+  employerFees: 7510,
+  rounding: 3740,
+  sales: { 25: 3001, 12: 3002, 6: 3003, 0: 3004 } as Record<number, number>,
+  salesEuServices: 3308,
+};
