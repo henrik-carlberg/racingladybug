@@ -6,6 +6,9 @@ import { getCustomer } from '@/lib/services/customers';
 import { kr, today } from '@/lib/format';
 import { KINDS, createActivity, createContact, listActivities, listContacts, logSystemActivity, updateActivity } from './service';
 import { addActivity, addContact, completeTask } from './actions';
+import { CustomerDeals, Deal, Forecast, Nav, Pipeline, Stages } from './pipeline-pages';
+import * as pl from './pipeline';
+import { onQuoteSigned } from './pipeline';
 
 // ---------- Sidor ----------
 
@@ -20,6 +23,7 @@ async function Overview({ companyId, basePath }: ModulePageProps) {
   return (
     <>
       <h1>CRM</h1>
+      <Nav basePath={basePath} />
       {tasks.length > 0 && (
         <>
           <h2>Öppna uppgifter</h2>
@@ -50,6 +54,7 @@ async function CustomerView({ companyId, params, basePath }: ModulePageProps) {
     <>
       <h1>{c.name}</h1>
       <p className="muted">{[c.orgnr, c.email, c.city].filter(Boolean).join(' · ')} · <Link href={`/c/${companyId}/kunder/${id}`}>Kunduppgifter</Link></p>
+      <CustomerDeals companyId={companyId} customerId={id} basePath={basePath} />
       <h2>Kontaktpersoner</h2>
       {contacts.length > 0 && <table><tbody>{contacts.map((p) => (
         <tr key={p.id}><td>{p.name}</td><td>{p.title}</td><td>{p.email}</td><td>{p.phone}</td></tr>
@@ -95,15 +100,39 @@ export const crm: ModuleDefinition = {
   id: 'crm',
   name: 'CRM',
   version: '0.1.0',
-  description: 'Kontaktpersoner, anteckningar, uppgifter och en tidslinje per kund. Fakturor som bokförs, betalas eller krediteras loggas automatiskt.',
-  nav: [{ label: 'Kundöversikt', path: '' }],
-  pages: { '': Overview, 'kund/:id': CustomerView },
+  description: 'Säljpipeline med affärer, offerter som e-signeras, prognos och analys – plus kontaktpersoner, anteckningar, uppgifter och tidslinje per kund. Fakturor loggas automatiskt.',
+  nav: [{ label: 'Säljpipeline', path: 'pipeline' }, { label: 'Prognos och analys', path: 'prognos' }, { label: 'Kunder', path: '' }],
+  pages: { '': Overview, 'kund/:id': CustomerView, pipeline: Pipeline, 'affar/:id': Deal, prognos: Forecast, steg: Stages },
   scopes: [
     { scope: 'crm:read', description: 'Läsa CRM-aktiviteter och kontakter' },
     { scope: 'crm:write', description: 'Skapa och ändra CRM-aktiviteter och kontakter' },
   ],
-  events: [{ type: 'crm.activity.created', description: 'En CRM-aktivitet har skapats manuellt eller via API' }],
+  events: [
+    { type: 'crm.activity.created', description: 'En CRM-aktivitet har skapats manuellt eller via API' },
+    { type: 'crm.deal.created', description: 'En affär har lagts upp i säljpipelinen' },
+    { type: 'crm.deal.won', description: 'En affär har vunnits (t.ex. när kunden signerat offerten)' },
+    { type: 'crm.deal.lost', description: 'En affär har förlorats' },
+  ],
   api: [
+    { method: 'GET', path: '/pipelines', scope: 'crm:read', tag: 'CRM', summary: 'Lista pipelines med faser',
+      handler: async ({ actor }) => {
+        const [pipes, st] = await Promise.all([pl.pipelines(sql, actor.companyId), pl.stages(sql, actor.companyId)]);
+        return { object: 'list', has_more: false, data: pipes.map((x) => ({ ...x, object: 'crm.pipeline', stages: st.filter((s) => s.pipeline_id === x.id) })) };
+      } },
+    { method: 'GET', path: '/deals', scope: 'crm:read', tag: 'CRM', summary: 'Lista affärer', query: [{ name: 'kind', description: 'open, won eller lost' }, { name: 'pipeline_id', description: 'Pipeline' }],
+      handler: async ({ actor, query }) => ({ object: 'list', has_more: false, data: await pl.listDeals(actor.companyId, {
+        kind: query.get('kind') ?? undefined, pipeline_id: query.get('pipeline_id') ? Number(query.get('pipeline_id')) : undefined }) }) },
+    { method: 'GET', path: '/deals/:id', scope: 'crm:read', tag: 'CRM', summary: 'Hämta affär med offertrader', handler: ({ actor, params }) => pl.getDeal(actor.companyId, Number(params.id)) },
+    { method: 'POST', path: '/deals', scope: 'crm:write', tag: 'CRM', status: 201, summary: 'Skapa affär',
+      body: { type: 'object', required: ['title'], properties: { title: { type: 'string' }, customer_id: { type: 'integer' }, prospect_name: { type: 'string' }, contact_name: { type: 'string' },
+        contact_email: { type: 'string' }, value: { type: 'integer', description: 'öre exkl. moms' }, expected_close: { type: 'string', format: 'date' }, pipeline_id: { type: 'integer' }, stage_id: { type: 'integer' },
+        owner_user_id: { type: 'integer' }, source: { type: 'string' }, next_step: { type: 'string' } } },
+      handler: ({ actor, body }) => pl.createDeal(actor, body) },
+    { method: 'POST', path: '/deals/:id/stage', scope: 'crm:write', tag: 'CRM', summary: 'Flytta affär till steg (lost_reason krävs för förlorad)',
+      body: { type: 'object', required: ['stage_id'], properties: { stage_id: { type: 'integer' }, lost_reason: { type: 'string' } } },
+      handler: ({ actor, params, body }) => pl.moveDeal(actor, Number(params.id), body) },
+    { method: 'GET', path: '/pipeline/report', scope: 'crm:read', tag: 'CRM', summary: 'Prognos per månad, vinstandel och förlustorsaker', query: [{ name: 'pipeline_id', description: 'Pipeline (tomt = alla)' }],
+      handler: ({ actor, query }) => pl.report(actor.companyId, 6, query.get('pipeline_id') ? Number(query.get('pipeline_id')) : undefined) },
     {
       method: 'GET', path: '/activities', scope: 'crm:read', tag: 'CRM', summary: 'Lista aktiviteter',
       query: [{ name: 'customer_id', description: 'Filtrera på kund' }, { name: 'open_tasks', description: 'true = endast öppna uppgifter' }],
@@ -136,6 +165,10 @@ export const crm: ModuleDefinition = {
     },
   ],
   on: {
+    'document.completed': async (e, tx) => {
+      const d = e.data as { source_module: string | null; source_id: number | null };
+      if (d.source_module === 'crm' && d.source_id) await onQuoteSigned(tx, e.companyId, d.source_id);
+    },
     'customer.created': async (e, tx) => {
       const c = e.data as { id: number };
       await logSystemActivity(tx, e.companyId, c.id, 'Kunden skapades', e.id);

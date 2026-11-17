@@ -68,6 +68,7 @@ button.link { background: none; border: none; color: var(--accent); padding: 0; 
 .doc table { border: none; background: transparent; }
 .doc th { background: transparent; color: #444; }
 .doc th, .doc td { border-color: #ddd; }
+@media screen { .print-only { display: none; } }
 @media print {
   .side, .no-print, .flash { display: none !important; }
   .shell { display: block; }
@@ -86,3 +87,6 @@ details.help > summary::-webkit-details-marker { display: none; }
   .side nav { display: none; margin-top: .5rem; }
   .navtoggle:checked ~ nav { display: block; }
 }
+
+/* Innehållet får inte tänjas ut av breda tavlor/tabeller – de scrollar själva */
+main { min-width: 0; }
