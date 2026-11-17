@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IT-Säkert</title>
-<meta name="description" content="IT-Säkert hjälper företag att skydda sina system, sin data och sina medarbetare – med säkerhetsgranskningar, åtgärder vid incidenter och utbildning.">
+<meta name="description" content="IT-Säkert hjälper företag att skydda sina system, sin data och sina medarbetare – med säkerhetsgranskningar, åtgärder vid incidenter, systemintegration och utbildning.">
 <link rel="icon" href="logo/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="logo/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -76,7 +76,7 @@
   .logo svg { width: 32px; height: 32px; }
   .logo .mark { color: #7fb0ff; font-weight: 800; }
   .nav ul { list-style: none; display: flex; gap: 28px; margin: 0; padding: 0; }
-  .nav ul a { text-decoration: none; color: var(--hero-muted); font-weight: 500; font-size: .95rem; }
+  .nav ul a { white-space: nowrap; text-decoration: none; color: var(--hero-muted); font-weight: 500; font-size: .95rem; }
   .nav ul a:hover { color: var(--hero-text); }
   .btn {
     display: inline-flex; align-items: center; gap: 8px;
@@ -180,7 +180,7 @@
   .incident-cta span { color: var(--hero-muted); font-size: .93rem; margin-bottom: 8px; }
 
   /* Utbildningar */
-  .courses { padding-top: 0; }
+  .courses { }
   .courses-head { display: grid; grid-template-columns: 1.15fr .85fr; align-items: center; gap: 48px; margin-bottom: 40px; }
   .courses-intro { display: grid; gap: 24px; }
   .courses-photo { width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius); }
@@ -200,6 +200,24 @@
   .course-group a b { display: flex; align-items: center; gap: 6px; font-size: 1rem; }
   .course-group a b .ext { color: var(--muted); }
   .course-group a span { color: var(--muted); font-size: .9rem; line-height: 1.45; }
+
+  /* Systemintegration */
+  .int-top { display: grid; grid-template-columns: 1.1fr .9fr; gap: 56px; align-items: center; margin-bottom: 48px; }
+  .int-cta { margin-top: 28px; }
+  .int-visual { display: grid; place-items: center; }
+  .int-diagram { width: 100%; max-width: 440px; height: auto; overflow: visible; }
+  .int-diagram .flow { stroke: var(--brand); stroke-width: 2; stroke-dasharray: 6 8; opacity: .55; animation: flow 1.6s linear infinite; }
+  @keyframes flow { to { stroke-dashoffset: -28; } }
+  @media (prefers-reduced-motion: reduce) { .int-diagram .flow { animation: none; } }
+  .int-diagram .hub-ring { fill: none; stroke: var(--brand); stroke-opacity: .25; stroke-width: 10; }
+  .int-diagram .hub { fill: var(--hero-bg); }
+  .int-diagram .hub-t { fill: #fff; font-weight: 700; font-size: 15px; text-anchor: middle; }
+  .int-diagram .sys rect { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+  .int-diagram .sys text { fill: var(--text); font-weight: 600; font-size: 13px; text-anchor: middle; }
+  .int-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+  .int-card { background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; }
+  .int-card h3 { margin: 0 0 8px; font-size: 1.05rem; }
+  .int-card p { margin: 0; color: var(--muted); font-size: .95rem; }
 
   /* Process */
   .alt { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
@@ -270,13 +288,15 @@
     .grid-3 { grid-template-columns: 1fr 1fr; }
     .card.incident { grid-template-columns: 1fr; }
     .course-grid { grid-template-columns: 1fr 1fr; }
+    .int-top { grid-template-columns: 1fr; gap: 32px; }
+    .int-grid { grid-template-columns: 1fr 1fr; }
     .courses-head { grid-template-columns: 1fr; gap: 28px; }
     .courses-photo { aspect-ratio: 16 / 9; }
     .steps { grid-template-columns: 1fr 1fr; }
     .step::after { display: none; }
     .contact-wrap { padding: 36px 24px; }
   }
-  @media (max-width: 720px) {
+  @media (max-width: 1000px) {
     .menu-toggle { display: block; }
     .nav ul, .nav > .btn { display: none; }
     .nav.open ul {
@@ -286,12 +306,14 @@
       padding: 8px 20px 16px;
     }
     .nav.open ul a { display: block; padding: 12px 0; }
+  }
+  @media (max-width: 720px) {
     .hero { padding: 64px 0 72px; }
     .hero-photo { aspect-ratio: 4 / 3; }
     .hero-visual { padding: 0; }
     .hero-visual .shield-card { position: relative; left: auto; bottom: auto; width: auto; margin: -36px 14px 0; }
     section { padding: 68px 0; }
-    .grid-3, .steps, .values, .row, .incident-list, .course-grid { grid-template-columns: 1fr; }
+    .grid-3, .steps, .values, .row, .incident-list, .course-grid, .int-grid { grid-template-columns: 1fr; }
     .wrap { padding: 0 16px; }
   }
 </style>
@@ -311,6 +333,7 @@
     </a>
     <ul>
       <li><a href="#tjanster">Tjänster</a></li>
+      <li><a href="#integrationer">Integrationer</a></li>
       <li><a href="#utbildningar">Utbildningar</a></li>
       <li><a href="#sa-arbetar-vi">Så arbetar vi</a></li>
       <li><a href="#om-oss">Om oss</a></li>
@@ -329,7 +352,7 @@
       <div>
         <span class="eyebrow">IT-säkerhet för små och medelstora företag</span>
         <h1>Tryggare IT. <span>Färre överraskningar.</span></h1>
-        <p class="lead">Vi hjälper ert företag att skydda system, data och medarbetare – från säkerhetsgranskning och övervakning till åtgärder vid incidenter, utbildning och NIS2-anpassning. Begripligt, personligt och utan krångel.</p>
+        <p class="lead">Vi hjälper ert företag att skydda system, data och medarbetare – från säkerhetsgranskning och övervakning till åtgärder vid incidenter, systemintegration, utbildning och NIS2-anpassning. Begripligt, personligt och utan krångel.</p>
         <div class="hero-actions">
           <a href="#kontakt" class="btn">Kostnadsfri säkerhetskoll
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
@@ -422,6 +445,45 @@
     </div>
   </section>
 
+
+
+  <section id="integrationer" class="alt">
+    <div class="wrap">
+      <div class="int-top">
+        <div>
+          <div class="section-head" style="margin-bottom:24px">
+            <div class="kicker">Systemintegration</div>
+            <h2>Få era system att prata samma språk</h2>
+            <p>Ekonomisystem, CRM, e-handel, HR och ärendehantering lever ofta i varsitt hörn. Resultatet blir dubbelregistrering, fel i underlagen och beslut på gammal information. Vi kopplar ihop systemen kring ett gemensamt språk, så att rätt data finns på rätt ställe – automatiskt.</p>
+          </div>
+          <ul class="checklist">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg><span>Slut på dubbelregistrering och manuella exporter</span></li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg><span>En version av sanningen – samma kund, order och artikel i alla system</span></li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg><span>Säkert från grunden: behörigheter, kryptering och spårbar loggning</span></li>
+          </ul>
+          <div class="int-cta">
+            <a class="btn" href="#kontakt" data-amne="Systemintegration">Diskutera en integration</a>
+          </div>
+        </div>
+        <div class="int-visual">
+          <svg class="int-diagram" viewBox="0 0 420 420" role="img" aria-label="Ekonomi, CRM, e-handel, HR och lön, lager och ärendehantering kopplade till en gemensam datamodell i mitten">
+            <line class="flow" x1="210" y1="210" x2="210.0" y2="60.0" style="animation-delay:-0.0s"/><line class="flow" x1="210" y1="210" x2="339.9" y2="135.0" style="animation-delay:-0.4s"/><line class="flow" x1="210" y1="210" x2="339.9" y2="285.0" style="animation-delay:-0.8s"/><line class="flow" x1="210" y1="210" x2="210.0" y2="360.0" style="animation-delay:-1.2s"/><line class="flow" x1="210" y1="210" x2="80.1" y2="285.0" style="animation-delay:-1.6s"/><line class="flow" x1="210" y1="210" x2="80.1" y2="135.0" style="animation-delay:-2.0s"/>
+            <circle class="hub-ring" cx="210" cy="210" r="74"/>
+            <circle class="hub" cx="210" cy="210" r="62"/>
+            <text class="hub-t" x="210" y="206">Gemensamt</text>
+            <text class="hub-t" x="210" y="226">språk</text>
+            <g class="sys"><rect x="164.0" y="40.0" width="92" height="40" rx="10"/><text x="210.0" y="65.0">Ekonomi</text></g><g class="sys"><rect x="293.9" y="115.0" width="92" height="40" rx="10"/><text x="339.9" y="140.0">CRM</text></g><g class="sys"><rect x="293.9" y="265.0" width="92" height="40" rx="10"/><text x="339.9" y="290.0">E-handel</text></g><g class="sys"><rect x="164.0" y="340.0" width="92" height="40" rx="10"/><text x="210.0" y="365.0">HR &amp; lön</text></g><g class="sys"><rect x="34.1" y="265.0" width="92" height="40" rx="10"/><text x="80.1" y="290.0">Lager</text></g><g class="sys"><rect x="34.1" y="115.0" width="92" height="40" rx="10"/><text x="80.1" y="140.0">Ärenden</text></g>
+          </svg>
+        </div>
+      </div>
+      <div class="int-grid">
+          <article class="int-card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M9 6h6M18 9v6M8.1 8.1l7.8 7.8"/></svg></div><h3>Integrationsanalys</h3><p>Vi kartlägger era system och dataflöden och tar fram en gemensam informationsmodell – så att kund, order och faktura betyder samma sak överallt.</p></article>
+          <article class="int-card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></svg></div><h3>Skräddarsydda integrationer</h3><p>Vi bygger kopplingarna mellan era system via API:er, filöverföring eller händelser – anpassat efter hur ni faktiskt arbetar.</p></article>
+          <article class="int-card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg></div><h3>Färdiga kopplingar</h3><p>Färdigpaketerade integrationer för vanliga flöden, som order till faktura eller nya medarbetare till alla system. Snabbt på plats och till fast pris.</p></article>
+          <article class="int-card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg></div><h3>Drift &amp; övervakning</h3><p>Vi övervakar integrationerna, larmar när något stannar och åtgärdar felet – så att informationen fortsätter flöda.</p></article>
+      </div>
+    </div>
+  </section>
 
   <section id="utbildningar" class="courses">
     <div class="wrap">
@@ -545,6 +607,7 @@
               <option>Akut incident – vi har drabbats</option>
               <option>Övervakning &amp; larm</option>
               <option>Backup &amp; återställning</option>
+              <option>Systemintegration</option>
               <option>Utbildning på plats</option>
               <option>Onlinekurser via Studieplaner.se</option>
               <option>GDPR / NIS2</option>
@@ -589,6 +652,11 @@
   document.querySelectorAll(".nav ul a").forEach(a =>
     a.addEventListener("click", () => document.getElementById("nav").classList.remove("open"))
   );
+
+  document.querySelectorAll("[data-amne]").forEach(a => a.addEventListener("click", () => {
+    const s = document.querySelector('select[name="amne"]');
+    if (s) s.value = a.dataset.amne;
+  }));
 
   function sendForm(e) {
     e.preventDefault();
