@@ -21,6 +21,7 @@ export default async function Ledger({ params, searchParams }: { params: Promise
       COALESCE(NULLIF(l.description,''), v.description) AS text, l.debit, l.credit
     FROM voucher_lines l JOIN vouchers v ON v.id = l.voucher_id
     WHERE v.company_id = ${company.id} AND v.date BETWEEN ${from} AND ${to}
+      AND v.source_type IS DISTINCT FROM 'opening_balance'
       ${accFilter ? sql`AND l.account_number = ${Number(accFilter)}` : sql``}
     ORDER BY l.account_number, v.date, v.series, v.number, l.id`;
   const names = new Map((await sql<{ number: number; name: string }[]>`SELECT number, name FROM accounts WHERE company_id = ${company.id}`).map((a) => [a.number, a.name]));
@@ -29,7 +30,8 @@ export default async function Ledger({ params, searchParams }: { params: Promise
   const fyStart = years.find((y) => y.start_date <= from && from <= y.end_date)?.start_date ?? from;
   const ibRes = new Map((await sql<{ account_number: number; b: number }[]>`
     SELECT l.account_number, SUM(l.debit - l.credit)::bigint AS b FROM voucher_lines l JOIN vouchers v ON v.id = l.voucher_id
-    WHERE v.company_id = ${company.id} AND v.date >= ${fyStart} AND v.date < ${from} AND l.account_number >= 3000 GROUP BY 1`).map((r) => [r.account_number, r.b]));
+    WHERE v.company_id = ${company.id} AND v.date >= ${fyStart} AND v.date < ${from} AND l.account_number >= 3000
+      AND v.source_type IS DISTINCT FROM 'opening_balance' GROUP BY 1`).map((r) => [r.account_number, r.b]));
   const groups = new Map<number, (typeof rows)[number][]>();
   for (const r of rows) (groups.get(r.account_number) ?? groups.set(r.account_number, []).get(r.account_number)!).push(r);
   const b = `/c/${company.id}`;

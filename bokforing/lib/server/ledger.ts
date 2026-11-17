@@ -115,18 +115,24 @@ export async function accountSums(companyId: number, from: string, to: string, o
     SELECT l.account_number, SUM(l.debit - l.credit)::bigint AS balance
     FROM voucher_lines l JOIN vouchers v ON v.id = l.voucher_id
     WHERE v.company_id = ${companyId} AND v.date BETWEEN ${from} AND ${to}
+      AND v.source_type IS DISTINCT FROM 'opening_balance'
       ${opts.excludeVatSettlements ? sql`AND v.source_type IS DISTINCT FROM 'vat'
         AND NOT (v.source_type = 'reversal' AND EXISTS (SELECT 1 FROM vouchers o WHERE o.id = v.corrects_id AND o.source_type = 'vat'))` : sql``}
     GROUP BY l.account_number`;
   return new Map(rows.map((r) => [r.account_number, r.balance]));
 }
 
-/** Balanskontonas ingående saldo vid ett datum = summan av alla tidigare transaktioner. */
+/**
+ * Balanskontonas ingående saldo vid ett datum = summan av alla tidigare transaktioner,
+ * plus en verifikation för ingående balanser (source_type 'opening_balance') daterad på dagen.
+ * Sådana verifikationer räknas aldrig som rörelser i perioden (se accountSums).
+ */
 export async function openingBalances(companyId: number, before: string): Promise<Map<number, number>> {
   const rows = await sql<{ account_number: number; balance: number }[]>`
     SELECT l.account_number, SUM(l.debit - l.credit)::bigint AS balance
     FROM voucher_lines l JOIN vouchers v ON v.id = l.voucher_id
-    WHERE v.company_id = ${companyId} AND v.date < ${before} AND l.account_number < 3000
+    WHERE v.company_id = ${companyId} AND l.account_number < 3000
+      AND (v.date < ${before} OR (v.source_type = 'opening_balance' AND v.date = ${before}))
     GROUP BY l.account_number`;
   // Tidigare års resultat förs till eget kapital (2099 för AB / 2019 för EF) vid årsskiftet
   const result = await sql<{ balance: number }[]>`

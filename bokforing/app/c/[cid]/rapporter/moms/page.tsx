@@ -5,6 +5,7 @@ import { vatReport } from '@/lib/vat';
 import { Flash, type SP } from '@/components/ui';
 import { kr, monthEnd, today } from '@/lib/format';
 import { settleVat } from './actions';
+import { Help } from '@/components/Help';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +34,7 @@ export default async function Vat({ params, searchParams }: { params: Promise<{ 
       AND v.date BETWEEN ${from} AND ${to} AND NOT EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = v.id)`;
   return (
     <>
-      <h1>Momsrapport</h1>
+      <h1>Momsrapport <Help term="moms" /></h1>
       <Flash searchParams={searchParams} />
       <form className="card row">
         <label>Från<input type="date" name="from" defaultValue={from} /></label>
@@ -55,7 +56,7 @@ export default async function Vat({ params, searchParams }: { params: Promise<{ 
       {settled ? <p className="muted">Momsen för perioden är avräknad i <a href={`/c/${company.id}/verifikationer/${settled.id}`}>{settled.label}</a>.</p> : (
         <form action={settleVat.bind(null, company.id)} className="card actions">
           <input type="hidden" name="from" value={from} /><input type="hidden" name="to" value={to} />
-          <button>Bokför momsavräkning per {to}</button>
+          <button>Bokför momsavräkning per {to}</button><Help term="momsavrakning" />
           <span className="muted small">Flyttar periodens moms från 26xx till 2650 Redovisningskonto för moms.</span>
         </form>
       )}

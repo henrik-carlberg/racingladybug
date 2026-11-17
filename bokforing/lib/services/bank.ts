@@ -243,7 +243,7 @@ async function candidates(companyId: number) {
     FROM vouchers v JOIN voucher_lines l ON l.voucher_id = v.id
     WHERE v.company_id = ${companyId} AND l.account_number BETWEEN 1900 AND 1999 AND v.date > now() - interval '1 year'
       AND NOT EXISTS (SELECT 1 FROM bank_transactions t WHERE t.voucher_id = v.id)
-      AND NOT EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = v.id) AND v.source_type <> 'reversal'
+      AND NOT EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = v.id) AND v.source_type NOT IN ('reversal','opening_balance')
     GROUP BY v.id, l.account_number`;
   const accts = await sql<{ id: number; ledger_account: number }[]>`SELECT id, ledger_account FROM bank_accounts WHERE company_id = ${companyId}`;
   return { invoices: [...invoices], supplierInvoices: [...supplierInvoices], voucherLines: [...voucherLines], ledgerByAccount: new Map(accts.map((a) => [a.id, a.ledger_account])) };
