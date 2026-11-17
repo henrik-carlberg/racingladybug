@@ -11,8 +11,8 @@ export const dynamic = 'force-dynamic';
 /** Renderar en moduls sida utifrån dess pages-mönster */
 export default async function ModulePage({ params, searchParams }: { params: Promise<{ cid: string; mod: string; path?: string[] }>; searchParams: SP }) {
   const { cid, mod, path = [] } = await params;
-  const ctx = await requireCompany(cid);
   const m = getModule(mod);
+  const ctx = await requireCompany(cid, { employee: !!m?.employeeAccess });
   if (!m || !(await isModuleEnabled(ctx.company.id, m.id))) notFound();
   const sub = '/' + path.join('/');
   for (const [pattern, Page] of Object.entries(m.pages ?? {})) {

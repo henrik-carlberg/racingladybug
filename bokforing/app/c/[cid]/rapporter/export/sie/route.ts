@@ -6,7 +6,7 @@ import { audit } from '@/lib/server/audit';
 
 export async function GET(req: Request, { params }: { params: Promise<{ cid: string }> }) {
   const { cid } = await params;
-  const { company, user } = await requireCompany(cid);
+  const { company, user } = await requireCompany(cid, { allowLocked: true });
   const fyId = Number(new URL(req.url).searchParams.get('fy'));
   const years = await fiscalYears(company.id);
   const idx = years.findIndex((y) => y.id === fyId);

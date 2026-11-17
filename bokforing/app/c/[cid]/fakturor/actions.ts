@@ -4,6 +4,8 @@ import { amount, attempt, done, str } from '@/lib/server/action';
 import { requireCompany } from '@/lib/server/auth';
 import { userActor } from '@/lib/services/actor';
 import * as svc from '@/lib/services/invoices';
+import { sendInvoice as sendSvc } from '@/lib/services/invoice-send';
+import { requestOrigin } from '@/lib/server/origin';
 
 export type FormState = { error?: string } | undefined;
 
@@ -54,4 +56,14 @@ export async function creditInvoice(cid: number, invoiceId: number, fd: FormData
   let creditId = 0;
   await attempt(`/c/${cid}/fakturor/${invoiceId}`, async () => { creditId = (await svc.creditInvoice(actor, invoiceId, { date: str(fd, 'date') })).id; });
   done(`/c/${cid}/fakturor/${creditId}`, 'Kreditfakturan är bokförd');
+}
+
+export async function sendInvoice(cid: number, invoiceId: number, fd: FormData) {
+  const actor = userActor(await requireCompany(cid));
+  let msg = '';
+  await attempt(`/c/${cid}/fakturor/${invoiceId}`, async () => {
+    const r = await sendSvc(actor, invoiceId, { to: str(fd, 'to'), message: str(fd, 'message') }, await requestOrigin());
+    msg = r.emailed ? `Fakturan är skickad till ${r.to}` : `E-post kunde inte skickas (ej konfigurerad) – dela länken: ${r.link}`;
+  });
+  done(`/c/${cid}/fakturor/${invoiceId}`, msg);
 }

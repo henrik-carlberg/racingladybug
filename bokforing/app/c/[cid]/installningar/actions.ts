@@ -1,4 +1,6 @@
 'use server';
+import { sendMail } from '@/lib/server/mail';
+import { requestOrigin } from '@/lib/server/origin';
 import { sql } from '@/lib/db';
 import { attempt, done, int, str } from '@/lib/server/action';
 import { requireCompany, newToken, sha256 } from '@/lib/server/auth';
@@ -116,10 +118,20 @@ export async function invite(cid: number, fd: FormData) {
   await attempt(back(cid), async () => {
     const email = str(fd, 'email').toLowerCase();
     if (!email.includes('@')) throw new Error('Ange en e-postadress');
-    const role = str(fd, 'role') === 'owner' ? 'owner' : 'accountant';
-    await sql`INSERT INTO invites (company_id, email, role, token_hash, created_by, expires_at)
-      VALUES (${company.id}, ${email}, ${role}, ${sha256(token)}, ${user.id}, ${addDays(new Date().toISOString().slice(0, 10), 7)})`;
+    const r = str(fd, 'role');
+    const role = r === 'owner' ? 'owner' : r === 'employee' ? 'employee' : 'accountant';
+    let employeeId: number | null = null;
+    if (role === 'employee') {
+      employeeId = Number(str(fd, 'employee_id')) || null;
+      const [e] = employeeId ? await sql<{ user_id: number | null }[]>`SELECT user_id FROM employees WHERE id = ${employeeId} AND company_id = ${company.id}` : [];
+      if (!e) throw new Error('Välj vilken anställd inbjudan gäller');
+      if (e.user_id) throw new Error('Den anställda har redan ett konto');
+    }
+    await sql`INSERT INTO invites (company_id, email, role, token_hash, created_by, expires_at, employee_id)
+      VALUES (${company.id}, ${email}, ${role}, ${sha256(token)}, ${user.id}, ${addDays(new Date().toISOString().slice(0, 10), 7)}, ${employeeId})`;
     await audit(sql, { companyId: company.id, userId: user.id, action: 'invite', entity: 'membership', details: { email, role } });
+    const link = `${await requestOrigin()}/invite/${token}`;
+    await sendMail(email, `Inbjudan till ${company.name}`, `Hej!\n\n${user.name} har bjudit in dig till ${company.name} i bokföringen.\n\nSkapa ditt konto här (länken gäller i 7 dagar):\n${link}\n`);
   });
   done(`${back(cid)}?invite=${token}`);
 }

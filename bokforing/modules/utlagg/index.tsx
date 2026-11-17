@@ -14,10 +14,11 @@ function Nav({ basePath }: { basePath: string }) {
   return <p className="small"><Link href={basePath}>Utläggsräkningar</Link> · <Link href={`${basePath}/installningar`}>Ersättningar och konton</Link></p>;
 }
 
-async function Overview({ companyId, basePath, searchParams }: ModulePageProps) {
+async function Overview({ companyId, actor, basePath, searchParams }: ModulePageProps) {
+  const self = actor.role === 'employee' ? (await sql<{ id: number }[]>`SELECT id FROM employees WHERE company_id = ${companyId} AND user_id = ${actor.userId}`)[0]?.id ?? -1 : undefined;
   const [claims, emps] = await Promise.all([
-    svc.listClaims(companyId, { status: searchParams.status }),
-    sql<{ id: number; name: string }[]>`SELECT id, first_name || ' ' || last_name AS name FROM employees WHERE company_id = ${companyId} AND active ORDER BY last_name`,
+    svc.listClaims(companyId, { status: searchParams.status, employee_id: self }),
+    sql<{ id: number; name: string }[]>`SELECT id, first_name || ' ' || last_name AS name FROM employees WHERE company_id = ${companyId} AND active ${self ? sql`AND id = ${self}` : sql``} ORDER BY last_name`,
   ]);
   const waiting = claims.filter((c) => c.status === 'submitted');
   return (
@@ -49,6 +50,10 @@ async function Overview({ companyId, basePath, searchParams }: ModulePageProps) 
 
 async function Claim({ companyId, actor, basePath, params }: ModulePageProps) {
   const c = await svc.getClaim(companyId, Number(params.id));
+  if (actor.role === 'employee') {
+    const [me] = await sql<{ id: number }[]>`SELECT id FROM employees WHERE company_id = ${companyId} AND user_id = ${actor.userId}`;
+    if (me?.id !== c.employee_id) return <p>Du har inte tillgång till den här räkningen.</p>;
+  }
   const s = await svc.settings(sql, companyId);
   const editable = c.status === 'draft' || c.status === 'rejected';
   const runs = c.status === 'approved' ? await sql<{ id: number; period: string }[]>`SELECT id, period FROM payroll_runs WHERE company_id = ${companyId} AND status = 'draft' ORDER BY period DESC` : [];
@@ -111,7 +116,8 @@ async function Claim({ companyId, actor, basePath, params }: ModulePageProps) {
         </div>
       )}
       {c.status === 'submitted' && actor.role !== 'owner' && <p className="small">Väntar på att ägaren attesterar.</p>}
-      {c.status === 'approved' && (
+      {c.status === 'approved' && actor.role === 'employee' && <p className="small">Attesterad – betalas ut med lönen eller till ditt konto.</p>}
+      {c.status === 'approved' && actor.role !== 'employee' && (
         <div className="card stack">
           <b>Betala ut {kr(c.total)} kr</b>
           {runs.length > 0 && (
@@ -131,7 +137,8 @@ async function Claim({ companyId, actor, basePath, params }: ModulePageProps) {
   );
 }
 
-async function Settings({ companyId, basePath }: ModulePageProps) {
+async function Settings({ companyId, actor, basePath }: ModulePageProps) {
+  if (actor.role === 'employee') return <p>Endast ägare och redovisningskonsult kan ändra ersättningarna.</p>;
   const s = await svc.settings(sql, companyId);
   return (
     <>
@@ -162,6 +169,7 @@ export const utlagg: ModuleDefinition = {
   name: 'Utlägg och reseräkningar',
   version: '0.1.0',
   description: 'Anställdas kvitton, milersättning och traktamente med skattefria belopp, attest av ägaren, bokföring mot skuld till anställda och utbetalning via lönen eller banken.',
+  employeeAccess: true,
   nav: [{ label: 'Utläggsräkningar', path: '' }, { label: 'Ersättningar', path: 'installningar' }],
   pages: { '': Overview, 'r/:id': Claim, installningar: Settings },
   scopes: [

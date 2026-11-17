@@ -14,9 +14,11 @@ export default async function Settings({ params, searchParams }: { params: Promi
   const { company: c, role, user } = await requireCompany(cid);
   const sp = await searchParams;
   const years = await fiscalYears(c.id);
-  const members = await sql<{ id: number; name: string; email: string; role: 'owner' | 'accountant' }[]>`
+  const unlinked = await sql<{ id: number; name: string; email: string }[]>`SELECT id, first_name || ' ' || last_name AS name, email FROM employees
+    WHERE company_id = ${c.id} AND active AND user_id IS NULL ORDER BY last_name`;
+  const members = await sql<{ id: number; name: string; email: string; role: 'owner' | 'accountant' | 'employee' }[]>`
     SELECT u.id, u.name, u.email, m.role FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.company_id = ${c.id} ORDER BY m.role DESC, u.name`;
-  const invites = await sql<{ id: number; email: string; role: 'owner' | 'accountant'; expires: string }[]>`
+  const invites = await sql<{ id: number; email: string; role: 'owner' | 'accountant' | 'employee'; expires: string }[]>`
     SELECT id, email, role, to_char(expires_at,'YYYY-MM-DD') AS expires FROM invites
     WHERE company_id = ${c.id} AND accepted_at IS NULL AND expires_at > now() ORDER BY id DESC`;
   const h = await headers();
@@ -145,12 +147,16 @@ export default async function Settings({ params, searchParams }: { params: Promi
         <form action={a.invite.bind(null, c.id)} className="card row" style={{ marginTop: '1rem' }}>
           <label>Bjud in e-post<input name="email" type="email" required /></label>
           <label>Roll
-            <select name="role"><option value="accountant">Redovisningskonsult</option><option value="owner">Ägare</option></select>
+            <select name="role"><option value="accountant">Redovisningskonsult</option><option value="owner">Ägare</option><option value="employee">Anställd (självservice)</option></select>
+          </label>
+          <label>Anställd (vid självservice)
+            <select name="employee_id"><option value="">–</option>{unlinked.map((e) => <option key={e.id} value={e.id}>{e.name}{e.email ? ` (${e.email})` : ''}</option>)}</select>
           </label>
           <div style={{ flex: '0 0 auto' }}><button>Skapa inbjudan</button></div>
         </form>
       ) : <p className="muted small">Endast ägare kan bjuda in och ta bort användare.</p>}
-      <p className="muted small">En redovisningskonsult kan bokföra, fakturera, attestera och betala leverantörsfakturor samt köra lön, men inte hantera användare.</p>
+      <p className="muted small">En redovisningskonsult kan bokföra, fakturera, attestera och betala leverantörsfakturor samt köra lön, men inte hantera användare.
+        En anställd med självservice ser bara sin egen tidrapport, sina utlägg och lönespecifikationer. Användare kostar inget extra.</p>
     </>
   );
 }

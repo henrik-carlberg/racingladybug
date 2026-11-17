@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { sql } from '@/lib/db';
 import { AppError } from '@/lib/errors';
 import { authenticateApiKey } from '@/lib/server/apikeys';
+import { companyAccess } from '@/lib/server/auth';
 import { MODULES } from '@/modules/registry';
 import { CORE_ROUTES } from './routes';
 import { hasScope, matchRoute, type ApiRoute } from './router';
@@ -29,6 +30,8 @@ export async function handleApi(req: Request, pathParts: string[]): Promise<Resp
     const who = await authenticateApiKey(token);
     if (!who) return error(401, 'unauthorized', 'Ogiltig eller återkallad API-nyckel', { 'WWW-Authenticate': 'Bearer' });
 
+    const acc = await companyAccess(who.actor.companyId);
+    if (acc.state === 'locked') return error(402, 'payment_required', 'Bolagets provperiod eller abonnemang har gått ut');
     const target = resolve(path);
     const match = target && matchRoute(target.routes, method, target.sub);
     if (!target || !match) return error(404, 'not_found', `Okänd endpoint: ${method} /api/v1${path}`);

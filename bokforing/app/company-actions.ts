@@ -6,6 +6,7 @@ import { audit } from '@/lib/server/audit';
 import { basAccountsFor } from '@/lib/bas';
 import { normalizeOrgNumber, normalizePersonalNumber } from '@/lib/validate';
 import { defaultFiscalEnd, fiscalYearError } from '@/lib/fiscal';
+import { startTrial } from '@/lib/services/billing';
 
 export async function createCompany(fd: FormData) {
   const user = await requireUser();
@@ -27,6 +28,7 @@ export async function createCompany(fd: FormData) {
         VALUES (${str(fd, 'name')}, ${orgnr}, ${type}, ${vat}, ${method}) RETURNING id`;
       id = c.id;
       await tx`INSERT INTO memberships (user_id, company_id, role) VALUES (${user.id}, ${id}, 'owner')`;
+      await startTrial(tx, id);
       await tx`INSERT INTO fiscal_years (company_id, start_date, end_date) VALUES (${id}, ${start}, ${end})`;
       await tx`INSERT INTO accounts ${tx(basAccountsFor(type).map((a) => ({ company_id: id, ...a })))}`;
       await audit(tx, { companyId: id, userId: user.id, action: 'create', entity: 'company', entityId: id });

@@ -28,6 +28,8 @@ export interface ModuleDefinition {
   name: string;
   description: string;
   version: string;
+  /** Anställda med självservice får öppna modulens sidor (modulen ansvarar för att begränsa till egen data) */
+  employeeAccess?: boolean;
   /** Menyval under modulens rubrik i sidomenyn. path är relativ modulens bas-URL. */
   nav?: { label: string; path: string }[];
   /** Sidor: mönster ('', 'kontakter/:id') → serverkomponent */

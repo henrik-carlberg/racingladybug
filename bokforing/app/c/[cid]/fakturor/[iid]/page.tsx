@@ -4,12 +4,11 @@ import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
 import { loadLines } from '@/lib/server/invoices';
 import { Flash, Status, type SP } from '@/components/ui';
-import { computeInvoice, lineNet } from '@/lib/invoice';
-import { kr, today } from '@/lib/format';
-import { bookInvoice, creditInvoice, deleteDraft, registerPayment } from '../actions';
+import { today } from '@/lib/format';
+import { bookInvoice, creditInvoice, deleteDraft, registerPayment, sendInvoice } from '../actions';
 import { PrintButton } from '@/components/PrintButton';
+import { InvoiceDoc } from '@/components/InvoiceDoc';
 import { listTimeEntries } from '@/lib/services/time';
-import { fmtHours, monthName } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +17,7 @@ interface Inv {
   our_reference: string; your_reference: string; notes: string; reverse_charge: boolean; total: number; rounding: number;
   voucher_id: number | null; payment_voucher_id: number | null; paid_date: string | null; credit_of_id: number | null;
   hour_bank: { period: string; purchased: number; drawn_before: number; used_now: number; drawn: number; overage: number; remaining: number } | null;
+  c_email: string; public_token: string | null; sent_local: string | null; sent_to: string | null;
   c_name: string; c_orgnr: string; c_vat: string; c_address: string; c_postal: string; c_city: string; c_country: string;
 }
 
@@ -27,15 +27,14 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
   const [inv] = await sql<Inv[]>`
     SELECT i.*, to_char(i.invoice_date,'YYYY-MM-DD') AS invoice_date, to_char(i.due_date,'YYYY-MM-DD') AS due_date,
       to_char(i.paid_date,'YYYY-MM-DD') AS paid_date,
+      c.email AS c_email, to_char(i.sent_at AT TIME ZONE 'Europe/Stockholm','YYYY-MM-DD HH24:MI') AS sent_local,
       c.name AS c_name, c.orgnr AS c_orgnr, c.vat_number AS c_vat, c.address AS c_address, c.postal_code AS c_postal, c.city AS c_city, c.country AS c_country
     FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.id = ${Number(iid)} AND i.company_id = ${co.id}`;
   if (!inv) notFound();
   const lines = await loadLines(sql, inv.id);
-  const t = computeInvoice(lines, { reverseCharge: inv.reverse_charge });
   const [orig] = inv.credit_of_id ? await sql<{ id: number; invoice_number: number }[]>`SELECT id, invoice_number FROM invoices WHERE id = ${inv.credit_of_id}` : [];
   const isCredit = !!inv.credit_of_id;
   const time = await listTimeEntries(co.id, { invoice_id: inv.id });
-  const hb = inv.hour_bank;
   const b = `/c/${co.id}`;
   const t0 = today();
 
@@ -57,6 +56,17 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
             <form action={deleteDraft.bind(null, co.id, inv.id)}><button className="link">Ta bort utkast</button></form>
             <span className="muted small">När fakturan bokförs får den fakturanummer och OCR och kan inte längre ändras.</span>
           </div>
+        )}
+        {inv.status !== 'draft' && (
+          <form action={sendInvoice.bind(null, co.id, inv.id)} className="card stack">
+            <div className="row">
+              <label>Skicka till e-post<input name="to" type="email" defaultValue={inv.sent_to ?? inv.c_email} placeholder="kund@exempel.se" /></label>
+              <label style={{ flex: '3 1 300px' }}>Meddelande (valfritt)<input name="message" placeholder="Tack för uppdraget!" /></label>
+              <div style={{ flex: '0 0 auto', alignSelf: 'end' }}><button className={inv.sent_local ? 'secondary' : ''}>{inv.sent_local ? 'Skicka igen' : 'Skicka faktura'}</button></div>
+            </div>
+            <span className="small muted">{inv.sent_local ? `Skickad ${inv.sent_local} till ${inv.sent_to}. ` : ''}Kunden får en länk där fakturan kan visas, skrivas ut och sparas som PDF.
+              {inv.public_token && <> Länk: <a href={`/f/${inv.public_token}`} target="_blank">/f/{inv.public_token.slice(0, 8)}…</a></>}</span>
+          </form>
         )}
         {inv.status === 'booked' && (
           <div className="card stack">
@@ -83,100 +93,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
         )}
       </div>
 
-      <div className="doc">
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '2rem' }}>
-          <div>
-            <h2 style={{ marginTop: 0 }}>{co.name}</h2>
-            <div className="small">{co.address}<br />{co.postal_code} {co.city}</div>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <h2 style={{ marginTop: 0 }}>{isCredit ? 'KREDITFAKTURA' : 'FAKTURA'}</h2>
-            <table className="small" style={{ width: 'auto', marginLeft: 'auto' }}>
-              <tbody>
-                <tr><td>Fakturanummer</td><td>{inv.invoice_number ?? '–'}</td></tr>
-                <tr><td>Fakturadatum</td><td>{inv.invoice_date}</td></tr>
-                {!isCredit && <tr><td>Förfallodatum</td><td><b>{inv.due_date}</b></td></tr>}
-                <tr><td>Leveransdatum</td><td>{inv.delivery_date || inv.invoice_date}</td></tr>
-                {inv.ocr && !isCredit && <tr><td>OCR</td><td className="mono">{inv.ocr}</td></tr>}
-                {orig && <tr><td>Krediterar faktura</td><td>{orig.invoice_number}</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', margin: '1.5rem 0', gap: '2rem' }}>
-          <div className="small">
-            {inv.our_reference && <>Vår referens: {inv.our_reference}<br /></>}
-            {inv.your_reference && <>Er referens: {inv.your_reference}</>}
-          </div>
-          <div style={{ minWidth: 240 }}>
-            <b>{inv.c_name}</b><br />{inv.c_address}<br />{inv.c_postal} {inv.c_city}{inv.c_country !== 'SE' ? `, ${inv.c_country}` : ''}
-            {inv.c_orgnr && <><br /><span className="small">Org.nr {inv.c_orgnr}</span></>}
-            {inv.c_vat && <><br /><span className="small">Momsreg.nr {inv.c_vat}</span></>}
-          </div>
-        </div>
-        <table>
-          <thead><tr><th>Beskrivning</th><th className="num">Antal</th><th className="num">À-pris</th><th className="num">Moms</th><th className="num">Belopp</th></tr></thead>
-          <tbody>
-            {lines.map((l, i) => (
-              <tr key={i}>
-                <td>{l.description}</td>
-                <td className="num">{String(l.quantity).replace('.', ',')} {l.unit}</td>
-                <td className="num">{kr(l.unitPrice)}</td>
-                <td className="num">{inv.reverse_charge ? '–' : `${l.vatRate} %`}</td>
-                <td className="num">{kr(lineNet(l))}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <table style={{ width: 'auto', marginLeft: 'auto', marginTop: '1rem' }}>
-          <tbody>
-            <tr><td>Belopp exkl. moms</td><td className="num">{kr(t.net)}</td></tr>
-            {Object.entries(t.vatByRate).filter(([r]) => r !== '0').map(([r, v]) => (
-              <tr key={r}><td>Moms {r} % (underlag {kr(v.base)})</td><td className="num">{kr(v.vat)}</td></tr>
-            ))}
-            {t.rounding !== 0 && <tr><td>Öresavrundning</td><td className="num">{kr(t.rounding)}</td></tr>}
-            <tr className="sum"><td>{isCredit ? 'Att kreditera' : 'Att betala'} SEK</td><td className="num">{kr(t.total)}</td></tr>
-          </tbody>
-        </table>
-        {inv.reverse_charge && <p><b>Omvänd betalningsskyldighet</b> (Reverse charge, art. 196 Directive 2006/112/EC). Köparens momsreg.nr: {inv.c_vat}</p>}
-        {inv.notes && <p>{inv.notes}</p>}
-        {hb && (
-          <div style={{ border: '1px solid #ccc', borderRadius: 6, padding: '.75rem 1rem', margin: '1rem 0', maxWidth: 420 }}>
-            <b>Timbank – avräkning {monthName(hb.period)}</b>
-            <table className="small" style={{ marginTop: '.4rem' }}>
-              <tbody>
-                <tr><td>Köpta timmar totalt</td><td className="num">{fmtHours(hb.purchased)}</td></tr>
-                <tr><td>Använt tidigare</td><td className="num">{fmtHours(hb.drawn_before)}</td></tr>
-                <tr><td>Använt {monthName(hb.period)}</td><td className="num">{fmtHours(hb.used_now)}</td></tr>
-                {hb.overage > 0 && <tr><td>Varav utöver timbanken (faktureras)</td><td className="num">{fmtHours(hb.overage)}</td></tr>}
-                <tr className="sum"><td><b>Kvar i timbanken</b></td><td className="num"><b>{fmtHours(hb.remaining)}</b></td></tr>
-              </tbody>
-            </table>
-          </div>
-        )}
-        {time.length > 0 && (
-          <div style={{ marginTop: '1.5rem' }}>
-            <b>Tidsspecifikation</b>
-            <table className="small" style={{ marginTop: '.4rem' }}>
-              <thead><tr><th>Datum</th><th>Aktivitet</th><th>Beskrivning</th><th>Utförd av</th><th className="num">Tid</th></tr></thead>
-              <tbody>
-                {time.map((e) => (
-                  <tr key={e.id}><td>{e.date}</td><td>{e.activity_name}</td><td>{e.description}</td><td>{e.user_name}</td><td className="num">{fmtHours(e.minutes)}</td></tr>
-                ))}
-                <tr className="sum"><td colSpan={4}>Summa</td><td className="num">{fmtHours(time.reduce((s, e) => s + e.minutes, 0))}</td></tr>
-              </tbody>
-            </table>
-          </div>
-        )}
-        <hr style={{ margin: '2rem 0 1rem', border: 0, borderTop: '1px solid #ddd' }} />
-        <div className="small" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
-          <div>{co.name}<br />{co.address}<br />{co.postal_code} {co.city}</div>
-          <div>Org.nr {co.orgnr}<br />{co.vat_number && <>Momsreg.nr {co.vat_number}<br /></>}{co.f_skatt ? 'Godkänd för F-skatt' : ''}</div>
-          <div>{co.bankgiro && <>Bankgiro {co.bankgiro}<br /></>}{co.plusgiro && <>Plusgiro {co.plusgiro}<br /></>}{co.iban && <>IBAN {co.iban}</>}</div>
-          <div>{co.email}<br />{co.phone}</div>
-        </div>
-        {!isCredit && <p className="small" style={{ marginTop: '1rem' }}>{co.late_interest}</p>}
-      </div>
+      <InvoiceDoc inv={inv} lines={lines} co={co} orig={orig} isCredit={isCredit} time={time} />
     </>
   );
 }

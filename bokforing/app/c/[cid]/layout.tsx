@@ -6,9 +6,33 @@ import { enabledModules } from '@/lib/modules/enabled';
 
 export default async function CompanyLayout({ children, params }: { children: ReactNode; params: Promise<{ cid: string }> }) {
   const { cid } = await params;
-  const { company, role, user } = await requireCompany(cid);
+  const { company, role, user, billing } = await requireCompany(cid, { employee: true, allowLocked: true });
   const b = `/c/${company.id}`;
   const modules = await enabledModules(company.id);
+  const banner = billing.state === 'trial' && (billing.daysLeft ?? 99) <= 14 ? `Provperioden slutar om ${billing.daysLeft} dagar.`
+    : billing.state === 'past_due' ? 'Senaste betalningen gick inte igenom.' : null;
+  if (role === 'employee') {
+    return (
+      <div className="shell">
+        <aside className="side">
+          <div className="brand"><Link href="/">Bokföring</Link></div>
+          <div className="company">{company.name}<br />{user.name} · {ROLE_LABEL[role]}</div>
+          <input type="checkbox" id="navtoggle" className="navtoggle" aria-hidden="true" />
+          <label htmlFor="navtoggle" className="navbtn btn secondary">☰ Meny</label>
+          <nav>
+            <Link href={`${b}/mitt`}>Min sida</Link>
+            <Link href={`${b}/tid`}>⏱ Tidrapport</Link>
+            {modules.some((m) => m.id === 'utlagg') && <Link href={`${b}/m/utlagg`}>Utlägg och resor</Link>}
+            <Link href={`${b}/mitt/lon`}>Lönespecifikationer</Link>
+            <div className="group">Konto</div>
+            <Link href="/konto">Mitt konto</Link>
+            <Link href="/">Byt bolag</Link>
+          </nav>
+        </aside>
+        <main>{children}</main>
+      </div>
+    );
+  }
   return (
     <div className="shell">
       <aside className="side">
@@ -57,13 +81,17 @@ export default async function CompanyLayout({ children, params }: { children: Re
           <Link href={`${b}/installningar`}>Inställningar</Link>
           <Link href={`${b}/dokument`}>Dokument &amp; e-signering</Link>
           <Link href={`${b}/moduler`}>Moduler</Link>
+          <Link href={`${b}/abonnemang`}>Abonnemang</Link>
           <Link href={`${b}/integrationer`}>Integrationer (API)</Link>
           <Link href={`${b}/historik`}>Behandlingshistorik</Link>
           <Link href="/">Byt bolag</Link>
           <Link href="/konto">Mitt konto</Link>
         </nav>
       </aside>
-      <main>{children}</main>
+      <main>
+        {banner && <div className="flash error no-print">{banner} <Link href={`${b}/abonnemang`}>{role === 'owner' ? 'Starta abonnemang' : 'Se abonnemang'}</Link></div>}
+        {children}
+      </main>
     </div>
   );
 }
