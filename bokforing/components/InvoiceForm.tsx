@@ -1,0 +1,94 @@
+'use client';
+import { useActionState, useState } from 'react';
+import { parseAmount, formatAmount } from '@/lib/money';
+import { computeInvoice, defaultSalesAccount } from '@/lib/invoice';
+
+type FormState = { error?: string } | undefined;
+type Row = { description: string; quantity: string; unit: string; price: string; vat: string; account: string };
+type Customer = { id: number; name: string; reverse_charge: boolean };
+
+export interface InvoiceInitial {
+  customer_id?: number; invoice_date: string; due_date?: string; delivery_date?: string; our_reference?: string; your_reference?: string; notes?: string; lines?: Row[];
+}
+
+export function InvoiceForm({ action, customers, accounts, initial }: {
+  action: (s: FormState, fd: FormData) => Promise<FormState>;
+  customers: Customer[];
+  accounts: { number: number; name: string }[];
+  initial: InvoiceInitial;
+}) {
+  const [state, formAction, pending] = useActionState(action, undefined);
+  const [customerId, setCustomerId] = useState(String(initial.customer_id ?? ''));
+  const rc = customers.find((c) => String(c.id) === customerId)?.reverse_charge ?? false;
+  const blank = (): Row => ({ description: '', quantity: '1', unit: 'st', price: '', vat: '25', account: String(defaultSalesAccount(25, rc)) });
+  const [rows, setRows] = useState<Row[]>(initial.lines?.length ? initial.lines : [blank()]);
+  const set = (i: number, k: keyof Row, v: string) =>
+    setRows((r) => r.map((x, j) => {
+      if (j !== i) return x;
+      const n = { ...x, [k]: v };
+      if (k === 'vat') n.account = String(defaultSalesAccount(Number(v), rc));
+      return n;
+    }));
+  const parsed = rows.map((r) => ({
+    description: r.description, quantity: Number(r.quantity.replace(',', '.')) || 0, unit: r.unit,
+    unitPrice: parseAmount(r.price) ?? 0, vatRate: Number(r.vat) as 0 | 6 | 12 | 25, account: Number(r.account),
+  }));
+  const t = computeInvoice(parsed, { reverseCharge: rc });
+  return (
+    <form action={formAction} className="stack">
+      {state?.error && <div className="flash error">{state.error}</div>}
+      <div className="card stack">
+        <div className="row">
+          <label style={{ flex: '2 1 260px' }}>Kund
+            <select name="customer_id" value={customerId} onChange={(e) => setCustomerId(e.target.value)} required>
+              <option value="">Välj kund…</option>
+              {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </label>
+          <label>Fakturadatum<input type="date" name="invoice_date" defaultValue={initial.invoice_date} required /></label>
+          <label>Förfallodatum (tomt = enligt villkor)<input type="date" name="due_date" defaultValue={initial.due_date} /></label>
+        </div>
+        <div className="row">
+          <label>Vår referens<input name="our_reference" defaultValue={initial.our_reference} /></label>
+          <label>Er referens<input name="your_reference" defaultValue={initial.your_reference} /></label>
+          <label>Leveransdatum/-period (tomt = fakturadatum)<input name="delivery_date" defaultValue={initial.delivery_date} placeholder="T.ex. 2026-05-01 – 2026-05-31" /></label>
+        </div>
+        {rc && <p className="small muted" style={{ margin: 0 }}>Kunden har omvänd skattskyldighet – ingen moms debiteras och texten "Omvänd betalningsskyldighet" skrivs på fakturan.</p>}
+      </div>
+      <datalist id="sales-accounts">{accounts.filter((a) => a.number >= 3000 && a.number < 4000).map((a) => <option key={a.number} value={a.number}>{a.name}</option>)}</datalist>
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>Beskrivning</th><th style={{ width: 90 }}>Antal</th><th style={{ width: 80 }}>Enhet</th><th style={{ width: 130 }} className="num">À-pris</th><th style={{ width: 90 }}>Moms</th><th style={{ width: 100 }}>Konto</th><th className="num">Belopp</th><th></th></tr></thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i}>
+                <td><input value={r.description} onChange={(e) => set(i, 'description', e.target.value)} /></td>
+                <td><input value={r.quantity} onChange={(e) => set(i, 'quantity', e.target.value)} inputMode="decimal" /></td>
+                <td><input value={r.unit} onChange={(e) => set(i, 'unit', e.target.value)} /></td>
+                <td><input value={r.price} onChange={(e) => set(i, 'price', e.target.value)} inputMode="decimal" style={{ textAlign: 'right' }} /></td>
+                <td>
+                  <select value={r.vat} onChange={(e) => set(i, 'vat', e.target.value)} disabled={rc}>
+                    <option value="25">25 %</option><option value="12">12 %</option><option value="6">6 %</option><option value="0">0 %</option>
+                  </select>
+                </td>
+                <td><input list="sales-accounts" value={r.account} onChange={(e) => set(i, 'account', e.target.value)} /></td>
+                <td className="num">{formatAmount(t.lineNets[i] ?? 0)}</td>
+                <td><button type="button" className="link" onClick={() => setRows((x) => x.filter((_, j) => j !== i))}>✕</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div><button type="button" className="secondary" onClick={() => setRows((x) => [...x, blank()])}>+ Rad</button></div>
+      <div className="card" style={{ maxWidth: 360, marginLeft: 'auto' }}>
+        <div className="row"><span>Netto</span><span className="num" style={{ textAlign: 'right' }}>{formatAmount(t.net)}</span></div>
+        <div className="row"><span>Moms</span><span style={{ textAlign: 'right' }}>{formatAmount(t.vat)}</span></div>
+        {t.rounding !== 0 && <div className="row"><span>Öresavrundning</span><span style={{ textAlign: 'right' }}>{formatAmount(t.rounding)}</span></div>}
+        <div className="row" style={{ fontWeight: 700 }}><span>Att betala</span><span style={{ textAlign: 'right' }}>{formatAmount(t.total)}</span></div>
+      </div>
+      <label>Meddelande på fakturan<textarea name="notes" rows={2} defaultValue={initial.notes} /></label>
+      <input type="hidden" name="lines" value={JSON.stringify(rows)} />
+      <div><button disabled={pending}>{pending ? 'Sparar…' : 'Spara utkast'}</button></div>
+    </form>
+  );
+}
