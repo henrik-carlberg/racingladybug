@@ -170,6 +170,26 @@
   .badge-247 { display: inline-block; vertical-align: middle; margin-left: 8px; padding: 3px 10px; border-radius: 999px; font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; background: #dc2626; color: #fff; }
   .incident-cta span { color: var(--hero-muted); font-size: .93rem; margin-bottom: 8px; }
 
+  /* Utbildningar */
+  .courses { padding-top: 0; }
+  .courses-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 32px; margin-bottom: 40px; }
+  .courses-head .section-head { margin-bottom: 0; }
+  .courses-head .section-head a, .inline-link { color: var(--brand); font-weight: 600; text-decoration: none; }
+  .courses-head .section-head a:hover, .inline-link:hover { text-decoration: underline; }
+  .courses-cta { display: grid; gap: 12px; justify-items: end; flex: none; }
+  .text-link { color: var(--muted); font-size: .92rem; text-decoration: none; }
+  .text-link:hover { color: var(--brand); }
+  .ext { width: 15px; height: 15px; flex: none; }
+  .course-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .course-group { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; }
+  .course-group h3 { margin: 0 0 12px; font-size: .85rem; letter-spacing: .06em; text-transform: uppercase; color: var(--brand); }
+  .course-group ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+  .course-group a { display: grid; gap: 2px; padding: 10px 12px; margin: 0 -12px; border-radius: 10px; text-decoration: none; transition: background .15s; }
+  .course-group a:hover { background: var(--brand-soft); }
+  .course-group a b { display: flex; align-items: center; gap: 6px; font-size: 1rem; }
+  .course-group a b .ext { color: var(--muted); }
+  .course-group a span { color: var(--muted); font-size: .9rem; line-height: 1.45; }
+
   /* Process */
   .alt { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
   .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; counter-reset: step; }
@@ -236,6 +256,9 @@
     .hero-grid, .about, .contact-wrap { grid-template-columns: 1fr; }
     .grid-3 { grid-template-columns: 1fr 1fr; }
     .card.incident { grid-template-columns: 1fr; }
+    .course-grid { grid-template-columns: 1fr 1fr; }
+    .courses-head { flex-direction: column; align-items: flex-start; }
+    .courses-cta { justify-items: start; }
     .steps { grid-template-columns: 1fr 1fr; }
     .step::after { display: none; }
     .contact-wrap { padding: 36px 24px; }
@@ -252,7 +275,7 @@
     .nav.open ul a { display: block; padding: 12px 0; }
     .hero { padding: 64px 0 72px; }
     section { padding: 68px 0; }
-    .grid-3, .steps, .values, .row, .incident-list { grid-template-columns: 1fr; }
+    .grid-3, .steps, .values, .row, .incident-list, .course-grid { grid-template-columns: 1fr; }
     .wrap { padding: 0 16px; }
   }
 </style>
@@ -272,6 +295,7 @@
     </a>
     <ul>
       <li><a href="#tjanster">Tjänster</a></li>
+      <li><a href="#utbildningar">Utbildningar</a></li>
       <li><a href="#sa-arbetar-vi">Så arbetar vi</a></li>
       <li><a href="#om-oss">Om oss</a></li>
       <li><a href="#kontakt">Kontakt</a></li>
@@ -348,7 +372,7 @@
         <article class="card">
           <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M21 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg></div>
           <h3>Utbildning för personal</h3>
-          <p>Praktiska utbildningar om nätfiske, lösenord och säkert distansarbete – människan är ofta första försvarslinjen.</p>
+          <p>Praktiska utbildningar om nätfiske, lösenord och säkert distansarbete – på plats hos er eller online via <a class="inline-link" href="#utbildningar">Studieplaner.se</a>.</p>
         </article>
         <article class="card">
           <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5M9 14l2 2 4-4"/></svg></div>
@@ -378,6 +402,43 @@
             </a>
           </div>
         </article>
+      </div>
+    </div>
+  </section>
+
+
+  <section id="utbildningar" class="courses">
+    <div class="wrap">
+      <div class="courses-head">
+        <div class="section-head">
+          <div class="kicker">Utbildningar</div>
+          <h2>Lär er mer om IT-säkerhet – i egen takt</h2>
+          <p>På <a href="https://studieplaner.se/" target="_blank" rel="noopener">Studieplaner.se</a> finns våra onlinekurser på svenska, skrivna av Henrik Carlberg på IT-Säkert. Korta lektioner, kontrollfrågor, provträning och färdiga Word-mallar. Ni betalar en gång – ingen prenumeration – och företag kan betala mot faktura.</p>
+        </div>
+        <div class="courses-cta">
+          <a class="btn" href="https://studieplaner.se/" target="_blank" rel="noopener">Se alla kurser på Studieplaner.se <svg class="ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
+          <a class="text-link" href="#kontakt">Hellre utbildning på plats? Kontakta oss →</a>
+        </div>
+      </div>
+      <div class="course-grid">
+        <div class="course-group">
+          <h3>Informationssäkerhet &amp; GRC</h3>
+          <ul>
+            <li><a href="https://studieplaner.se/grc/" target="_blank" rel="noopener"><b>GRC-konsult<svg class="ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></b><span>ISO 27001, cybersäkerhetslagen och förberedelse för CISM-provet</span></a></li><li><a href="https://studieplaner.se/lead-implementer/" target="_blank" rel="noopener"><b>ISO 27001 Lead Implementer<svg class="ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></b><span>Inför ett ledningssystem – från projektstart till certifiering</span></a></li><li><a href="https://studieplaner.se/lead-auditor/" target="_blank" rel="noopener"><b>ISO 27001 Lead Auditor<svg class="ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></b><span>Revision enligt ISO 19011 och träning inför Lead Auditor-provet</span></a></li>
+          </ul>
+        </div>
+        <div class="course-group">
+          <h3>Cybersäkerhetslagen (NIS2)</h3>
+          <ul>
+            <li><a href="https://studieplaner.se/ledning/" target="_blank" rel="noopener"><b>För ledningen<svg class="ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></b><span>Ledningens utbildning för styrelse, vd och ledningsgrupp – med kursintyg</span></a></li><li><a href="https://studieplaner.se/cybersakerhetslagen/" target="_blank" rel="noopener"><b>I praktiken<svg class="ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></b><span>För den som genomför arbetet: risk, åtgärder, incidentrapportering och tillsyn</span></a></li>
+          </ul>
+        </div>
+        <div class="course-group">
+          <h3>IT-ledning &amp; Azure</h3>
+          <ul>
+            <li><a href="https://studieplaner.se/pps/" target="_blank" rel="noopener"><b>PPS – Praktisk projektstyrning<svg class="ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></b><span>Projektledning med PPS-modellen och certifieringen</span></a></li><li><a href="https://studieplaner.se/cio/" target="_blank" rel="noopener"><b>Företagsekonomi för CIO<svg class="ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></b><span>It-budget, kostnadsstyrning, business case och leverantörsaffärer</span></a></li><li><a href="https://studieplaner.se/azure-administrator/" target="_blank" rel="noopener"><b>Azure-administratör (AZ-104)<svg class="ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></b><span>Drift och administration av Microsoft Azure</span></a></li><li><a href="https://studieplaner.se/azure-arkitekt/" target="_blank" rel="noopener"><b>Azure-arkitekt (AZ-305)<svg class="ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></b><span>Design av lösningar i Microsoft Azure</span></a></li>
+          </ul>
+        </div>
       </div>
     </div>
   </section>
@@ -462,7 +523,8 @@
               <option>Akut incident – vi har drabbats</option>
               <option>Övervakning &amp; larm</option>
               <option>Backup &amp; återställning</option>
-              <option>Utbildning</option>
+              <option>Utbildning på plats</option>
+              <option>Onlinekurser via Studieplaner.se</option>
               <option>GDPR / NIS2</option>
               <option>Annat</option>
             </select>
