@@ -226,6 +226,12 @@
   .viz-head h3 { font-size: clamp(1.4rem, 2.6vw, 1.9rem); letter-spacing: -.02em; line-height: 1.2; margin: 8px 0 10px; }
   .viz-head p { color: var(--muted); margin: 0; }
   .viz-note { color: var(--muted); font-size: .88rem; margin: 14px 0 0; }
+  .flow-tabs { display: inline-flex; gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 99px; margin-bottom: 18px; flex-wrap: wrap; }
+  .flow-tabs button { font: inherit; font-weight: 600; font-size: .95rem; border: 0; background: none; color: var(--muted); padding: 9px 18px; border-radius: 99px; cursor: pointer; }
+  .flow-tabs button[aria-selected="true"] { background: var(--brand); color: var(--brand-ink); }
+  .flow-tabs button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+  .flow-lead { color: var(--muted); margin: 0 0 16px; max-width: 720px; }
+  .flow-sec { margin-top: 16px; padding: 16px 18px; border-radius: var(--radius); border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line)); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); font-size: .95rem; }
   .flow-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
   .flow-col { border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; background: var(--bg); }
   .flow-col.before { border-color: color-mix(in srgb, #ef4444 30%, var(--line)); }
@@ -644,9 +650,15 @@
       <div class="viz" id="order-flode">
         <div class="viz-head">
           <div class="kicker">Exempel</div>
-          <h3>En order – i dag och med integrerade system</h3>
-          <p>Samma order ska finnas i fem system. Utan integration flyttar någon informationen för hand, ett steg i taget. Med integration sker det automatiskt i samma sekund som ordern läggs.</p>
+          <h3>Samma information – i dag och med integrerade system</h3>
+          <p>Utan integration flyttar någon informationen mellan systemen för hand, ett steg i taget. Med integration sker det automatiskt i samma sekund. Välj ett exempel:</p>
         </div>
+        <div class="flow-tabs" role="tablist" aria-label="Välj exempel">
+          <button type="button" role="tab" id="tab-order" aria-controls="flow-order" aria-selected="true">En order</button>
+          <button type="button" role="tab" id="tab-medarbetare" aria-controls="flow-medarbetare" aria-selected="false" tabindex="-1">En ny medarbetare</button>
+        </div>
+        <div class="flow-panel" id="flow-order" role="tabpanel" aria-labelledby="tab-order">
+        <p class="flow-lead">Samma order ska finnas i fem system. Med integration skapas den överallt i samma sekund som kunden lägger den.</p>
         <div class="flow-cols">
           <div class="flow-col before">
             <div class="flow-title"><span>I dag</span><strong>15 min</strong><small>handpåläggning per order – och 5 tillfällen att skriva fel</small></div>
@@ -672,6 +684,38 @@
           </div>
         </div>
         <p class="viz-note">Tiderna är exempel. Med 400 order i månaden blir 15 minuter per order ungefär 1 200 timmar om året.</p>
+        </div>
+        <div class="flow-panel" id="flow-medarbetare" role="tabpanel" aria-labelledby="tab-medarbetare" hidden>
+        <p class="flow-lead">En ny medarbetare ska finnas i fem system innan första arbetsdagen. Med integration räcker det att registrera personen i HR-systemet – resten följer av rollen.</p>
+        <div class="flow-cols">
+          <div class="flow-col before">
+            <div class="flow-title"><span>I dag</span><strong>35 min</strong><small>handpåläggning per person – och 5 tillfällen att göra fel</small></div>
+            <ol class="steps-flow">
+              <li class="fstep start"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="4"/><path d="M1 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1M19 8v6M16 11h6"/></svg></span><div><b>HR-systemet</b><span>En ny medarbetare registreras</span></div><em>Start</em></li>
+              <li class="fstep manual"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></span><div><b>Lönesystemet</b><span>Anställningen läggs upp för hand</span></div><em>5 min</em><i class="risk" title="Risk för fel">Risk för fel</i></li>
+              <li class="fstep manual"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></span><div><b>Användarkonto och e-post</b><span>Konto och licenser skapas</span></div><em>10 min</em><i class="risk" title="Risk för fel">Risk för fel</i></li>
+              <li class="fstep manual"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></span><div><b>Behörigheter</b><span>Rätt åtkomst i affärssystem och CRM</span></div><em>10 min</em><i class="risk" title="Risk för fel">Risk för fel</i></li>
+              <li class="fstep manual"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></span><div><b>Passersystemet</b><span>Passerkort beställs</span></div><em>5 min</em><i class="risk" title="Risk för fel">Risk för fel</i></li>
+              <li class="fstep manual"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></span><div><b>Utrustning</b><span>Dator och telefon beställs</span></div><em>5 min</em><i class="risk" title="Risk för fel">Risk för fel</i></li>
+            </ol>
+          </div>
+          <div class="flow-col after">
+            <div class="flow-title"><span>Integrerat</span><strong>0 min</strong><small>per person – allt är klart till första arbetsdagen</small></div>
+            <ol class="steps-flow">
+              <li class="fstep start"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="4"/><path d="M1 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1M19 8v6M16 11h6"/></svg></span><div><b>HR-systemet</b><span>En ny medarbetare registreras</span></div><em>Start</em></li>
+              <li class="fstep auto" style="--d:0.00s"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/></svg></span><div><b>Lönesystemet</b><span>Anställningen skapas automatiskt</span></div><em>0 min</em></li>
+              <li class="fstep auto" style="--d:0.35s"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/></svg></span><div><b>Användarkonto och e-post</b><span>Konto och licenser skapas automatiskt</span></div><em>0 min</em></li>
+              <li class="fstep auto" style="--d:0.70s"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/></svg></span><div><b>Behörigheter</b><span>Behörigheter sätts utifrån roll</span></div><em>0 min</em></li>
+              <li class="fstep auto" style="--d:1.05s"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/></svg></span><div><b>Passersystemet</b><span>Passerkortet aktiveras automatiskt</span></div><em>0 min</em></li>
+              <li class="fstep auto" style="--d:1.40s"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/></svg></span><div><b>Utrustning</b><span>Beställningen läggs automatiskt</span></div><em>0 min</em></li>
+            </ol>
+          </div>
+        </div>
+        <div class="flow-sec">
+          <b>Den stora vinsten är säkerheten.</b> Samma flöde gäller när någon slutar. Manuellt riskerar konton, behörigheter och passerkort att glömmas kvar – en vanlig väg in för obehöriga. Integrerat stängs allt samma dag som anställningen avslutas i HR-systemet.
+        </div>
+        <p class="viz-note">Tiderna är exempel.</p>
+        </div>
       </div>
       <div class="viz" id="spaghetti">
         <div class="viz-head">
@@ -1057,6 +1101,28 @@
     }
     f.addEventListener("change", update);
     update();
+  })();
+
+
+  // Flikar för flödesexemplen
+  (function () {
+    const tabs = [...document.querySelectorAll('.flow-tabs [role="tab"]')];
+    function select(t) {
+      tabs.forEach(x => {
+        const on = x === t;
+        x.setAttribute("aria-selected", on);
+        x.tabIndex = on ? 0 : -1;
+        document.getElementById(x.getAttribute("aria-controls")).hidden = !on;
+      });
+    }
+    tabs.forEach((t, i) => {
+      t.addEventListener("click", () => select(t));
+      t.addEventListener("keydown", e => {
+        if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+        const n = tabs[(i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+        select(n); n.focus();
+      });
+    });
   })();
 
   // Spaghetti eller nav: antal kopplingar
