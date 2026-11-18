@@ -10,7 +10,7 @@ export async function kioskStamp(token: string, fd: FormData) {
   let msg = '';
   try {
     await limit(`kiosk:${token}`, LIMITS.kiosk.max, LIMITS.kiosk.window);
-    const r = await stamp(site.company_id, site.id, { personalNumber: String(fd.get('personal_number') ?? ''), name: String(fd.get('name') ?? '') }, 'kiosk', null);
+    const r = await stamp(site.company_id, site.id, { personalNumber: String(fd.get('personal_number') ?? ''), name: String(fd.get('name') ?? ''), id06: String(fd.get('id06') ?? '') }, 'kiosk', null);
     msg = `${r.name} – ${r.action === 'in' ? 'instämplad' : 'utstämplad'} ${new Date().toLocaleTimeString('sv-SE', { timeZone: 'Europe/Stockholm', hour: '2-digit', minute: '2-digit' })}`;
   } catch (e) {
     redirect(`/p/${token}?fel=${encodeURIComponent((e as Error).message)}`);

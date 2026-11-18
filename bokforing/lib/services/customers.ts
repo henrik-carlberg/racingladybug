@@ -9,10 +9,10 @@ import { CURRENCIES } from '@/lib/invoice';
 
 export interface CustomerOut {
   id: number; object: 'customer'; name: string; orgnr: string; vat_number: string; email: string; address: string;
-  postal_code: string; city: string; country: string; payment_terms: number | null; reverse_charge: boolean; peppol_id: string; currency: string; language: 'sv' | 'en'; created_at: string;
+  postal_code: string; city: string; country: string; payment_terms: number | null; reverse_charge: boolean; construction_rc: boolean; peppol_id: string; currency: string; language: 'sv' | 'en'; created_at: string;
 }
 
-const COLS = () => sql`id, 'customer' AS object, name, orgnr, vat_number, email, address, postal_code, city, country, payment_terms, reverse_charge, peppol_id, currency, language, created_at`;
+const COLS = () => sql`id, 'customer' AS object, name, orgnr, vat_number, email, address, postal_code, city, country, payment_terms, reverse_charge, construction_rc, peppol_id, currency, language, created_at`;
 
 export async function getCustomer(companyId: number, id: number): Promise<CustomerOut> {
   const [c] = await sql<CustomerOut[]>`SELECT ${COLS()} FROM customers WHERE id = ${id} AND company_id = ${companyId}`;
@@ -27,14 +27,14 @@ export async function listCustomers(companyId: number, p: Page, f: { q?: string 
   return list([...rows], p);
 }
 
-const FIELDS = ['name', 'orgnr', 'vat_number', 'email', 'address', 'postal_code', 'city', 'country', 'payment_terms', 'reverse_charge', 'peppol_id', 'currency', 'language'] as const;
+const FIELDS = ['name', 'orgnr', 'vat_number', 'email', 'address', 'postal_code', 'city', 'country', 'payment_terms', 'reverse_charge', 'construction_rc', 'peppol_id', 'currency', 'language'] as const;
 
 function read(input: Record<string, unknown>, partial: boolean) {
   const f: Record<string, unknown> = {};
   for (const k of FIELDS) {
     if (partial && !has(input, k)) continue;
     if (k === 'payment_terms') f[k] = optInt(input, k, 'Betalningsvillkor');
-    else if (k === 'reverse_charge') f[k] = bool(input, k);
+    else if (k === 'reverse_charge' || k === 'construction_rc') f[k] = bool(input, k);
     else if (k === 'currency') { const v = (str(input, k) || 'SEK').toUpperCase(); if (!(CURRENCIES as readonly string[]).includes(v)) throw new ValidationError(`Valuta stöds inte: ${v}`); f[k] = v; }
     else if (k === 'language') f[k] = str(input, k) === 'en' ? 'en' : 'sv';
     else if (k === 'vat_number') f[k] = str(input, k).toUpperCase().replace(/\s/g, '');

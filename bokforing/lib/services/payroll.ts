@@ -20,13 +20,13 @@ export interface EmployeeOut {
   employment_start: string | null; employment_end: string | null; monthly_salary: number;
   tax_mode: 'table' | 'percent'; tax_table: number | null; tax_column: number; tax_percent: number | null;
   fee_override: number | null; active: boolean; vacation_days: number; hours_per_week: number; created_at: string;
-  car_benefit: number; pension_percent: number; vacation_rule: 'same' | 'percent'; employment_form: string; title: string;
+  car_benefit: number; pension_percent: number; vacation_rule: 'same' | 'percent'; employment_form: string; title: string; id06: string;
 }
 
 const ECOLS = () => sql`id, 'employee' AS object, first_name, last_name, personal_number, email, address, postal_code, city,
   bank_clearing, bank_account, to_char(employment_start,'YYYY-MM-DD') AS employment_start, to_char(employment_end,'YYYY-MM-DD') AS employment_end,
   monthly_salary, tax_mode, tax_table, tax_column, tax_percent::float8 AS tax_percent, fee_override::float8 AS fee_override, active, vacation_days, hours_per_week::float8 AS hours_per_week, created_at,
-  car_benefit, pension_percent::float8 AS pension_percent, vacation_rule, employment_form, title`;
+  car_benefit, pension_percent::float8 AS pension_percent, vacation_rule, employment_form, title, id06`;
 
 export async function getEmployee(companyId: number, id: number): Promise<EmployeeOut> {
   const [e] = await sql<EmployeeOut[]>`SELECT ${ECOLS()} FROM employees WHERE id = ${id} AND company_id = ${companyId}`;
@@ -79,6 +79,7 @@ function readEmployee(input: Record<string, unknown>, cur?: EmployeeOut) {
   if (has(input, 'vacation_rule')) f.vacation_rule = str(input, 'vacation_rule') === 'percent' ? 'percent' : 'same';
   if (has(input, 'employment_form')) { const v = str(input, 'employment_form') || 'tillsvidare'; if (!['tillsvidare', 'visstid', 'provanstallning', 'timanstalld'].includes(v)) throw new ValidationError('Ogiltig anställningsform'); f.employment_form = v; }
   if (has(input, 'title')) f.title = str(input, 'title');
+  if (has(input, 'id06')) f.id06 = str(input, 'id06').replace(/\s/g, '').slice(0, 30);
   const m = { ...cur, ...f } as Record<string, unknown>;
   if (m.tax_mode === 'table' && (!m.tax_table || (m.tax_table as number) < 29 || (m.tax_table as number) > 42)) throw new ValidationError('Ange skattetabell (29–42)');
   if (m.tax_mode === 'percent' && (m.tax_percent == null || (m.tax_percent as number) < 0 || (m.tax_percent as number) > 100)) throw new ValidationError('Ange skattesats i procent');

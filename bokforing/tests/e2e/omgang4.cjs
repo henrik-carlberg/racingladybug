@@ -225,6 +225,104 @@ async function accept(browser, link, name, password) {
   assert((await mob.evaluate(() => document.activeElement?.className)) === 'skip-link', 'första tabbstoppet är hopplänken');
   log('gränssnitt på engelska, sidor ryms i mobilen, hopplänk för tangentbord');
 
+  // ================= Del 5: branschpaket =================
+  // ---- Omvänd byggmoms ----
+  await owner.goto(B + '/kunder');
+  await owner.fill('input[name=name]', 'Byggare AB');
+  await owner.fill('input[name=orgnr]', '556677-0001');
+  await owner.fill('input[name=vat_number]', 'SE556677000101');
+  await owner.check('input[name=construction_rc]');
+  await owner.click('button:has-text("Spara kund")');
+  await waitMsg(owner, 'Kunden är sparad');
+  await owner.goto(B + '/fakturor/ny');
+  await owner.selectOption('select[name=customer_id]', { label: 'Byggare AB' });
+  await owner.fill('input[name=invoice_date]', '2026-11-16');
+  const brow = owner.locator('tbody tr').first();
+  await brow.locator('td:nth-child(1) input').fill('Snickeriarbete');
+  await brow.locator('td:nth-child(4) input').fill('8000');
+  await owner.click('button:has-text("Spara utkast")');
+  await owner.waitForURL(/fakturor\/\d+\?ok/);
+  await owner.click('button:has-text("Bokför faktura")');
+  await waitMsg(owner, 'klar att skicka');
+  const bdoc = (await owner.locator('.doc').innerText()).replace(/\s+/g, ' ').replace(/ /g, ' ');
+  assert(bdoc.includes('Omvänd betalningsskyldighet för byggtjänster') && bdoc.includes('8 000,00') && !bdoc.includes('Moms 25 %'), 'byggfaktura: ' + bdoc.slice(0, 800));
+  await owner.click('p.small a:has-text("verifikation") >> nth=0');
+  await owner.waitForURL(/verifikationer\/\d+/);
+  t = await text(owner);
+  assert(t.includes('3231') && !t.includes('2611'), 'byggmoms bokförd på 3231 utan utgående moms: ' + t.slice(0, 600));
+  log('omvänd byggmoms: faktura utan moms med lagtext, bokförd på 3231 (momsruta 41)');
+
+  // ---- Personalliggare bygg med ID06 ----
+  await owner.goto(B + '/personalliggare');
+  await owner.fill('form:has-text("Lägg till arbetsplats") input[name=name]', 'Bygget Kvarnen');
+  await owner.check('input[name=construction]');
+  await owner.fill('input[name=site_ref]', 'BYGG1234567');
+  await owner.click('button:has-text("Lägg till arbetsplats")');
+  await owner.waitForURL(/ok=/);
+  await owner.selectOption('form:has-text("Stämpla in/ut") select[name=site_id]', { label: 'Bygget Kvarnen' });
+  await owner.fill('form:has-text("Stämpla in/ut") input[name=personal_number]', '19770303-0408');
+  await owner.fill('form:has-text("Stämpla in/ut") input[name=name]', 'Inhyrd Snickare');
+  await owner.click('button:has-text("Stämpla in/ut")');
+  await waitMsg(owner, 'ID06');
+  await owner.selectOption('form:has-text("Stämpla in/ut") select[name=site_id]', { label: 'Bygget Kvarnen' });
+  await owner.fill('form:has-text("Stämpla in/ut") input[name=personal_number]', '19770303-0408');
+  await owner.fill('form:has-text("Stämpla in/ut") input[name=name]', 'Inhyrd Snickare');
+  await owner.fill('form:has-text("Stämpla in/ut") input[name=id06]', 'ID06-778899');
+  await owner.click('button:has-text("Stämpla in/ut")');
+  await owner.waitForURL((u) => decodeURIComponent(u.toString()).includes('Inhyrd Snickare'));
+  t = await text(owner);
+  assert(t.includes('ID06-778899') && t.includes('BYGG1234567'), 'personalliggare bygg: ' + t.slice(0, 900));
+  log('personalliggare på byggarbetsplats kräver ID06 och visar byggarbetsplatsens ID');
+
+  // ---- ÄTA på arbetsorder ----
+  await owner.goto(B + '/moduler');
+  const aktivera = owner.locator('.card:has(h2:text-is("Arbetsordrar")) button:text-is("Aktivera")');
+  if (await aktivera.count()) { await aktivera.click(); await owner.waitForURL(/ok=/); }
+  await owner.goto(B + '/m/arbetsorder');
+  await owner.fill('input[name=title]', 'Altanbygge');
+  await owner.selectOption('select[name=customer_id]', { label: 'Byggare AB' });
+  await owner.click('button:has-text("Skapa arbetsorder")');
+  await waitMsg(owner, 'Arbetsordern är skapad');
+  await owner.selectOption('select[name=kind]', 'ata');
+  await owner.fill('input[name=description]', 'Extra trappa');
+  await owner.fill('input[name=quantity]', '4');
+  await owner.fill('input[name=unit_price]', '650');
+  await owner.click('button:has-text("Lägg till")');
+  await waitMsg(owner, 'godkännas av beställaren');
+  await owner.selectOption('select[name=kind]', 'ata');
+  await owner.fill('input[name=description]', 'Extra trappa');
+  await owner.fill('input[name=quantity]', '4');
+  await owner.fill('input[name=unit_price]', '650');
+  await owner.fill('input[name=approved_by]', 'Bo Beställare');
+  await owner.click('button:has-text("Lägg till")');
+  await waitMsg(owner, 'Raden är tillagd');
+  await owner.click('button:has-text("Skapa faktura")');
+  await waitMsg(owner, 'Fakturautkast skapat');
+  t = await text(owner);
+  assert(t.includes('ÄTA: Extra trappa') && t.includes('godkänt av Bo Beställare'), 'ÄTA på fakturan: ' + t.slice(0, 900));
+  log('ÄTA-arbete kräver beställarens godkännande och märks på fakturan');
+
+  // ---- Inventering med streckkod ----
+  await owner.goto(B + '/m/lager/artiklar');
+  await owner.fill('input[name=sku]', 'SKAN-1');
+  await owner.fill('input[name=name]', 'Skannad vara');
+  await owner.fill('input[name=barcode]', '7310865004703');
+  await owner.click('button:has-text("Lägg upp artikel")');
+  await owner.waitForURL(/ok=/);
+  await owner.goto(B + '/m/lager/inventering');
+  const scan = owner.locator('.scanner input').first();
+  for (let i = 0; i < 3; i++) { await scan.fill('7310865004703'); await scan.press('Enter'); }
+  await owner.locator('text=Skannad vara: 3').waitFor();
+  await scan.fill('0000000000000'); await scan.press('Enter');
+  await owner.locator('text=Okänd kod').waitFor();
+  log('inventering med streckkodsläsare räknar upp artikeln');
+
+  // ---- Beläggning ----
+  await owner.goto(B + '/tid/belaggning?from=2026-01-01&to=2026-12-31');
+  t = await text(owner);
+  assert(t.includes('Beläggning') && t.includes('Debiterbart') && t.includes('Ägare Testsson'), 'beläggning: ' + t.slice(0, 800));
+  log('beläggning per person med debiterbar tid och värde');
+
   await browser.close();
   console.log('Omgång 4: alla steg gick igenom');
 })().catch((e) => { console.error('✘', e.message); process.exit(1); });

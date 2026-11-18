@@ -69,3 +69,15 @@ export async function allBankStatements(cid: number, period: string) {
   await attempt(list(cid), async () => { n = await svc.createBankStatements(actor, period); });
   done(`/c/${cid}/fakturor?status=draft`, `${n} avräkningar är skapade som utkast`);
 }
+
+export async function setRate(cid: number, pid: number, fd: FormData) {
+  const actor = userActor(await requireCompany(cid));
+  await attempt(one(cid, pid), async () => {
+    for (const [k, v] of fd.entries()) {
+      const m = k.match(/^rate_(\d+)$/);
+      if (!m) continue;
+      await svc.setUserRate(actor, pid, Number(m[1]), String(v).trim() ? amount(String(v), undefined, 'Timpris') : null);
+    }
+  });
+  done(one(cid, pid), 'Timprisen är sparade');
+}

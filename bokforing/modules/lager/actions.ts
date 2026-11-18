@@ -32,7 +32,7 @@ export async function saveProduct(cid: number, id: number | null, fd: FormData) 
     pid = (await svc.saveProduct(actor, id, {
       sku: str(fd, 'sku'), name: str(fd, 'name'), unit: str(fd, 'unit'), purchase_price: amount(fd, 'purchase_price', 'Inköpspris'),
       sales_price: amount(fd, 'sales_price', 'Försäljningspris'), vat_rate: str(fd, 'vat_rate'), reorder_point: str(fd, 'reorder_point'),
-      reorder_qty: str(fd, 'reorder_qty'), supplier_id: str(fd, 'supplier_id'), supplier_sku: str(fd, 'supplier_sku'),
+      reorder_qty: str(fd, 'reorder_qty'), supplier_id: str(fd, 'supplier_id'), supplier_sku: str(fd, 'supplier_sku'), barcode: str(fd, 'barcode'),
       active: id ? fd.get('active') === 'on' : true, opening_qty: str(fd, 'opening_qty'), warehouse_id: str(fd, 'warehouse_id'),
     })).id;
   });

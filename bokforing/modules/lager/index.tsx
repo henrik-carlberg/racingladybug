@@ -5,6 +5,7 @@ import { PrintButton } from '@/components/PrintButton';
 import { kr, today } from '@/lib/format';
 import * as svc from './service';
 import * as a from './actions';
+import { Scanner } from '@/components/Scanner';
 
 const qty = (n: number) => n.toLocaleString('sv-SE', { maximumFractionDigits: 3 });
 const krIn = (ore: number) => (ore ? (ore / 100).toFixed(2).replace('.', ',').replace(/,00$/, '') : '');
@@ -105,6 +106,7 @@ async function ProductForm({ companyId, p }: { companyId: number; p?: svc.Produc
       <div className="row">
         <label>Leverantör<select name="supplier_id" defaultValue={p?.supplier_id ?? ''}><option value="">–</option>{suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
         <label>Leverantörens artikelnr<input name="supplier_sku" defaultValue={p?.supplier_sku} /></label>
+        <label>Streckkod (EAN)<input name="barcode" defaultValue={p?.barcode} inputMode="numeric" /></label>
         <label>Beställningspunkt<input name="reorder_point" defaultValue={p?.reorder_point ? qty(p.reorder_point) : ''} inputMode="decimal" /></label>
         <label>Beställ antal<input name="reorder_qty" defaultValue={p?.reorder_qty ? qty(p.reorder_qty) : ''} inputMode="decimal" /></label>
       </div>
@@ -403,8 +405,9 @@ async function Count({ companyId, basePath, searchParams }: ModulePageProps) {
         <label>Lagerställe<select name="lager" defaultValue={wid}>{whs.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></label>
         <div style={{ flex: '0 0 auto', alignSelf: 'end' }}><button className="secondary">Visa</button></div>
       </form>
-      <form action={a.count.bind(null, companyId)} className="stack">
+      <form action={a.count.bind(null, companyId)} className="stack" id="count-form">
         <input type="hidden" name="warehouse_id" value={wid} />
+        <Scanner products={products.map((p) => ({ id: p.id, sku: p.sku, barcode: p.barcode, name: p.name }))} />
         <div className="table-wrap"><table>
           <thead><tr><th>Art.nr</th><th>Benämning</th><th className="num">Enligt lagret</th><th className="num">Räknat</th></tr></thead>
           <tbody>{products.map((p) => (

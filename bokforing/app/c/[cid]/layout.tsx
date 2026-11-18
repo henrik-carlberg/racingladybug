@@ -67,6 +67,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
           {see('invoicing') && <Link href={`${b}/kunder`}>{t('Kunder')}</Link>}
           <Link href={`${b}/tid`}>{t('⏱ Tidrapportering')}</Link>
           <Link href={`${b}/uppdrag`}>{t('Uppdrag & timbanker')}</Link>
+          <Link href={`${b}/tid/belaggning`}>{t('Beläggning')}</Link>
           <div className="group">{t('Inköp')}</div>
           {see('purchasing') && <Link href={`${b}/leverantorsfakturor/inkorg`}>{t('Inkorg för fakturor')}</Link>}
           {see('purchasing') && <Link href={`${b}/leverantorsfakturor`}>{t('Leverantörsfakturor')}</Link>}

@@ -58,7 +58,7 @@ export async function listInvoices(companyId: number, p: Page, f: { status?: str
   return { ...res, data: await Promise.all(res.data.map((r) => getInvoice(companyId, r.id))) };
 }
 
-function parseLines(input: Record<string, unknown>, reverseCharge: boolean): InvoiceLineInput[] {
+function parseLines(input: Record<string, unknown>, reverseCharge: boolean, construction = false): InvoiceLineInput[] {
   const lines = arr(input, 'lines', 'Fakturarader').map((r, i) => {
     const label = `Rad ${i + 1}`;
     const quantity = r.quantity == null || r.quantity === '' ? 1 : Number(r.quantity);
@@ -69,7 +69,7 @@ function parseLines(input: Record<string, unknown>, reverseCharge: boolean): Inv
     return {
       description: str(r, 'description', { required: true, label: `${label}: beskrivning` }),
       quantity, unit: str(r, 'unit') || 'st', unitPrice: int(r, 'unit_price', `${label}: à-pris (öre)`), vatRate,
-      account: optInt(r, 'account', `${label}: konto`) ?? defaultSalesAccount(vatRate, reverseCharge),
+      account: optInt(r, 'account', `${label}: konto`) ?? (construction ? ACC.salesConstructionRc : defaultSalesAccount(vatRate, reverseCharge)),
       labor: r.labor === true || r.labor === 'true' || r.labor === 'on',
     };
   });
@@ -86,10 +86,14 @@ export async function saveDraft(actor: Actor, invoiceId: number | null, input: R
 export async function saveDraftTx(tx: Tx, actor: Actor, invoiceId: number | null, input: Record<string, unknown>): Promise<InvoiceOut> {
   const [company] = await tx<{ invoice_terms: number }[]>`SELECT invoice_terms FROM companies WHERE id = ${actor.companyId}`;
   const customerId = int(input, 'customer_id', 'Kund');
-  const [cust] = await tx<{ reverse_charge: boolean; payment_terms: number | null; currency: string; language: string }[]>`
-    SELECT reverse_charge, payment_terms, currency, language FROM customers WHERE id = ${customerId} AND company_id = ${actor.companyId}`;
+  const [cust] = await tx<{ reverse_charge: boolean; construction_rc: boolean; vat_number: string; orgnr: string; payment_terms: number | null; currency: string; language: string }[]>`
+    SELECT reverse_charge, construction_rc, vat_number, orgnr, payment_terms, currency, language FROM customers WHERE id = ${customerId} AND company_id = ${actor.companyId}`;
   if (!cust) throw new ValidationError('Kunden finns inte');
-  const lines = parseLines(input, cust.reverse_charge);
+  // Omvänd skattskyldighet: tjänster till EU-företag, eller byggtjänster till byggföretag i Sverige
+  const rcKind = cust.reverse_charge ? 'eu' : cust.construction_rc ? 'construction' : '';
+  const rcOn = !!rcKind;
+  if (rcKind === 'construction' && !cust.vat_number && !cust.orgnr) throw new ValidationError('Omvänd byggmoms kräver köparens momsregistreringsnummer eller organisationsnummer');
+  const lines = parseLines(input, rcOn, rcKind === 'construction');
   const advance = input.advance === true || input.advance === 'true' || input.advance === 'on';
   if (advance) {
     if (str(input, 'reduction_type')) throw new ValidationError('En förskottsfaktura kan inte ha ROT/RUT – lägg avdraget på slutfakturan');
@@ -110,13 +114,13 @@ export async function saveDraftTx(tx: Tx, actor: Actor, invoiceId: number | null
     if (str(input, 'reduction_type')) throw new ValidationError('ROT/RUT kan inte kombineras med utländsk valuta');
     if (await accountingMethod(tx, actor.companyId) === 'cash') throw new ValidationError('Fakturor i utländsk valuta kräver faktureringsmetoden');
   }
-  const tt = invoiceTotals(lines, { reverseCharge: cust.reverse_charge, currency, rate });
+  const tt = invoiceTotals(lines, { reverseCharge: rcOn, currency, rate });
   const t = tt.sek;
-  const rr = await readReduction(tx, actor.companyId, invoiceId, input, lines, t, cust.reverse_charge, invoiceDate);
+  const rr = await readReduction(tx, actor.companyId, invoiceId, input, lines, t, rcOn, invoiceDate);
   const head = {
     customer_id: customerId, invoice_date: invoiceDate, due_date: dueDate, delivery_date: str(input, 'delivery_date'),
     our_reference: str(input, 'our_reference'), your_reference: str(input, 'your_reference'), notes: str(input, 'notes'),
-    reverse_charge: cust.reverse_charge, advance, currency, exchange_rate: rate, language, total_currency: tt.foreign ? tt.doc.total : null, total_net: t.net, total_vat: t.vat, rounding: t.rounding, total: t.total - rr.tax_reduction, ...rr,
+    reverse_charge: rcOn, rc_kind: rcKind, advance, currency, exchange_rate: rate, language, total_currency: tt.foreign ? tt.doc.total : null, total_net: t.net, total_vat: t.vat, rounding: t.rounding, total: t.total - rr.tax_reduction, ...rr,
   };
   {
     let id = invoiceId ?? 0;
@@ -337,8 +341,8 @@ async function registerFxPayment(tx: Tx, actor: Actor, invoiceId: number, inv: {
 /** Kreditera en bokförd, obetald faktura. Returnerar kreditfakturan. */
 export async function creditInvoice(actor: Actor, invoiceId: number, input: Record<string, unknown>): Promise<InvoiceOut> {
   return sql.begin(async (tx) => {
-    const [inv] = await tx<{ status: string; customer_id: number; invoice_number: number; reverse_charge: boolean; customer: string; voucher_id: number | null; total: number; tax_reduction: number; project_id: number | null; currency: string; exchange_rate: string; language: string }[]>`
-      SELECT i.status, i.customer_id, i.invoice_number, i.reverse_charge, c.name AS customer, i.voucher_id, i.total, i.tax_reduction, i.project_id, i.currency, i.exchange_rate, i.language
+    const [inv] = await tx<{ status: string; customer_id: number; invoice_number: number; reverse_charge: boolean; customer: string; voucher_id: number | null; total: number; tax_reduction: number; project_id: number | null; currency: string; exchange_rate: string; language: string; rc_kind: string }[]>`
+      SELECT i.status, i.customer_id, i.invoice_number, i.reverse_charge, c.name AS customer, i.voucher_id, i.total, i.tax_reduction, i.project_id, i.currency, i.exchange_rate, i.language, i.rc_kind
       FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.id = ${invoiceId} AND i.company_id = ${actor.companyId} FOR UPDATE OF i`;
     if (!inv) throw new NotFoundError('Fakturan');
     if (inv.status !== 'booked' && !(inv.status === 'paid' && inv.total === 0)) throw new ConflictError('Endast bokförda, obetalda fakturor kan krediteras');
@@ -355,7 +359,7 @@ export async function creditInvoice(actor: Actor, invoiceId: number, input: Reco
       company_id: actor.companyId, customer_id: inv.customer_id, invoice_number: no, invoice_date: d, due_date: d,
       status: 'paid', notes: `Kreditering av faktura ${inv.invoice_number}`, reverse_charge: inv.reverse_charge,
       total_net: t.net, total_vat: t.vat, rounding: t.rounding, total: t.total + inv.tax_reduction, credit_of_id: invoiceId, paid_date: d, tax_reduction: -inv.tax_reduction,
-      currency: inv.currency, exchange_rate: inv.exchange_rate, language: inv.language, total_currency: tt.foreign ? tt.doc.total : null,
+      currency: inv.currency, exchange_rate: inv.exchange_rate, language: inv.language, total_currency: tt.foreign ? tt.doc.total : null, rc_kind: inv.rc_kind,
     })} RETURNING id`;
     await tx`INSERT INTO invoice_lines ${tx(lines.map((l, i) => ({
       invoice_id: creditId, position: i + 1, description: l.description, quantity: l.quantity, unit: l.unit,

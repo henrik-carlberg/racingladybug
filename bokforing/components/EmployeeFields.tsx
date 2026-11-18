@@ -2,7 +2,7 @@ export type EmployeeRow = {
   id: number; first_name: string; last_name: string; personal_number: string; email: string; address: string; postal_code: string; city: string;
   bank_clearing: string; bank_account: string; employment_start: string | null; employment_end: string | null; monthly_salary: number;
   tax_mode: 'table' | 'percent'; tax_table: number | null; tax_column: number; tax_percent: string | null; fee_override: string | null; active: boolean; vacation_days: number; hours_per_week: number;
-  car_benefit: number; pension_percent: number; vacation_rule: string; employment_form: string; title: string;
+  car_benefit: number; pension_percent: number; vacation_rule: string; employment_form: string; title: string; id06: string;
 };
 
 export function EmployeeFields({ e }: { e?: Partial<EmployeeRow> }) {
@@ -47,6 +47,7 @@ export function EmployeeFields({ e }: { e?: Partial<EmployeeRow> }) {
       </div>
       <div className="row">
         <label>Befattning<input name="title" defaultValue={e?.title ?? ''} /></label>
+        <label>ID06-kort (bygg)<input name="id06" defaultValue={e?.id06 ?? ''} /></label>
         <label>Anställningsform<select name="employment_form" defaultValue={e?.employment_form ?? 'tillsvidare'}><option value="tillsvidare">Tillsvidare</option><option value="provanstallning">Provanställning</option><option value="visstid">Visstid</option><option value="timanstalld">Timanställd</option></select></label>
         <label>Semesterlön<select name="vacation_rule" defaultValue={e?.vacation_rule ?? 'same'}><option value="same">Sammalöneregeln</option><option value="percent">Procentregeln (12 %)</option></select></label>
       </div>

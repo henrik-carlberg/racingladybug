@@ -49,14 +49,14 @@ async function warehouseId(db: Db, companyId: number, input: Record<string, unkn
 
 export interface ProductOut {
   id: number; object: 'inv.product'; sku: string; name: string; unit: string; purchase_price: number; avg_cost: number; sales_price: number; vat_rate: number;
-  reorder_point: number; reorder_qty: number; supplier_id: number | null; supplier_name: string | null; supplier_sku: string; active: boolean;
+  reorder_point: number; reorder_qty: number; supplier_id: number | null; supplier_name: string | null; supplier_sku: string; barcode: string; active: boolean;
   on_hand: number; on_order: number; reserved: number; available: number; value: number;
   stock: { warehouse_id: number; warehouse: string; qty: number }[];
 }
 
 const PCOLS = (db: Db, companyId: number) => db`p.id, 'inv.product' AS object, p.sku, p.name, p.unit, p.purchase_price::int AS purchase_price, p.avg_cost::float8 AS avg_cost,
   p.sales_price::int AS sales_price, p.vat_rate, p.reorder_point::float8 AS reorder_point, p.reorder_qty::float8 AS reorder_qty, p.supplier_id, s.name AS supplier_name,
-  p.supplier_sku, p.active,
+  p.supplier_sku, p.barcode, p.active,
   COALESCE((SELECT SUM(qty) FROM inv_stock st WHERE st.product_id = p.id), 0)::float8 AS on_hand,
   COALESCE((SELECT SUM(l.qty - l.received) FROM inv_purchase_order_lines l JOIN inv_purchase_orders o ON o.id = l.order_id
     WHERE l.product_id = p.id AND o.company_id = ${companyId} AND o.status IN ('draft', 'sent', 'partial')), 0)::float8 AS on_order,
@@ -115,7 +115,7 @@ export async function saveProduct(actor: Actor, id: number | null, input: Record
     sku: str(input, 'sku', { required: true, label: 'Artikelnummer' }), name: str(input, 'name', { required: true, label: 'Benämning' }),
     unit: str(input, 'unit') || 'st', purchase_price: ore(input, 'purchase_price', 'Inköpspris') ?? 0, sales_price: ore(input, 'sales_price', 'Försäljningspris') ?? 0,
     vat_rate: vat, reorder_point: parseQty(input.reorder_point) ?? 0, reorder_qty: parseQty(input.reorder_qty) ?? 0,
-    supplier_id: supplierId, supplier_sku: str(input, 'supplier_sku'), active: input.active == null ? true : input.active === true || input.active === 'true' || input.active === 'on',
+    supplier_id: supplierId, supplier_sku: str(input, 'supplier_sku'), barcode: str(input, 'barcode').replace(/\s/g, '').slice(0, 40), active: input.active == null ? true : input.active === true || input.active === 'true' || input.active === 'on',
   };
   try {
     return await sql.begin(async (tx) => {

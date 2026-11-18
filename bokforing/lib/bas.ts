@@ -164,4 +164,5 @@ export const ACC = {
   rounding: 3740,
   sales: { 25: 3001, 12: 3002, 6: 3003, 0: 3004 } as Record<number, number>,
   salesEuServices: 3308,
+  salesConstructionRc: 3231,
 };

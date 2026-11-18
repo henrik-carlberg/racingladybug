@@ -53,7 +53,7 @@ const EN: Record<string, string> = {
   'Inga fakturor.': 'No invoices.', 'Inga kunder ännu.': 'No customers yet.', 'Inga leverantörer ännu.': 'No suppliers yet.', 'Inga verifikationer.': 'No vouchers.',
   'Namn': 'Name', 'Nr': 'No.', 'Ny faktura': 'New invoice', 'Ny kund': 'New customer', 'Ny leverantör': 'New supplier', 'Obetalt': 'Unpaid',
   'Registrera faktura': 'Register invoice', 'Rättelse': 'Correction', 'Spara kund': 'Save customer', 'Spara leverantör': 'Save supplier', 'Sök kund': 'Search customer',
-  'Räkenskapsår': 'Financial year',
+  'Räkenskapsår': 'Financial year', 'Beläggning': 'Utilization',
   // Vanliga knappar och rubriker
   'Tillbaka': 'Back', 'Ta bort': 'Delete', 'Redigera': 'Edit', 'Visa': 'Show', 'Datum': 'Date', 'Belopp': 'Amount', 'Beskrivning': 'Description',
   'Status': 'Status', 'Kund': 'Customer', 'Leverantör': 'Supplier', 'Konto': 'Account', 'Summa': 'Total', 'Sök': 'Search',

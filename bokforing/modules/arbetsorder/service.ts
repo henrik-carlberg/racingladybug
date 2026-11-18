@@ -8,9 +8,9 @@ import { date, int, optInt, str } from '@/lib/services/input';
 import { saveDraftTx } from '@/lib/services/invoices';
 
 export const STATUS: Record<string, string> = { new: 'Ny', scheduled: 'Planerad', in_progress: 'Pågår', done: 'Klar', invoiced: 'Fakturerad', cancelled: 'Makulerad' };
-export const KIND: Record<string, string> = { labor: 'Arbete', material: 'Material', other: 'Övrigt' };
+export const KIND: Record<string, string> = { labor: 'Arbete', material: 'Material', ata: 'ÄTA-arbete', other: 'Övrigt' };
 
-export interface Item { id: number; kind: string; description: string; quantity: number; unit: string; unit_price: number; vat_rate: number; user_name: string | null; date: string }
+export interface Item { id: number; approved_by: string; kind: string; description: string; quantity: number; unit: string; unit_price: number; vat_rate: number; user_name: string | null; date: string }
 export interface Order {
   id: number; number: number; customer_id: number; customer: string; title: string; description: string; address: string; scheduled_date: string | null;
   assignee_user_id: number | null; assignee: string | null; project_id: number | null; status: string; report: string; signed_by: string; signed_at: string | null;
@@ -38,7 +38,7 @@ export async function getOrder(companyId: number, id: number): Promise<Order> {
     FROM wo_orders o JOIN customers c ON c.id = o.customer_id LEFT JOIN users u ON u.id = o.assignee_user_id LEFT JOIN invoices inv ON inv.id = o.invoice_id
     WHERE o.id = ${id} AND o.company_id = ${companyId}`;
   if (!o) throw new NotFoundError('Arbetsordern');
-  const items = await sql<Item[]>`SELECT i.id, i.kind, i.description, i.quantity::float8 AS quantity, i.unit, i.unit_price::bigint AS unit_price, i.vat_rate, u.name AS user_name, to_char(i.date,'YYYY-MM-DD') AS date
+  const items = await sql<Item[]>`SELECT i.id, i.kind, i.approved_by, i.description, i.quantity::float8 AS quantity, i.unit, i.unit_price::bigint AS unit_price, i.vat_rate, u.name AS user_name, to_char(i.date,'YYYY-MM-DD') AS date
     FROM wo_items i LEFT JOIN users u ON u.id = i.user_id WHERE i.order_id = ${id} ORDER BY i.kind, i.id`;
   const list = items.map((i) => ({ ...i, unit_price: Number(i.unit_price) }));
   return { ...o, items: list, net: list.reduce((s, i) => s + itemNet(i), 0) };
@@ -89,10 +89,12 @@ export async function addItem(actor: Actor, id: number, input: Record<string, un
   const vat = optInt(input, 'vat_rate', 'Moms') ?? 25;
   if (![0, 6, 12, 25].includes(vat)) throw new ValidationError('Moms 0, 6, 12 eller 25 %');
   const price = int(input, 'unit_price', 'À-pris');
+  const approvedBy = str(input, 'approved_by');
+  if (kind === 'ata' && approvedBy.length < 2) throw new ValidationError('ÄTA-arbeten ska godkännas av beställaren – ange vem som godkände');
   if (price < 0) throw new ValidationError('Ogiltigt pris');
   await sql`INSERT INTO wo_items ${sql({
     order_id: id, kind, description: str(input, 'description', { required: true, label: 'Beskrivning' }), quantity, unit: str(input, 'unit') || (kind === 'labor' ? 'h' : 'st'),
-    unit_price: price, vat_rate: vat, user_id: actor.userId, date: date(input, 'date', 'Datum', false) || new Date().toISOString().slice(0, 10),
+    unit_price: price, vat_rate: vat, user_id: actor.userId, approved_by: kind === 'ata' ? approvedBy : '', date: date(input, 'date', 'Datum', false) || new Date().toISOString().slice(0, 10),
   })}`;
   await sql`UPDATE wo_orders SET status = 'in_progress' WHERE id = ${id} AND status IN ('new','scheduled')`;
 }
@@ -133,7 +135,7 @@ export async function invoiceOrder(actor: Actor, id: number) {
     const inv = await saveDraftTx(tx, actor, null, {
       customer_id: o.customer_id, invoice_date: new Date().toISOString().slice(0, 10), your_reference: '',
       our_reference: o.assignee ?? '', notes: `Arbetsorder ${o.number}: ${o.title}${o.address ? `, ${o.address}` : ''}${o.report ? `\n${o.report}` : ''}`,
-      lines: o.items.map((i) => ({ description: `${i.description}${i.date ? ` (${i.date})` : ''}`, quantity: i.quantity, unit: i.unit, unit_price: i.unit_price, vat_rate: i.vat_rate, labor: i.kind === 'labor' })),
+      lines: o.items.map((i) => ({ description: `${i.kind === 'ata' ? 'ÄTA: ' : ''}${i.description}${i.date ? ` (${i.date})` : ''}${i.kind === 'ata' && i.approved_by ? `, godkänt av ${i.approved_by}` : ''}`, quantity: i.quantity, unit: i.unit, unit_price: i.unit_price, vat_rate: i.vat_rate, labor: i.kind === 'labor' || i.kind === 'ata' })),
     });
     if (o.project_id) await tx`UPDATE invoices SET project_id = ${o.project_id} WHERE id = ${inv.id}`;
     await tx`UPDATE wo_orders SET status = 'invoiced', invoice_id = ${inv.id} WHERE id = ${id}`;
