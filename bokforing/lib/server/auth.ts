@@ -31,6 +31,13 @@ export async function createSession(userId: number) {
   const expires = new Date(Date.now() + SESSION_DAYS * 86400_000);
   await sql`INSERT INTO sessions (id, user_id, expires_at) VALUES (${sha256(token)}, ${userId}, ${expires})`;
   (await cookies()).set(COOKIE, token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', expires });
+  // Gränssnittets språk följer användaren
+  const [u] = await sql<{ locale: string }[]>`SELECT locale FROM users WHERE id = ${userId}`;
+  await setLangCookie(u?.locale === 'en' ? 'en' : 'sv');
+}
+
+export async function setLangCookie(lang: 'sv' | 'en') {
+  (await cookies()).set('ui_lang', lang, { sameSite: 'lax', path: '/', maxAge: 365 * 86400, secure: process.env.NODE_ENV === 'production' });
 }
 
 export async function destroySession() {

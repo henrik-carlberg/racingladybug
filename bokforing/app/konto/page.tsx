@@ -11,13 +11,17 @@ import { AddPasskey } from '@/components/Passkeys';
 import { changePassword, removePasskey } from '../passkey-actions';
 import { logout } from '../auth-actions';
 import { removeAccount } from '../gdpr-actions';
-import { saveDigest } from '../digest-actions';
+import { saveDigest, saveLanguage } from '../digest-actions';
+import { uiLang } from '@/lib/server/lang';
+import { translator } from '@/lib/ui-i18n';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Account({ searchParams }: { searchParams: SP }) {
   const user = await requireUser();
   const passkeys = await listPasskeys(user.id);
+  const lang = await uiLang();
+  const t = translator(lang);
   const [{ digest, monthly_report }] = await sql<{ digest: string; monthly_report: boolean }[]>`SELECT digest, monthly_report FROM users WHERE id = ${user.id}`;
   const [mfa] = await sql<{ secret: string | null; on: string | null; codes: number }[]>`
     SELECT totp_secret AS secret, to_char(totp_enabled_at,'YYYY-MM-DD') AS on, cardinality(backup_codes)::int AS codes FROM users WHERE id = ${user.id}`;
@@ -26,10 +30,10 @@ export default async function Account({ searchParams }: { searchParams: SP }) {
   return (
     <div className="center" style={{ maxWidth: 760 }}>
       <div className="header">
-        <h1>Mitt konto</h1>
+        <h1>{t('Mitt konto')}</h1>
         <div className="actions" style={{ margin: 0 }}>
-          <Link className="btn secondary" href="/">Mina bolag</Link>
-          <form action={logout}><button className="secondary">Logga ut</button></form>
+          <Link className="btn secondary" href="/">{t('Mina bolag')}</Link>
+          <form action={logout}><button className="secondary">{t('Logga ut')}</button></form>
         </div>
       </div>
       <p className="muted">{user.name} · {user.email}</p>
@@ -57,7 +61,7 @@ export default async function Account({ searchParams }: { searchParams: SP }) {
       <div style={{ marginTop: '1rem' }}><AddPasskey /></div>
       <p className="small muted">Om du tar bort en passkey här, ta gärna bort den även i enhetens lösenordshanterare.</p>
 
-      <h2 id="tvasteg">Tvåstegsverifiering</h2>
+      <h2 id="tvasteg">{t('Tvåstegsverifiering')}</h2>
       <p className="muted small">Med tvåstegsverifiering krävs både lösenordet och en engångskod från en app i telefonen (t.ex. Microsoft Authenticator, Google Authenticator eller 1Password). Inloggning med passkey räknas redan som tvåstegs.</p>
       {mfa.on ? (
         <div className="card stack">
@@ -93,7 +97,14 @@ export default async function Account({ searchParams }: { searchParams: SP }) {
         <form action={startTotp}><button className="secondary">Slå på tvåstegsverifiering</button></form>
       )}
 
-      <h2 id="sammandrag">Sammandrag via e-post</h2>
+      <h2 id="sprak">{t('Gränssnittets språk')}</h2>
+      <form action={saveLanguage} className="card row" style={{ alignItems: 'end' }}>
+        <label>{t('Språk')}<select name="locale" defaultValue={lang}><option value="sv">Svenska</option><option value="en">English</option></select></label>
+        <div style={{ flex: '0 0 auto' }}><button className="secondary">{t('Spara')}</button></div>
+        <span className="small muted">{lang === 'en' ? 'Menus and common pages are shown in English. Bookkeeping terms, reports and forms for Swedish authorities stay in Swedish.' : 'Menyer och vanliga sidor visas på engelska. Bokföringstermer, rapporter och blanketter till svenska myndigheter är kvar på svenska.'}</span>
+      </form>
+
+      <h2 id="sammandrag">{t('Sammandrag via e-post')}</h2>
       <form action={saveDigest} className="card row" style={{ alignItems: 'end' }}>
         <label>Skicka det som väntar i mina bolag<select name="digest" defaultValue={digest}>
           <option value="weekly">Varje måndag</option><option value="daily">Varje vardagsmorgon</option><option value="off">Aldrig</option>
@@ -103,7 +114,7 @@ export default async function Account({ searchParams }: { searchParams: SP }) {
         <span className="small muted">Förfallna fakturor, betalningar, attester, frågor från byrån m.m. Skickas bara när något väntar.</span>
       </form>
 
-      <h2>Byt lösenord</h2>
+      <h2>{t('Byt lösenord')}</h2>
       <form action={changePassword} className="card stack">
         <div className="row">
           <label>Nuvarande lösenord<input type="password" name="current" required autoComplete="current-password" /></label>
@@ -113,7 +124,7 @@ export default async function Account({ searchParams }: { searchParams: SP }) {
         <p className="small muted" style={{ margin: 0 }}>Dina andra inloggade sessioner loggas ut.</p>
       </form>
 
-      <h2 id="gdpr">Mina personuppgifter</h2>
+      <h2 id="gdpr">{t('Mina personuppgifter')}</h2>
       <p className="muted small">Du kan när som helst ladda ner de uppgifter som finns om dig (registerutdrag). Läs mer i <Link href="/integritet">integritetspolicyn</Link>.</p>
       <p><a className="btn secondary" href="/konto/export">Ladda ner mina uppgifter (JSON)</a></p>
       <details className="card">

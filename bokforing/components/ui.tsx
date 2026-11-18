@@ -7,8 +7,8 @@ export async function Flash({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
   return (
     <>
-      {sp.error && <div className="flash error">{String(sp.error)}</div>}
-      {sp.ok && <div className="flash ok">{String(sp.ok)}</div>}
+      {sp.error && <div className="flash error" role="alert">{String(sp.error)}</div>}
+      {sp.ok && <div className="flash ok" role="status">{String(sp.ok)}</div>}
     </>
   );
 }

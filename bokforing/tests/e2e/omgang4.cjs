@@ -196,6 +196,35 @@ async function accept(browser, link, name, password) {
   assert(t.includes('Budget mot utfall hittills i år') && t.includes('6110'), 'budget mot utfall: ' + t.slice(0, 900));
   log('budget per konto och månad, förifylld från förra året, jämförd med utfallet');
 
+  // ================= Del 4: engelska, mobil, tillgänglighet =================
+  const { devices } = require('playwright');
+  const mob = await (await browser.newContext({ ...devices['iPhone 13'] })).newPage();
+  mob.setDefaultTimeout(20000);
+  await mob.goto(BASE + '/login');
+  await mob.fill('input[name=email]', 'konsult.omg4@example.com');
+  await mob.fill('input[name=password]', 'fakturalosen1');
+  await mob.click('form button:has-text("Logga in")');
+  await mob.waitForURL(BASE + '/');
+  await mob.goto(BASE + '/konto');
+  await mob.selectOption('select[name=locale]', 'en');
+  await mob.click('form:has(select[name=locale]) button');
+  await waitMsg(mob, 'The setting has been saved');
+  assert(await mob.locator('html').getAttribute('lang') === 'en', 'html lang=en');
+  await mob.goto(B);
+  await mob.click('label.navbtn');
+  const navEn = await mob.locator('nav').innerText();
+  assert(navEn.includes('Customer invoices') && navEn.includes('Overview') && !navEn.includes('Kundfakturor'), 'engelsk meny: ' + navEn.slice(0, 300));
+  for (const u of ['', '/fakturor', '/kunder', '/kvitto']) {
+    await mob.goto(B + u);
+    const [sw, vw] = await mob.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
+    assert(sw <= vw + 1, `${u || 'översikt'} ryms i mobilen (${sw} > ${vw})`);
+  }
+  await mob.goto(B + '/kunder');
+  assert((await text(mob)).includes('New customer') || (await text(mob)).includes('Save customer'), 'kundsidan på engelska');
+  await mob.keyboard.press('Tab');
+  assert((await mob.evaluate(() => document.activeElement?.className)) === 'skip-link', 'första tabbstoppet är hopplänken');
+  log('gränssnitt på engelska, sidor ryms i mobilen, hopplänk för tangentbord');
+
   await browser.close();
   console.log('Omgång 4: alla steg gick igenom');
 })().catch((e) => { console.error('✘', e.message); process.exit(1); });
