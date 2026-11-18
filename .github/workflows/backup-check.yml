@@ -1,0 +1,31 @@
+# Veckovis kontroll av att produktionsdatabasen går att återställa från en säkerhetskopia.
+# Sätt hemligheten BACKUP_SOURCE_DATABASE_URL (t.ex. en skrivskyddad roll i Neon). Kopian lämnar aldrig jobbet.
+name: Kontroll av säkerhetskopia
+on:
+  schedule: [{ cron: '17 3 * * 1' }]
+  workflow_dispatch: {}
+permissions: { contents: read }
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env: { POSTGRES_PASSWORD: kontroll, POSTGRES_DB: kontroll }
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults: { run: { working-directory: bokforing } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: PostgreSQL-klient
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client-17 || sudo apt-get install -y postgresql-client
+      - run: npm ci --omit=dev --ignore-scripts
+      - name: Återställ och jämför
+        env:
+          SOURCE_DATABASE_URL: ${{ secrets.BACKUP_SOURCE_DATABASE_URL }}
+          TARGET_DATABASE_URL: postgres://postgres:kontroll@localhost:5432/kontroll
+        run: |
+          if [ -z "$SOURCE_DATABASE_URL" ]; then echo "BACKUP_SOURCE_DATABASE_URL är inte satt – hoppar över"; exit 0; fi
+          node scripts/backup-check.mjs

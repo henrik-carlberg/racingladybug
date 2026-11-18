@@ -1,4 +1,5 @@
 'use server';
+import { limit, LIMITS } from '@/lib/server/ratelimit';
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/server';
 import { revalidatePath } from 'next/cache';
 import { createSession, destroyOtherSessions, hashPassword, requireUser, verifyPassword } from '@/lib/server/auth';
@@ -46,6 +47,7 @@ export async function removePasskey(id: string) {
 export async function changePassword(fd: FormData) {
   const user = await requireUser();
   await attempt('/konto', async () => {
+    await limit(`pw:${user.id}`, LIMITS.passwordChange.max, LIMITS.passwordChange.window);
     const [u] = await sql<{ password_hash: string }[]>`SELECT password_hash FROM users WHERE id = ${user.id}`;
     if (!(await verifyPassword(str(fd, 'current'), u.password_hash))) throw new Error('Nuvarande lösenord är fel');
     const pw = str(fd, 'password');

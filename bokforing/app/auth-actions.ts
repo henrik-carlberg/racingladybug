@@ -5,13 +5,26 @@ import { createSession, destroySession, hashPassword, verifyPassword, sha256 } f
 import { audit } from '@/lib/server/audit';
 import { signupOpen } from '@/lib/billing';
 import { completeLogin, startLogin } from '@/lib/server/mfa';
+import { clientIp, current, hit, limit, LIMITS, RateLimitError } from '@/lib/server/ratelimit';
+
+// Används för att jämna ut svarstiden när kontot inte finns (så att det inte går att se vilka e-postadresser som har konton)
+const DUMMY_HASH = '$2b$12$Oep9/AQg0NgRE4rInnYH/u19zgfpHnL6psqysUoABAOUw9YK3vKI2';
 
 export async function login(fd: FormData) {
   let next = '/';
   await attempt('/login', async () => {
     const email = str(fd, 'email').toLowerCase();
+    const ip = await clientIp();
+    const L = LIMITS;
+    const blocked = (await current(`login:${email}`, L.loginFailEmail.window)) >= L.loginFailEmail.max || (await current(`loginip:${ip}`, L.loginFailIp.window)) >= L.loginFailIp.max;
+    if (blocked) throw new RateLimitError(L.loginFailEmail.window);
     const [u] = await sql<{ id: number; password_hash: string }[]>`SELECT id, password_hash FROM users WHERE email = ${email}`;
-    if (!u || !(await verifyPassword(str(fd, 'password'), u.password_hash))) throw new Error('Fel e-post eller lösenord');
+    const ok = await verifyPassword(str(fd, 'password'), u?.password_hash ?? DUMMY_HASH);
+    if (!u || !ok) {
+      await hit(`login:${email}`, L.loginFailEmail.max, L.loginFailEmail.window);
+      await hit(`loginip:${ip}`, L.loginFailIp.max, L.loginFailIp.window);
+      throw new Error('Fel e-post eller lösenord');
+    }
     next = await startLogin(u.id);
   });
   done(next);
@@ -21,6 +34,7 @@ export async function login(fd: FormData) {
 export async function loginCode(fd: FormData) {
   let msg = '';
   await attempt('/login/kod', async () => {
+    await limit(`mfa:${await clientIp()}`, LIMITS.mfa.max, LIMITS.mfa.window);
     const r = await completeLogin(str(fd, 'code'));
     if (!r.ok) throw new Error('Fel kod – försök igen');
     if (r.backupUsed) msg = 'Du loggade in med en reservkod. Den kan inte användas igen.';
@@ -35,6 +49,7 @@ function checkPassword(pw: string) {
 /** Fri registrering (sätt ALLOW_SIGNUP=false för att bara tillåta det första kontot och inbjudningar) */
 export async function register(fd: FormData) {
   await attempt('/register', async () => {
+    await limit(`register:${await clientIp()}`, LIMITS.register.max, LIMITS.register.window);
     const [{ count }] = await sql<{ count: number }[]>`SELECT count(*)::int AS count FROM users`;
     if (count > 0 && !signupOpen()) throw new Error('Registrering är stängd. Be ägaren om en inbjudan.');
     const email = str(fd, 'email').toLowerCase();
@@ -56,6 +71,7 @@ export async function acceptInvite(fd: FormData) {
   const token = str(fd, 'token');
   let next = '/';
   await attempt(`/invite/${token}`, async () => {
+    await limit(`invite:${await clientIp()}`, LIMITS.loginFailIp.max, LIMITS.loginFailIp.window);
     const userId = await sql.begin(async (tx) => {
       const [inv] = await tx<{ id: number; company_id: number; email: string; role: string; employee_id: number | null }[]>`
         SELECT id, company_id, email, role, employee_id FROM invites

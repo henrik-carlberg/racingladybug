@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { sql } from '@/lib/db';
-import { requireUser } from '@/lib/server/auth';
-import { createCompany } from './company-actions';
+import { currentUser } from '@/lib/server/auth';
+import { Landing } from '@/components/Landing';
+import { createCompany, createDemo } from './company-actions';
 import { logout } from './auth-actions';
 import { Flash, type SP } from '@/components/ui';
 import { ROLE_LABEL } from '@/lib/format';
@@ -9,7 +10,8 @@ import { ROLE_LABEL } from '@/lib/format';
 export const dynamic = 'force-dynamic';
 
 export default async function Home({ searchParams }: { searchParams: SP }) {
-  const user = await requireUser();
+  const user = await currentUser();
+  if (!user) return <Landing />;
   const companies = await sql<{ id: number; name: string; orgnr: string; role: 'owner' | 'accountant' }[]>`
     SELECT c.id, c.name, c.orgnr, m.role FROM companies c JOIN memberships m ON m.company_id = c.id
     WHERE m.user_id = ${user.id} ORDER BY c.name`;
@@ -48,6 +50,12 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
           <h2>Klienter via byrå</h2>
           <table><tbody>{clients.map((c) => <tr key={c.id}><td><Link href={`/c/${c.id}`}>{c.name}</Link></td><td>{c.orgnr}</td><td className="small muted">{c.firm}</td></tr>)}</tbody></table>
         </>
+      )}
+      {companies.length === 0 && (
+        <div className="card row" style={{ alignItems: 'center' }}>
+          <div style={{ flex: '1 1 300px' }}><b>Vill du prova först?</b><div className="small muted">Ett demobolag med kunder, fakturor, leverantörer, bank och en anställd. Det kostar ingenting och kan tas bort.</div></div>
+          <form action={createDemo} style={{ flex: '0 0 auto' }}><button className="secondary">Skapa demobolag</button></form>
+        </div>
       )}
       <h2>Lägg upp nytt bolag</h2>
       <form action={createCompany} className="card stack">

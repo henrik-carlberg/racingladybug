@@ -245,7 +245,7 @@ async function login(browser, email, pw) {
   await guest.click('summary:has-text("Uppdatera dina kontaktuppgifter")');
   await guest.fill('input[name=email]', 'ekonomi@portalkund.example');
   await guest.click('button:has-text("Spara")');
-  await guest.waitForURL(/ok=/);
+  await waitMsg(guest, 'Dina uppgifter är uppdaterade');
   const c2 = await api('GET', `/customers/${cust.json.id}`);
   assert(c2.json.email === 'ekonomi@portalkund.example', 'kontakt uppdaterad');
   await guest.click('a:has-text("Faktura")');

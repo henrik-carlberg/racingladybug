@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Pager, pageOf, pageSql, PAGE_SIZE } from '@/components/Pager';
 import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
 import { Flash, Header, Status, type SP } from '@/components/ui';
@@ -11,12 +12,15 @@ export default async function Invoices({ params, searchParams }: { params: Promi
   const { company } = await requireCompany(cid);
   const sp = await searchParams;
   const status = String(sp.status ?? '');
-  const rows = await sql<{ id: number; invoice_number: number | null; invoice_date: string; due_date: string; customer: string; total: number; status: string }[]>`
+  const page = pageOf(sp);
+  const all = await sql<{ id: number; invoice_number: number | null; invoice_date: string; due_date: string; customer: string; total: number; status: string }[]>`
     SELECT i.id, i.invoice_number, to_char(i.invoice_date,'YYYY-MM-DD') AS invoice_date, to_char(i.due_date,'YYYY-MM-DD') AS due_date,
       c.name AS customer, i.total, i.status
     FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.company_id = ${company.id}
     ${status ? sql`AND i.status = ${status}` : sql``}
-    ORDER BY i.status = 'draft' DESC, i.invoice_number DESC NULLS FIRST, i.id DESC LIMIT 500`;
+    ORDER BY i.status = 'draft' DESC, i.invoice_number DESC NULLS FIRST, i.id DESC LIMIT ${pageSql(page).limit} OFFSET ${pageSql(page).offset}`;
+  const hasMore = all.length > PAGE_SIZE;
+  const rows = all.slice(0, PAGE_SIZE);
   const t = today();
   const b = `/c/${company.id}`;
   return (
@@ -42,6 +46,7 @@ export default async function Invoices({ params, searchParams }: { params: Promi
             {rows.length === 0 && <tr><td colSpan={6} className="muted">Inga fakturor.</td></tr>}
           </tbody>
         </table>
+        <Pager base={`${b}/fakturor`} sp={sp} page={page} hasMore={hasMore} count={rows.length} />
       </div>
     </>
   );

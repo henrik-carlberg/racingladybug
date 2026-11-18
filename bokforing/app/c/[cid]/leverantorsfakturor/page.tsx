@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Pager, pageOf, pageSql, PAGE_SIZE } from '@/components/Pager';
 import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
 import { Flash, Header, Status, type SP } from '@/components/ui';
@@ -11,12 +12,15 @@ export default async function SupplierInvoices({ params, searchParams }: { param
   const { company } = await requireCompany(cid);
   const sp = await searchParams;
   const status = String(sp.status ?? 'open');
-  const rows = await sql<{ id: number; supplier: string; invoice_number: string; invoice_date: string; due_date: string; total: number; status: string }[]>`
+  const page = pageOf(sp);
+  const all = await sql<{ id: number; supplier: string; invoice_number: string; invoice_date: string; due_date: string; total: number; status: string }[]>`
     SELECT i.id, s.name AS supplier, i.invoice_number, to_char(i.invoice_date,'YYYY-MM-DD') AS invoice_date,
       to_char(i.due_date,'YYYY-MM-DD') AS due_date, i.total, i.status
     FROM supplier_invoices i JOIN suppliers s ON s.id = i.supplier_id WHERE i.company_id = ${company.id}
     ${status === 'open' ? sql`AND i.status <> 'paid'` : status === 'all' ? sql`` : sql`AND i.status = ${status}`}
-    ORDER BY i.due_date, i.id LIMIT 500`;
+    ORDER BY i.due_date, i.id LIMIT ${pageSql(page).limit} OFFSET ${pageSql(page).offset}`;
+  const hasMore = all.length > PAGE_SIZE;
+  const rows = all.slice(0, PAGE_SIZE);
   const [{ inbox }] = await sql<{ inbox: number }[]>`SELECT count(*)::int AS inbox FROM inbox_documents WHERE company_id = ${company.id} AND status IN ('new','ready','failed')`;
   const t = today();
   const b = `/c/${company.id}`;
@@ -47,6 +51,7 @@ export default async function SupplierInvoices({ params, searchParams }: { param
             {rows.length === 0 && <tr><td colSpan={6} className="muted">Inga fakturor.</td></tr>}
           </tbody>
         </table>
+        <Pager base={`${b}/leverantorsfakturor`} sp={sp} page={page} hasMore={hasMore} count={rows.length} />
       </div>
     </>
   );

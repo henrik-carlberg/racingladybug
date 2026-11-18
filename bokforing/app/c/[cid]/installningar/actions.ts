@@ -18,7 +18,7 @@ export async function updateCompany(cid: number, fd: FormData) {
     const prelFrom = str(fd, 'prelskatt_from');
     if (prelFrom && !/^\d{4}-\d{2}$/.test(prelFrom)) throw new Error('Ange månad som ÅÅÅÅ-MM');
     await sql`UPDATE companies SET
-      name = ${str(fd, 'name')}, address = ${str(fd, 'address')}, postal_code = ${str(fd, 'postal_code')}, city = ${str(fd, 'city')},
+      name = CASE WHEN is_demo THEN name ELSE ${str(fd, 'name')} END, address = ${str(fd, 'address')}, postal_code = ${str(fd, 'postal_code')}, city = ${str(fd, 'city')},
       email = ${str(fd, 'email')}, phone = ${str(fd, 'phone')}, vat_number = ${str(fd, 'vat_number')},
       bankgiro = ${str(fd, 'bankgiro')}, plusgiro = ${str(fd, 'plusgiro')}, iban = ${str(fd, 'iban')}, bic = ${str(fd, 'bic').toUpperCase()},
       swish_number = ${str(fd, 'swish_number').replace(/[^\d]/g, '')},

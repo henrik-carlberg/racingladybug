@@ -21,6 +21,8 @@ export default async function Export({ params }: { params: Promise<{ cid: string
           ))}
         </tbody>
       </table>
+      <h2>Allt</h2>
+      <p>All bolagets data – kunder, fakturor, verifikationer, lön, anställda och moduler – som en JSON-fil, för egen säkerhetskopia eller flytt. <a className="btn secondary" href={`/c/${company.id}/rapporter/export/allt`}>Ladda ner allt (JSON)</a></p>
       <h2>Import</h2>
       <p>Byter du från ett annat bokföringsprogram? <Link href={`/c/${company.id}/kom-igang/sie-import`}>Importera en SIE-fil</Link> med kontoplan, ingående balanser och verifikationer.</p>
     </>
