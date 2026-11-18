@@ -3,7 +3,8 @@ import { sql } from '@/lib/db';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import { auditBy } from '@/lib/server/audit';
 import { today } from '@/lib/format';
-import { KIND_LABEL, leaveItems, sickItems, vacationDaysTaken, vacationItems, type AbsenceKind } from '@/lib/absence';
+import { KIND_LABEL, leaveItems, sickItems, vacationDaysTaken, vacationItems, workdays, type AbsenceKind } from '@/lib/absence';
+import { percentRuleVacation } from '@/lib/payroll-extras';
 import type { Actor } from './actor';
 import { date, int, optInt, str } from './input';
 import { updatePayslip } from './payroll';
@@ -80,8 +81,8 @@ export async function applyToRun(actor: Actor, runId: number) {
   if (!run) throw new NotFoundError('Lönekörningen');
   if (run.status !== 'draft') throw new ConflictError('Lönekörningen är redan bokförd');
   const firstOfPeriod = `${run.period}-01`;
-  const slips = await sql<{ id: number; employee_id: number; items: unknown[]; monthly: number; hours: number }[]>`
-    SELECT p.id, p.employee_id, p.items, e.monthly_salary::bigint AS monthly, e.hours_per_week::float8 AS hours FROM payslips p JOIN employees e ON e.id = p.employee_id WHERE p.run_id = ${runId}`;
+  const slips = await sql<{ id: number; employee_id: number; items: unknown[]; monthly: number; hours: number; rule: string; paid_days: number }[]>`
+    SELECT p.id, p.employee_id, p.items, e.monthly_salary::bigint AS monthly, e.hours_per_week::float8 AS hours, e.vacation_rule AS rule, e.vacation_days AS paid_days FROM payslips p JOIN employees e ON e.id = p.employee_id WHERE p.run_id = ${runId}`;
   let n = 0;
   for (const s of slips) {
     const abs = await sql<{ id: number; kind: AbsenceKind; from: string; to: string; extent: number }[]>`
@@ -95,6 +96,15 @@ export async function applyToRun(actor: Actor, runId: number) {
         const [prev] = await sql<{ n: number }[]>`SELECT count(*)::int AS n FROM absences WHERE employee_id = ${s.employee_id} AND kind = 'sick' AND id <> ${a.id}
           AND status = 'approved' AND to_date < ${a.from} AND to_date >= ${a.from}::date - 5`;
         items.push(...sickItems({ from: a.from, to: a.to, extent: a.extent, monthly, hoursPerWeek: s.hours, noKarens: prev.n > 0 }));
+      } else if (a.kind === 'vacation' && s.rule === 'percent') {
+        // Procentregeln: 12 % av förra årets semesterlönegrundande lön (bokförda lönespecar) per betald semesterdag
+        const year = Number(a.from.slice(0, 4)) - 1;
+        const [earned] = await sql<{ sum: number }[]>`SELECT COALESCE(SUM(p.gross_cash), 0)::bigint AS sum FROM payslips p JOIN payroll_runs r ON r.id = p.run_id
+          WHERE p.employee_id = ${s.employee_id} AND r.status = 'booked' AND r.period LIKE ${year + '-%'}`;
+        const days = workdays(a.from, a.to).length * (a.extent / 100);
+        const v = percentRuleVacation({ earnedLastYear: Number(earned.sum), paidDays: s.paid_days || 25, daysTaken: days, monthly });
+        if (v.pay) items.push({ type: 'salary', description: `Semesterlön ${String(days).replace('.', ',')} dagar ${a.from}–${a.to} (procentregeln, 12 % av ${year})`, amount: v.pay });
+        if (v.deduction) items.push({ type: 'salary', description: `Avdrag lön under semester ${String(days).replace('.', ',')} dagar`, amount: -v.deduction });
       } else if (a.kind === 'vacation') items.push(...vacationItems({ from: a.from, to: a.to, monthly, extent: a.extent }));
       else items.push(...leaveItems({ kind: a.kind, from: a.from, to: a.to, extent: a.extent, monthly, hoursPerWeek: s.hours }));
     }

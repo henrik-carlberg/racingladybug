@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
@@ -17,6 +18,7 @@ export default async function Employee({ params, searchParams }: { params: Promi
   return (
     <>
       <h1>{e.first_name} {e.last_name}</h1>
+      <p className="small"><Link href={`/c/${company.id}/lon/anstallda/${e.id}/intyg`}>Underlag för arbetsgivarintyg</Link></p>
       <Flash searchParams={searchParams} />
       <form action={saveEmployee.bind(null, company.id, e.id)} className="card stack">
         <EmployeeFields e={e} />

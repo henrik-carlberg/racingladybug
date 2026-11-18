@@ -2,6 +2,7 @@ export type EmployeeRow = {
   id: number; first_name: string; last_name: string; personal_number: string; email: string; address: string; postal_code: string; city: string;
   bank_clearing: string; bank_account: string; employment_start: string | null; employment_end: string | null; monthly_salary: number;
   tax_mode: 'table' | 'percent'; tax_table: number | null; tax_column: number; tax_percent: string | null; fee_override: string | null; active: boolean; vacation_days: number; hours_per_week: number;
+  car_benefit: number; pension_percent: number; vacation_rule: string; employment_form: string; title: string;
 };
 
 export function EmployeeFields({ e }: { e?: Partial<EmployeeRow> }) {
@@ -43,6 +44,15 @@ export function EmployeeFields({ e }: { e?: Partial<EmployeeRow> }) {
         <label>Semesterdagar per år<input name="vacation_days" type="number" min={0} max={60} defaultValue={e?.vacation_days ?? 25} /></label>
         <label>Arbetstid timmar/vecka<input name="hours_per_week" inputMode="decimal" defaultValue={e?.hours_per_week ?? 40} /></label>
         <label className="check"><input type="checkbox" name="active" defaultChecked={e?.active ?? true} /> Aktiv (tas med i lönekörningar)</label>
+      </div>
+      <div className="row">
+        <label>Befattning<input name="title" defaultValue={e?.title ?? ''} /></label>
+        <label>Anställningsform<select name="employment_form" defaultValue={e?.employment_form ?? 'tillsvidare'}><option value="tillsvidare">Tillsvidare</option><option value="provanstallning">Provanställning</option><option value="visstid">Visstid</option><option value="timanstalld">Timanställd</option></select></label>
+        <label>Semesterlön<select name="vacation_rule" defaultValue={e?.vacation_rule ?? 'same'}><option value="same">Sammalöneregeln</option><option value="percent">Procentregeln (12 %)</option></select></label>
+      </div>
+      <div className="row">
+        <label>Bilförmån kr/mån (se Lön → Bilförmån)<input name="car_benefit" inputMode="decimal" defaultValue={e?.car_benefit ? (Number(e.car_benefit) / 100).toFixed(2).replace('.', ',') : ''} /></label>
+        <label>Tjänstepension % av lönen<input name="pension_percent" inputMode="decimal" defaultValue={e?.pension_percent ? String(e.pension_percent).replace('.', ',') : ''} placeholder="T.ex. 4,5" /></label>
       </div>
       <p className="muted small" style={{ margin: 0 }}>Skattetabell och kolumn framgår av den anställdes skattebesked (Skatteverket). Kolumn 1 gäller för de flesta löntagare. Saknas A-skattsedel/skattebesked ska 30 % dras.</p>
     </>

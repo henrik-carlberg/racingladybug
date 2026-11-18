@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 interface Slip {
   id: number; employee_id: number; name: string; items: PayItem[]; gross_cash: number; benefits: number; tax: number;
-  net_deductions: number; reimbursements: number; net_pay: number; employer_fee: number; employer_fee_rate: string;
+  net_deductions: number; reimbursements: number; net_pay: number; employer_fee: number; employer_fee_rate: string; pension: number; pension_tax: number;
   tax_info: string;
 }
 
@@ -49,6 +49,7 @@ export default async function Run({ params, searchParams }: { params: Promise<{ 
         <div className="card stat"><div className="label">Bruttolön</div><div className="value">{kr(sum('gross_cash'))}</div></div>
         <div className="card stat"><div className="label">Skatteavdrag</div><div className="value">{kr(sum('tax'))}</div></div>
         <div className="card stat"><div className="label">Arbetsgivaravgifter</div><div className="value">{kr(sum('employer_fee'))}</div></div>
+        {sum('pension') > 0 && <div className="card stat"><div className="label">Tjänstepension + särskild löneskatt</div><div className="value">{kr(sum('pension') + sum('pension_tax'))}</div></div>}
         <div className="card stat"><div className="label">Att betala ut</div><div className="value">{kr(sum('net_pay'))}</div></div>
       </div>
       {!draft && (
@@ -99,6 +100,7 @@ export default async function Run({ params, searchParams }: { params: Promise<{ 
             <div>Nettoavdrag / utlägg<br /><b>{kr(-p.net_deductions)} / {kr(p.reimbursements)}</b></div>
             <div>Nettolön<br /><b>{kr(p.net_pay)}</b></div>
             <div>Arbetsgivaravgift ({p.employer_fee_rate} %)<br /><b>{kr(p.employer_fee)}</b></div>
+            {Number(p.pension) > 0 && <div>Tjänstepension<br /><b>{kr(p.pension)}</b> <span className="small muted">+ SLP {kr(p.pension_tax)}</span></div>}
           </div>
         </div>
       ))}
@@ -118,7 +120,7 @@ export default async function Run({ params, searchParams }: { params: Promise<{ 
           <div className="card actions">
             <form action={bookRun.bind(null, company.id, run.id)}><button>Bokför lönekörning</button></form>
             <form action={deleteRun.bind(null, company.id, run.id)}><button className="link">Ta bort utkast</button></form>
-            <span className="muted small">Bokföring: 7210 Löner, 2710 Personalskatt, 7510/2731 Arbetsgivaravgifter, 1930 Nettolön. Därefter kan AGI-filen laddas ner.</span>
+            <span className="muted small">Bokföring: 7210 Löner, 2710 Personalskatt, 7510/2731 Arbetsgivaravgifter, 1930 Nettolön, och vid tjänstepension 7411/2990 och särskild löneskatt 7533/2514. Därefter kan AGI-filen laddas ner.</span>
           </div>
         </>
       )}

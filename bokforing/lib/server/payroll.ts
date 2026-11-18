@@ -2,6 +2,7 @@ import 'server-only';
 import type { Tx } from '@/lib/db';
 import { birthYearFromPersonalNumber, calculatePayslip, type PayItem, type PayslipCalc } from '@/lib/payroll';
 import type { TaxTableRow } from '@/lib/payroll';
+import { pensionCost } from '@/lib/payroll-extras';
 
 interface SlipContext {
   items: PayItem[];
@@ -13,12 +14,13 @@ interface SlipContext {
   fee_override: string | null;
   payment_date: string;
   name: string;
+  pension_percent: string;
 }
 
 /** Räknar om en lönespec och sparar resultatet */
 export async function recomputeSlip(tx: Tx, slipId: number): Promise<PayslipCalc> {
   const [s] = await tx<SlipContext[]>`
-    SELECT p.items, e.personal_number, e.tax_mode, e.tax_table, e.tax_column, e.tax_percent, e.fee_override,
+    SELECT p.items, e.pension_percent, e.personal_number, e.tax_mode, e.tax_table, e.tax_column, e.tax_percent, e.fee_override,
       to_char(r.payment_date,'YYYY-MM-DD') AS payment_date, e.first_name || ' ' || e.last_name AS name
     FROM payslips p JOIN employees e ON e.id = p.employee_id JOIN payroll_runs r ON r.id = p.run_id WHERE p.id = ${slipId}`;
   let rows: TaxTableRow[] = [];
@@ -35,7 +37,8 @@ export async function recomputeSlip(tx: Tx, slipId: number): Promise<PayslipCalc
     s.payment_date,
     s.fee_override != null ? Number(s.fee_override) : null,
   );
-  await tx`UPDATE payslips SET gross_cash = ${c.grossCash}, benefits = ${c.benefits}, tax = ${c.tax}, net_deductions = ${c.netDeductions},
+  const pen = pensionCost(c.grossCash, Number(s.pension_percent ?? 0));
+  await tx`UPDATE payslips SET pension = ${pen.premium}, pension_tax = ${pen.slp}, gross_cash = ${c.grossCash}, benefits = ${c.benefits}, tax = ${c.tax}, net_deductions = ${c.netDeductions},
     reimbursements = ${c.reimbursements}, net_pay = ${c.netPay}, employer_fee_rate = ${c.employerFeeRate}, employer_fee = ${c.employerFee}
     WHERE id = ${slipId}`;
   return c;

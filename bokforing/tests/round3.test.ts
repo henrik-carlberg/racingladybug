@@ -90,3 +90,25 @@ describe('koncernsammanställning', () => {
     expect(orgDigits('556677-8899')).toBe(orgDigits('165566778899'));
   });
 });
+
+import { carBenefitMonthly, carBenefitYearly, pensionCost, percentRuleVacation } from '@/lib/payroll-extras';
+describe('lönetillägg', () => {
+  it('bilförmån enligt schablonen', () => {
+    // 400 000 kr bil, pbb 59 200, SLR 2,55 %, fordonsskatt 1 500
+    const y = carBenefitYearly({ newCarPrice: 40_000_000, vehicleTax: 150_000, pbb: 5_920_000, slr: 2.55 });
+    const expected = 0.29 * 59200 + 400000 * (0.7 * 0.0255 + 0.01) + 0.13 * 400000 + 1500;
+    expect(y / 100).toBe(Math.round(expected));
+    expect(carBenefitMonthly(y)).toBe(Math.round(y / 12 / 100) * 100);
+  });
+  it('tjänstepension och särskild löneskatt', () => {
+    expect(pensionCost(3_500_000, 4.5)).toEqual({ premium: 157_500, slp: Math.round(157_500 * 0.2426) });
+    expect(pensionCost(3_500_000, 0).premium).toBe(0);
+  });
+  it('semesterlön enligt procentregeln', () => {
+    const v = percentRuleVacation({ earnedLastYear: 30_000_000, paidDays: 25, daysTaken: 5, monthly: 0 });
+    expect(v.dayPay).toBe(144_000);
+    expect(v.pay).toBe(720_000);
+    expect(v.deduction).toBe(0);
+    expect(percentRuleVacation({ earnedLastYear: 42_000_000, paidDays: 25, daysTaken: 2, monthly: 3_500_000 }).deduction).toBe(322_000);
+  });
+});

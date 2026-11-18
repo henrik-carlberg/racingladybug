@@ -5,6 +5,7 @@ import { createVoucher } from '@/lib/server/ledger';
 import { auditBy } from '@/lib/server/audit';
 import { emit } from '@/lib/server/events';
 import { recomputeSlip } from '@/lib/server/payroll';
+import { fromSigned } from '@/lib/ledger-lines';
 import { payrollBookingLines, type PayItem, type PayItemType } from '@/lib/payroll';
 import { buildAgiXml } from '@/lib/agi';
 import { agiId, normalizePersonalNumber } from '@/lib/validate';
@@ -19,11 +20,13 @@ export interface EmployeeOut {
   employment_start: string | null; employment_end: string | null; monthly_salary: number;
   tax_mode: 'table' | 'percent'; tax_table: number | null; tax_column: number; tax_percent: number | null;
   fee_override: number | null; active: boolean; vacation_days: number; hours_per_week: number; created_at: string;
+  car_benefit: number; pension_percent: number; vacation_rule: 'same' | 'percent'; employment_form: string; title: string;
 }
 
 const ECOLS = () => sql`id, 'employee' AS object, first_name, last_name, personal_number, email, address, postal_code, city,
   bank_clearing, bank_account, to_char(employment_start,'YYYY-MM-DD') AS employment_start, to_char(employment_end,'YYYY-MM-DD') AS employment_end,
-  monthly_salary, tax_mode, tax_table, tax_column, tax_percent::float8 AS tax_percent, fee_override::float8 AS fee_override, active, vacation_days, hours_per_week::float8 AS hours_per_week, created_at`;
+  monthly_salary, tax_mode, tax_table, tax_column, tax_percent::float8 AS tax_percent, fee_override::float8 AS fee_override, active, vacation_days, hours_per_week::float8 AS hours_per_week, created_at,
+  car_benefit, pension_percent::float8 AS pension_percent, vacation_rule, employment_form, title`;
 
 export async function getEmployee(companyId: number, id: number): Promise<EmployeeOut> {
   const [e] = await sql<EmployeeOut[]>`SELECT ${ECOLS()} FROM employees WHERE id = ${id} AND company_id = ${companyId}`;
@@ -71,6 +74,11 @@ function readEmployee(input: Record<string, unknown>, cur?: EmployeeOut) {
   if (want('active')) f.active = has(input, 'active') ? bool(input, 'active') : true;
   if (has(input, 'vacation_days') && input.vacation_days !== '') { const v = optInt(input, 'vacation_days', 'Semesterdagar'); if (v == null || v < 0 || v > 60) throw new ValidationError('Ogiltigt antal semesterdagar'); f.vacation_days = v; }
   if (has(input, 'hours_per_week') && input.hours_per_week !== '') { const h = num(input, 'hours_per_week', 'Arbetstid'); if (h == null || h <= 0 || h > 60) throw new ValidationError('Ogiltig arbetstid'); f.hours_per_week = h; }
+  if (has(input, 'car_benefit') && input.car_benefit !== '') { const v = optInt(input, 'car_benefit', 'Bilförmån (öre/mån)'); if (v == null || v < 0) throw new ValidationError('Ogiltig bilförmån'); f.car_benefit = v; }
+  if (has(input, 'pension_percent') && input.pension_percent !== '') { const v = num(input, 'pension_percent', 'Tjänstepension'); if (v == null || v < 0 || v > 50) throw new ValidationError('Tjänstepension 0–50 %'); f.pension_percent = v; }
+  if (has(input, 'vacation_rule')) f.vacation_rule = str(input, 'vacation_rule') === 'percent' ? 'percent' : 'same';
+  if (has(input, 'employment_form')) { const v = str(input, 'employment_form') || 'tillsvidare'; if (!['tillsvidare', 'visstid', 'provanstallning', 'timanstalld'].includes(v)) throw new ValidationError('Ogiltig anställningsform'); f.employment_form = v; }
+  if (has(input, 'title')) f.title = str(input, 'title');
   const m = { ...cur, ...f } as Record<string, unknown>;
   if (m.tax_mode === 'table' && (!m.tax_table || (m.tax_table as number) < 29 || (m.tax_table as number) > 42)) throw new ValidationError('Ange skattetabell (29–42)');
   if (m.tax_mode === 'percent' && (m.tax_percent == null || (m.tax_percent as number) < 0 || (m.tax_percent as number) > 100)) throw new ValidationError('Ange skattesats i procent');
@@ -142,7 +150,10 @@ export async function listPayrollRuns(companyId: number, p: Page) {
   return { ...res, data: await Promise.all(res.data.map((r) => getPayrollRun(companyId, r.id))) };
 }
 
-const defaultItems = (salary: number): PayItem[] => (salary ? [{ type: 'salary', description: 'Månadslön', amount: salary }] : []);
+const defaultItems = (salary: number, car = 0): PayItem[] => [
+  ...(salary ? [{ type: 'salary' as const, description: 'Månadslön', amount: salary }] : []),
+  ...(car ? [{ type: 'benefit' as const, description: 'Bilförmån', amount: Number(car) }] : []),
+];
 
 export async function createPayrollRun(actor: Actor, input: Record<string, unknown>) {
   const period = str(input, 'period', { required: true, label: 'Period' });
@@ -153,12 +164,12 @@ export async function createPayrollRun(actor: Actor, input: Record<string, unkno
     const exists = await tx`SELECT 1 FROM payroll_runs WHERE company_id = ${actor.companyId} AND period = ${period}`;
     if (exists.length) throw new ConflictError(`Det finns redan en lönekörning för ${period}`);
     const [{ id }] = await tx<{ id: number }[]>`INSERT INTO payroll_runs (company_id, period, payment_date) VALUES (${actor.companyId}, ${period}, ${paymentDate}) RETURNING id`;
-    const emps = await tx<{ id: number; monthly_salary: number }[]>`
-      SELECT id, monthly_salary FROM employees WHERE company_id = ${actor.companyId} AND active
+    const emps = await tx<{ id: number; monthly_salary: number; car_benefit: number }[]>`
+      SELECT id, monthly_salary, car_benefit FROM employees WHERE company_id = ${actor.companyId} AND active
         AND (employment_end IS NULL OR employment_end >= ${period + '-01'}) ORDER BY last_name`;
     for (const e of emps) {
       const [p] = await tx<{ id: number }[]>`INSERT INTO payslips (run_id, employee_id, items, employer_fee_rate)
-        VALUES (${id}, ${e.id}, ${tx.json(defaultItems(e.monthly_salary) as never)}, 0) RETURNING id`;
+        VALUES (${id}, ${e.id}, ${tx.json(defaultItems(e.monthly_salary, e.car_benefit) as never)}, 0) RETURNING id`;
       await recomputeSlip(tx, p.id);
     }
     await auditBy(tx, actor, 'create', 'payroll_run', id, { period });
@@ -204,10 +215,10 @@ export async function updatePayslip(actor: Actor, runId: number, slipId: number,
 export async function addEmployeeToRun(actor: Actor, runId: number, employeeId: number) {
   return sql.begin(async (tx) => {
     await assertDraft(tx, actor.companyId, runId);
-    const [e] = await tx<{ id: number; monthly_salary: number }[]>`SELECT id, monthly_salary FROM employees WHERE id = ${employeeId} AND company_id = ${actor.companyId}`;
+    const [e] = await tx<{ id: number; monthly_salary: number; car_benefit: number }[]>`SELECT id, monthly_salary, car_benefit FROM employees WHERE id = ${employeeId} AND company_id = ${actor.companyId}`;
     if (!e) throw new ValidationError('Den anställda finns inte');
     const [p] = await tx<{ id: number }[]>`INSERT INTO payslips (run_id, employee_id, items, employer_fee_rate)
-      VALUES (${runId}, ${e.id}, ${tx.json(defaultItems(e.monthly_salary) as never)}, 0) ON CONFLICT DO NOTHING RETURNING id`;
+      VALUES (${runId}, ${e.id}, ${tx.json(defaultItems(e.monthly_salary, e.car_benefit) as never)}, 0) ON CONFLICT DO NOTHING RETURNING id`;
     if (p) await recomputeSlip(tx, p.id);
     await auditBy(tx, actor, 'add', 'payslip', p?.id);
     return fetchRun(tx, actor.companyId, runId);
@@ -241,8 +252,16 @@ export async function bookPayrollRun(actor: Actor, runId: number) {
     if (slips.length === 0) throw new ValidationError('Lönekörningen saknar lönespecifikationer');
     const calcs = [];
     for (const s of slips) calcs.push({ calc: await recomputeSlip(tx, s.id), items: s.items });
+    // Tjänstepension (premien betalas mot försäkringsbolagets faktura, 2990) och särskild löneskatt (2514)
+    const [pen] = await tx<{ premium: number; slp: number }[]>`SELECT COALESCE(SUM(pension), 0)::bigint AS premium, COALESCE(SUM(pension_tax), 0)::bigint AS slp FROM payslips WHERE run_id = ${runId}`;
+    const pensionLines = Number(pen.premium) ? fromSigned([
+      { account: 7411, amount: Number(pen.premium) }, { account: 2990, amount: -Number(pen.premium), description: 'Upplupen pensionspremie' },
+      { account: 7533, amount: Number(pen.slp) }, { account: 2514, amount: -Number(pen.slp) },
+    ]) : [];
+    if (pensionLines.length) for (const [n, name] of [[7411, 'Premier för kollektiva pensionsförsäkringar'], [7533, 'Särskild löneskatt för pensionskostnader'], [2514, 'Beräknad särskild löneskatt på pensionskostnader'], [2990, 'Övriga upplupna kostnader och förutbetalda intäkter']] as const)
+      await tx`INSERT INTO accounts (company_id, number, name) VALUES (${actor.companyId}, ${n}, ${name}) ON CONFLICT DO NOTHING`;
     const v = await createVoucher(tx, {
-      actor, date: r.payment_date, description: `Lön ${r.period}`, lines: payrollBookingLines(calcs), sourceType: 'payroll', sourceId: runId, series: 'L',
+      actor, date: r.payment_date, description: `Lön ${r.period}`, lines: [...payrollBookingLines(calcs), ...pensionLines], sourceType: 'payroll', sourceId: runId, series: 'L',
     });
     await tx`UPDATE payroll_runs SET status = 'booked', voucher_id = ${v.id}, booked_by = ${actor.userId}, booked_at = now() WHERE id = ${runId}`;
     await auditBy(tx, actor, 'book', 'payroll_run', runId);
