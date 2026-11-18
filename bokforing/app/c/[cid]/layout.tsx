@@ -79,10 +79,14 @@ export default async function CompanyLayout({ children, params }: { children: Re
           <Link href={`${b}/schema`}>Schema</Link>
           <Link href={`${b}/personalliggare`}>Personalliggare</Link>
           <Link href={`${b}/lon/skattetabeller`}>Skattetabeller</Link>
+          <Link href={`${b}/lon/bilforman`}>Bilförmån</Link>
           <div className="group">Rapporter</div>
           <Link href={`${b}/rapporter`}>Resultat &amp; balans</Link>
+          <Link href={`${b}/rapporter/manad`}>Månadsrapport</Link>
+          <Link href={`${b}/assistent`}>Fråga assistenten</Link>
           <Link href={`${b}/rapporter/huvudbok`}>Huvudbok</Link>
           <Link href={`${b}/rapporter/moms`}>Moms</Link>
+          <Link href={`${b}/rapporter/eu`}>EU-handel</Link>
           <Link href={`${b}/rapporter/export`}>Export (SIE)</Link>
           <Link href={`${b}/rapporter/dimensioner`}>Resultat per dimension</Link>
           <Link href={`${b}/anlaggningar`}>Anläggningsregister</Link>
@@ -110,6 +114,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
         </nav>
       </aside>
       <main>
+        {role === 'auditor' && <div className="card small auditor-banner" style={{ borderColor: 'var(--warn)' }}>Du är inloggad som revisor och har läsbehörighet. Du kan inte ändra något i bokföringen.</div>}
         {(company as { is_demo?: boolean }).is_demo && <div className="flash ok no-print demo-banner">Det här är ett demobolag med exempeldata. {role === 'owner' && <form action={deleteDemo.bind(null, company.id)} style={{ display: 'inline' }}><button className="link">Ta bort demobolaget</button></form>}</div>}
         {banner && <div className="flash error no-print">{banner} <Link href={`${b}/abonnemang`}>{role === 'owner' ? 'Starta abonnemang' : 'Se abonnemang'}</Link></div>}
         {children}

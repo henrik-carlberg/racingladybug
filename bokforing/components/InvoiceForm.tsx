@@ -6,10 +6,10 @@ import { computeReduction, labourInclVat, REDUCTION, type ReductionType } from '
 
 type FormState = { error?: string } | undefined;
 type Row = { description: string; quantity: string; unit: string; price: string; vat: string; account: string; labor?: boolean };
-type Customer = { id: number; name: string; reverse_charge: boolean };
+type Customer = { id: number; name: string; reverse_charge: boolean; currency?: string; language?: string };
 
 export interface InvoiceInitial {
-  customer_id?: number; advance?: boolean; invoice_date: string; due_date?: string; delivery_date?: string; our_reference?: string; your_reference?: string; notes?: string; lines?: Row[];
+  customer_id?: number; advance?: boolean; currency?: string; exchange_rate?: number | string; language?: string; invoice_date: string; due_date?: string; delivery_date?: string; our_reference?: string; your_reference?: string; notes?: string; lines?: Row[];
   reduction_type?: ReductionType | null; buyer_pnr?: string; property?: string; brf_orgnr?: string; apartment_no?: string; work_type?: string; reduction_max?: number | null;
 }
 
@@ -21,7 +21,12 @@ export function InvoiceForm({ action, customers, accounts, initial }: {
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const [customerId, setCustomerId] = useState(String(initial.customer_id ?? ''));
-  const rc = customers.find((c) => String(c.id) === customerId)?.reverse_charge ?? false;
+  const cust = customers.find((c) => String(c.id) === customerId);
+  const rc = cust?.reverse_charge ?? false;
+  const [currency, setCurrency] = useState(initial.currency ?? 'SEK');
+  const [rate, setRate] = useState(initial.exchange_rate ? String(initial.exchange_rate).replace('.', ',') : '');
+  const [lang, setLang] = useState(initial.language ?? 'sv');
+  const foreign = currency !== 'SEK';
   const [advance, setAdvance] = useState(!!initial.advance);
   const salesAcc = (vat: number) => (advance ? 2420 : defaultSalesAccount(vat, rc));
   const blank = (): Row => ({ description: '', quantity: '1', unit: 'st', price: '', vat: '25', account: String(salesAcc(25)) });
@@ -39,7 +44,7 @@ export function InvoiceForm({ action, customers, accounts, initial }: {
     description: r.description, quantity: Number(r.quantity.replace(',', '.')) || 0, unit: r.unit,
     unitPrice: parseAmount(r.price) ?? 0, vatRate: Number(r.vat) as 0 | 6 | 12 | 25, account: Number(r.account), labor: !!r.labor,
   }));
-  const t = computeInvoice(parsed, { reverseCharge: rc });
+  const t = computeInvoice(parsed, { reverseCharge: rc, roundToKrona: !foreign });
   const labour = rr ? labourInclVat(parsed, t, rc) : 0;
   const red = rr ? computeReduction(rr as ReductionType, labour, parseAmount(rrMax)) : null;
   return (
@@ -48,13 +53,26 @@ export function InvoiceForm({ action, customers, accounts, initial }: {
       <div className="card stack">
         <div className="row">
           <label style={{ flex: '2 1 260px' }}>Kund
-            <select name="customer_id" value={customerId} onChange={(e) => setCustomerId(e.target.value)} required>
+            <select name="customer_id" value={customerId} onChange={(e) => {
+              setCustomerId(e.target.value);
+              const c = customers.find((x) => String(x.id) === e.target.value);
+              if (!c) return;
+              setCurrency(c.currency ?? 'SEK'); setLang(c.language ?? 'sv');
+              // Rader med standardkontot byter till det som gäller för den nya kunden (t.ex. 3308 vid omvänd skattskyldighet)
+              if (!advance) setRows((r) => r.map((x) => (x.account === String(defaultSalesAccount(Number(x.vat), rc)) ? { ...x, account: String(defaultSalesAccount(Number(x.vat), c.reverse_charge)) } : x)));
+            }} required>
               <option value="">Välj kund…</option>
               {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </label>
           <label>Fakturadatum<input type="date" name="invoice_date" defaultValue={initial.invoice_date} required /></label>
           <label>Förfallodatum (tomt = enligt villkor)<input type="date" name="due_date" defaultValue={initial.due_date} /></label>
+        </div>
+        <div className="row">
+          <label style={{ flex: '0 0 120px' }}>Valuta<select name="currency" value={currency} onChange={(e) => setCurrency(e.target.value)}>{['SEK', 'EUR', 'USD', 'GBP', 'NOK', 'DKK'].map((v) => <option key={v}>{v}</option>)}</select></label>
+          {foreign && <label style={{ flex: '0 0 200px' }}>Kurs (kr per {currency})<input name="exchange_rate" value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" required placeholder="T.ex. 11,25" /></label>}
+          <label style={{ flex: '0 0 140px' }}>Språk<select name="language" value={lang} onChange={(e) => setLang(e.target.value)}><option value="sv">Svenska</option><option value="en">Engelska</option></select></label>
+          {foreign && <span className="small muted" style={{ alignSelf: 'end', flex: '1 1 260px' }}>Priserna anges i {currency}. Fakturan bokförs i kronor med kursen ovan (t.ex. Riksbankens kurs på fakturadagen); kursdifferensen vid betalningen bokförs på 3960/7960.</span>}
         </div>
         <div className="row">
           <label>Vår referens<input name="our_reference" defaultValue={initial.our_reference} /></label>
@@ -97,7 +115,8 @@ export function InvoiceForm({ action, customers, accounts, initial }: {
           <div className="row"><span>Totalt</span><span style={{ textAlign: 'right' }}>{formatAmount(t.total)}</span></div>
           <div className="row"><span>{REDUCTION[rr as ReductionType].label} ({REDUCTION[rr as ReductionType].pct} % av arbete {formatAmount(labour)})</span><span style={{ textAlign: 'right' }}>−{formatAmount(red.reduction)}</span></div>
         </>}
-        <div className="row" style={{ fontWeight: 700 }}><span>Att betala</span><span style={{ textAlign: 'right' }}>{formatAmount(t.total - (red?.reduction ?? 0))}</span></div>
+        <div className="row" style={{ fontWeight: 700 }}><span>Att betala{foreign ? ` ${currency}` : ''}</span><span style={{ textAlign: 'right' }}>{formatAmount(t.total - (red?.reduction ?? 0))}</span></div>
+        {foreign && Number(rate.replace(',', '.')) > 0 && <div className="row small muted"><span>Bokförs som</span><span style={{ textAlign: 'right' }}>{formatAmount(Math.round(t.total * Number(rate.replace(',', '.'))))} kr</span></div>}
         {red?.capped && <p className="small muted" style={{ margin: 0 }}>Avdraget är begränsat av köparens återstående utrymme.</p>}
       </div>
       <label className="row" style={{ alignItems: 'center', gap: '.5rem' }}>
@@ -107,7 +126,7 @@ export function InvoiceForm({ action, customers, accounts, initial }: {
         }} />
         <span>Förskottsfaktura – bokförs mot 2420 Förskott från kunder och dras av på slutfakturan</span>
       </label>
-      {!rc && !advance && (
+      {!rc && !advance && !foreign && (
         <div className="card stack">
           <div className="row" style={{ alignItems: 'end' }}>
             <label style={{ flex: '0 0 220px' }}>Skattereduktion för kunden

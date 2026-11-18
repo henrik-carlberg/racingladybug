@@ -9,7 +9,7 @@ export async function saveCustomer(cid: number, id: number | null, fd: FormData)
   const input = {
     name: str(fd, 'name'), orgnr: str(fd, 'orgnr'), vat_number: str(fd, 'vat_number'), email: str(fd, 'email'), address: str(fd, 'address'),
     postal_code: str(fd, 'postal_code'), city: str(fd, 'city'), country: str(fd, 'country'), payment_terms: str(fd, 'payment_terms'),
-    reverse_charge: fd.get('reverse_charge') === 'on', peppol_id: str(fd, 'peppol_id'),
+    reverse_charge: fd.get('reverse_charge') === 'on', peppol_id: str(fd, 'peppol_id'), currency: str(fd, 'currency'), language: str(fd, 'language'),
   };
   await attempt(id ? `/c/${cid}/kunder/${id}` : `/c/${cid}/kunder`, () => (id ? updateCustomer(actor, id, input) : createCustomer(actor, input)));
   done(`/c/${cid}/kunder`, 'Kunden är sparad');

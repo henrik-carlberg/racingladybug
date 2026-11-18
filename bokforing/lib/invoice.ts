@@ -67,3 +67,36 @@ export function defaultSalesAccount(vatRate: number, reverseCharge: boolean): nu
   if (reverseCharge) return ACC.salesEuServices;
   return ACC.sales[vatRate] ?? ACC.sales[25];
 }
+
+/** Fakturor i utländsk valuta: raderna och dokumentet är i fakturans valuta, bokföringen i kronor */
+export const CURRENCIES = ['SEK', 'EUR', 'USD', 'GBP', 'NOK', 'DKK'] as const;
+export type Currency = (typeof CURRENCIES)[number];
+export const isForeign = (c: string | null | undefined) => !!c && c !== 'SEK';
+
+/** Räknar om en fakturas belopp till kronor med kursen (kronor per valutaenhet). Öresdifferensen hamnar som avrundning. */
+export function convertTotals(t: InvoiceTotals, rate: number): InvoiceTotals {
+  const lineNets = t.lineNets.map((n) => Math.round(n * rate));
+  const vatByRate: InvoiceTotals['vatByRate'] = {};
+  for (const [r, v] of Object.entries(t.vatByRate)) vatByRate[Number(r)] = { base: Math.round(v.base * rate), vat: Math.round(v.vat * rate) };
+  const net = lineNets.reduce((a, b) => a + b, 0);
+  const vat = Object.values(vatByRate).reduce((a, v) => a + v.vat, 0);
+  const total = Math.round(t.total * rate);
+  return { net, vat, vatByRate, rounding: total - net - vat, total, lineNets };
+}
+
+/** Totaler för dokumentet (fakturans valuta) och för bokföringen (kronor) */
+export function invoiceTotals(lines: InvoiceLineInput[], o: { reverseCharge: boolean; currency?: string | null; rate?: number | string | null }) {
+  const foreign = isForeign(o.currency);
+  const doc = computeInvoice(lines, { reverseCharge: o.reverseCharge, roundToKrona: !foreign });
+  return { doc, sek: foreign ? convertTotals(doc, Number(o.rate)) : doc, foreign };
+}
+
+/** Betalning av en faktura i utländsk valuta: hela fordran regleras, skillnaden mot inbetalt belopp är kursvinst (3960) eller kursförlust (7960) */
+export function fxPaymentLines(receivable: number, received: number, bank: number, clearing: number = ACC.customerReceivables, sign: 1 | -1 = 1): Line[] {
+  const diff = received - receivable; // kund: positivt = vinst; leverantör (sign -1): betalat mer = förlust
+  return fromSigned([
+    { account: bank, amount: sign * received },
+    { account: clearing, amount: -sign * receivable },
+    ...(diff ? [{ account: sign * diff > 0 ? 3960 : 7960, amount: -sign * diff }] : []),
+  ]);
+}

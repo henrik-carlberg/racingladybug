@@ -10,4 +10,4 @@ export function monthEnd(period: string) {
   const [y, m] = period.split('-').map(Number);
   return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
 }
-export const ROLE_LABEL = { owner: 'Ägare', accountant: 'Redovisningskonsult', employee: 'Anställd (självservice)' } as const;
+export const ROLE_LABEL = { owner: 'Ägare', accountant: 'Redovisningskonsult', employee: 'Anställd (självservice)', auditor: 'Revisor' } as const;
