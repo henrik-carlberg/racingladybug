@@ -12,6 +12,8 @@ import { addDays, today } from '@/lib/format';
 import * as eb from '@/lib/bank/enablebanking';
 import { decimalToOre, parseBankCsv, parseCamt053, fromEnableBanking, type BankTx } from '@/lib/bank/parse';
 import { suggestMatches, type Suggestion } from '@/lib/bank/match';
+import { learnKey } from '@/lib/bank/rules';
+import { accountSuggestions, type AccountSuggestion } from './bank-rules';
 import { registerPaymentTx } from './invoices';
 import { paySupplierInvoiceTx } from './suppliers';
 import type { Actor } from './actor';
@@ -179,7 +181,7 @@ export async function syncAccount(actor: Actor, accountId: number) {
 }
 
 /** Synkar alla aktiva Open Banking-konton (cron) */
-export async function syncAllAccounts(): Promise<{ accounts: number; imported: number; errors: number }> {
+export async function syncAllAccounts(): Promise<{ accounts: number; imported: number; errors: number; matched: number }> {
   const accts = await sql<{ id: number; company_id: number; created_by: number }[]>`
     SELECT a.id, a.company_id, c.created_by FROM bank_accounts a JOIN bank_connections c ON c.id = a.connection_id
     WHERE a.active AND c.status = 'active'`;
@@ -189,7 +191,12 @@ export async function syncAllAccounts(): Promise<{ accounts: number; imported: n
       imported += (await syncAccount({ companyId: a.company_id, userId: a.created_by, apiKeyId: null, role: 'owner' }, a.id)).imported;
     } catch (e) { errors++; console.error('bank sync', a.id, e); }
   }
-  return { accounts: accts.length, imported, errors };
+  // Säkra matchningar och automatiska konteringsregler per bolag
+  let matched = 0;
+  for (const c of new Map(accts.map((a) => [a.company_id, a.created_by]))) {
+    try { matched += await autoMatch({ companyId: c[0], userId: c[1], apiKeyId: null, role: 'owner' }); } catch (e) { console.error('automatch', c[0], e); }
+  }
+  return { accounts: accts.length, imported, errors, matched };
 }
 
 export async function importFile(actor: Actor, accountId: number, filename: string, content: string) {
@@ -205,11 +212,12 @@ export async function importFile(actor: Actor, accountId: number, filename: stri
 export interface BankTxOut {
   id: number; object: 'bank_transaction'; bank_account_id: number; booking_date: string; amount: number; currency: string;
   description: string; reference: string; counterparty: string; status: 'unmatched' | 'matched' | 'ignored';
-  match_type: string | null; match_id: number | null; voucher_id: number | null; suggestions?: Suggestion[];
+  match_type: string | null; match_id: number | null; voucher_id: number | null; suggestions?: Suggestion[]; accountSuggestion?: AccountSuggestion;
+  booked_account?: number | null; rule_id?: number | null;
 }
 
 const TCOLS = () => sql`id, 'bank_transaction' AS object, bank_account_id, to_char(booking_date,'YYYY-MM-DD') AS booking_date, amount, currency,
-  description, reference, counterparty, status, match_type, match_id, voucher_id`;
+  description, reference, counterparty, status, match_type, match_id, voucher_id, booked_account, rule_id`;
 
 export async function listTransactions(companyId: number, f: { status?: string; account_id?: number; limit?: number; withSuggestions?: boolean }) {
   const rows = [...await sql<BankTxOut[]>`SELECT ${TCOLS()} FROM bank_transactions WHERE company_id = ${companyId}
@@ -225,6 +233,8 @@ export async function listTransactions(companyId: number, f: { status?: string; 
         { invoices: c.invoices, supplierInvoices: c.supplierInvoices, voucherLines: c.voucherLines.filter((v) => v.ledger === ledger) },
       );
     }
+    const acc = await accountSuggestions(companyId, rows.filter((r) => r.status === 'unmatched'));
+    for (const r of rows) { const a = acc.get(r.id); if (a) r.accountSuggestion = a; }
   }
   return rows;
 }
@@ -266,14 +276,15 @@ export async function getTransaction(companyId: number, id: number): Promise<Ban
 export async function reconcile(actor: Actor, txId: number, input: Record<string, unknown>): Promise<BankTxOut> {
   const type = str(input, 'type', { required: true, label: 'Typ' });
   await sql.begin(async (tx) => {
-    const [t] = await tx<{ id: number; status: string; amount: number; booking_date: string; description: string; counterparty: string; bank_account_id: number }[]>`
-      SELECT id, status, amount, to_char(booking_date,'YYYY-MM-DD') AS booking_date, description, counterparty, bank_account_id
+    const [t] = await tx<{ id: number; status: string; amount: number; booking_date: string; description: string; counterparty: string; reference: string; bank_account_id: number }[]>`
+      SELECT id, status, amount, to_char(booking_date,'YYYY-MM-DD') AS booking_date, description, counterparty, reference, bank_account_id
       FROM bank_transactions WHERE id = ${txId} AND company_id = ${actor.companyId} FOR UPDATE`;
     if (!t) throw new NotFoundError('Banktransaktionen');
     if (t.status !== 'unmatched') throw new ConflictError('Transaktionen är redan avstämd');
     const a = await ownAccount(tx, actor.companyId, t.bank_account_id);
     let voucherId: number | null = null;
     let matchId: number | null = null;
+    let booked: { account: number; vat: number; ruleId: number | null } | null = null;
 
     if (type === 'invoice') {
       matchId = int(input, 'id', 'Faktura');
@@ -314,12 +325,17 @@ export async function reconcile(actor: Actor, txId: number, input: Record<string
         lines, sourceType: 'bank', sourceId: txId,
       });
       voucherId = v.id;
+      const ruleId = optInt(input, 'rule_id', 'Regel') ?? null;
+      booked = { account, vat: vatRate, ruleId };
+      if (ruleId) await tx`UPDATE bank_rules SET hits = hits + 1, last_used_at = now() WHERE id = ${ruleId} AND company_id = ${actor.companyId}`;
     } else if (type !== 'ignore') {
       throw new ValidationError('Okänd avstämningstyp');
     }
 
     await tx`UPDATE bank_transactions SET status = ${type === 'ignore' ? 'ignored' : 'matched'}, match_type = ${type}, match_id = ${matchId},
-      voucher_id = ${voucherId}, matched_by = ${actor.userId}, matched_at = now() WHERE id = ${txId}`;
+      voucher_id = ${voucherId}, matched_by = ${actor.userId}, matched_at = now(),
+      booked_account = ${booked?.account ?? null}, booked_vat = ${booked?.vat ?? null}, rule_id = ${booked?.ruleId ?? null},
+      learn_key = ${booked ? learnKey(t as never) : null} WHERE id = ${txId}`;
     await auditBy(tx, actor, 'reconcile', 'bank_transaction', txId, { type, match_id: matchId, voucher_id: voucherId });
     const [out] = await tx<BankTxOut[]>`SELECT ${TCOLS()} FROM bank_transactions WHERE id = ${txId}`;
     await emit(tx, actor.companyId, 'bank.transaction.matched', out);
@@ -336,6 +352,22 @@ export async function reopen(actor: Actor, txId: number) {
   return getTransaction(actor.companyId, txId);
 }
 
+/** Bokför transaktioner med kontoförslag. onlyAuto: bara regler markerade som automatiska och bara där ingen faktura kan vara betald. */
+export async function bookSuggestions(actor: Actor, opts: { onlyAuto: boolean; ids?: number[] }): Promise<number> {
+  const rows = await listTransactions(actor.companyId, { status: 'unmatched', limit: 1000, withSuggestions: true });
+  let n = 0;
+  for (const r of rows) {
+    const a = r.accountSuggestion;
+    if (!a || (opts.ids && !opts.ids.includes(r.id))) continue;
+    if (opts.onlyAuto && (a.source !== 'rule' || !a.auto || (r.suggestions ?? []).some((s) => s.score >= 80))) continue;
+    try {
+      await reconcile(actor, r.id, { type: 'account', account: a.account, vat_rate: a.vatRate, description: a.description, rule_id: a.ruleId ?? undefined });
+      n++;
+    } catch (e) { console.error('bokför förslag', r.id, e); }
+  }
+  return n;
+}
+
 /** Stämmer automatiskt av transaktioner där det finns exakt ett säkert förslag (OCR + belopp) */
 export async function autoMatch(actor: Actor): Promise<number> {
   const rows = await listTransactions(actor.companyId, { status: 'unmatched', limit: 1000, withSuggestions: true });
@@ -350,5 +382,5 @@ export async function autoMatch(actor: Actor): Promise<number> {
       n++;
     } catch (e) { console.error('automatch', r.id, e); }
   }
-  return n;
+  return n + await bookSuggestions(actor, { onlyAuto: true });
 }

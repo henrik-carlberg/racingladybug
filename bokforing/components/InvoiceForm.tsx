@@ -2,13 +2,15 @@
 import { useActionState, useState } from 'react';
 import { parseAmount, formatAmount } from '@/lib/money';
 import { computeInvoice, defaultSalesAccount } from '@/lib/invoice';
+import { computeReduction, labourInclVat, REDUCTION, type ReductionType } from '@/lib/rotrut';
 
 type FormState = { error?: string } | undefined;
-type Row = { description: string; quantity: string; unit: string; price: string; vat: string; account: string };
+type Row = { description: string; quantity: string; unit: string; price: string; vat: string; account: string; labor?: boolean };
 type Customer = { id: number; name: string; reverse_charge: boolean };
 
 export interface InvoiceInitial {
   customer_id?: number; invoice_date: string; due_date?: string; delivery_date?: string; our_reference?: string; your_reference?: string; notes?: string; lines?: Row[];
+  reduction_type?: ReductionType | null; buyer_pnr?: string; property?: string; brf_orgnr?: string; apartment_no?: string; work_type?: string; reduction_max?: number | null;
 }
 
 export function InvoiceForm({ action, customers, accounts, initial }: {
@@ -22,7 +24,9 @@ export function InvoiceForm({ action, customers, accounts, initial }: {
   const rc = customers.find((c) => String(c.id) === customerId)?.reverse_charge ?? false;
   const blank = (): Row => ({ description: '', quantity: '1', unit: 'st', price: '', vat: '25', account: String(defaultSalesAccount(25, rc)) });
   const [rows, setRows] = useState<Row[]>(initial.lines?.length ? initial.lines : [blank()]);
-  const set = (i: number, k: keyof Row, v: string) =>
+  const [rr, setRr] = useState<string>(initial.reduction_type ?? '');
+  const [rrMax, setRrMax] = useState(initial.reduction_max != null ? (initial.reduction_max / 100).toFixed(2).replace('.', ',') : '');
+  const set = (i: number, k: keyof Row, v: string | boolean) =>
     setRows((r) => r.map((x, j) => {
       if (j !== i) return x;
       const n = { ...x, [k]: v };
@@ -31,9 +35,11 @@ export function InvoiceForm({ action, customers, accounts, initial }: {
     }));
   const parsed = rows.map((r) => ({
     description: r.description, quantity: Number(r.quantity.replace(',', '.')) || 0, unit: r.unit,
-    unitPrice: parseAmount(r.price) ?? 0, vatRate: Number(r.vat) as 0 | 6 | 12 | 25, account: Number(r.account),
+    unitPrice: parseAmount(r.price) ?? 0, vatRate: Number(r.vat) as 0 | 6 | 12 | 25, account: Number(r.account), labor: !!r.labor,
   }));
   const t = computeInvoice(parsed, { reverseCharge: rc });
+  const labour = rr ? labourInclVat(parsed, t, rc) : 0;
+  const red = rr ? computeReduction(rr as ReductionType, labour, parseAmount(rrMax)) : null;
   return (
     <form action={formAction} className="stack">
       {state?.error && <div className="flash error">{state.error}</div>}
@@ -58,7 +64,7 @@ export function InvoiceForm({ action, customers, accounts, initial }: {
       <datalist id="sales-accounts">{accounts.filter((a) => a.number >= 3000 && a.number < 4000).map((a) => <option key={a.number} value={a.number}>{a.name}</option>)}</datalist>
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Beskrivning</th><th style={{ width: 90 }}>Antal</th><th style={{ width: 80 }}>Enhet</th><th style={{ width: 130 }} className="num">À-pris</th><th style={{ width: 90 }}>Moms</th><th style={{ width: 100 }}>Konto</th><th className="num">Belopp</th><th></th></tr></thead>
+          <thead><tr><th>Beskrivning</th><th style={{ width: 90 }}>Antal</th><th style={{ width: 80 }}>Enhet</th><th style={{ width: 130 }} className="num">À-pris</th><th style={{ width: 90 }}>Moms</th><th style={{ width: 100 }}>Konto</th><th className="num">Belopp</th>{rr && <th title="Arbetskostnad som ger ROT/RUT-avdrag">Arbete</th>}<th></th></tr></thead>
           <tbody>
             {rows.map((r, i) => (
               <tr key={i}>
@@ -73,6 +79,7 @@ export function InvoiceForm({ action, customers, accounts, initial }: {
                 </td>
                 <td><input list="sales-accounts" value={r.account} onChange={(e) => set(i, 'account', e.target.value)} /></td>
                 <td className="num">{formatAmount(t.lineNets[i] ?? 0)}</td>
+                {rr && <td style={{ textAlign: 'center' }}><input type="checkbox" aria-label="Arbetskostnad" name={`labor_${i}`} checked={!!r.labor} onChange={(e) => set(i, 'labor', e.target.checked)} /></td>}
                 <td><button type="button" className="link" onClick={() => setRows((x) => x.filter((_, j) => j !== i))}>✕</button></td>
               </tr>
             ))}
@@ -84,8 +91,40 @@ export function InvoiceForm({ action, customers, accounts, initial }: {
         <div className="row"><span>Netto</span><span className="num" style={{ textAlign: 'right' }}>{formatAmount(t.net)}</span></div>
         <div className="row"><span>Moms</span><span style={{ textAlign: 'right' }}>{formatAmount(t.vat)}</span></div>
         {t.rounding !== 0 && <div className="row"><span>Öresavrundning</span><span style={{ textAlign: 'right' }}>{formatAmount(t.rounding)}</span></div>}
-        <div className="row" style={{ fontWeight: 700 }}><span>Att betala</span><span style={{ textAlign: 'right' }}>{formatAmount(t.total)}</span></div>
+        {red && <>
+          <div className="row"><span>Totalt</span><span style={{ textAlign: 'right' }}>{formatAmount(t.total)}</span></div>
+          <div className="row"><span>{REDUCTION[rr as ReductionType].label} ({REDUCTION[rr as ReductionType].pct} % av arbete {formatAmount(labour)})</span><span style={{ textAlign: 'right' }}>−{formatAmount(red.reduction)}</span></div>
+        </>}
+        <div className="row" style={{ fontWeight: 700 }}><span>Att betala</span><span style={{ textAlign: 'right' }}>{formatAmount(t.total - (red?.reduction ?? 0))}</span></div>
+        {red?.capped && <p className="small muted" style={{ margin: 0 }}>Avdraget är begränsat av köparens återstående utrymme.</p>}
       </div>
+      {!rc && (
+        <div className="card stack">
+          <div className="row" style={{ alignItems: 'end' }}>
+            <label style={{ flex: '0 0 220px' }}>Skattereduktion för kunden
+              <select name="reduction_type" value={rr} onChange={(e) => setRr(e.target.value)}>
+                <option value="">Ingen</option><option value="rot">ROT-avdrag (30 % av arbetet)</option><option value="rut">RUT-avdrag (50 % av arbetet)</option>
+              </select>
+            </label>
+            {rr && <p className="small muted" style={{ margin: 0, flex: '1 1 300px' }}>Markera raderna med arbetskostnad (kolumnen Arbete). Material, resor och utrustning ger inget avdrag. Kunden betalar resten och du begär avdraget från Skatteverket när kunden har betalat.</p>}
+          </div>
+          {rr && <>
+            <div className="row">
+              <label>Köparens personnummer<input name="buyer_pnr" defaultValue={initial.buyer_pnr} required placeholder="ÅÅÅÅMMDD-NNNN" /></label>
+              <label style={{ flex: '2 1 260px' }}>Typ av arbete<input name="work_type" defaultValue={initial.work_type} required placeholder={rr === 'rot' ? 'T.ex. Målning och tapetsering' : 'T.ex. Städning'} /></label>
+              <label>Kvar av köparens tak (kr, valfritt)<input value={rrMax} onChange={(e) => setRrMax(e.target.value)} inputMode="decimal" placeholder={rr === 'rot' ? '50 000' : '75 000'} /></label>
+            </div>
+            {rr === 'rot' && (
+              <div className="row">
+                <label>Fastighetsbeteckning (småhus)<input name="property" defaultValue={initial.property} placeholder="T.ex. Stockholm Ekbacken 1:23" /></label>
+                <label>eller BRF:s org.nr<input name="brf_orgnr" defaultValue={initial.brf_orgnr} /></label>
+                <label>Lägenhetsnummer<input name="apartment_no" defaultValue={initial.apartment_no} placeholder="1101" /></label>
+              </div>
+            )}
+            <input type="hidden" name="reduction_max" value={rrMax} />
+          </>}
+        </div>
+      )}
       <label>Meddelande på fakturan<textarea name="notes" rows={2} defaultValue={initial.notes} /></label>
       <input type="hidden" name="lines" value={JSON.stringify(rows)} />
       <div><button disabled={pending}>{pending ? 'Sparar…' : 'Spara utkast'}</button></div>
