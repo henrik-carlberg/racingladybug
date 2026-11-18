@@ -149,6 +149,7 @@ export const isBalanceAccount = (n: number) => n < 3000;
 export const ACC = {
   bank: 1930,
   customerReceivables: 1510,
+  customerAdvances: 2420,
   taxReductionReceivable: 1513,
   cardClearing: 1580,
   employeeReceivables: 1610,

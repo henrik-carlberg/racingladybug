@@ -16,7 +16,7 @@ export default async function Portal({ params, searchParams }: { params: Promise
   const [invoices, quotes] = await Promise.all([portalInvoices(p.company_id, p.customer_id), portalQuotes(p.company_id, p.customer_id)]);
   const t = today();
   const open = invoices.filter((i) => i.status === 'booked');
-  const due = open.reduce((s, i) => s + Number(i.total), 0);
+  const due = open.reduce((s, i) => s + Number(i.remaining), 0);
   return (
     <main style={{ maxWidth: 900, margin: '0 auto', padding: '1.5rem 16px' }}>
       <div className="header"><div><h1 style={{ marginBottom: 0 }}>{p.customer}</h1><div className="muted">Kundportal hos {p.company}</div></div></div>
@@ -51,7 +51,7 @@ export default async function Portal({ params, searchParams }: { params: Promise
           <tr key={i.id}>
             <td><a href={`/f/${i.public_token}`}>{i.credit_of_id ? 'Kreditfaktura' : 'Faktura'} {i.number}</a></td><td>{i.invoice_date}</td>
             <td style={i.status === 'booked' && i.due_date < t ? { color: 'var(--danger)' } : undefined}>{i.credit_of_id ? '' : i.due_date}</td>
-            <td className="num">{kr(i.total)}</td>
+            <td className="num">{kr(i.total)}{i.status === 'booked' && Number(i.remaining) < Number(i.total) && <div className="small muted">kvar {kr(i.remaining)}</div>}</td>
             <td>{i.status === 'paid' ? <span className="badge ok">Betald</span> : i.status === 'credited' ? <span className="badge">Krediterad</span> : i.due_date < t ? <span className="badge danger">Förfallen</span> : <span className="badge warn">Obetald</span>}</td>
             <td>{i.card && <form action={payInvoice.bind(null, i.public_token!)}><button className="secondary">Betala</button></form>}{i.status === 'booked' && i.ocr && <div className="small muted">OCR {i.ocr}</div>}</td>
           </tr>
