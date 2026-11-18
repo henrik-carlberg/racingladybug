@@ -96,7 +96,13 @@ export async function requireCompany(companyId: number | string, opts: { owner?:
   if (role === 'employee' && !opts.employee) redirect(`/c/${id}/mitt`);
   if (opts.owner && role !== 'owner') throw new Error('Endast ägare får göra detta');
   // Revisorn får läsa allt men inte ändra något: alla serveråtgärder (formulär, knappar) nekas
-  if (role === 'auditor' && (await headers()).get('next-action')) throw new Error('Revisorn har läsbehörighet och kan inte ändra i bokföringen');
+  if (role === 'auditor' && (await headers()).get('next-action')) {
+    const msg = 'Revisorn har läsbehörighet och kan inte ändra i bokföringen';
+    const ref = (await headers()).get('referer');
+    let back = `/c/${id}`;
+    try { const u = new URL(ref ?? ''); if (u.pathname.startsWith(`/c/${id}`)) back = u.pathname; } catch { /* ingen referer */ }
+    redirect(`${back}?error=${encodeURIComponent(msg)}`);
+  }
   const billing = await companyAccess(id);
   if (billing.state === 'locked' && !opts.allowLocked) redirect(`/c/${id}/abonnemang`);
   return { user, company: company as Company, role, billing, employeeId: employee_id };

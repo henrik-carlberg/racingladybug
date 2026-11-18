@@ -53,7 +53,14 @@ export function InvoiceForm({ action, customers, accounts, initial }: {
       <div className="card stack">
         <div className="row">
           <label style={{ flex: '2 1 260px' }}>Kund
-            <select name="customer_id" value={customerId} onChange={(e) => { setCustomerId(e.target.value); const c = customers.find((x) => String(x.id) === e.target.value); if (c) { setCurrency(c.currency ?? 'SEK'); setLang(c.language ?? 'sv'); } }} required>
+            <select name="customer_id" value={customerId} onChange={(e) => {
+              setCustomerId(e.target.value);
+              const c = customers.find((x) => String(x.id) === e.target.value);
+              if (!c) return;
+              setCurrency(c.currency ?? 'SEK'); setLang(c.language ?? 'sv');
+              // Rader med standardkontot byter till det som gäller för den nya kunden (t.ex. 3308 vid omvänd skattskyldighet)
+              if (!advance) setRows((r) => r.map((x) => (x.account === String(defaultSalesAccount(Number(x.vat), rc)) ? { ...x, account: String(defaultSalesAccount(Number(x.vat), c.reverse_charge)) } : x)));
+            }} required>
               <option value="">Välj kund…</option>
               {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>

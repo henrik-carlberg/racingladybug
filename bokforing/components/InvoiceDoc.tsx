@@ -91,7 +91,7 @@ export async function InvoiceDoc({ inv, lines, co, orig, isCredit, time }: {
                 <tr><td>{REDUCTION[inv.reduction_type].label} ({REDUCTION[inv.reduction_type].pct} % av arbetskostnad {kr(labour)} kr inkl. moms)</td><td className="num">−{kr(red)}</td></tr>
               </>}
               <tr className="sum"><td>{isCredit ? L.toCredit : L.toPay} {cur}</td><td className="num">{kr(toPay)}</td></tr>
-              {foreign && <tr className="small muted"><td colSpan={2}>{L.rate(cur, String(inv.exchange_rate ?? '').replace('.', ','))}</td></tr>}
+              {foreign && <tr className="small muted"><td colSpan={2}>{L.rate(cur, Number(inv.exchange_rate ?? 0).toLocaleString('sv-SE', { maximumFractionDigits: 6 }))}</td></tr>}
             </tbody>
           </table>
           {inv.reverse_charge && <p><b>{L.reverseCharge}</b> ({langOf(inv.language) === 'en' ? 'VAT' : 'Reverse charge'}, art. 196 Directive 2006/112/EC). {L.buyerVat}: {inv.c_vat}</p>}

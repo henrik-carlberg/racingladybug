@@ -52,7 +52,7 @@ export function EmployeeFields({ e }: { e?: Partial<EmployeeRow> }) {
       </div>
       <div className="row">
         <label>Bilförmån kr/mån (se Lön → Bilförmån)<input name="car_benefit" inputMode="decimal" defaultValue={e?.car_benefit ? (Number(e.car_benefit) / 100).toFixed(2).replace('.', ',') : ''} /></label>
-        <label>Tjänstepension % av lönen<input name="pension_percent" inputMode="decimal" defaultValue={e?.pension_percent ? String(e.pension_percent).replace('.', ',') : ''} placeholder="T.ex. 4,5" /></label>
+        <label>Tjänstepension % av lönen<input name="pension_percent" inputMode="decimal" defaultValue={Number(e?.pension_percent) ? Number(e!.pension_percent).toLocaleString('sv-SE', { maximumFractionDigits: 2 }) : ''} placeholder="T.ex. 4,5" /></label>
       </div>
       <p className="muted small" style={{ margin: 0 }}>Skattetabell och kolumn framgår av den anställdes skattebesked (Skatteverket). Kolumn 1 gäller för de flesta löntagare. Saknas A-skattsedel/skattebesked ska 30 % dras.</p>
     </>

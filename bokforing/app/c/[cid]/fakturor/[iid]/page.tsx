@@ -117,7 +117,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
               <label>Bankkonto<select name="bank_account"><option value="1930">1930 Företagskonto</option><option value="1940">1940 Övriga bankkonton</option><option value="1910">1910 Kassa</option></select></label>
               <div style={{ flex: '0 0 auto' }}><button>Registrera inbetalning</button></div>
             </form>
-            {inv.currency !== 'SEK' && <p className="small muted" style={{ margin: 0 }}>Fakturan är på {inv.total_currency != null ? kr(inv.total_currency) : ''} {inv.currency} och bokförd till {kr(inv.total)} kr (kurs {String(inv.exchange_rate).replace('.', ',')}). Ange vad som kom in på kontot i kronor – skillnaden bokförs som kursvinst (3960) eller kursförlust (7960).</p>}
+            {inv.currency !== 'SEK' && <p className="small muted" style={{ margin: 0 }}>Fakturan är på {inv.total_currency != null ? kr(inv.total_currency) : ''} {inv.currency} och bokförd till {kr(inv.total)} kr (kurs {Number(inv.exchange_rate).toLocaleString('sv-SE', { maximumFractionDigits: 6 })}). Ange vad som kom in på kontot i kronor – skillnaden bokförs som kursvinst (3960) eller kursförlust (7960).</p>}
             {Number(inv.paid_amount) === 0 && <form action={creditInvoice.bind(null, co.id, inv.id)} className="row">
               <label>Kreditera per datum<input type="date" name="date" defaultValue={t0} required /></label>
               <div style={{ flex: '0 0 auto' }}><button className="danger">Kreditera hela fakturan</button></div>
