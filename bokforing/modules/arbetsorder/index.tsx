@@ -53,7 +53,7 @@ async function OrderPage({ companyId, basePath, params }: ModulePageProps) {
   const o = await svc.getOrder(companyId, Number(params.id));
   const users = await members(companyId);
   const locked = o.status === 'invoiced' && !!o.invoice_id || o.status === 'cancelled';
-  const labour = o.items.filter((i) => i.kind === 'labor').reduce((s, i) => s + svc.itemNet(i), 0);
+  const labour = o.items.filter((i) => i.kind === 'labor' || i.kind === 'ata').reduce((s, i) => s + svc.itemNet(i), 0);
   return (
     <>
       <div className="header">
@@ -68,7 +68,7 @@ async function OrderPage({ companyId, basePath, params }: ModulePageProps) {
         <thead><tr><th>Typ</th><th>Datum</th><th>Beskrivning</th><th className="num">Antal</th><th className="num">À-pris</th><th className="num">Moms</th><th className="num">Belopp</th><th></th></tr></thead>
         <tbody>
           {o.items.map((i) => (
-            <tr key={i.id}><td>{svc.KIND[i.kind]}</td><td className="small">{i.date}</td><td>{i.description}{i.user_name && <span className="small muted"> ({i.user_name})</span>}</td>
+            <tr key={i.id}><td>{svc.KIND[i.kind]}</td><td className="small">{i.date}</td><td>{i.description}{i.user_name && <span className="small muted"> ({i.user_name})</span>}{i.kind === 'ata' && <div className="small muted">Godkänt av {i.approved_by}</div>}</td>
               <td className="num">{String(i.quantity).replace('.', ',')} {i.unit}</td><td className="num">{kr(i.unit_price)}</td><td className="num">{i.vat_rate} %</td><td className="num">{kr(svc.itemNet(i))}</td>
               <td>{!locked && <form action={a.removeItem.bind(null, companyId, o.id, i.id)}><button className="link">Ta bort</button></form>}</td></tr>
           ))}
@@ -85,6 +85,7 @@ async function OrderPage({ companyId, basePath, params }: ModulePageProps) {
           <label style={{ flex: '0 0 120px' }}>À-pris exkl. moms<input name="unit_price" inputMode="decimal" required /></label>
           <label style={{ flex: '0 0 90px' }}>Moms<select name="vat_rate" defaultValue="25"><option value="25">25 %</option><option value="12">12 %</option><option value="6">6 %</option><option value="0">0 %</option></select></label>
           <label style={{ flex: '0 0 150px' }}>Datum<input type="date" name="date" defaultValue={today()} /></label>
+          <label style={{ flex: '0 0 180px' }}>Godkänt av (ÄTA)<input name="approved_by" placeholder="Beställarens namn" /></label>
           <div style={{ flex: '0 0 auto' }}><button className="secondary">Lägg till</button></div>
         </form>
       )}

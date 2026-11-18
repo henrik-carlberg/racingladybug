@@ -152,3 +152,31 @@ export async function revokeInvite(cid: number, inviteId: number) {
   await sql`DELETE FROM invites WHERE id = ${inviteId} AND company_id = ${company.id} AND accepted_at IS NULL`;
   done(back(cid), 'Inbjudan är återkallad');
 }
+
+/** Ägaren begränsar vad en redovisningskonsult eller annan användare får göra */
+export async function setPermissions(cid: number, userId: number, fd: FormData) {
+  const { company, user } = await requireCompany(cid, { owner: true });
+  await attempt(back(cid), async () => {
+    const { ALL_PERMISSIONS, parsePermissions } = await import('@/lib/permissions');
+    const chosen = parsePermissions(fd.getAll('perm').map(String)) ?? [];
+    const perms = chosen.length === ALL_PERMISSIONS.length ? null : chosen;
+    const r = await sql`UPDATE memberships SET permissions = ${perms ? sql.array(perms) : null} WHERE company_id = ${company.id} AND user_id = ${userId} AND role = 'accountant' RETURNING user_id`;
+    if (!r.length) throw new Error('Behörigheter kan bara begränsas för redovisningskonsulter');
+    await audit(sql, { companyId: company.id, userId: user.id, action: 'permissions', entity: 'membership', entityId: userId, details: { permissions: perms } });
+  });
+  done(back(cid), 'Behörigheterna är sparade');
+}
+
+export async function setAttestRules(cid: number, fd: FormData) {
+  const { company, user } = await requireCompany(cid, { owner: true });
+  await attempt(back(cid), async () => {
+    const { parseAmount } = await import('@/lib/money');
+    const raw = str(fd, 'attest_threshold');
+    const threshold = raw ? parseAmount(raw) : null;
+    if (raw && (threshold == null || threshold <= 0)) throw new Error('Ange beloppsgränsen i kronor');
+    const notRegistrant = fd.get('attest_not_registrant') === 'on';
+    await sql`UPDATE companies SET attest_threshold = ${threshold}, attest_not_registrant = ${notRegistrant} WHERE id = ${company.id}`;
+    await audit(sql, { companyId: company.id, userId: user.id, action: 'attest_rules', entity: 'company', entityId: company.id, details: { threshold, notRegistrant } });
+  });
+  done(back(cid), 'Attestreglerna är sparade');
+}

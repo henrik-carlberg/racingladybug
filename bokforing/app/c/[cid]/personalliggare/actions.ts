@@ -8,7 +8,7 @@ const base = (cid: number, qs = '') => `/c/${cid}/personalliggare${qs}`;
 
 export async function createSite(cid: number, fd: FormData) {
   const actor = userActor(await requireCompany(cid));
-  await attempt(base(cid), () => svc.createSite(actor, str(fd, 'name'), str(fd, 'address')));
+  await attempt(base(cid), () => svc.createSite(actor, str(fd, 'name'), str(fd, 'address'), { construction: fd.get('construction') === 'on', siteRef: str(fd, 'site_ref') }));
   done(base(cid), 'Arbetsplatsen är tillagd');
 }
 
@@ -22,7 +22,7 @@ export async function stampFor(cid: number, fd: FormData) {
   const ctx = await requireCompany(cid);
   let msg = '';
   await attempt(base(cid), async () => {
-    const r = await svc.stamp(ctx.company.id, Number(str(fd, 'site_id')), { personalNumber: str(fd, 'personal_number'), name: str(fd, 'name') }, 'manager', ctx.user.id);
+    const r = await svc.stamp(ctx.company.id, Number(str(fd, 'site_id')), { personalNumber: str(fd, 'personal_number'), name: str(fd, 'name'), id06: str(fd, 'id06') }, 'manager', ctx.user.id);
     msg = `${r.name} är ${r.action === 'in' ? 'instämplad' : 'utstämplad'}`;
   });
   done(base(cid), msg);

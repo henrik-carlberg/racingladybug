@@ -16,13 +16,15 @@ const fmt = (col: string) => sql`to_char(${sql.unsafe(col)} AT TIME ZONE ${TZ}, 
 
 // ---------- Arbetsplatser ----------
 
-export interface Site { id: number; name: string; address: string; kiosk_token: string; active: boolean }
+export interface Site { id: number; name: string; address: string; kiosk_token: string; active: boolean; kind: 'general' | 'construction'; site_ref: string }
 export async function listSites(companyId: number, activeOnly = false): Promise<Site[]> {
-  return [...await sql<Site[]>`SELECT id, name, address, kiosk_token, active FROM work_sites WHERE company_id = ${companyId} ${activeOnly ? sql`AND active` : sql``} ORDER BY name`];
+  return [...await sql<Site[]>`SELECT id, name, address, kiosk_token, active, kind, site_ref FROM work_sites WHERE company_id = ${companyId} ${activeOnly ? sql`AND active` : sql``} ORDER BY name`];
 }
-export async function createSite(actor: Actor, name: string, address: string) {
+export async function createSite(actor: Actor, name: string, address: string, opts: { construction?: boolean; siteRef?: string } = {}) {
   if (!name.trim()) throw new ValidationError('Ange arbetsplatsens namn');
-  const [r] = await sql<{ id: number }[]>`INSERT INTO work_sites (company_id, name, address, kiosk_token) VALUES (${actor.companyId}, ${name.trim()}, ${address.trim()}, ${randomBytes(18).toString('base64url')}) RETURNING id`;
+  const ref = (opts.siteRef ?? '').trim().toUpperCase();
+  if (opts.construction && !/^[A-Z0-9-]{6,20}$/.test(ref)) throw new ValidationError('Ange byggarbetsplatsens ID från Skatteverket (byggherren anmäler byggarbetsplatsen)');
+  const [r] = await sql<{ id: number }[]>`INSERT INTO work_sites (company_id, name, address, kiosk_token, kind, site_ref) VALUES (${actor.companyId}, ${name.trim()}, ${address.trim()}, ${randomBytes(18).toString('base64url')}, ${opts.construction ? 'construction' : 'general'}, ${ref}) RETURNING id`;
   await auditBy(sql, actor, 'create', 'work_site', r.id);
   return r.id;
 }
@@ -80,13 +82,13 @@ export async function copyWeek(actor: Actor, weekStart: string) {
 // ---------- Personalliggare ----------
 
 export interface LogEntry {
-  id: number; site_id: number; site: string; employee_id: number | null; person_name: string; personal_number: string;
+  id: number; site_id: number; site: string; site_ref: string; id06: string; employee_id: number | null; person_name: string; personal_number: string;
   check_in: string; check_out: string | null; source: string; changes: { field: string; old_value: string; new_value: string; reason: string; by: string | null; at: string }[];
 }
 
 export async function listLog(companyId: number, f: { siteId?: number; date?: string; open?: boolean }): Promise<LogEntry[]> {
   return [...await sql<LogEntry[]>`
-    SELECT l.id, l.site_id, w.name AS site, l.employee_id, l.person_name, l.personal_number, ${fmt('l.check_in')} AS check_in,
+    SELECT l.id, l.site_id, w.name AS site, w.site_ref, l.id06, l.employee_id, l.person_name, l.personal_number, ${fmt('l.check_in')} AS check_in,
       CASE WHEN l.check_out IS NULL THEN NULL ELSE ${fmt('l.check_out')} END AS check_out, l.source,
       COALESCE((SELECT json_agg(json_build_object('field', c.field, 'old_value', c.old_value, 'new_value', c.new_value, 'reason', c.reason, 'by', u.name,
         'at', to_char(c.changed_at AT TIME ZONE ${TZ}, 'YYYY-MM-DD HH24:MI')) ORDER BY c.id) FROM staff_log_changes c LEFT JOIN users u ON u.id = c.changed_by WHERE c.log_id = l.id), '[]') AS changes
@@ -100,12 +102,12 @@ export async function listLog(companyId: number, f: { siteId?: number; date?: st
  * Stämplar in eller ut. Har personen ett öppet pass på arbetsplatsen stämplas hen ut, annars in.
  * Anställda identifieras med personnummer; andra verksamma (ägare, inhyrda) anger namn och personnummer.
  */
-export async function stamp(companyId: number, siteId: number, who: { personalNumber: string; name?: string }, source: 'self' | 'kiosk' | 'manager', userId: number | null) {
+export async function stamp(companyId: number, siteId: number, who: { personalNumber: string; name?: string; id06?: string }, source: 'self' | 'kiosk' | 'manager', userId: number | null) {
   const pnr = normalizePersonalNumber(who.personalNumber);
   if (!pnr) throw new ValidationError('Ogiltigt personnummer');
-  const [site] = await sql`SELECT 1 FROM work_sites WHERE id = ${siteId} AND company_id = ${companyId} AND active`;
+  const [site] = await sql<{ kind: string }[]>`SELECT kind FROM work_sites WHERE id = ${siteId} AND company_id = ${companyId} AND active`;
   if (!site) throw new ValidationError('Välj arbetsplats');
-  const [emp] = await sql<{ id: number; name: string }[]>`SELECT id, first_name || ' ' || last_name AS name FROM employees WHERE company_id = ${companyId} AND personal_number = ${pnr} AND active`;
+  const [emp] = await sql<{ id: number; name: string; id06: string }[]>`SELECT id, first_name || ' ' || last_name AS name, id06 FROM employees WHERE company_id = ${companyId} AND personal_number = ${pnr} AND active`;
   const name = emp?.name ?? who.name?.trim();
   if (!name) throw new ValidationError('Personnumret finns inte bland de anställda – ange även namn');
   return sql.begin(async (tx) => {
@@ -114,8 +116,11 @@ export async function stamp(companyId: number, siteId: number, who: { personalNu
       await tx`UPDATE staff_log SET check_out = now() WHERE id = ${open.id}`;
       return { action: 'out' as const, name };
     }
-    await tx`INSERT INTO staff_log (company_id, site_id, employee_id, person_name, personal_number, check_in, source, created_by)
-      VALUES (${companyId}, ${siteId}, ${emp?.id ?? null}, ${name}, ${pnr}, now(), ${source}, ${userId})`;
+    // På byggarbetsplatser registreras ID06-kortet (krav i personalliggaren för byggbranschen)
+    const id06 = (emp?.id06 || who.id06 || '').trim();
+    if (site.kind === 'construction' && !id06) throw new ValidationError('Ange ID06-kortets nummer – krävs på byggarbetsplatser');
+    await tx`INSERT INTO staff_log (company_id, site_id, employee_id, person_name, personal_number, check_in, source, created_by, id06)
+      VALUES (${companyId}, ${siteId}, ${emp?.id ?? null}, ${name}, ${pnr}, now(), ${source}, ${userId}, ${id06})`;
     return { action: 'in' as const, name };
   });
 }

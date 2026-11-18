@@ -21,6 +21,7 @@ export default async function Kiosk({ params, searchParams }: { params: Promise<
       <form action={kioskStamp.bind(null, token)} className="card stack">
         <label>Personnummer<input name="personal_number" inputMode="numeric" autoComplete="off" required autoFocus placeholder="ÅÅÅÅMMDD-NNNN" style={{ fontSize: '1.3rem' }} /></label>
         <label>Namn (bara om du inte är anställd här)<input name="name" autoComplete="off" /></label>
+        <label>ID06-kort (byggarbetsplats, om det inte finns registrerat)<input name="id06" autoComplete="off" /></label>
         <button style={{ fontSize: '1.2rem', padding: '.8rem' }}>Stämpla in / ut</button>
       </form>
       <h2>Instämplade nu ({open.length})</h2>

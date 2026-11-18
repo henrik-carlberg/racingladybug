@@ -14,7 +14,7 @@ const TYPE_LABEL: Record<string, string> = { invoice: 'Kundfaktura', supplier_in
 
 export default async function Reconcile({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company, role } = await requireCompany(cid);
+  const { company, role } = await requireCompany(cid, { perm: 'ledger' });
   const sp = await searchParams;
   const status = String(sp.status ?? 'unmatched');
   const accountId = sp.account_id ? Number(sp.account_id) : undefined;

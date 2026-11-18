@@ -15,7 +15,7 @@ const FORMS: Record<string, string> = { tillsvidare: 'Tillsvidareanställning', 
 /** Underlag för arbetsgivarintyg: anställning och lön per månad de senaste 13 månaderna */
 export default async function Certificate({ params, searchParams }: { params: Promise<{ cid: string; eid: string }>; searchParams: SP }) {
   const { cid, eid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'payroll' });
   const sp = await searchParams;
   const [e] = await sql<{ id: number; name: string; pnr: string; start: string | null; end: string | null; form: string; title: string; hours: number; monthly: number }[]>`
     SELECT id, first_name || ' ' || last_name AS name, personal_number AS pnr, to_char(employment_start,'YYYY-MM-DD') AS start, to_char(employment_end,'YYYY-MM-DD') AS "end",

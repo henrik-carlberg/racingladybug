@@ -14,7 +14,7 @@ const STATUS: Record<string, [string, string]> = {
 
 export default async function RotRut({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'invoicing' });
   const t = today();
   const year = t.slice(0, 4);
   const [all, buyers] = await Promise.all([listReductions(company.id), buyerTotals(company.id, year)]);

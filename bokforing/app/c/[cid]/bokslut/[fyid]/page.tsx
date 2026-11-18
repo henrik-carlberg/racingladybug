@@ -22,7 +22,7 @@ function Step({ n, title, done, children }: { n: number; title: string; done?: b
 
 export default async function YearendYear({ params, searchParams }: { params: Promise<{ cid: string; fyid: string }>; searchParams: SP }) {
   const { cid, fyid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'ledger' });
   const s = await yearStatus(company.id, Number(fyid)).catch((e) => { if (e instanceof NotFoundError) notFound(); throw e; });
   const b = `/c/${company.id}`;
   const ab = s.companyType === 'AB';

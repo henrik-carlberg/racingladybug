@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
 import { lockChecks } from '@/lib/services/lockcheck';
+import { ALL_PERMISSIONS, PERMISSIONS } from '@/lib/permissions';
 import { fiscalYears } from '@/lib/server/ledger';
 import { Flash, type SP } from '@/components/ui';
 import { ROLE_LABEL } from '@/lib/format';
@@ -21,8 +22,8 @@ export default async function Settings({ params, searchParams }: { params: Promi
   const years = await fiscalYears(c.id);
   const unlinked = await sql<{ id: number; name: string; email: string }[]>`SELECT id, first_name || ' ' || last_name AS name, email FROM employees
     WHERE company_id = ${c.id} AND active AND user_id IS NULL ORDER BY last_name`;
-  const members = await sql<{ id: number; name: string; email: string; role: 'owner' | 'accountant' | 'employee' }[]>`
-    SELECT u.id, u.name, u.email, m.role FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.company_id = ${c.id} ORDER BY m.role DESC, u.name`;
+  const members = await sql<{ id: number; name: string; email: string; role: 'owner' | 'accountant' | 'employee' | 'auditor'; permissions: string[] | null }[]>`
+    SELECT u.id, u.name, u.email, m.role, m.permissions FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.company_id = ${c.id} ORDER BY m.role DESC, u.name`;
   const invites = await sql<{ id: number; email: string; role: 'owner' | 'accountant' | 'employee'; expires: string }[]>`
     SELECT id, email, role, to_char(expires_at,'YYYY-MM-DD') AS expires FROM invites
     WHERE company_id = ${c.id} AND accepted_at IS NULL AND expires_at > now() ORDER BY id DESC`;
@@ -145,13 +146,29 @@ export default async function Settings({ params, searchParams }: { params: Promi
         {checks.some((x) => !x.ok) && <span className="small" style={{ color: 'var(--warn)', alignSelf: 'center' }}>Det finns punkter kvar ovan – du kan ändå låsa.</span>}
       </form>
 
+      <h2>Attest av leverantörsfakturor</h2>
+      <form action={a.setAttestRules.bind(null, c.id)} className="card row" style={{ alignItems: 'end' }}>
+        <label>Två attester från belopp (kr inkl. moms, tomt = alltid en)<input name="attest_threshold" inputMode="decimal" defaultValue={c.attest_threshold ? (Number(c.attest_threshold) / 100).toFixed(0) : ''} disabled={!isOwner} /></label>
+        <label className="check"><input type="checkbox" name="attest_not_registrant" defaultChecked={c.attest_not_registrant} disabled={!isOwner} /> Den som registrerar en faktura får inte attestera den</label>
+        {isOwner && <div style={{ flex: '0 0 auto' }}><button className="secondary">Spara</button></div>}
+      </form>
+
       <h2>Användare</h2>
       <table>
         <thead><tr><th>Namn</th><th>E-post</th><th>Roll</th><th></th></tr></thead>
         <tbody>
           {members.map((m) => (
             <tr key={m.id}>
-              <td>{m.name}</td><td>{m.email}</td><td>{ROLE_LABEL[m.role]}</td>
+              <td>{m.name}</td><td>{m.email}</td><td>{ROLE_LABEL[m.role]}
+                {m.role === 'accountant' && (isOwner ? (
+                  <details className="small perms"><summary>{m.permissions ? `Begränsad (${m.permissions.length} av ${ALL_PERMISSIONS.length})` : 'Alla behörigheter'}</summary>
+                    <form action={a.setPermissions.bind(null, c.id, m.id)} className="stack" style={{ gap: '.2rem', marginTop: '.3rem' }}>
+                      {ALL_PERMISSIONS.map((p) => <label key={p} className="check"><input type="checkbox" name="perm" value={p} defaultChecked={!m.permissions || m.permissions.includes(p)} /> {PERMISSIONS[p]}</label>)}
+                      <div><button className="secondary">Spara behörigheter</button></div>
+                    </form>
+                  </details>
+                ) : m.permissions && <div className="small muted">Begränsad behörighet</div>)}
+              </td>
               <td className="num">{isOwner && m.id !== user.id && (
                 <form action={a.removeMember.bind(null, c.id, m.id)}><button className="link">Ta bort</button></form>
               )}</td>

@@ -35,7 +35,7 @@ export async function addItem(cid: number, id: number, fd: FormData) {
   const actor = await ctx(cid);
   await attempt(`${base(cid)}/o/${id}`, () => svc.addItem(actor, id, {
     kind: str(fd, 'kind'), description: str(fd, 'description'), quantity: str(fd, 'quantity'), unit: str(fd, 'unit'),
-    unit_price: amount(fd, 'unit_price', 'À-pris') ?? 0, vat_rate: str(fd, 'vat_rate'), date: str(fd, 'date'),
+    unit_price: amount(fd, 'unit_price', 'À-pris') ?? 0, vat_rate: str(fd, 'vat_rate'), date: str(fd, 'date'), approved_by: str(fd, 'approved_by'),
   }));
   done(`${base(cid)}/o/${id}`, 'Raden är tillagd');
 }

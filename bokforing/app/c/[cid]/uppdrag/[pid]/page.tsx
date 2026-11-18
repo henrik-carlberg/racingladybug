@@ -7,8 +7,8 @@ import { Flash, Status, type SP } from '@/components/ui';
 import { Help } from '@/components/Help';
 import { kr, today } from '@/lib/format';
 import { BILLING_LABEL, fmtHours, monthName, monthRange, previousMonth } from '@/lib/time';
-import { getProject, listTimeEntries } from '@/lib/services/time';
-import { bankStatement, buyHourBank, invoiceTime, saveActivity, updateProject } from '../actions';
+import { getProject, listTimeEntries, userRates } from '@/lib/services/time';
+import { bankStatement, buyHourBank, invoiceTime, saveActivity, setRate, updateProject } from '../actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +18,7 @@ export default async function ProjectPage({ params, searchParams }: { params: Pr
   const { cid, pid } = await params;
   const { company } = await requireCompany(cid);
   const p = await getProject(company.id, Number(pid)).catch((e) => { if (e instanceof NotFoundError) notFound(); throw e; });
+  const rates = p.billing === 'hourly' ? await userRates(company.id, p.id) : [];
   const b = `/c/${company.id}`;
   const t = today();
   const prev = previousMonth(t);
@@ -152,6 +153,17 @@ export default async function ProjectPage({ params, searchParams }: { params: Pr
           ))}</tbody>
         </table></div>
       </>)}
+
+      {p.billing === 'hourly' && rates.length > 0 && (
+          <>
+            <h2>Timpris per person</h2>
+            <form action={setRate.bind(null, company.id, p.id)} className="card stack">
+              <p className="small muted" style={{ margin: 0 }}>Lämna tomt för att använda aktivitetens eller uppdragets timpris ({kr(p.hourly_rate)} kr). Ett pris per person går före aktivitetens pris.</p>
+              <div className="row">{rates.map((r) => <label key={r.user_id} style={{ flex: '0 1 200px' }}>{r.name}<input name={`rate_${r.user_id}`} inputMode="decimal" defaultValue={r.rate != null ? (r.rate / 100).toFixed(0) : ''} placeholder={(p.hourly_rate / 100).toFixed(0)} /></label>)}</div>
+              <div><button className="secondary">Spara timpriser</button></div>
+            </form>
+          </>
+      )}
 
       <h2>Inställningar för uppdraget</h2>
       <form action={updateProject.bind(null, company.id, p.id)} className="card stack">

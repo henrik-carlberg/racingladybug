@@ -6,7 +6,7 @@ import { computeReduction, labourInclVat, REDUCTION, type ReductionType } from '
 
 type FormState = { error?: string } | undefined;
 type Row = { description: string; quantity: string; unit: string; price: string; vat: string; account: string; labor?: boolean };
-type Customer = { id: number; name: string; reverse_charge: boolean; currency?: string; language?: string };
+type Customer = { id: number; name: string; reverse_charge: boolean; construction_rc?: boolean; currency?: string; language?: string };
 
 export interface InvoiceInitial {
   customer_id?: number; advance?: boolean; currency?: string; exchange_rate?: number | string; language?: string; invoice_date: string; due_date?: string; delivery_date?: string; our_reference?: string; your_reference?: string; notes?: string; lines?: Row[];
@@ -22,13 +22,14 @@ export function InvoiceForm({ action, customers, accounts, initial }: {
   const [state, formAction, pending] = useActionState(action, undefined);
   const [customerId, setCustomerId] = useState(String(initial.customer_id ?? ''));
   const cust = customers.find((c) => String(c.id) === customerId);
-  const rc = cust?.reverse_charge ?? false;
+  const construction = !!cust?.construction_rc;
+  const rc = (cust?.reverse_charge ?? false) || construction;
   const [currency, setCurrency] = useState(initial.currency ?? 'SEK');
   const [rate, setRate] = useState(initial.exchange_rate ? String(initial.exchange_rate).replace('.', ',') : '');
   const [lang, setLang] = useState(initial.language ?? 'sv');
   const foreign = currency !== 'SEK';
   const [advance, setAdvance] = useState(!!initial.advance);
-  const salesAcc = (vat: number) => (advance ? 2420 : defaultSalesAccount(vat, rc));
+  const salesAcc = (vat: number) => (advance ? 2420 : construction ? 3231 : defaultSalesAccount(vat, rc));
   const blank = (): Row => ({ description: '', quantity: '1', unit: 'st', price: '', vat: '25', account: String(salesAcc(25)) });
   const [rows, setRows] = useState<Row[]>(initial.lines?.length ? initial.lines : [blank()]);
   const [rr, setRr] = useState<string>(initial.reduction_type ?? '');
@@ -59,7 +60,8 @@ export function InvoiceForm({ action, customers, accounts, initial }: {
               if (!c) return;
               setCurrency(c.currency ?? 'SEK'); setLang(c.language ?? 'sv');
               // Rader med standardkontot byter till det som gäller för den nya kunden (t.ex. 3308 vid omvänd skattskyldighet)
-              if (!advance) setRows((r) => r.map((x) => (x.account === String(defaultSalesAccount(Number(x.vat), rc)) ? { ...x, account: String(defaultSalesAccount(Number(x.vat), c.reverse_charge)) } : x)));
+              const newAcc = (v: number) => (c.construction_rc ? 3231 : defaultSalesAccount(v, c.reverse_charge));
+              if (!advance) setRows((r) => r.map((x) => (x.account === String(salesAcc(Number(x.vat))) ? { ...x, account: String(newAcc(Number(x.vat))) } : x)));
             }} required>
               <option value="">Välj kund…</option>
               {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -119,8 +121,8 @@ export function InvoiceForm({ action, customers, accounts, initial }: {
         {foreign && Number(rate.replace(',', '.')) > 0 && <div className="row small muted"><span>Bokförs som</span><span style={{ textAlign: 'right' }}>{formatAmount(Math.round(t.total * Number(rate.replace(',', '.'))))} kr</span></div>}
         {red?.capped && <p className="small muted" style={{ margin: 0 }}>Avdraget är begränsat av köparens återstående utrymme.</p>}
       </div>
-      <label className="row" style={{ alignItems: 'center', gap: '.5rem' }}>
-        <input type="checkbox" name="advance" checked={advance} style={{ width: 'auto' }} onChange={(e) => {
+      <label className="check">
+        <input type="checkbox" name="advance" checked={advance} onChange={(e) => {
           const on = e.target.checked; setAdvance(on); if (on) setRr('');
           setRows((r) => r.map((x) => ({ ...x, account: String(on ? 2420 : defaultSalesAccount(Number(x.vat), rc)) })));
         }} />

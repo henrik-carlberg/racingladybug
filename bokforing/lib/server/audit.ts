@@ -14,5 +14,9 @@ export async function audit(
 
 /** Loggar en händelse utförd av en aktör (användare eller API-nyckel) */
 export function auditBy(db: Tx | typeof sql, a: Actor, action: string, entity: string, entityId?: number | null, details?: unknown) {
+  // Revisorn har bara läsbehörighet – alla ändringar loggas via auditBy, så de stoppas här även om en kontroll i gränssnittet missas
+  if (a.role === 'auditor') throw new Error('Revisorn har läsbehörighet och kan inte ändra i bokföringen');
   return audit(db, { companyId: a.companyId, userId: a.userId, apiKeyId: a.apiKeyId, action, entity, entityId, details });
 }
+
+export { changes } from '@/lib/changes';

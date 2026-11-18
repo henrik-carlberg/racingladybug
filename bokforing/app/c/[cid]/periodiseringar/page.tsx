@@ -72,7 +72,7 @@ export default async function Accruals({ params, searchParams }: { params: Promi
           {ccs.length > 0 && <label>Kostnadsställe<select name="cost_center_id"><option value="">–</option>{ccs.map((c) => <option key={c.id} value={c.id}>{c.code} {c.name}</option>)}</select></label>}
         </div>
         <div className="row" style={{ alignItems: 'end' }}>
-          <label className="row" style={{ alignItems: 'center', gap: '.5rem', flex: '1 1 320px' }}><input type="checkbox" name="transfer" defaultChecked style={{ width: 'auto' }} />
+          <label className="check" style={{ flex: '1 1 320px' }}><input type="checkbox" name="transfer" defaultChecked style={{ width: 'auto' }} />
             <span>Flytta beloppet från resultatkontot till balanskontot (om fakturan redan har bokförts som kostnad eller intäkt)</span></label>
           <label style={{ flex: '0 0 180px' }}>Datum för omföring<input type="date" name="transfer_date" defaultValue={t} /></label>
         </div>

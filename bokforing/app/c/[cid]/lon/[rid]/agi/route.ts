@@ -5,7 +5,7 @@ import { AppError } from '@/lib/errors';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ cid: string; rid: string }> }) {
   const { cid, rid } = await params;
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'payroll' }));
   try {
     const { filename, xml } = await buildAgiForRun(actor, Number(rid));
     return new Response(xml, { headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Content-Disposition': `attachment; filename="${filename}"` } });

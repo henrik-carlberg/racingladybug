@@ -6,7 +6,7 @@ import { AppError } from '@/lib/errors';
 /** SRU-filer (ISO 8859-1) för Skatteverkets filöverföring */
 export async function GET(_req: Request, { params }: { params: Promise<{ cid: string; fyid: string; file: string }> }) {
   const { cid, fyid, file } = await params;
-  const { company, user } = await requireCompany(cid);
+  const { company, user } = await requireCompany(cid, { perm: 'ledger' });
   if (file !== 'INFO.SRU' && file !== 'BLANKETTER.SRU') return new Response('Okänd fil', { status: 404 });
   try {
     const f = await sruFiles(company.id, Number(fyid), user.name);

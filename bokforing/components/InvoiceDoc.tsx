@@ -13,7 +13,7 @@ export interface InvoiceDocData {
   our_reference: string; your_reference: string; notes: string; reverse_charge: boolean;
   hour_bank: { period: string; purchased: number; drawn_before: number; used_now: number; drawn: number; overage: number; remaining: number } | null;
   c_name: string; c_orgnr: string; c_vat: string; c_address: string; c_postal: string; c_city: string; c_country: string;
-  currency?: string; exchange_rate?: number | string; language?: string;
+  currency?: string; exchange_rate?: number | string; language?: string; rc_kind?: string;
   reduction_type?: ReductionType | null; tax_reduction?: number; buyer_pnr?: string; property?: string; brf_orgnr?: string; apartment_no?: string; work_type?: string;
 }
 
@@ -94,7 +94,8 @@ export async function InvoiceDoc({ inv, lines, co, orig, isCredit, time }: {
               {foreign && <tr className="small muted"><td colSpan={2}>{L.rate(cur, Number(inv.exchange_rate ?? 0).toLocaleString('sv-SE', { maximumFractionDigits: 6 }))}</td></tr>}
             </tbody>
           </table>
-          {inv.reverse_charge && <p><b>{L.reverseCharge}</b> ({langOf(inv.language) === 'en' ? 'VAT' : 'Reverse charge'}, art. 196 Directive 2006/112/EC). {L.buyerVat}: {inv.c_vat}</p>}
+          {inv.reverse_charge && inv.rc_kind === 'construction' && <p><b>{langOf(inv.language) === 'en' ? 'Reverse charge – construction services' : 'Omvänd betalningsskyldighet för byggtjänster'}</b> ({langOf(inv.language) === 'en' ? 'the buyer accounts for the VAT' : 'köparen redovisar momsen'}). {L.buyerVat}: {inv.c_vat || inv.c_orgnr}</p>}
+          {inv.reverse_charge && inv.rc_kind !== 'construction' && <p><b>{L.reverseCharge}</b> ({langOf(inv.language) === 'en' ? 'VAT' : 'Reverse charge'}, art. 196 Directive 2006/112/EC). {L.buyerVat}: {inv.c_vat}</p>}
           {inv.reduction_type && (
             <div className="small" style={{ border: '1px solid #ccc', borderRadius: 6, padding: '.6rem .9rem', margin: '1rem 0' }}>
               <b>{REDUCTION[inv.reduction_type].label}</b> – fakturan gäller {inv.work_type}. Arbetskostnad {kr(labour)} kr, material och övrigt {kr(t.total - labour)} kr (inkl. moms).

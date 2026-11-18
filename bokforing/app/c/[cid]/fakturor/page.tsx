@@ -1,3 +1,5 @@
+import { translator } from '@/lib/ui-i18n';
+import { uiLang } from '@/lib/server/lang';
 import Link from 'next/link';
 import { Pager, pageOf, pageSql, PAGE_SIZE } from '@/components/Pager';
 import { sql } from '@/lib/db';
@@ -9,7 +11,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function Invoices({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'invoicing' });
+  const L = translator(await uiLang());
   const sp = await searchParams;
   const status = String(sp.status ?? '');
   const page = pageOf(sp);
@@ -25,7 +28,7 @@ export default async function Invoices({ params, searchParams }: { params: Promi
   const b = `/c/${company.id}`;
   return (
     <>
-      <Header title="Kundfakturor"><Link className="btn" href={`${b}/fakturor/ny`}>Ny faktura</Link></Header>
+      <Header title={L('Kundfakturor')}><Link className="btn" href={`${b}/fakturor/ny`}>{L("Ny faktura")}</Link></Header>
       <Flash searchParams={searchParams} />
       <div className="actions">
         {[['', 'Alla'], ['draft', 'Utkast'], ['booked', 'Obetalda'], ['paid', 'Betalda'], ['credited', 'Krediterade']].map(([s, l]) => (
@@ -34,7 +37,7 @@ export default async function Invoices({ params, searchParams }: { params: Promi
       </div>
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Nr</th><th>Kund</th><th>Datum</th><th>Förfaller</th><th className="num">Belopp</th><th>Status</th></tr></thead>
+          <thead><tr><th>{L("Nr")}</th><th>{L("Kund")}</th><th>{L("Datum")}</th><th>{L("Förfaller")}</th><th className="num">{L("Belopp")}</th><th>{L("Status")}</th></tr></thead>
           <tbody>
             {rows.map((i) => (
               <tr key={i.id}>
@@ -43,7 +46,7 @@ export default async function Invoices({ params, searchParams }: { params: Promi
                 <td className="num">{kr(i.total)}</td><td><Status s={i.status} overdue={i.due_date < t} /></td>
               </tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={6} className="muted">Inga fakturor.</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={6} className="muted">{L("Inga fakturor.")}</td></tr>}
           </tbody>
         </table>
         <Pager base={`${b}/fakturor`} sp={sp} page={page} hasMore={hasMore} count={rows.length} />

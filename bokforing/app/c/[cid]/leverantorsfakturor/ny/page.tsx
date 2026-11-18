@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function NewSupplierInvoice({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'purchasing' });
   const suppliers = await sql<{ id: number; name: string; default_account: number }[]>`SELECT id, name, default_account FROM suppliers WHERE company_id = ${company.id} ORDER BY name`;
   const accounts = await sql<{ number: number; name: string }[]>`SELECT number, name FROM accounts WHERE company_id = ${company.id} AND active AND number BETWEEN 1000 AND 8999 ORDER BY number`;
   return (

@@ -6,7 +6,7 @@ import { audit } from '@/lib/server/audit';
 import { sql } from '@/lib/db';
 
 export async function importTables(cid: number, fd: FormData) {
-  const { company, user } = await requireCompany(cid);
+  const { company, user } = await requireCompany(cid, { perm: 'payroll' });
   const back = `/c/${cid}/lon/skattetabeller`;
   let count = 0;
   await attempt(back, async () => {

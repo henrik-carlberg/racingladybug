@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function Yearend({ params }: { params: Promise<{ cid: string }> }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'ledger' });
   const years = await fiscalYears(company.id);
   return (
     <div style={{ maxWidth: 820 }}>

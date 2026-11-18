@@ -9,6 +9,7 @@ import { replaceAccount } from '@/lib/ledger-lines';
 import { proportionalLines } from '@/lib/partial';
 import { ACC } from '@/lib/bas';
 import { CURRENCIES, fxPaymentLines, isForeign } from '@/lib/invoice';
+import { attestError, requiredApprovals } from '@/lib/attest';
 import type { Actor } from './actor';
 import { arr, date, has, int, list, optInt, ore, str, type Page } from './input';
 import { insertAttachment, type AttachmentIn } from './vouchers';
@@ -130,7 +131,7 @@ export async function registerSupplierInvoice(actor: Actor, input: Record<string
       const [{ id }] = await tx<{ id: number }[]>`INSERT INTO supplier_invoices ${tx({
         company_id: actor.companyId, supplier_id: supplierId, invoice_number: invoiceNumber, invoice_date: d,
         due_date: date(input, 'due_date', 'Förfallodatum', false) || d, payment_reference: str(input, 'payment_reference'),
-        description: str(input, 'description'), total, vat, status: 'booked', cost_lines: tx.json(costs as never), currency, total_currency: totalCurrency,
+        description: str(input, 'description'), total, vat, status: 'booked', cost_lines: tx.json(costs as never), currency, total_currency: totalCurrency, registered_by: actor.userId,
       })} RETURNING id`;
       const [{ m }] = await tx<{ m: string }[]>`SELECT accounting_method AS m FROM companies WHERE id = ${actor.companyId}`;
       const v = m === 'cash' ? null : await createVoucher(tx, {
@@ -153,12 +154,22 @@ export async function registerSupplierInvoice(actor: Actor, input: Record<string
 
 export async function approveSupplierInvoice(actor: Actor, id: number) {
   return sql.begin(async (tx) => {
-    const r = await tx`UPDATE supplier_invoices SET status = 'approved', approved_by = ${actor.userId}, approved_at = now()
-      WHERE id = ${id} AND company_id = ${actor.companyId} AND status = 'booked' RETURNING id`;
-    if (!r.length) { await fetchSI(tx, actor.companyId, id); throw new ConflictError('Fakturan är redan attesterad eller betald'); }
-    await auditBy(tx, actor, 'approve', 'supplier_invoice', id);
+    const [inv] = await tx<{ status: string; total: number; registered_by: number | null }[]>`
+      SELECT status, total, registered_by FROM supplier_invoices WHERE id = ${id} AND company_id = ${actor.companyId} FOR UPDATE`;
+    if (!inv) throw new NotFoundError('Leverantörsfakturan');
+    if (inv.status !== 'booked') throw new ConflictError('Fakturan är redan attesterad eller betald');
+    const [co] = await tx<{ threshold: number | null; not_registrant: boolean }[]>`SELECT attest_threshold AS threshold, attest_not_registrant AS not_registrant FROM companies WHERE id = ${actor.companyId}`;
+    const rules = { threshold: co.threshold == null ? null : Number(co.threshold), notRegistrant: co.not_registrant };
+    const approvedBy = (await tx<{ user_id: number }[]>`SELECT user_id FROM supplier_invoice_approvals WHERE supplier_invoice_id = ${id}`).map((r) => r.user_id);
+    const err = attestError({ userId: actor.userId, registeredBy: inv.registered_by, approvedBy, rules });
+    if (err) throw new ConflictError(err);
+    await tx`INSERT INTO supplier_invoice_approvals (supplier_invoice_id, user_id) VALUES (${id}, ${actor.userId})`;
+    const needed = requiredApprovals(Number(inv.total), rules);
+    const done = approvedBy.length + 1 >= needed;
+    if (done) await tx`UPDATE supplier_invoices SET status = 'approved', approved_by = ${actor.userId}, approved_at = now() WHERE id = ${id}`;
+    await auditBy(tx, actor, done ? 'approve' : 'approve_partial', 'supplier_invoice', id, { step: approvedBy.length + 1, of: needed });
     const out = await fetchSI(tx, actor.companyId, id);
-    await emit(tx, actor.companyId, 'supplier_invoice.approved', out);
+    if (done) await emit(tx, actor.companyId, 'supplier_invoice.approved', out);
     return out;
   });
 }
@@ -247,4 +258,32 @@ export async function bookOpenSupplierInvoicesAtYearEnd(tx: Tx, actor: Actor, en
     await auditBy(tx, actor, 'book_yearend', 'supplier_invoice', inv.id);
   }
   return open.length;
+}
+
+/**
+ * Bankens avisering (camt.054) om genomförda betalningar: leverantörsfakturor som betalats med vår betalfil
+ * (EndToEndId LF<id>) bokförs som betalda på bankens bokföringsdag. Avvisade betalningar rapporteras.
+ */
+export async function applyPaymentNotification(actor: Actor, xml: string, bankAccount = 1930) {
+  const { parseCamt054 } = await import('@/lib/bank/parse');
+  const list = parseCamt054(xml);
+  if (!list.length) throw new ValidationError('Filen innehåller inga betalningar');
+  const result = { paid: [] as string[], rejected: [] as string[], skipped: [] as string[] };
+  for (const p of list) {
+    const m = p.endToEndId.match(/^LF(\d+)$/);
+    if (!m) { result.skipped.push(`${p.endToEndId} (okänd referens)`); continue; }
+    const [inv] = await sql<{ id: number; status: string; label: string; remaining: number }[]>`
+      SELECT i.id, i.status, s.name || ' ' || i.invoice_number AS label, (i.total - i.paid_amount)::bigint AS remaining
+      FROM supplier_invoices i JOIN suppliers s ON s.id = i.supplier_id WHERE i.id = ${Number(m[1])} AND i.company_id = ${actor.companyId}`;
+    if (!inv) { result.skipped.push(`${p.endToEndId} (finns inte i bolaget)`); continue; }
+    if (p.status === 'rejected') { result.rejected.push(inv.label); continue; }
+    if (inv.status === 'paid') { result.skipped.push(`${inv.label} (redan betald)`); continue; }
+    try {
+      await sql.begin((tx) => paySupplierInvoiceTx(tx, actor, inv.id, { date: p.date, bank_account: bankAccount, amount: Math.min(p.amount, Number(inv.remaining)) }));
+      result.paid.push(inv.label);
+    } catch (e) {
+      result.skipped.push(`${inv.label} (${e instanceof Error ? e.message : 'fel'})`);
+    }
+  }
+  return result;
 }

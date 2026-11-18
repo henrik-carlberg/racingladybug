@@ -123,7 +123,7 @@ async function invoice(page, B, customer, desc, price, opts = {}) {
   // ---- Semesterlöneskuld (förslaget visas) ----
   await page.goto(B + '/periodiseringar?asof=2026-12-31');
   t = await text(page);
-  assert(t.includes('Semesterlöneskuld') && (t.includes('Dagar kvar') || t.includes('Inga aktiva anställda')), 'semesterlöneskuld: ' + t.slice(-800));
+  assert(t.includes('Semesterlöneskuld') && (/dagar kvar/i.test(t) || t.includes('Inga aktiva anställda')), 'semesterlöneskuld: ' + t.slice(-800));
   log('förslag på semesterlöneskuld per bokslutsdagen');
 
   // ---- Kvitto som läses av ----

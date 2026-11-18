@@ -1,3 +1,5 @@
+import { translator } from '@/lib/ui-i18n';
+import { uiLang } from '@/lib/server/lang';
 import Link from 'next/link';
 import { Pager, pageOf, pageSql, PAGE_SIZE } from '@/components/Pager';
 import { sql } from '@/lib/db';
@@ -11,7 +13,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function Customers({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'invoicing' });
+  const L = translator(await uiLang());
   const sp = await searchParams;
   const page = pageOf(sp);
   const q = typeof sp.q === 'string' ? sp.q.trim() : '';
@@ -23,25 +26,25 @@ export default async function Customers({ params, searchParams }: { params: Prom
   const rows = all.slice(0, PAGE_SIZE);
   return (
     <>
-      <h1>Kunder</h1>
-      <form className="row" style={{ alignItems: 'end', maxWidth: 520 }}><label>Sök kund<input name="q" defaultValue={q} placeholder="Namn, org.nr eller e-post" /></label><div style={{ flex: '0 0 auto' }}><button className="secondary">Sök</button></div></form>
+      <h1>{L("Kunder")}</h1>
+      <form className="row" style={{ alignItems: 'end', maxWidth: 520 }}><label>{L("Sök kund")}<input name="q" defaultValue={q} placeholder="Namn, org.nr eller e-post" /></label><div style={{ flex: '0 0 auto' }}><button className="secondary">{L("Sök")}</button></div></form>
       <Flash searchParams={searchParams} />
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Namn</th><th>Org.nr</th><th>E-post</th><th className="num">Obetalt</th></tr></thead>
+          <thead><tr><th>{L("Namn")}</th><th>{L("Org.nr")}</th><th>{L("E-post")}</th><th className="num">{L("Obetalt")}</th></tr></thead>
           <tbody>
             {rows.map((c) => (
               <tr key={c.id}><td><Link href={`/c/${company.id}/kunder/${c.id}`}>{c.name}</Link></td><td>{c.orgnr}</td><td>{c.email}</td><td className="num">{c.open ? kr(c.open) : ''}</td></tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={4} className="muted">Inga kunder ännu.</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={4} className="muted">{L("Inga kunder ännu.")}</td></tr>}
           </tbody>
         </table>
         <Pager base={`/c/${company.id}/kunder`} sp={sp} page={page} hasMore={hasMore} count={rows.length} />
       </div>
-      <h2>Ny kund</h2>
+      <h2>{L("Ny kund")}</h2>
       <form action={saveCustomer.bind(null, company.id, null)} className="card stack">
         <CustomerFields />
-        <div><button>Spara kund</button></div>
+        <div><button>{L("Spara kund")}</button></div>
       </form>
     </>
   );

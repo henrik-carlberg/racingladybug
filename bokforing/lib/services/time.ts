@@ -30,8 +30,8 @@ async function loadProject(db: Tx | typeof sql, companyId: number, id: number): 
   const [t] = await db<{ total: number; unbilled: number; value: number }[]>`
     SELECT COALESCE(SUM(e.minutes), 0)::int AS total,
       COALESCE(SUM(e.minutes) FILTER (WHERE e.billable AND e.invoice_id IS NULL), 0)::int AS unbilled,
-      COALESCE(SUM(e.minutes * COALESCE(a.hourly_rate, ${p.hourly_rate}) / 60.0) FILTER (WHERE e.billable AND e.invoice_id IS NULL), 0)::bigint AS value
-    FROM time_entries e JOIN project_activities a ON a.id = e.activity_id WHERE e.project_id = ${id}`;
+      COALESCE(SUM(e.minutes * COALESCE(r.rate, a.hourly_rate, ${p.hourly_rate}) / 60.0) FILTER (WHERE e.billable AND e.invoice_id IS NULL), 0)::bigint AS value
+    FROM time_entries e JOIN project_activities a ON a.id = e.activity_id LEFT JOIN project_user_rates r ON r.project_id = e.project_id AND r.user_id = e.user_id WHERE e.project_id = ${id}`;
   let bank: ProjectOut['bank'] = null;
   if (p.billing === 'hour_bank') {
     const b = await bankTotals(db, id);
@@ -181,8 +181,10 @@ export async function deleteTimeEntry(actor: Actor, id: number) {
 
 interface Unbilled { id: number; minutes: number; activity: string; rate: number }
 async function unbilled(tx: Tx, companyId: number, projectId: number, to: string, from?: string): Promise<Unbilled[]> {
-  return tx<Unbilled[]>`SELECT e.id, e.minutes, a.name AS activity, COALESCE(a.hourly_rate, p.hourly_rate)::int AS rate
+  // Timpris: personens pris på uppdraget, annars aktivitetens, annars uppdragets
+  return tx<Unbilled[]>`SELECT e.id, e.minutes, a.name AS activity, COALESCE(r.rate, a.hourly_rate, p.hourly_rate)::int AS rate
     FROM time_entries e JOIN project_activities a ON a.id = e.activity_id JOIN projects p ON p.id = e.project_id
+      LEFT JOIN project_user_rates r ON r.project_id = e.project_id AND r.user_id = e.user_id
     WHERE e.company_id = ${companyId} AND e.project_id = ${projectId} AND e.billable AND e.invoice_id IS NULL
       AND e.date <= ${to} ${from ? tx`AND e.date >= ${from}` : tx``}
     ORDER BY e.date, e.id FOR UPDATE OF e`;
@@ -299,3 +301,50 @@ export async function createAllBankStatements(date = today()) {
 }
 
 export type { BankStatement };
+
+// ---------- Timpris per person och beläggning ----------
+
+export async function userRates(companyId: number, projectId: number) {
+  return sql<{ user_id: number; name: string; rate: number | null }[]>`
+    SELECT u.id AS user_id, u.name, r.rate::int AS rate FROM memberships m JOIN users u ON u.id = m.user_id
+      LEFT JOIN project_user_rates r ON r.project_id = ${projectId} AND r.user_id = u.id
+    WHERE m.company_id = ${companyId} AND m.role <> 'auditor' ORDER BY u.name`;
+}
+
+export async function setUserRate(actor: Actor, projectId: number, userId: number, rateOre: number | null) {
+  const [p] = await sql`SELECT 1 FROM projects WHERE id = ${projectId} AND company_id = ${actor.companyId}`;
+  if (!p) throw new NotFoundError('Uppdraget');
+  const [m] = await sql`SELECT 1 FROM memberships WHERE company_id = ${actor.companyId} AND user_id = ${userId}`;
+  if (!m) throw new ValidationError('Personen är inte användare i bolaget');
+  if (rateOre == null) await sql`DELETE FROM project_user_rates WHERE project_id = ${projectId} AND user_id = ${userId}`;
+  else {
+    if (rateOre < 0) throw new ValidationError('Ogiltigt timpris');
+    await sql`INSERT INTO project_user_rates (project_id, user_id, rate) VALUES (${projectId}, ${userId}, ${rateOre}) ON CONFLICT (project_id, user_id) DO UPDATE SET rate = EXCLUDED.rate`;
+  }
+  await auditBy(sql, actor, 'user_rate', 'project', projectId, { user_id: userId, rate: rateOre });
+}
+
+/**
+ * Beläggning per person i en period: rapporterad tid, debiterbar tid och beläggningsgrad
+ * (debiterbar tid i procent av tillgänglig tid = arbetstid per vecka enligt anställningen, annars 40 h, för vardagarna i perioden).
+ */
+export async function utilization(companyId: number, from: string, to: string) {
+  const rows = await sql<{ user_id: number; name: string; total: number; billable: number; value: number; hours_per_week: number | null }[]>`
+    SELECT u.id AS user_id, u.name,
+      COALESCE(SUM(e.minutes), 0)::int AS total,
+      COALESCE(SUM(e.minutes) FILTER (WHERE e.billable AND p.billing <> 'internal'), 0)::int AS billable,
+      COALESCE(SUM(e.minutes * COALESCE(r.rate, a.hourly_rate, p.hourly_rate) / 60.0) FILTER (WHERE e.billable AND p.billing <> 'internal'), 0)::bigint AS value,
+      (SELECT em.hours_per_week::float8 FROM employees em WHERE em.company_id = ${companyId} AND em.user_id = u.id LIMIT 1) AS hours_per_week
+    FROM memberships m JOIN users u ON u.id = m.user_id
+      LEFT JOIN time_entries e ON e.user_id = u.id AND e.company_id = ${companyId} AND e.date BETWEEN ${from} AND ${to}
+      LEFT JOIN projects p ON p.id = e.project_id LEFT JOIN project_activities a ON a.id = e.activity_id
+      LEFT JOIN project_user_rates r ON r.project_id = e.project_id AND r.user_id = e.user_id
+    WHERE m.company_id = ${companyId} AND m.role IN ('owner','accountant','employee')
+    GROUP BY u.id, u.name HAVING COALESCE(SUM(e.minutes), 0) > 0 ORDER BY u.name`;
+  const { workdays } = await import('@/lib/absence');
+  const days = workdays(from, to).length;
+  return rows.map((r) => {
+    const available = Math.round(((r.hours_per_week ?? 40) / 5) * days * 60);
+    return { ...r, value: Number(r.value), available, utilization: available ? Math.round((r.billable / available) * 1000) / 10 : null };
+  });
+}

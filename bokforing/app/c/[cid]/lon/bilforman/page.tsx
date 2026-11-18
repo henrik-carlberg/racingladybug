@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function CarBenefit({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  await requireCompany(cid);
+  await requireCompany(cid, { perm: 'payroll' });
   const sp = await searchParams;
   const year = Number(sp.year ?? today().slice(0, 4));
   const d = CAR_DEFAULTS[year] ?? CAR_DEFAULTS[2026];

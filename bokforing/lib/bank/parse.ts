@@ -158,3 +158,27 @@ export function fromEnableBanking(list: EbTransaction[]): BankTx[] {
     };
   }).filter((t) => /^\d{4}-\d{2}-\d{2}$/.test(t.bookingDate)));
 }
+
+// ---------- camt.054: bankens avisering om genomförda (eller avvisade) betalningar ----------
+
+export interface Camt054Payment { endToEndId: string; amount: number; date: string; status: 'booked' | 'rejected'; reference: string; creditor: string }
+
+/** Betalningar ur en camt.054 (BkToCstmrDbtCdtNtfctn). Belopp i öre (positivt), bokföringsdag från posten. */
+export function parseCamt054(xml: string): Camt054Payment[] {
+  if (!/BkToCstmrDbtCdtNtfctn/.test(xml)) throw new Error('Filen är inte en camt.054-avisering');
+  const out: Camt054Payment[] = [];
+  for (const e of all(xml, 'Ntry')) {
+    const st = tag(e, 'Sts/Cd') ?? tag(e, 'Sts') ?? 'BOOK';
+    const date = (tag(e, 'BookgDt/Dt') ?? tag(e, 'BookgDt/DtTm') ?? tag(e, 'ValDt/Dt') ?? '').slice(0, 10);
+    const details = all(e, 'TxDtls');
+    for (const d of details.length ? details : [e]) {
+      const amt = tag(d, 'Amt') ?? tag(e, 'Amt');
+      const e2e = tag(d, 'EndToEndId') ?? tag(d, 'InstrId') ?? '';
+      if (!amt || !e2e || e2e === 'NOTPROVIDED') continue;
+      const rejected = st === 'RJCT' || !!tag(d, 'RtrInf/Rsn/Cd');
+      out.push({ endToEndId: e2e.trim(), amount: Math.abs(decimalToOre(amt)), date, status: rejected ? 'rejected' : 'booked',
+        reference: tag(d, 'CdtrRefInf/Ref') ?? '', creditor: tag(d, 'Cdtr/Nm') ?? tag(d, 'Cdtr/Pty/Nm') ?? '' });
+    }
+  }
+  return out.filter((p) => /^\d{4}-\d{2}-\d{2}$/.test(p.date));
+}

@@ -4,6 +4,7 @@ import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import { auditBy } from '@/lib/server/audit';
 import { INBOX_MAX_BYTES, INBOX_TYPES, inboxAddress, mimeFor, newInboxToken, tokensIn, type Extracted } from '@/lib/inbox';
 import { ExtractionError, extractInvoice, invoiceAiEnabled } from './invoice-ai';
+import { parseUbl } from '@/lib/peppol-in';
 import { createSupplier, registerSupplierInvoice } from './suppliers';
 import type { Actor } from './actor';
 
@@ -29,7 +30,7 @@ export async function addDocument(companyId: number, d: NewDoc): Promise<number 
   const mime = mimeFor(d.filename, d.mimeType);
   let error = d.error ?? '';
   let data = d.data;
-  if (data && !INBOX_TYPES[mime]) { error = `Filtypen ${mime || 'okänd'} stöds inte – skicka PDF, JPG eller PNG`; data = null; }
+  if (data && !INBOX_TYPES[mime]) { error = `Filtypen ${mime || 'okänd'} stöds inte – skicka PDF, JPG, PNG eller e-faktura (XML)`; data = null; }
   if (data && data.length > INBOX_MAX_BYTES) { error = 'Filen är större än 10 MB'; data = null; }
   const [r] = await sql<{ id: number }[]>`
     INSERT INTO inbox_documents (company_id, source, message_id, from_address, subject, filename, mime_type, data, status, error, uploaded_by)
@@ -44,6 +45,16 @@ export async function processDocument(id: number) {
   const [d] = await sql<{ company_id: number; mime_type: string; data: Buffer | null; status: string }[]>`
     SELECT company_id, mime_type, data, status FROM inbox_documents WHERE id = ${id}`;
   if (!d || !d.data || !['new', 'failed'].includes(d.status)) return;
+  // E-faktura (Peppol BIS/UBL): uppgifterna läses direkt ur XML-filen, ingen AI behövs
+  if (d.mime_type === 'application/xml') {
+    try {
+      const x = parseUbl(Buffer.from(d.data).toString('utf8'));
+      await sql`UPDATE inbox_documents SET status = 'ready', extracted = ${sql.json(x as never)}, error = '' WHERE id = ${id}`;
+    } catch (e) {
+      await sql`UPDATE inbox_documents SET status = 'failed', error = ${e instanceof Error ? e.message : 'E-fakturan kunde inte läsas'} WHERE id = ${id}`;
+    }
+    return;
+  }
   if (!invoiceAiEnabled()) {
     await sql`UPDATE inbox_documents SET status = 'ready', error = '' WHERE id = ${id}`;
     return;

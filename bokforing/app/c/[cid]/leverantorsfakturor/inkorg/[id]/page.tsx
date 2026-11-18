@@ -14,7 +14,7 @@ const TYPE: Record<string, string> = { credit_note: 'Kreditfaktura – registrer
 
 export default async function InboxDoc({ params, searchParams }: { params: Promise<{ cid: string; id: string }>; searchParams: SP }) {
   const { cid, id } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'purchasing' });
   const { doc, suggestion: s } = await getInboxDoc(company.id, Number(id));
   const x = doc.extracted;
   const suppliers = await sql<{ id: number; name: string }[]>`SELECT id, name FROM suppliers WHERE company_id = ${company.id} ORDER BY name`;
