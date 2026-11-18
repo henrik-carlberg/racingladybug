@@ -4,7 +4,8 @@ import { requireCompany } from '@/lib/server/auth';
 import { Flash, type SP } from '@/components/ui';
 import { ReceiptForm } from '@/components/ReceiptForm';
 import { kr, today } from '@/lib/format';
-import { saveReceipt } from './actions';
+import { readReceipt, saveReceipt } from './actions';
+import { invoiceAiEnabled } from '@/lib/services/invoice-ai';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,9 +21,9 @@ export default async function Receipt({ params, searchParams }: { params: Promis
   return (
     <div style={{ maxWidth: 820 }}>
       <h1>Nytt kvitto eller utlägg</h1>
-      <p className="muted">Fota kvittot, välj vad det gäller – appen väljer konto och moms. Fakturor från leverantörer med betalning senare registrerar du under <Link href={`/c/${company.id}/leverantorsfakturor/ny`}>Leverantörsfakturor</Link>.</p>
+      <p className="muted">{invoiceAiEnabled() ? 'Fota kvittot – appen läser av datum, belopp och moms och föreslår vad det gäller. Kontrollera och bokför.' : 'Fota kvittot, välj vad det gäller – appen väljer konto och moms.'} Fakturor från leverantörer med betalning senare registrerar du under <Link href={`/c/${company.id}/leverantorsfakturor/ny`}>Leverantörsfakturor</Link>.</p>
       <Flash searchParams={searchParams} />
-      <ReceiptForm action={saveReceipt.bind(null, company.id)} today={today()} companyType={company.company_type} accountNames={names} />
+      <ReceiptForm action={saveReceipt.bind(null, company.id)} read={invoiceAiEnabled() ? readReceipt.bind(null, company.id) : undefined} today={today()} companyType={company.company_type} accountNames={names} />
       {recent.length > 0 && (
         <>
           <h2>Senaste kvitton</h2>

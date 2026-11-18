@@ -34,7 +34,7 @@ export async function approve(cid: number, id: number) {
 
 export async function markPaid(cid: number, id: number, fd: FormData) {
   const actor = userActor(await requireCompany(cid));
-  await attempt(`/c/${cid}/leverantorsfakturor/${id}`, () => svc.paySupplierInvoices(actor, [id], { date: str(fd, 'date'), bank_account: str(fd, 'bank_account') }));
+  await attempt(`/c/${cid}/leverantorsfakturor/${id}`, () => svc.paySupplierInvoices(actor, [id], { date: str(fd, 'date'), bank_account: str(fd, 'bank_account'), amount: amount(fd, 'amount') ?? undefined }));
   done(`/c/${cid}/leverantorsfakturor/${id}`, 'Betalningen är bokförd');
 }
 

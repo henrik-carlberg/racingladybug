@@ -86,6 +86,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
           <Link href={`${b}/rapporter/export`}>Export (SIE)</Link>
           <Link href={`${b}/rapporter/dimensioner`}>Resultat per dimension</Link>
           <Link href={`${b}/anlaggningar`}>Anläggningsregister</Link>
+          <Link href={`${b}/periodiseringar`}>Periodiseringar</Link>
           <Link href={`${b}/bokslut`}>Bokslut &amp; deklaration</Link>
           {modules.map((m) => (
             <div key={m.id}>

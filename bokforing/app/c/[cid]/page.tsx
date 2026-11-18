@@ -23,11 +23,11 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
     SELECT COALESCE(SUM(l.debit - l.credit), 0)::bigint AS v FROM voucher_lines l JOIN vouchers v ON v.id = l.voucher_id
     WHERE v.company_id = ${id} AND l.account_number BETWEEN 1910 AND 1949`;
   const [ar] = await sql<{ n: number; v: number; overdue: number }[]>`
-    SELECT count(*)::int AS n, COALESCE(SUM(total), 0)::bigint AS v,
-           COALESCE(SUM(total) FILTER (WHERE due_date < ${t}), 0)::bigint AS overdue
+    SELECT count(*)::int AS n, COALESCE(SUM(total - paid_amount), 0)::bigint AS v,
+           COALESCE(SUM(total - paid_amount) FILTER (WHERE due_date < ${t}), 0)::bigint AS overdue
     FROM invoices WHERE company_id = ${id} AND status = 'booked'`;
   const [ap] = await sql<{ n: number; v: number; unapproved: number }[]>`
-    SELECT count(*)::int AS n, COALESCE(SUM(total), 0)::bigint AS v, count(*) FILTER (WHERE status = 'booked')::int AS unapproved
+    SELECT count(*)::int AS n, COALESCE(SUM(total - paid_amount), 0)::bigint AS v, count(*) FILTER (WHERE status = 'booked')::int AS unapproved
     FROM supplier_invoices WHERE company_id = ${id} AND status IN ('booked','approved')`;
   const [res] = await sql<{ v: number }[]>`
     SELECT COALESCE(SUM(l.credit - l.debit), 0)::bigint AS v FROM voucher_lines l JOIN vouchers v ON v.id = l.voucher_id

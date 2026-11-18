@@ -5,6 +5,7 @@ import { createVoucher } from '@/lib/server/ledger';
 import { auditBy } from '@/lib/server/audit';
 import { emit } from '@/lib/server/events';
 import { loadLines } from '@/lib/server/invoices';
+import { proportionalLines } from '@/lib/partial';
 import { computeInvoice, defaultSalesAccount, invoiceBookingLines, invoicePaymentLines, lineNet, type InvoiceLineInput } from '@/lib/invoice';
 import { makeOcr, normalizePersonalNumber } from '@/lib/validate';
 import { computeReduction, labourInclVat, reductionErrors, remainingForBuyer, REDUCTION, type ReductionType } from '@/lib/rotrut';
@@ -25,7 +26,7 @@ export interface InvoiceOut {
   total_net: number; total_vat: number; rounding: number; total: number; paid_date: string | null;
   credit_of_id: number | null; voucher_id: number | null; payment_voucher_id: number | null; created_at: string;
   reduction_type: ReductionType | null; tax_reduction: number; buyer_pnr: string; property: string; brf_orgnr: string; apartment_no: string; work_type: string;
-  reduction_status: string | null;
+  reduction_status: string | null; paid_amount: number; advance: boolean;
   lines: { description: string; quantity: number; unit: string; unit_price: number; vat_rate: number; account: number; amount: number; labor: boolean }[];
 }
 
@@ -35,7 +36,7 @@ async function fetchInvoice(db: Tx | typeof sql, companyId: number, id: number):
       to_char(i.invoice_date,'YYYY-MM-DD') AS invoice_date, to_char(i.due_date,'YYYY-MM-DD') AS due_date, i.delivery_date,
       i.ocr, i.our_reference, i.your_reference, i.notes, i.reverse_charge, i.total_net, i.total_vat, i.rounding, i.total,
       to_char(i.paid_date,'YYYY-MM-DD') AS paid_date, i.credit_of_id, i.voucher_id, i.payment_voucher_id, i.created_at,
-      i.reduction_type, i.tax_reduction, i.buyer_pnr, i.property, i.brf_orgnr, i.apartment_no, i.work_type, i.reduction_status
+      i.reduction_type, i.tax_reduction, i.buyer_pnr, i.property, i.brf_orgnr, i.apartment_no, i.work_type, i.reduction_status, i.paid_amount, i.advance
     FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.id = ${id} AND i.company_id = ${companyId}`;
   if (!i) throw new NotFoundError('Fakturan');
   const lines = await loadLines(db, id);
@@ -88,6 +89,12 @@ export async function saveDraftTx(tx: Tx, actor: Actor, invoiceId: number | null
     SELECT reverse_charge, payment_terms FROM customers WHERE id = ${customerId} AND company_id = ${actor.companyId}`;
   if (!cust) throw new ValidationError('Kunden finns inte');
   const lines = parseLines(input, cust.reverse_charge);
+  const advance = input.advance === true || input.advance === 'true' || input.advance === 'on';
+  if (advance) {
+    if (str(input, 'reduction_type')) throw new ValidationError('En förskottsfaktura kan inte ha ROT/RUT – lägg avdraget på slutfakturan');
+    for (const l of lines) if (l.account < 2000 || l.account >= 3000) l.account = ACC.customerAdvances;
+    await tx`INSERT INTO accounts (company_id, number, name) VALUES (${actor.companyId}, ${ACC.customerAdvances}, 'Förskott från kunder') ON CONFLICT DO NOTHING`;
+  }
   const invoiceDate = date(input, 'invoice_date', 'Fakturadatum');
   const dueDate = date(input, 'due_date', 'Förfallodatum', false) || addDays(invoiceDate, cust.payment_terms ?? company.invoice_terms);
   const t = computeInvoice(lines, { reverseCharge: cust.reverse_charge });
@@ -95,7 +102,7 @@ export async function saveDraftTx(tx: Tx, actor: Actor, invoiceId: number | null
   const head = {
     customer_id: customerId, invoice_date: invoiceDate, due_date: dueDate, delivery_date: str(input, 'delivery_date'),
     our_reference: str(input, 'our_reference'), your_reference: str(input, 'your_reference'), notes: str(input, 'notes'),
-    reverse_charge: cust.reverse_charge, total_net: t.net, total_vat: t.vat, rounding: t.rounding, total: t.total - rr.tax_reduction, ...rr,
+    reverse_charge: cust.reverse_charge, advance, total_net: t.net, total_vat: t.vat, rounding: t.rounding, total: t.total - rr.tax_reduction, ...rr,
   };
   {
     let id = invoiceId ?? 0;
@@ -115,6 +122,50 @@ export async function saveDraftTx(tx: Tx, actor: Actor, invoiceId: number | null
     await emit(tx, actor.companyId, invoiceId ? 'invoice.updated' : 'invoice.created', out);
     return out;
   }
+}
+
+/** Förskottsfakturor till kunden som är betalda och ännu inte avräknade */
+export async function openAdvances(db: Tx | typeof sql, companyId: number, customerId: number) {
+  return db<{ id: number; invoice_number: number; total_net: number; total: number; invoice_date: string }[]>`
+    SELECT id, invoice_number, total_net, total, to_char(invoice_date,'YYYY-MM-DD') AS invoice_date FROM invoices
+    WHERE company_id = ${companyId} AND customer_id = ${customerId} AND advance AND status = 'paid' AND advance_settled_by IS NULL AND credit_of_id IS NULL
+    ORDER BY invoice_date, id`;
+}
+
+/** Avräkna en betald förskottsfaktura på ett fakturautkast: en negativ rad mot 2420 per momssats */
+export async function settleAdvance(actor: Actor, draftId: number, advanceId: number): Promise<InvoiceOut> {
+  return sql.begin(async (tx) => {
+    const [d] = await tx<{ customer_id: number; status: string; advance: boolean; reduction_type: string | null; reverse_charge: boolean }[]>`
+      SELECT customer_id, status, advance, reduction_type, reverse_charge FROM invoices WHERE id = ${draftId} AND company_id = ${actor.companyId} FOR UPDATE`;
+    if (!d) throw new NotFoundError('Fakturan');
+    if (d.status !== 'draft') throw new ConflictError('Förskott kan bara avräknas på ett utkast');
+    if (d.advance) throw new ConflictError('En förskottsfaktura kan inte avräkna andra förskott');
+    if (d.reduction_type) throw new ConflictError('Avräkna förskottet innan du lägger till ROT/RUT');
+    const [a] = await tx<{ invoice_number: number }[]>`SELECT invoice_number FROM invoices WHERE id = ${advanceId} AND company_id = ${actor.companyId}
+      AND customer_id = ${d.customer_id} AND advance AND status = 'paid' AND advance_settled_by IS NULL AND credit_of_id IS NULL FOR UPDATE`;
+    if (!a) throw new ValidationError('Förskottsfakturan finns inte, är inte betald eller är redan avräknad');
+    const advLines = await loadLines(tx, advanceId);
+    const byRate = new Map<number, number>();
+    for (const l of advLines) byRate.set(l.vatRate, (byRate.get(l.vatRate) ?? 0) + lineNet(l));
+    const lines = await loadLines(tx, draftId);
+    for (const [rate, net] of byRate) if (net) lines.push({
+      description: `Avgår förskott enligt faktura ${a.invoice_number}${byRate.size > 1 ? ` (${rate} % moms)` : ''}`,
+      quantity: -1, unit: 'st', unitPrice: net, vatRate: rate as InvoiceLineInput['vatRate'], account: ACC.customerAdvances, labor: false,
+    });
+    const t = computeInvoice(lines, { reverseCharge: d.reverse_charge });
+    if (t.total < 0) throw new ValidationError('Förskottet är större än fakturan');
+    await tx`DELETE FROM invoice_lines WHERE invoice_id = ${draftId}`;
+    await tx`INSERT INTO invoice_lines ${tx(lines.map((l, i) => ({
+      invoice_id: draftId, position: i + 1, description: l.description, quantity: l.quantity, unit: l.unit,
+      unit_price: l.unitPrice, vat_rate: l.vatRate, account_number: l.account, labor: !!l.labor,
+    })))}`;
+    await tx`UPDATE invoices SET total_net = ${t.net}, total_vat = ${t.vat}, rounding = ${t.rounding}, total = ${t.total} WHERE id = ${draftId}`;
+    await tx`UPDATE invoices SET advance_settled_by = ${draftId} WHERE id = ${advanceId}`;
+    await auditBy(tx, actor, 'settle_advance', 'invoice', draftId, { advance_id: advanceId });
+    const out = await fetchInvoice(tx, actor.companyId, draftId);
+    await emit(tx, actor.companyId, 'invoice.updated', out);
+    return out;
+  });
 }
 
 /** Hur mycket ROT/RUT som redan dragits för köparen under kalenderåret, på andra fakturor i bolaget (öre) */
@@ -211,31 +262,38 @@ export async function registerPayment(actor: Actor, invoiceId: number, input: Re
 
 /** Som registerPayment men i en befintlig transaktion (används av bankavstämningen) */
 export async function registerPaymentTx(tx: Tx, actor: Actor, invoiceId: number, input: Record<string, unknown>): Promise<InvoiceOut> {
-  const [inv] = await tx<{ status: string; total: number; invoice_number: number; voucher_id: number | null; reverse_charge: boolean; customer: string; tax_reduction: number; reduction_type: string | null; project_id: number | null }[]>`
-    SELECT i.status, i.total, i.invoice_number, i.voucher_id, i.reverse_charge, c.name AS customer, i.tax_reduction, i.reduction_type, i.project_id
+  const [inv] = await tx<{ status: string; total: number; paid_amount: number; invoice_number: number; voucher_id: number | null; imported: boolean; reverse_charge: boolean; customer: string; tax_reduction: number; reduction_type: string | null; project_id: number | null }[]>`
+    SELECT i.status, i.total, i.paid_amount, i.invoice_number, i.voucher_id, i.imported, i.reverse_charge, c.name AS customer, i.tax_reduction, i.reduction_type, i.project_id
     FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.id = ${invoiceId} AND i.company_id = ${actor.companyId} FOR UPDATE OF i`;
   if (!inv) throw new NotFoundError('Fakturan');
   if (inv.status !== 'booked') throw new ConflictError('Endast bokförda, obetalda fakturor kan registreras som betalda');
-  const amount = optInt(input, 'amount', 'Belopp') ?? inv.total;
-  if (amount !== inv.total) throw new ValidationError('Delbetalningar stöds inte ännu – beloppet måste vara fakturans totalbelopp');
+  const total = Number(inv.total), paidBefore = Number(inv.paid_amount);
+  const remaining = total - paidBefore;
+  const amount = optInt(input, 'amount', 'Belopp') ?? remaining;
+  if (amount <= 0) throw new ValidationError('Beloppet måste vara större än noll');
+  if (amount > remaining) throw new ValidationError(`Beloppet är större än det som återstår att betala (${(remaining / 100).toFixed(2).replace('.', ',')} kr)`);
   const d = date(input, 'date', 'Betaldatum');
   const bank = optInt(input, 'bank_account', 'Bankkonto') ?? 1930;
   if ((bank < 1900 || bank > 1999) && bank !== ACC.cardClearing) throw new ValidationError('Bankkonto måste vara ett 19xx-konto');
-  // Kontantmetoden: fakturan är inte bokförd än – intäkt och moms bokförs direkt mot banken
-  const lines = inv.voucher_id ? invoicePaymentLines(amount, bank) : await (async () => {
+  const full = paidBefore + amount === total;
+  // Kontantmetoden: fakturan är inte bokförd än – intäkt och moms bokförs vid betalningen, vid delbetalning med betalningens andel
+  const lines = inv.voucher_id || inv.imported ? invoicePaymentLines(amount, bank) : await (async () => {
     const il = await loadLines(tx, invoiceId);
-    return tagProject(replaceAccount(invoiceBookingLines(il, computeInvoice(il, { reverseCharge: inv.reverse_charge }), 1, inv.tax_reduction), ACC.customerReceivables, bank), inv.project_id);
+    const booking = tagProject(invoiceBookingLines(il, computeInvoice(il, { reverseCharge: inv.reverse_charge }), 1, inv.tax_reduction), inv.project_id);
+    return proportionalLines(booking, total, paidBefore, amount, ACC.customerReceivables, bank);
   })();
   const v = await createVoucher(tx, {
-    actor, date: d, description: inv.voucher_id ? `Inbetalning kundfaktura ${inv.invoice_number}` : `Inbetalning kundfaktura ${inv.invoice_number}, ${inv.customer} (kontantmetoden)`,
+    actor, date: d, description: `${full && !paidBefore ? 'Inbetalning' : full ? 'Slutbetalning' : 'Delbetalning'} kundfaktura ${inv.invoice_number}${inv.voucher_id || inv.imported ? '' : `, ${inv.customer} (kontantmetoden)`}`,
     lines, sourceType: 'invoice_payment', sourceId: invoiceId, series: 'B',
   });
-  // ROT/RUT: när kunden har betalat sin del kan företaget begära resten från Skatteverket
-  await tx`UPDATE invoices SET status = 'paid', paid_date = ${d}, payment_voucher_id = ${v.id},
-    reduction_status = ${inv.reduction_type && inv.tax_reduction > 0 ? 'to_request' : null} WHERE id = ${invoiceId}`;
-  await auditBy(tx, actor, 'paid', 'invoice', invoiceId);
+  await tx`INSERT INTO invoice_payments (company_id, invoice_id, date, amount, voucher_id) VALUES (${actor.companyId}, ${invoiceId}, ${d}, ${amount}, ${v.id})`;
+  // ROT/RUT: när kunden har betalat hela sin del kan företaget begära resten från Skatteverket
+  await tx`UPDATE invoices SET paid_amount = paid_amount + ${amount}, payment_voucher_id = ${v.id},
+    status = ${full ? 'paid' : 'booked'}, paid_date = ${full ? d : null},
+    reduction_status = ${full && inv.reduction_type && inv.tax_reduction > 0 ? 'to_request' : null} WHERE id = ${invoiceId}`;
+  await auditBy(tx, actor, full ? 'paid' : 'partly_paid', 'invoice', invoiceId, { amount });
   const out = await fetchInvoice(tx, actor.companyId, invoiceId);
-  await emit(tx, actor.companyId, 'invoice.paid', out);
+  await emit(tx, actor.companyId, full ? 'invoice.paid' : 'invoice.partly_paid', out);
   return out;
 }
 
@@ -247,6 +305,9 @@ export async function creditInvoice(actor: Actor, invoiceId: number, input: Reco
       FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.id = ${invoiceId} AND i.company_id = ${actor.companyId} FOR UPDATE OF i`;
     if (!inv) throw new NotFoundError('Fakturan');
     if (inv.status !== 'booked' && !(inv.status === 'paid' && inv.total === 0)) throw new ConflictError('Endast bokförda, obetalda fakturor kan krediteras');
+    const [{ paid, imported }] = await tx<{ paid: number; imported: boolean }[]>`SELECT paid_amount AS paid, imported FROM invoices WHERE id = ${invoiceId}`;
+    if (imported) throw new ConflictError('En importerad faktura krediteras i det tidigare systemet eller med en manuell verifikation mot 1510');
+    if (Number(paid) > 0) throw new ConflictError('Fakturan är delbetald. Gör en kreditfaktura på resterande belopp manuellt eller registrera resten som betalt.');
     const lines = (await loadLines(tx, invoiceId)).map((l) => ({ ...l, quantity: -l.quantity }));
     const t = computeInvoice(lines, { reverseCharge: inv.reverse_charge });
     const d = date(input, 'date', 'Datum');
@@ -270,6 +331,8 @@ export async function creditInvoice(actor: Actor, invoiceId: number, input: Reco
       await tx`UPDATE invoices SET voucher_id = ${v.id} WHERE id = ${creditId}`;
     }
     await tx`UPDATE invoices SET status = 'credited' WHERE id = ${invoiceId}`;
+    // Förskott som avräknats på den krediterade fakturan kan avräknas igen
+    await tx`UPDATE invoices SET advance_settled_by = NULL WHERE advance_settled_by = ${invoiceId}`;
     // Tidrader på fakturan blir åter ofakturerade (kan tas med i ett nytt underlag eller en ny avräkning)
     await tx`UPDATE time_entries SET invoice_id = NULL WHERE invoice_id = ${invoiceId}`;
     await auditBy(tx, actor, 'credit', 'invoice', invoiceId, { credit_invoice: no });
@@ -282,15 +345,20 @@ export async function creditInvoice(actor: Actor, invoiceId: number, input: Reco
 /** Kontantmetoden: bokför obetalda kundfakturor per bokslutsdagen (kundfordran mot intäkt och moms).
  *  När de sedan betalas bokförs betalningen mot kundfordran som vid faktureringsmetoden. */
 export async function bookOpenInvoicesAtYearEnd(tx: Tx, actor: Actor, endDate: string): Promise<number> {
-  const open = await tx<{ id: number; invoice_number: number; reverse_charge: boolean; customer: string; tax_reduction: number; project_id: number | null }[]>`
-    SELECT i.id, i.invoice_number, i.reverse_charge, c.name AS customer, i.tax_reduction, i.project_id FROM invoices i JOIN customers c ON c.id = i.customer_id
-    WHERE i.company_id = ${actor.companyId} AND i.status = 'booked' AND i.voucher_id IS NULL AND i.invoice_date <= ${endDate}
+  const open = await tx<{ id: number; invoice_number: number; reverse_charge: boolean; customer: string; tax_reduction: number; project_id: number | null; total: number; paid_amount: number }[]>`
+    SELECT i.id, i.invoice_number, i.reverse_charge, c.name AS customer, i.tax_reduction, i.project_id, i.total, i.paid_amount FROM invoices i JOIN customers c ON c.id = i.customer_id
+    WHERE i.company_id = ${actor.companyId} AND i.status = 'booked' AND i.voucher_id IS NULL AND NOT i.imported AND i.invoice_date <= ${endDate}
     ORDER BY i.invoice_number FOR UPDATE OF i`;
   for (const inv of open) {
     const lines = await loadLines(tx, inv.id);
     const v = await createVoucher(tx, {
       actor, date: endDate, description: `Obetald kundfaktura ${inv.invoice_number}, ${inv.customer} – per bokslutsdagen`,
-      lines: tagProject(invoiceBookingLines(lines, computeInvoice(lines, { reverseCharge: inv.reverse_charge }), 1, inv.tax_reduction), inv.project_id), sourceType: 'invoice', sourceId: inv.id, series: 'B',
+      lines: (() => {
+        const booking = tagProject(invoiceBookingLines(lines, computeInvoice(lines, { reverseCharge: inv.reverse_charge }), 1, inv.tax_reduction), inv.project_id);
+        // Delbetald: bara den obetalda andelen bokförs
+        const paid = Number(inv.paid_amount), total = Number(inv.total);
+        return paid > 0 ? proportionalLines(booking, total, paid, total - paid, ACC.customerReceivables, ACC.customerReceivables) : booking;
+      })(), sourceType: 'invoice', sourceId: inv.id, series: 'B',
     });
     await tx`UPDATE invoices SET voucher_id = ${v.id} WHERE id = ${inv.id}`;
     await auditBy(tx, actor, 'book_yearend', 'invoice', inv.id);

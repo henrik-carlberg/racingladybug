@@ -29,7 +29,7 @@ export function Landing() {
       </section>
       <section className="card" style={{ marginTop: '2rem' }}>
         <h2 style={{ marginTop: 0 }}>Byt från ett annat program på en kvart</h2>
-        <p className="muted" style={{ marginBottom: 0 }}>Importera en SIE-fil med kontoplan, ingående balanser och verifikationer. Vill du prova först finns ett demobolag med exempeldata.</p>
+        <p className="muted" style={{ marginBottom: 0 }}>Importera en SIE-fil med kontoplan, ingående balanser och verifikationer, och kunder, leverantörer och obetalda fakturor från CSV. Vill du prova först finns ett demobolag med exempeldata.</p>
       </section>
       <footer className="small muted" style={{ marginTop: '3rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
         <Link href="/villkor">Villkor</Link><Link href="/integritet">Integritetspolicy</Link><Link href="/hjalp">Hjälp</Link>

@@ -1,12 +1,13 @@
 'use client';
 import { useActionState, useState } from 'react';
-import { RECEIPT_CATEGORIES, receiptLines } from '@/lib/receipts';
+import { RECEIPT_CATEGORIES, receiptLines, type ReceiptGuess } from '@/lib/receipts';
 import { formatAmount, parseAmount } from '@/lib/money';
 
 type State = { error?: string } | undefined;
 
-export function ReceiptForm({ action, today, companyType, accountNames }: {
+export function ReceiptForm({ action, read, today, companyType, accountNames }: {
   action: (s: State, fd: FormData) => Promise<State>;
+  read?: (fd: FormData) => Promise<{ guess?: ReceiptGuess; error?: string }>;
   today: string;
   companyType: 'AB' | 'EF';
   accountNames: Record<number, string>;
@@ -17,6 +18,26 @@ export function ReceiptForm({ action, today, companyType, accountNames }: {
   const [vat, setVat] = useState<string>('');
   const [persons, setPersons] = useState('1');
   const [paidWith, setPaidWith] = useState<'company' | 'private'>('company');
+  const [date, setDate] = useState(today);
+  const [description, setDescription] = useState('');
+  const [reading, setReading] = useState<'' | 'busy' | 'done' | string>('');
+  const onFile = async (f: File | undefined) => {
+    if (!read || !f) return;
+    setReading('busy');
+    const fd = new FormData();
+    fd.set('file', f);
+    try {
+      const r = await read(fd);
+      if (r.error || !r.guess) { setReading(r.error ?? 'Kvittot kunde inte läsas av'); return; }
+      const g = r.guess;
+      if (g.date) setDate(g.date);
+      if (g.total) setTotal((g.total / 100).toFixed(2).replace('.', ','));
+      if (g.category) setCatKey(g.category);
+      setVat(g.vatRate != null ? String(g.vatRate) : '');
+      if (g.description || g.merchant) setDescription([g.merchant, g.description].filter(Boolean).join(': '));
+      setReading('done');
+    } catch { setReading('Kvittot kunde inte läsas av'); }
+  };
   const cat = RECEIPT_CATEGORIES.find((c) => c.key === catKey);
   const vatRate = (vat === '' ? cat?.vat ?? 25 : Number(vat)) as 0 | 6 | 12 | 25;
   const totalOre = parseAmount(total) ?? 0;
@@ -28,10 +49,14 @@ export function ReceiptForm({ action, today, companyType, accountNames }: {
       <label className="card" style={{ cursor: 'pointer', textAlign: 'center', borderStyle: 'dashed' }}>
         <span style={{ fontSize: '1.1rem' }}>📷 Fota eller välj kvitto</span>
         <span className="small muted">Bild eller PDF sparas som underlag (krav enligt bokföringslagen)</span>
-        <input type="file" name="file" accept="image/*,application/pdf" capture="environment" />
+        <input type="file" name="file" accept="image/*,application/pdf" capture="environment" onChange={(e) => onFile(e.target.files?.[0])} />
+        {read && reading === '' && <span className="small muted">Uppgifterna läses av automatiskt – kontrollera dem innan du bokför.</span>}
+        {reading === 'busy' && <span className="small">Läser av kvittot…</span>}
+        {reading === 'done' && <span className="small receipt-read" style={{ color: 'var(--ok)' }}>Avläst ✓ Kontrollera uppgifterna nedan.</span>}
+        {reading && reading !== 'busy' && reading !== 'done' && <span className="small" style={{ color: 'var(--warn)' }}>{reading}</span>}
       </label>
       <div className="row">
-        <label>Datum på kvittot<input type="date" name="date" defaultValue={today} required /></label>
+        <label>Datum på kvittot<input type="date" name="date" value={date} onChange={(e) => setDate(e.target.value)} required /></label>
         <label>Belopp inkl. moms (kr)<input name="total" value={total} onChange={(e) => setTotal(e.target.value)} inputMode="decimal" required placeholder="0,00" /></label>
       </div>
       <div className="stack" style={{ gap: '.5rem' }}>
@@ -59,7 +84,7 @@ export function ReceiptForm({ action, today, companyType, accountNames }: {
           <option value="private">Privata pengar (utlägg){companyType === 'AB' ? ' – bolaget är skyldigt dig' : ' – egen insättning'}</option>
         </select></label>
       </div>
-      <label>Beskrivning (valfritt)<input name="description" placeholder={cat?.label ?? 'T.ex. Pennor och block'} /></label>
+      <label>Beskrivning (valfritt)<input name="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder={cat?.label ?? 'T.ex. Pennor och block'} /></label>
       {preview && (
         <div className="card small">
           <b>Bokförs så här:</b>
@@ -73,7 +98,7 @@ export function ReceiptForm({ action, today, companyType, accountNames }: {
         </div>
       )}
       <div className="actions" style={{ margin: 0 }}>
-        <button disabled={pending || !cat || totalOre <= 0}>{pending ? 'Bokför…' : 'Bokför kvitto'}</button>
+        <button disabled={pending || reading === 'busy' || !cat || totalOre <= 0}>{pending ? 'Bokför…' : 'Bokför kvitto'}</button>
         <button name="another" value="1" className="secondary" disabled={pending || !cat || totalOre <= 0}>Bokför och registrera nästa</button>
       </div>
     </form>

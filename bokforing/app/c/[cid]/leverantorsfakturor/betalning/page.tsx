@@ -12,12 +12,12 @@ export default async function Payments({ params, searchParams }: { params: Promi
   const { company } = await requireCompany(cid);
   const rows = await sql<{ id: number; supplier: string; to: string; invoice_number: string; due_date: string; reference: string; total: number }[]>`
     SELECT i.id, s.name AS supplier, COALESCE(NULLIF('BG ' || NULLIF(s.bankgiro,''), ''), NULLIF('PG ' || NULLIF(s.plusgiro,''), ''), s.bank_account) AS to,
-      i.invoice_number, to_char(i.due_date,'YYYY-MM-DD') AS due_date, i.payment_reference AS reference, i.total
+      i.invoice_number, to_char(i.due_date,'YYYY-MM-DD') AS due_date, i.payment_reference AS reference, (i.total - i.paid_amount)::bigint AS total
     FROM supplier_invoices i JOIN suppliers s ON s.id = i.supplier_id
     WHERE i.company_id = ${company.id} AND i.status = 'approved' ORDER BY i.due_date`;
   const [{ n: waiting }] = await sql<{ n: number }[]>`SELECT count(*)::int AS n FROM supplier_invoices WHERE company_id = ${company.id} AND status = 'booked'`;
   const b = `/c/${company.id}`;
-  const sum = rows.reduce((s, r) => s + r.total, 0);
+  const sum = rows.reduce((s, r) => s + Number(r.total), 0);
   return (
     <>
       <h1>Betalningsförslag</h1>

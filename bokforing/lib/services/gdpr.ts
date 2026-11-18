@@ -42,7 +42,7 @@ export async function deleteAccount(userId: number, password: string, confirm: s
     await tx`DELETE FROM firm_members WHERE user_id = ${userId}`;
     await tx`UPDATE employees SET user_id = NULL WHERE user_id = ${userId}`;
     await tx`UPDATE users SET email = ${`raderad-${userId}@invalid`}, name = 'Raderad användare', password_hash = ${await hashPassword(randomBytes(24).toString('hex'))},
-      totp_secret = NULL, totp_enabled_at = NULL, backup_codes = '{}' WHERE id = ${userId}`;
+      totp_secret = NULL, totp_enabled_at = NULL, backup_codes = '{}', digest = 'off', unsubscribe_token = NULL WHERE id = ${userId}`;
     await audit(tx, { companyId: null, userId, action: 'delete_account', entity: 'user', entityId: userId });
   });
 }

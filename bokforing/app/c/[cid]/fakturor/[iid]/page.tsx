@@ -6,7 +6,8 @@ import { loadLines } from '@/lib/server/invoices';
 import { Flash, Status, type SP } from '@/components/ui';
 import { kr, today } from '@/lib/format';
 import type { ReductionType } from '@/lib/rotrut';
-import { bookInvoice, creditInvoice, deleteDraft, registerPayment, sendInvoice } from '../actions';
+import { bookInvoice, creditInvoice, deleteDraft, registerPayment, sendInvoice, settleAdvance } from '../actions';
+import { openAdvances } from '@/lib/services/invoices';
 import { PrintButton } from '@/components/PrintButton';
 import { InvoiceDoc } from '@/components/InvoiceDoc';
 import { peppolCheck } from '@/lib/services/einvoice';
@@ -17,7 +18,7 @@ export const dynamic = 'force-dynamic';
 interface Inv {
   id: number; invoice_number: number | null; invoice_date: string; due_date: string; delivery_date: string; status: string; ocr: string | null;
   our_reference: string; your_reference: string; notes: string; reverse_charge: boolean; total: number; rounding: number;
-  voucher_id: number | null; payment_voucher_id: number | null; paid_date: string | null; credit_of_id: number | null;
+  voucher_id: number | null; payment_voucher_id: number | null; paid_date: string | null; paid_amount: number; advance: boolean; advance_settled_by: number | null; customer_id: number; credit_of_id: number | null;
   hour_bank: { period: string; purchased: number; drawn_before: number; used_now: number; drawn: number; overage: number; remaining: number } | null;
   c_email: string; public_token: string | null; sent_local: string | null; sent_to: string | null;
   c_name: string; c_orgnr: string; c_vat: string; c_address: string; c_postal: string; c_city: string; c_country: string;
@@ -36,6 +37,8 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
     FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.id = ${Number(iid)} AND i.company_id = ${co.id}`;
   if (!inv) notFound();
   const lines = await loadLines(sql, inv.id);
+  const advances = inv.status === 'draft' && !inv.advance && !inv.reduction_type ? await openAdvances(sql, co.id, inv.customer_id) : [];
+  const payments = await sql<{ id: number; date: string; amount: number; voucher_id: number | null }[]>`SELECT id, to_char(date,'YYYY-MM-DD') AS date, amount, voucher_id FROM invoice_payments WHERE invoice_id = ${inv.id} ORDER BY date, id`;
   const [orig] = inv.credit_of_id ? await sql<{ id: number; invoice_number: number }[]>`SELECT id, invoice_number FROM invoices WHERE id = ${inv.credit_of_id}` : [];
   const isCredit = !!inv.credit_of_id;
   const time = await listTimeEntries(co.id, { invoice_id: inv.id });
@@ -60,6 +63,18 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
             <form action={bookInvoice.bind(null, co.id, inv.id)}><button>Bokför faktura</button></form>
             <form action={deleteDraft.bind(null, co.id, inv.id)}><button className="link">Ta bort utkast</button></form>
             <span className="muted small">När fakturan bokförs får den fakturanummer och OCR och kan inte längre ändras.</span>
+          </div>
+        )}
+        {inv.advance && <div className="card small"><span className="badge">Förskottsfaktura</span> Bokförs mot 2420 Förskott från kunder.{inv.advance_settled_by && <> Avräknad på <Link href={`${b}/fakturor/${inv.advance_settled_by}`}>slutfakturan</Link>.</>}</div>}
+        {advances.length > 0 && (
+          <div className="card stack">
+            <b>Betalda förskott att avräkna</b>
+            {advances.map((a) => (
+              <form key={a.id} action={settleAdvance.bind(null, co.id, inv.id, a.id)} className="row" style={{ alignItems: 'center' }}>
+                <span>Faktura {a.invoice_number} ({a.invoice_date}): {kr(a.total_net)} exkl. moms</span>
+                <div style={{ flex: '0 0 auto' }}><button className="secondary">Dra av på denna faktura</button></div>
+              </form>
+            ))}
           </div>
         )}
         {inv.status !== 'draft' && (
@@ -88,18 +103,24 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
               : <><a href={`${b}/fakturor/${inv.id}/peppol`}>Ladda ner e-faktura (XML)</a> <span className="muted">– skicka via din Peppol-operatör till {peppol.data.buyer.endpoint}.</span></>}
           </div>
         )}
+        {payments.length > 0 && (
+          <div className="card small">
+            <b>Inbetalningar</b> – betalt {kr(inv.paid_amount)} av {kr(inv.total)}{Number(inv.paid_amount) < Number(inv.total) && <>, kvar {kr(Number(inv.total) - Number(inv.paid_amount))}</>}
+            <ul>{payments.map((p) => <li key={p.id}>{p.date}: {kr(p.amount)} {p.voucher_id && <Link href={`${b}/verifikationer/${p.voucher_id}`}>verifikation</Link>}</li>)}</ul>
+          </div>
+        )}
         {inv.status === 'booked' && (
           <div className="card stack">
             <form action={registerPayment.bind(null, co.id, inv.id)} className="row">
               <label>Betaldatum<input type="date" name="date" defaultValue={t0} required /></label>
-              <label>Belopp<input name="amount" defaultValue={(inv.total / 100).toFixed(2).replace('.', ',')} required /></label>
+              <label>Belopp<input name="amount" defaultValue={((Number(inv.total) - Number(inv.paid_amount)) / 100).toFixed(2).replace('.', ',')} required /></label>
               <label>Bankkonto<select name="bank_account"><option value="1930">1930 Företagskonto</option><option value="1940">1940 Övriga bankkonton</option><option value="1910">1910 Kassa</option></select></label>
               <div style={{ flex: '0 0 auto' }}><button>Registrera inbetalning</button></div>
             </form>
-            <form action={creditInvoice.bind(null, co.id, inv.id)} className="row">
+            {Number(inv.paid_amount) === 0 && <form action={creditInvoice.bind(null, co.id, inv.id)} className="row">
               <label>Kreditera per datum<input type="date" name="date" defaultValue={t0} required /></label>
               <div style={{ flex: '0 0 auto' }}><button className="danger">Kreditera hela fakturan</button></div>
-            </form>
+            </form>}
           </div>
         )}
         {inv.status === 'booked' && !inv.voucher_id && (
@@ -108,7 +129,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
         {(inv.voucher_id || inv.payment_voucher_id) && (
           <p className="small">
             {inv.voucher_id && <>Bokförd: <Link href={`${b}/verifikationer/${inv.voucher_id}`}>verifikation</Link>. </>}
-            {inv.payment_voucher_id && <>Betald {inv.paid_date}: <Link href={`${b}/verifikationer/${inv.payment_voucher_id}`}>verifikation</Link>.</>}
+            {inv.payment_voucher_id && inv.status === 'paid' && <>Betald {inv.paid_date}: <Link href={`${b}/verifikationer/${inv.payment_voucher_id}`}>verifikation</Link>.</>}
           </p>
         )}
       </div>

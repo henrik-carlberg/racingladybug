@@ -22,7 +22,7 @@ export async function saveDraft(cid: number, invoiceId: number | null, _prev: Fo
     const inv = await svc.saveDraft(actor, invoiceId, {
       customer_id: str(fd, 'customer_id'), invoice_date: str(fd, 'invoice_date'), due_date: str(fd, 'due_date'),
       delivery_date: str(fd, 'delivery_date'), our_reference: str(fd, 'our_reference'), your_reference: str(fd, 'your_reference'),
-      notes: str(fd, 'notes'), lines,
+      notes: str(fd, 'notes'), lines, advance: fd.get('advance') === 'on',
       reduction_type: str(fd, 'reduction_type'), buyer_pnr: str(fd, 'buyer_pnr'), work_type: str(fd, 'work_type'), property: str(fd, 'property'),
       brf_orgnr: str(fd, 'brf_orgnr'), apartment_no: str(fd, 'apartment_no'), reduction_max: amount(fd, 'reduction_max', 'Kvar av köparens tak') ?? undefined,
     });
@@ -68,4 +68,10 @@ export async function sendInvoice(cid: number, invoiceId: number, fd: FormData) 
     msg = r.emailed ? `Fakturan är skickad till ${r.to}` : `E-post kunde inte skickas (ej konfigurerad) – dela länken: ${r.link}`;
   });
   done(`/c/${cid}/fakturor/${invoiceId}`, msg);
+}
+
+export async function settleAdvance(cid: number, invoiceId: number, advanceId: number) {
+  const actor = userActor(await requireCompany(cid));
+  await attempt(`/c/${cid}/fakturor/${invoiceId}`, () => svc.settleAdvance(actor, invoiceId, advanceId));
+  done(`/c/${cid}/fakturor/${invoiceId}`, 'Förskottet är avräknat på fakturan');
 }

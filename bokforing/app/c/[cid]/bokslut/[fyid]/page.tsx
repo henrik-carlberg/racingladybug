@@ -66,10 +66,10 @@ export default async function YearendYear({ params, searchParams }: { params: Pr
       <Step n={2} title="Bokslutsposter">
         <p className="small">Bokför vid behov som <Link href={`${b}/verifikationer/ny`}>ny verifikation</Link> daterad {s.fy.end_date}:</p>
         <ul className="small">
-          <li><b>Avskrivningar</b> på inventarier över ett halvt prisbasbelopp (t.ex. 20 % per år: debet 7832, kredit 1229).</li>
-          <li><b>Periodiseringar</b>: kostnader som betalats men gäller nästa år (1790) och kostnader som hör till året men inte fakturerats (2990).</li>
+          <li><b>Avskrivningar</b> på inventarier över ett halvt prisbasbelopp – bokförs från <Link href={`${b}/anlaggningar`}>anläggningsregistret</Link>.</li>
+          <li><b>Periodiseringar</b>: kostnader som betalats men gäller nästa år (1790) och kostnader som hör till året men inte fakturerats (2990) – lägg upp dem under <Link href={`${b}/periodiseringar`}>Periodiseringar</Link>.</li>
           <li><b>Lager</b>: inventera och justera lagerkontot.</li>
-          {ab && <li><b>Semesterlöneskuld</b> och upplupna sociala avgifter om ni har anställda (2920/2940).</li>}
+          {ab && <li><b>Semesterlöneskuld</b> och upplupna sociala avgifter om ni har anställda (2920/2940) – <Link href={`${b}/periodiseringar?asof=${s.fy.end_date}`}>beräkna och bokför förslaget</Link>.</li>}
           {ab && <li><b>Periodiseringsfond</b>: upp till 25 % av överskottet kan sättas av (8811/2110) – fråga gärna din redovisningskonsult.</li>}
         </ul>
       </Step>

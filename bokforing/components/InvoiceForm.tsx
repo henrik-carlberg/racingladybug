@@ -9,7 +9,7 @@ type Row = { description: string; quantity: string; unit: string; price: string;
 type Customer = { id: number; name: string; reverse_charge: boolean };
 
 export interface InvoiceInitial {
-  customer_id?: number; invoice_date: string; due_date?: string; delivery_date?: string; our_reference?: string; your_reference?: string; notes?: string; lines?: Row[];
+  customer_id?: number; advance?: boolean; invoice_date: string; due_date?: string; delivery_date?: string; our_reference?: string; your_reference?: string; notes?: string; lines?: Row[];
   reduction_type?: ReductionType | null; buyer_pnr?: string; property?: string; brf_orgnr?: string; apartment_no?: string; work_type?: string; reduction_max?: number | null;
 }
 
@@ -22,7 +22,9 @@ export function InvoiceForm({ action, customers, accounts, initial }: {
   const [state, formAction, pending] = useActionState(action, undefined);
   const [customerId, setCustomerId] = useState(String(initial.customer_id ?? ''));
   const rc = customers.find((c) => String(c.id) === customerId)?.reverse_charge ?? false;
-  const blank = (): Row => ({ description: '', quantity: '1', unit: 'st', price: '', vat: '25', account: String(defaultSalesAccount(25, rc)) });
+  const [advance, setAdvance] = useState(!!initial.advance);
+  const salesAcc = (vat: number) => (advance ? 2420 : defaultSalesAccount(vat, rc));
+  const blank = (): Row => ({ description: '', quantity: '1', unit: 'st', price: '', vat: '25', account: String(salesAcc(25)) });
   const [rows, setRows] = useState<Row[]>(initial.lines?.length ? initial.lines : [blank()]);
   const [rr, setRr] = useState<string>(initial.reduction_type ?? '');
   const [rrMax, setRrMax] = useState(initial.reduction_max != null ? (initial.reduction_max / 100).toFixed(2).replace('.', ',') : '');
@@ -30,7 +32,7 @@ export function InvoiceForm({ action, customers, accounts, initial }: {
     setRows((r) => r.map((x, j) => {
       if (j !== i) return x;
       const n = { ...x, [k]: v };
-      if (k === 'vat') n.account = String(defaultSalesAccount(Number(v), rc));
+      if (k === 'vat') n.account = String(salesAcc(Number(v)));
       return n;
     }));
   const parsed = rows.map((r) => ({
@@ -98,7 +100,14 @@ export function InvoiceForm({ action, customers, accounts, initial }: {
         <div className="row" style={{ fontWeight: 700 }}><span>Att betala</span><span style={{ textAlign: 'right' }}>{formatAmount(t.total - (red?.reduction ?? 0))}</span></div>
         {red?.capped && <p className="small muted" style={{ margin: 0 }}>Avdraget är begränsat av köparens återstående utrymme.</p>}
       </div>
-      {!rc && (
+      <label className="row" style={{ alignItems: 'center', gap: '.5rem' }}>
+        <input type="checkbox" name="advance" checked={advance} style={{ width: 'auto' }} onChange={(e) => {
+          const on = e.target.checked; setAdvance(on); if (on) setRr('');
+          setRows((r) => r.map((x) => ({ ...x, account: String(on ? 2420 : defaultSalesAccount(Number(x.vat), rc)) })));
+        }} />
+        <span>Förskottsfaktura – bokförs mot 2420 Förskott från kunder och dras av på slutfakturan</span>
+      </label>
+      {!rc && !advance && (
         <div className="card stack">
           <div className="row" style={{ alignItems: 'end' }}>
             <label style={{ flex: '0 0 220px' }}>Skattereduktion för kunden

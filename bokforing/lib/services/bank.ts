@@ -242,10 +242,10 @@ export async function listTransactions(companyId: number, f: { status?: string; 
 
 async function candidates(companyId: number) {
   const invoices = await sql<{ id: number; number: number; ocr: string | null; total: number; customer: string }[]>`
-    SELECT i.id, i.invoice_number AS number, i.ocr, i.total, c.name AS customer FROM invoices i JOIN customers c ON c.id = i.customer_id
+    SELECT i.id, i.invoice_number AS number, i.ocr, (i.total - i.paid_amount)::bigint AS total, c.name AS customer FROM invoices i JOIN customers c ON c.id = i.customer_id
     WHERE i.company_id = ${companyId} AND i.status = 'booked'`;
   const supplierInvoices = await sql<{ id: number; invoiceNumber: string; paymentReference: string; total: number; supplier: string; status: string }[]>`
-    SELECT i.id, i.invoice_number AS "invoiceNumber", i.payment_reference AS "paymentReference", i.total, s.name AS supplier, i.status
+    SELECT i.id, i.invoice_number AS "invoiceNumber", i.payment_reference AS "paymentReference", (i.total - i.paid_amount)::bigint AS total, s.name AS supplier, i.status
     FROM supplier_invoices i JOIN suppliers s ON s.id = i.supplier_id WHERE i.company_id = ${companyId} AND i.status IN ('booked','approved')`;
   // Bokförda rader på bankkonton som inte redan är kopplade till en banktransaktion (senaste året)
   const voucherLines = await sql<{ voucherId: number; label: string; date: string; amount: number; description: string; ledger: number }[]>`
@@ -294,10 +294,10 @@ export async function reconcile(actor: Actor, txId: number, input: Record<string
       voucherId = inv.payment_voucher_id;
     } else if (type === 'supplier_invoice') {
       matchId = int(input, 'id', 'Leverantörsfaktura');
-      const [si] = await tx<{ total: number }[]>`SELECT total FROM supplier_invoices WHERE id = ${matchId} AND company_id = ${actor.companyId}`;
+      const [si] = await tx<{ remaining: number }[]>`SELECT (total - paid_amount)::bigint AS remaining FROM supplier_invoices WHERE id = ${matchId} AND company_id = ${actor.companyId}`;
       if (!si) throw new NotFoundError('Leverantörsfakturan');
-      if (si.total !== -t.amount) throw new ValidationError('Beloppet stämmer inte med leverantörsfakturan');
-      const out = await paySupplierInvoiceTx(tx, actor, matchId, { date: t.booking_date, bank_account: a.ledger_account }, { autoApprove: true });
+      if (t.amount >= 0 || -t.amount > Number(si.remaining)) throw new ValidationError('Beloppet är större än det som återstår på leverantörsfakturan');
+      const out = await paySupplierInvoiceTx(tx, actor, matchId, { date: t.booking_date, bank_account: a.ledger_account, amount: -t.amount }, { autoApprove: true });
       voucherId = out.payment_voucher_id;
     } else if (type === 'voucher') {
       matchId = voucherId = int(input, 'id', 'Verifikation');

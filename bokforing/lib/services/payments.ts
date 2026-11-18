@@ -65,7 +65,7 @@ export async function createInvoiceCheckout(token: string, origin: string): Prom
   const ref = await invoiceByToken(token);
   if (!ref || !(await canPayByCard(ref.id))) throw new ValidationError('Fakturan kan inte betalas med kort');
   const [i] = await sql<{ number: number; total: number; company: string; account: string; email: string; ocr: string | null }[]>`
-    SELECT i.invoice_number AS number, i.total, co.name AS company, co.stripe_account_id AS account, cu.email, i.ocr
+    SELECT i.invoice_number AS number, (i.total - i.paid_amount)::bigint AS total, co.name AS company, co.stripe_account_id AS account, cu.email, i.ocr
     FROM invoices i JOIN companies co ON co.id = i.company_id JOIN customers cu ON cu.id = i.customer_id WHERE i.id = ${ref.id}`;
   const fee = Math.round((i.total * feePercent()) / 100);
   const s = await stripe<{ id: string; url: string }>('POST', '/checkout/sessions', {
@@ -101,9 +101,9 @@ export async function handleConnectEvent(e: ConnectEvent) {
       SELECT id, invoice_id, amount, status FROM invoice_checkouts WHERE session_id = ${o.id} AND company_id = ${co.id} FOR UPDATE`;
     if (!chk) return 'unknown_session';
     if (chk.status === 'paid') return 'duplicate';
-    const [inv] = await tx<{ status: string; total: number }[]>`SELECT status, total FROM invoices WHERE id = ${chk.invoice_id} FOR UPDATE`;
+    const [inv] = await tx<{ status: string; total: number }[]>`SELECT status, (total - paid_amount)::bigint AS total FROM invoices WHERE id = ${chk.invoice_id} FOR UPDATE`;
     const actor: Actor = { companyId: co.id, userId: co.owner!, apiKeyId: null, role: 'owner' };
-    if (inv.status !== 'booked' || inv.total !== chk.amount || o.amount_total !== chk.amount) {
+    if (inv.status !== 'booked' || Number(inv.total) !== chk.amount || o.amount_total !== chk.amount) {
       // Redan betald på annat sätt eller ändrat belopp: registreras inte automatiskt – syns för manuell hantering
       await tx`UPDATE invoice_checkouts SET status = 'mismatch', paid_at = now() WHERE id = ${chk.id}`;
       await auditBy(tx, actor, 'card_payment_mismatch', 'invoice', chk.invoice_id, { session: o.id, amount: o.amount_total });

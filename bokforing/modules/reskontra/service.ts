@@ -55,7 +55,7 @@ export async function openInvoices(companyId: number, f: { customer_id?: number 
   const s = await settings(sql, companyId);
   const rows = await sql<Omit<OpenInvoice, 'days_overdue' | 'interest' | 'action'>[]>`
     SELECT i.id, i.invoice_number AS number, i.customer_id, c.name AS customer, c.email, to_char(i.invoice_date,'YYYY-MM-DD') AS invoice_date,
-      to_char(i.due_date,'YYYY-MM-DD') AS due_date, i.total::bigint AS total,
+      to_char(i.due_date,'YYYY-MM-DD') AS due_date, (i.total - i.paid_amount)::bigint AS total,
       COALESCE((SELECT array_agg(level ORDER BY level) FROM rk_reminders r WHERE r.invoice_id = i.id), '{}') AS levels,
       (SELECT to_char(max(date),'YYYY-MM-DD') FROM rk_reminders r WHERE r.invoice_id = i.id) AS last_reminder,
       EXISTS (SELECT 1 FROM rk_collections k WHERE k.invoice_id = i.id) AS in_collection
@@ -89,8 +89,8 @@ export async function customerLedger(companyId: number, customerId: number) {
     SELECT to_char(invoice_date,'YYYY-MM-DD') AS date, CASE WHEN credit_of_id IS NULL THEN 'Faktura ' ELSE 'Kreditfaktura ' END || invoice_number AS text, total::bigint AS amount, id AS invoice_id
       FROM invoices WHERE company_id = ${companyId} AND customer_id = ${customerId} AND status IN ('booked', 'paid', 'credited') AND total <> 0
     UNION ALL
-    SELECT to_char(paid_date,'YYYY-MM-DD'), 'Betalning faktura ' || invoice_number, -total::bigint, id
-      FROM invoices WHERE company_id = ${companyId} AND customer_id = ${customerId} AND status = 'paid' AND credit_of_id IS NULL AND paid_date IS NOT NULL AND total <> 0
+    SELECT to_char(p.date,'YYYY-MM-DD'), 'Betalning faktura ' || i.invoice_number, -p.amount::bigint, i.id
+      FROM invoice_payments p JOIN invoices i ON i.id = p.invoice_id WHERE i.company_id = ${companyId} AND i.customer_id = ${customerId} AND i.credit_of_id IS NULL
     ORDER BY 1, 2`;
   let balance = 0;
   return rows.map((r) => { balance += Number(r.amount); return { ...r, amount: Number(r.amount), balance }; });
@@ -142,7 +142,7 @@ export async function reminderLetter(companyId: number, reminderId: number) {
     SELECT invoice_id, level, to_char(date,'YYYY-MM-DD') AS date, fee::bigint AS fee, interest::bigint AS interest FROM rk_reminders WHERE id = ${reminderId} AND company_id = ${companyId}`;
   if (!r) throw new NotFoundError('Påminnelsen');
   const [i] = await sql<{ number: number; customer: string; invoice_date: string; due_date: string; total: number; ocr: string | null; address: string; postal: string; city: string }[]>`
-    SELECT i.invoice_number AS number, c.name AS customer, to_char(i.invoice_date,'YYYY-MM-DD') AS invoice_date, to_char(i.due_date,'YYYY-MM-DD') AS due_date, i.total::bigint AS total, i.ocr,
+    SELECT i.invoice_number AS number, c.name AS customer, to_char(i.invoice_date,'YYYY-MM-DD') AS invoice_date, to_char(i.due_date,'YYYY-MM-DD') AS due_date, (i.total - i.paid_amount)::bigint AS total, i.ocr,
       c.address, c.postal_code AS postal, c.city FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.id = ${r.invoice_id}`;
   const [co] = await sql<{ name: string; bankgiro: string }[]>`SELECT name, bankgiro FROM companies WHERE id = ${companyId}`;
   const s = await settings(sql, companyId);

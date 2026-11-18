@@ -61,6 +61,7 @@ const INVOICE: Schema = { type: 'object', required: ['customer_id', 'invoice_dat
   buyer_pnr: { type: 'string', description: 'Köparens personnummer' }, work_type: { type: 'string', description: 'Typ av arbete' },
   property: { type: 'string', description: 'Fastighetsbeteckning (ROT)' }, brf_orgnr: { type: 'string' }, apartment_no: { type: 'string' },
   reduction_max: ORE('Köparens återstående tak för året, om känt'),
+  advance: { type: 'boolean', description: 'Förskottsfaktura: raderna bokförs mot 2420 Förskott från kunder och kan sedan avräknas på slutfakturan' },
   lines: { type: 'array', items: { type: 'object', required: ['description', 'unit_price'], properties: {
     description: { type: 'string' }, quantity: { type: 'number', default: 1 }, unit: { type: 'string', default: 'st' },
     unit_price: ORE('À-pris exkl. moms'), vat_rate: { type: 'integer', enum: [0, 6, 12, 25], default: 25 },
@@ -143,9 +144,12 @@ export const CORE_ROUTES: ApiRoute[] = [
     handler: ({ actor, params }) => invoices.deleteDraft(actor, id(params)) },
   { method: 'POST', path: '/invoices/:id/book', scope: 'sales:write', tag: 'Försäljning', summary: 'Bokför faktura',
     handler: ({ actor, params }) => invoices.bookInvoice(actor, id(params)) },
-  { method: 'POST', path: '/invoices/:id/payments', scope: 'sales:write', tag: 'Försäljning', summary: 'Registrera inbetalning (hela beloppet)',
-    body: { type: 'object', required: ['date'], properties: { date: DATE, amount: ORE('Belopp (standard: fakturans total)'), bank_account: { type: 'integer', default: 1930 } } },
+  { method: 'POST', path: '/invoices/:id/payments', scope: 'sales:write', tag: 'Försäljning', summary: 'Registrera inbetalning (hel eller delbetalning)',
+    body: { type: 'object', required: ['date'], properties: { date: DATE, amount: ORE('Belopp (standard: det som återstår). Ett lägre belopp blir en delbetalning.'), bank_account: { type: 'integer', default: 1930 } } },
     handler: ({ actor, params, body }) => invoices.registerPayment(actor, id(params), body) },
+  { method: 'POST', path: '/invoices/:id/settle-advance', scope: 'sales:write', tag: 'Försäljning', summary: 'Avräkna en betald förskottsfaktura på ett utkast',
+    body: { type: 'object', required: ['advance_invoice_id'], properties: { advance_invoice_id: { type: 'integer' } } },
+    handler: ({ actor, params, body }) => invoices.settleAdvance(actor, id(params), Number((body as Record<string, unknown>).advance_invoice_id)) },
   { method: 'POST', path: '/invoices/:id/credit', scope: 'sales:write', tag: 'Försäljning', status: 201, summary: 'Kreditera hela fakturan (returnerar kreditfakturan)',
     body: { type: 'object', required: ['date'], properties: { date: DATE } },
     handler: ({ actor, params, body }) => invoices.creditInvoice(actor, id(params), body) },
@@ -206,8 +210,8 @@ export const CORE_ROUTES: ApiRoute[] = [
     handler: ({ actor, body }) => suppliers.registerSupplierInvoice(actor, body) },
   { method: 'POST', path: '/supplier-invoices/:id/approve', scope: 'purchasing:write', tag: 'Inköp', summary: 'Attestera för betalning',
     handler: ({ actor, params }) => suppliers.approveSupplierInvoice(actor, id(params)) },
-  { method: 'POST', path: '/supplier-invoices/:id/pay', scope: 'purchasing:write', tag: 'Inköp', summary: 'Bokför betalning',
-    body: { type: 'object', required: ['date'], properties: { date: DATE, bank_account: { type: 'integer', default: 1930 } } },
+  { method: 'POST', path: '/supplier-invoices/:id/pay', scope: 'purchasing:write', tag: 'Inköp', summary: 'Bokför betalning (hel eller delbetalning)',
+    body: { type: 'object', required: ['date'], properties: { date: DATE, amount: ORE('Belopp (standard: det som återstår)'), bank_account: { type: 'integer', default: 1930 } } },
     handler: async ({ actor, params, body }) => (await suppliers.paySupplierInvoices(actor, [id(params)], body))[0] },
 
   // Lön

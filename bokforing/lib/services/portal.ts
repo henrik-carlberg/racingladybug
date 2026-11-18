@@ -30,8 +30,8 @@ export async function portalByToken(token: string) {
 
 /** Kundens fakturor (bokförda, betalda och krediterade). Fakturor som saknar publik länk får en. */
 export async function portalInvoices(companyId: number, customerId: number) {
-  const rows = await sql<{ id: number; number: number; invoice_date: string; due_date: string; total: number; status: string; ocr: string | null; public_token: string | null; credit_of_id: number | null }[]>`
-    SELECT id, invoice_number AS number, to_char(invoice_date,'YYYY-MM-DD') AS invoice_date, to_char(due_date,'YYYY-MM-DD') AS due_date, total, status, ocr, public_token, credit_of_id
+  const rows = await sql<{ id: number; number: number; invoice_date: string; due_date: string; total: number; remaining: number; status: string; ocr: string | null; public_token: string | null; credit_of_id: number | null }[]>`
+    SELECT id, invoice_number AS number, to_char(invoice_date,'YYYY-MM-DD') AS invoice_date, to_char(due_date,'YYYY-MM-DD') AS due_date, total, (total - paid_amount)::bigint AS remaining, status, ocr, public_token, credit_of_id
     FROM invoices WHERE company_id = ${companyId} AND customer_id = ${customerId} AND status <> 'draft' ORDER BY invoice_date DESC, id DESC LIMIT 100`;
   for (const r of rows) {
     if (!r.public_token) {
