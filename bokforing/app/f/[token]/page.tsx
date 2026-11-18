@@ -18,7 +18,8 @@ export default async function PublicInvoice({ params }: { params: Promise<{ toke
   if (!ref) notFound();
   const [inv] = await sql<(InvoiceDocData & { status: string; credit_of_id: number | null; paid_date: string | null })[]>`
     SELECT i.*, to_char(i.invoice_date,'YYYY-MM-DD') AS invoice_date, to_char(i.due_date,'YYYY-MM-DD') AS due_date, to_char(i.paid_date,'YYYY-MM-DD') AS paid_date,
-      c.name AS c_name, c.orgnr AS c_orgnr, c.vat_number AS c_vat, c.address AS c_address, c.postal_code AS c_postal, c.city AS c_city, c.country AS c_country
+      c.name AS c_name, c.orgnr AS c_orgnr, c.vat_number AS c_vat, c.address AS c_address, c.postal_code AS c_postal, c.city AS c_city, c.country AS c_country,
+      i.reduction_type, i.tax_reduction, i.buyer_pnr, i.property, i.brf_orgnr, i.apartment_no, i.work_type
     FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.id = ${ref.id}`;
   const [co] = await sql<Company[]>`SELECT * FROM companies WHERE id = ${ref.company_id}`;
   const lines = await loadLines(sql, ref.id);

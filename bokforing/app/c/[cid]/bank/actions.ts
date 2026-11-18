@@ -63,7 +63,7 @@ export async function reconcileTx(cid: number, txId: number, fd: FormData) {
   const ret = `/c/${cid}/bank/avstamning${str(fd, 'qs') ? `?${str(fd, 'qs')}` : ''}`;
   await attempt(ret, () => bank.reconcile(actor, txId, {
     type: str(fd, 'type'), id: str(fd, 'id') || undefined, account: str(fd, 'account') || undefined,
-    vat_rate: str(fd, 'vat_rate') || undefined, description: str(fd, 'description') || undefined,
+    vat_rate: str(fd, 'vat_rate') || undefined, description: str(fd, 'description') || undefined, rule_id: str(fd, 'rule_id') || undefined,
   }));
   done(ret, 'Transaktionen är avstämd');
 }
@@ -79,4 +79,11 @@ export async function autoMatch(cid: number) {
   let n = 0;
   await attempt(`/c/${cid}/bank/avstamning`, async () => { n = await bank.autoMatch(actor); });
   done(`/c/${cid}/bank/avstamning`, `${n} transaktioner stämdes av automatiskt`);
+}
+
+export async function bookAllSuggestions(cid: number) {
+  const actor = userActor(await requireCompany(cid));
+  let n = 0;
+  await attempt(`/c/${cid}/bank/avstamning`, async () => { n = await bank.bookSuggestions(actor, { onlyAuto: false }); });
+  done(`/c/${cid}/bank/avstamning`, `${n} transaktioner bokfördes enligt förslagen`);
 }

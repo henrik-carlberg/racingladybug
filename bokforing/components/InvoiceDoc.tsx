@@ -5,12 +5,14 @@ import { fmtHours, monthName } from '@/lib/time';
 import type { Company } from '@/lib/server/auth';
 import QRCode from 'qrcode';
 import { formatSwish, swishQrData } from '@/lib/pain001';
+import { formatPnr, labourInclVat, REDUCTION, type ReductionType } from '@/lib/rotrut';
 
 export interface InvoiceDocData {
   invoice_number: number | null; invoice_date: string; due_date: string; delivery_date: string; ocr: string | null;
   our_reference: string; your_reference: string; notes: string; reverse_charge: boolean;
   hour_bank: { period: string; purchased: number; drawn_before: number; used_now: number; drawn: number; overage: number; remaining: number } | null;
   c_name: string; c_orgnr: string; c_vat: string; c_address: string; c_postal: string; c_city: string; c_country: string;
+  reduction_type?: ReductionType | null; tax_reduction?: number; buyer_pnr?: string; property?: string; brf_orgnr?: string; apartment_no?: string; work_type?: string;
 }
 
 /** Fakturans dokument (används i appen, i utskrift och på kundens länk) */
@@ -20,8 +22,11 @@ export async function InvoiceDoc({ inv, lines, co, orig, isCredit, time }: {
 }) {
   const t = computeInvoice(lines, { reverseCharge: inv.reverse_charge });
   const hb = inv.hour_bank;
-  const swish = co.swish_number && !isCredit && t.total > 0
-    ? { data: swishQrData(co.swish_number, t.total, inv.ocr ?? String(inv.invoice_number ?? '')), svg: '' } : null;
+  const red = inv.reduction_type ? inv.tax_reduction ?? 0 : 0;
+  const toPay = t.total - red;
+  const labour = inv.reduction_type ? labourInclVat(lines, t, inv.reverse_charge) : 0;
+  const swish = co.swish_number && !isCredit && toPay > 0
+    ? { data: swishQrData(co.swish_number, toPay, inv.ocr ?? String(inv.invoice_number ?? '')), svg: '' } : null;
   if (swish) swish.svg = await QRCode.toString(swish.data, { type: 'svg', margin: 1, width: 120 });
   return (
         <div className="doc">
@@ -76,10 +81,22 @@ export async function InvoiceDoc({ inv, lines, co, orig, isCredit, time }: {
                 <tr key={r}><td>Moms {r} % (underlag {kr(v.base)})</td><td className="num">{kr(v.vat)}</td></tr>
               ))}
               {t.rounding !== 0 && <tr><td>Öresavrundning</td><td className="num">{kr(t.rounding)}</td></tr>}
-              <tr className="sum"><td>{isCredit ? 'Att kreditera' : 'Att betala'} SEK</td><td className="num">{kr(t.total)}</td></tr>
+              {inv.reduction_type && <>
+                <tr><td>Totalt inkl. moms</td><td className="num">{kr(t.total)}</td></tr>
+                <tr><td>{REDUCTION[inv.reduction_type].label} ({REDUCTION[inv.reduction_type].pct} % av arbetskostnad {kr(labour)} kr inkl. moms)</td><td className="num">−{kr(red)}</td></tr>
+              </>}
+              <tr className="sum"><td>{isCredit ? 'Att kreditera' : 'Att betala'} SEK</td><td className="num">{kr(toPay)}</td></tr>
             </tbody>
           </table>
           {inv.reverse_charge && <p><b>Omvänd betalningsskyldighet</b> (Reverse charge, art. 196 Directive 2006/112/EC). Köparens momsreg.nr: {inv.c_vat}</p>}
+          {inv.reduction_type && (
+            <div className="small" style={{ border: '1px solid #ccc', borderRadius: 6, padding: '.6rem .9rem', margin: '1rem 0' }}>
+              <b>{REDUCTION[inv.reduction_type].label}</b> – fakturan gäller {inv.work_type}. Arbetskostnad {kr(labour)} kr, material och övrigt {kr(t.total - labour)} kr (inkl. moms).
+              {' '}Köpare: {inv.c_name}, personnummer {formatPnr(inv.buyer_pnr ?? '')}.
+              {inv.reduction_type === 'rot' && (inv.property ? ` Fastighet: ${inv.property}.` : ` Bostadsrättsförening ${inv.brf_orgnr}, lägenhet ${inv.apartment_no}.`)}
+              {' '}{co.name} har F-skatt och begär {kr(red)} kr från Skatteverket när du har betalat. Beviljas inte hela avdraget betalar du mellanskillnaden.
+            </div>
+          )}
           {inv.notes && <p>{inv.notes}</p>}
           {hb && (
             <div style={{ border: '1px solid #ccc', borderRadius: 6, padding: '.75rem 1rem', margin: '1rem 0', maxWidth: 420 }}>
@@ -119,7 +136,7 @@ export async function InvoiceDoc({ inv, lines, co, orig, isCredit, time }: {
           {swish && (
             <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginTop: '1rem', border: '1px solid #ddd', borderRadius: 6, padding: '.6rem .8rem', maxWidth: 420 }}>
               <div style={{ width: 120, height: 120, flex: '0 0 auto' }} dangerouslySetInnerHTML={{ __html: swish.svg }} />
-              <div className="small"><b>Betala med Swish</b><br />Swishnummer {formatSwish(co.swish_number)}<br />Belopp {kr(t.total)} kr<br />Meddelande {inv.ocr ?? inv.invoice_number}</div>
+              <div className="small"><b>Betala med Swish</b><br />Swishnummer {formatSwish(co.swish_number)}<br />Belopp {kr(toPay)} kr<br />Meddelande {inv.ocr ?? inv.invoice_number}</div>
             </div>
           )}
           {!isCredit && <p className="small" style={{ marginTop: '1rem' }}>{co.late_interest}</p>}

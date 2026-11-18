@@ -4,7 +4,8 @@ import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
 import { loadLines } from '@/lib/server/invoices';
 import { Flash, Status, type SP } from '@/components/ui';
-import { today } from '@/lib/format';
+import { kr, today } from '@/lib/format';
+import type { ReductionType } from '@/lib/rotrut';
 import { bookInvoice, creditInvoice, deleteDraft, registerPayment, sendInvoice } from '../actions';
 import { PrintButton } from '@/components/PrintButton';
 import { InvoiceDoc } from '@/components/InvoiceDoc';
@@ -20,6 +21,7 @@ interface Inv {
   hour_bank: { period: string; purchased: number; drawn_before: number; used_now: number; drawn: number; overage: number; remaining: number } | null;
   c_email: string; public_token: string | null; sent_local: string | null; sent_to: string | null;
   c_name: string; c_orgnr: string; c_vat: string; c_address: string; c_postal: string; c_city: string; c_country: string;
+  reduction_type: ReductionType | null; tax_reduction: number; reduction_status: string | null; buyer_pnr: string; property: string; brf_orgnr: string; apartment_no: string; work_type: string;
 }
 
 export default async function InvoicePage({ params, searchParams }: { params: Promise<{ cid: string; iid: string }>; searchParams: SP }) {
@@ -29,7 +31,8 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
     SELECT i.*, to_char(i.invoice_date,'YYYY-MM-DD') AS invoice_date, to_char(i.due_date,'YYYY-MM-DD') AS due_date,
       to_char(i.paid_date,'YYYY-MM-DD') AS paid_date,
       c.email AS c_email, to_char(i.sent_at AT TIME ZONE 'Europe/Stockholm','YYYY-MM-DD HH24:MI') AS sent_local,
-      c.name AS c_name, c.orgnr AS c_orgnr, c.vat_number AS c_vat, c.address AS c_address, c.postal_code AS c_postal, c.city AS c_city, c.country AS c_country
+      c.name AS c_name, c.orgnr AS c_orgnr, c.vat_number AS c_vat, c.address AS c_address, c.postal_code AS c_postal, c.city AS c_city, c.country AS c_country,
+      i.reduction_type, i.tax_reduction, i.buyer_pnr, i.property, i.brf_orgnr, i.apartment_no, i.work_type
     FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.id = ${Number(iid)} AND i.company_id = ${co.id}`;
   if (!inv) notFound();
   const lines = await loadLines(sql, inv.id);
@@ -69,6 +72,14 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
             <span className="small muted">{inv.sent_local ? `Skickad ${inv.sent_local} till ${inv.sent_to}. ` : ''}Kunden får en länk där fakturan kan visas, skrivas ut och sparas som PDF.
               {inv.public_token && <> Länk: <a href={`/f/${inv.public_token}`} target="_blank">/f/{inv.public_token.slice(0, 8)}…</a></>}</span>
           </form>
+        )}
+        {inv.reduction_type && inv.status !== 'draft' && (
+          <div className="card small">
+            <b>{inv.reduction_type === 'rot' ? 'ROT-avdrag' : 'RUT-avdrag'}</b> {kr(inv.tax_reduction)} kr –{' '}
+            {inv.reduction_status === 'to_request' ? 'kunden har betalat, begär avdraget från Skatteverket' : inv.reduction_status === 'requested' ? 'begärt hos Skatteverket'
+              : inv.reduction_status === 'paid' ? 'utbetalt från Skatteverket' : inv.reduction_status === 'partly_paid' ? 'delvis beviljat' : inv.reduction_status === 'rejected' ? 'avslaget'
+              : 'begärs när kunden har betalat sin del'}. <a href={`/c/${co.id}/fakturor/rotrut`}>ROT och RUT</a>
+          </div>
         )}
         {peppol && (
           <div className="card small">

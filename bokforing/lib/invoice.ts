@@ -9,6 +9,7 @@ export interface InvoiceLineInput {
   unitPrice: number; // öre exkl moms
   vatRate: 0 | 6 | 12 | 25;
   account: number;
+  labor?: boolean; // arbetskostnad (grund för ROT/RUT-avdrag)
 }
 
 export interface InvoiceTotals {
@@ -40,10 +41,11 @@ export function computeInvoice(lines: InvoiceLineInput[], opts: { reverseCharge?
   return { net, vat, vatByRate, rounding: total - exact, total, lineNets };
 }
 
-/** Kontering av kundfaktura (eller kreditfaktura om sign = -1) */
-export function invoiceBookingLines(lines: InvoiceLineInput[], t: InvoiceTotals, sign: 1 | -1 = 1): Line[] {
+/** Kontering av kundfaktura (eller kreditfaktura om sign = -1). reduction: ROT/RUT-avdrag som fordras från Skatteverket (1513). */
+export function invoiceBookingLines(lines: InvoiceLineInput[], t: InvoiceTotals, sign: 1 | -1 = 1, reduction = 0): Line[] {
   const e: { account: number; amount: number }[] = [];
-  e.push({ account: ACC.customerReceivables, amount: sign * t.total });
+  e.push({ account: ACC.customerReceivables, amount: sign * (t.total - reduction) });
+  if (reduction) e.push({ account: ACC.taxReductionReceivable, amount: sign * reduction });
   lines.forEach((l, i) => e.push({ account: l.account, amount: -sign * t.lineNets[i] }));
   for (const [rate, v] of Object.entries(t.vatByRate)) {
     if (v.vat === 0) continue;

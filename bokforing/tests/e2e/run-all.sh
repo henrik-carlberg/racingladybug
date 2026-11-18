@@ -16,7 +16,7 @@ SERVER=$!
 trap 'kill -- -$SERVER 2>/dev/null' EXIT
 sleep 4
 export BASE_URL=http://localhost:$PORT
-for t in flow api passkey bank-hr simple cash time lonerevision lager marknad projekt crm resurser processer saas betalning trygghet inkorg; do
+for t in flow api passkey bank-hr simple cash time lonerevision lager marknad projekt crm resurser processer saas betalning trygghet inkorg rotbank; do
   echo "== $t"
   node tests/e2e/$t.cjs "$OUT"
 done

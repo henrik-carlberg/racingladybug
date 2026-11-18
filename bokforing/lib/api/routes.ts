@@ -57,10 +57,15 @@ const INVOICE: Schema = { type: 'object', required: ['customer_id', 'invoice_dat
   customer_id: { type: 'integer' }, invoice_date: DATE, due_date: DATE, delivery_date: { type: 'string' },
   our_reference: { type: 'string' }, your_reference: { type: 'string' }, notes: { type: 'string' },
   book: { type: 'boolean', description: 'true = bokför direkt (tilldelar fakturanummer och OCR)' },
+  reduction_type: { type: 'string', enum: ['rot', 'rut'], description: 'ROT- eller RUT-avdrag (fakturamodellen). Kräver buyer_pnr, work_type och för ROT property eller brf_orgnr + apartment_no.' },
+  buyer_pnr: { type: 'string', description: 'Köparens personnummer' }, work_type: { type: 'string', description: 'Typ av arbete' },
+  property: { type: 'string', description: 'Fastighetsbeteckning (ROT)' }, brf_orgnr: { type: 'string' }, apartment_no: { type: 'string' },
+  reduction_max: ORE('Köparens återstående tak för året, om känt'),
   lines: { type: 'array', items: { type: 'object', required: ['description', 'unit_price'], properties: {
     description: { type: 'string' }, quantity: { type: 'number', default: 1 }, unit: { type: 'string', default: 'st' },
     unit_price: ORE('À-pris exkl. moms'), vat_rate: { type: 'integer', enum: [0, 6, 12, 25], default: 25 },
-    account: { type: 'integer', description: 'Intäktskonto (standard efter momssats)' } } } } } };
+    account: { type: 'integer', description: 'Intäktskonto (standard efter momssats)' },
+    labor: { type: 'boolean', description: 'Arbetskostnad (grund för ROT/RUT-avdrag)' } } } } } };
 const SUPPLIER: Schema = { type: 'object', properties: {
   name: { type: 'string' }, orgnr: { type: 'string' }, bankgiro: { type: 'string' }, plusgiro: { type: 'string' },
   bank_account: { type: 'string' }, default_account: { type: 'integer', example: 4010 }, email: { type: 'string' } } };

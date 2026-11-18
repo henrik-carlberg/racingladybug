@@ -8,13 +8,14 @@ import { peppolErrors, peppolXml, type PeppolInvoice } from '@/lib/peppol';
 /** Samlar fakturans uppgifter i Peppol-format */
 export async function peppolData(companyId: number, invoiceId: number): Promise<PeppolInvoice> {
   const [i] = await sql<{ number: number | null; status: string; issue: string; due: string; delivery: string; ocr: string | null; your_reference: string; our_reference: string; notes: string;
-    reverse_charge: boolean; credit_of_id: number | null; c_name: string; c_orgnr: string; c_vat: string; c_address: string; c_postal: string; c_city: string; c_country: string; c_peppol: string; c_email: string }[]>`
+    reverse_charge: boolean; credit_of_id: number | null; c_name: string; c_orgnr: string; c_vat: string; c_address: string; c_postal: string; c_city: string; c_country: string; c_peppol: string; c_email: string; reduction_type: string | null }[]>`
     SELECT i.invoice_number AS number, i.status, to_char(i.invoice_date,'YYYY-MM-DD') AS issue, to_char(i.due_date,'YYYY-MM-DD') AS due, i.delivery_date AS delivery, i.ocr,
-      i.your_reference, i.our_reference, i.notes, i.reverse_charge, i.credit_of_id,
+      i.your_reference, i.our_reference, i.notes, i.reverse_charge, i.credit_of_id, i.reduction_type,
       c.name AS c_name, c.orgnr AS c_orgnr, c.vat_number AS c_vat, c.address AS c_address, c.postal_code AS c_postal, c.city AS c_city, c.country AS c_country, c.peppol_id AS c_peppol, c.email AS c_email
     FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.id = ${invoiceId} AND i.company_id = ${companyId}`;
   if (!i) throw new NotFoundError('Fakturan');
   if (i.status === 'draft' || !i.number) throw new ValidationError('Bokför fakturan innan den skickas som e-faktura');
+  if (i.reduction_type) throw new ValidationError('Fakturor med ROT/RUT-avdrag går till privatpersoner och skickas inte som e-faktura');
   const [co] = await sql<{ name: string; orgnr: string; vat_number: string; address: string; postal_code: string; city: string; email: string; phone: string; f_skatt: boolean;
     bankgiro: string; plusgiro: string; iban: string; invoice_terms: number; late_interest: string }[]>`
     SELECT name, orgnr, vat_number, address, postal_code, city, email, phone, f_skatt, bankgiro, plusgiro, iban, invoice_terms, late_interest FROM companies WHERE id = ${companyId}`;

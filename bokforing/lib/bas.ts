@@ -11,6 +11,7 @@ const ACCOUNTS: Acc[] = [
   [1259, 'Ackumulerade avskrivningar på datorer'],
   [1460, 'Lager av handelsvaror'],
   [1510, 'Kundfordringar'],
+  [1513, 'Kundfordringar – delad faktura (ROT/RUT)'],
   [1610, 'Kortfristiga fordringar hos anställda'],
   [1630, 'Avräkning för skatter och avgifter (skattekonto)'],
   [1650, 'Momsfordran'],
@@ -147,6 +148,7 @@ export const isBalanceAccount = (n: number) => n < 3000;
 export const ACC = {
   bank: 1930,
   customerReceivables: 1510,
+  taxReductionReceivable: 1513,
   employeeReceivables: 1610,
   supplierDebts: 2440,
   vatOut: { 25: 2611, 12: 2621, 6: 2631 } as Record<number, number>,

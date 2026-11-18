@@ -4,7 +4,8 @@ import { requireCompany } from '@/lib/server/auth';
 import { listBankAccounts, listTransactions } from '@/lib/services/bank';
 import { Flash, type SP } from '@/components/ui';
 import { kr } from '@/lib/format';
-import { autoMatch, reconcileTx, reopenTx } from '../actions';
+import { autoMatch, bookAllSuggestions, reconcileTx, reopenTx } from '../actions';
+import { learnKey } from '@/lib/bank/rules';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +22,9 @@ export default async function Reconcile({ params, searchParams }: { params: Prom
   const accNames = new Map(accounts.map((a) => [a.id, a.name]));
   const chart = await sql<{ number: number; name: string }[]>`SELECT number, name FROM accounts WHERE company_id = ${company.id} AND active ORDER BY number`;
   const b = `/c/${company.id}`;
+  const withAccount = rows.filter((r) => r.accountSuggestion && !(r.suggestions ?? []).some((x) => x.score >= 80)).length;
+  const ruleLink = (t: (typeof rows)[number], account?: number | null) => `${b}/bank/regler?${new URLSearchParams({ pattern: learnKey(t), direction: t.amount < 0 ? 'out' : 'in',
+    ...(account ? { account: String(account) } : {}), description: t.counterparty || t.description, back: `${b}/bank/avstamning` }).toString()}`;
   const qs = new URLSearchParams(Object.entries({ status, account_id: accountId ? String(accountId) : '' }).filter(([, v]) => v)).toString();
   return (
     <>
@@ -28,6 +32,8 @@ export default async function Reconcile({ params, searchParams }: { params: Prom
         <h1>Bankavstämning</h1>
         <div className="actions" style={{ margin: 0 }}>
           {status === 'unmatched' && <form action={autoMatch.bind(null, company.id)}><button>Stäm av säkra matchningar automatiskt</button></form>}
+          {withAccount > 0 && <form action={bookAllSuggestions.bind(null, company.id)}><button className="secondary">Bokför alla kontoförslag ({withAccount})</button></form>}
+          <Link className="btn secondary" href={`${b}/bank/regler`}>Konteringsregler</Link>
           <Link className="btn secondary" href={`${b}/bank`}>Bankkonton</Link>
         </div>
       </div>
@@ -57,11 +63,20 @@ export default async function Reconcile({ params, searchParams }: { params: Prom
                   <div style={{ flex: '0 0 auto' }}><button className={s.score >= 90 ? '' : 'secondary'}>{s.type === 'voucher' ? 'Koppla' : 'Matcha och bokför'}</button></div>
                 </form>
               ))}
+              {t.accountSuggestion && (() => { const a = t.accountSuggestion; return (
+                <form action={reconcileTx.bind(null, company.id, t.id)} className="row" style={{ alignItems: 'center' }}>
+                  <input type="hidden" name="type" value="account" /><input type="hidden" name="qs" value={qs} />
+                  <input type="hidden" name="account" value={a.account} /><input type="hidden" name="vat_rate" value={a.vatRate} /><input type="hidden" name="description" value={a.description} />
+                  {a.ruleId && <input type="hidden" name="rule_id" value={a.ruleId} />}
+                  <span style={{ flex: '3 1 300px' }}><span className="badge ok">Konto</span> {a.account} {a.accountName}{a.vatRate ? `, ${a.vatRate} % moms` : ''}
+                    <span className="small muted"> – {a.source === 'rule' ? `regel ”${a.ruleName}”${a.auto ? ' (automatisk)' : ''}` : `bokförd så ${a.count} gånger tidigare`}</span></span>
+                  <div style={{ flex: '0 0 auto' }}><button className={(t.suggestions ?? []).some((x) => x.score >= 80) ? 'secondary' : ''}>Bokför</button></div>
+                </form>); })()}
               <details>
                 <summary className="small">Bokför mot konto</summary>
                 <form action={reconcileTx.bind(null, company.id, t.id)} className="row" style={{ marginTop: '.5rem' }}>
                   <input type="hidden" name="type" value="account" /><input type="hidden" name="qs" value={qs} />
-                  <label style={{ flex: '0 0 130px' }}>Konto<input name="account" list="chart" required placeholder={t.amount < 0 ? '6570' : '3001'} /></label>
+                  <label style={{ flex: '0 0 130px' }}>Konto<input name="account" list="chart" required defaultValue={t.accountSuggestion?.account} placeholder={t.amount < 0 ? '6570' : '3001'} /></label>
                   <label style={{ flex: '0 0 110px' }}>Moms<select name="vat_rate" defaultValue="0"><option value="0">Ingen</option><option value="25">25 %</option><option value="12">12 %</option><option value="6">6 %</option></select></label>
                   <label style={{ flex: '2 1 200px' }}>Text<input name="description" defaultValue={t.counterparty || t.description} /></label>
                   <div style={{ flex: '0 0 auto' }}><button className="secondary">Bokför</button></div>
@@ -78,6 +93,7 @@ export default async function Reconcile({ params, searchParams }: { params: Prom
               {t.voucher_id && <> – <Link href={`${b}/verifikationer/${t.voucher_id}`}>verifikation</Link></>}
               {t.match_type === 'invoice' && t.match_id && <> – <Link href={`${b}/fakturor/${t.match_id}`}>faktura</Link></>}
               {t.match_type === 'supplier_invoice' && t.match_id && <> – <Link href={`${b}/leverantorsfakturor/${t.match_id}`}>leverantörsfaktura</Link></>}
+              {t.match_type === 'account' && !t.rule_id && <> · <Link href={ruleLink(t, t.booked_account)}>Skapa regel så att {t.counterparty || 'motparten'} bokförs så automatiskt</Link></>}
               {(t.status === 'ignored' || t.match_type === 'voucher') && <form action={reopenTx.bind(null, company.id, t.id)} style={{ display: 'inline', marginLeft: 8 }}><button className="link">Ångra</button></form>}
             </div>
           )}
