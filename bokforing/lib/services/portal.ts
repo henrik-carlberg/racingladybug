@@ -20,8 +20,8 @@ export async function portalLink(actor: Actor, customerId: number, rotate = fals
 export async function portalByToken(token: string) {
   if (!/^[A-Za-z0-9_-]{20,64}$/.test(token)) return null;
   const [r] = await sql<{ customer_id: number; company_id: number; customer: string; email: string; address: string; postal_code: string; city: string;
-    company: string; company_email: string; company_phone: string; bankgiro: string; owner: number | null }[]>`
-    SELECT cu.id AS customer_id, cu.company_id, cu.name AS customer, cu.email, cu.address, cu.postal_code, cu.city,
+    company: string; company_email: string; company_phone: string; bankgiro: string; owner: number | null; language: string }[]>`
+    SELECT cu.id AS customer_id, cu.company_id, cu.name AS customer, cu.email, cu.address, cu.postal_code, cu.city, cu.language,
       co.name AS company, co.email AS company_email, co.phone AS company_phone, co.bankgiro,
       (SELECT m.user_id FROM memberships m WHERE m.company_id = co.id AND m.role = 'owner' ORDER BY m.created_at LIMIT 1) AS owner
     FROM customers cu JOIN companies co ON co.id = cu.company_id WHERE cu.portal_token = ${token}`;
