@@ -120,7 +120,7 @@ export async function invite(cid: number, fd: FormData) {
     const email = str(fd, 'email').toLowerCase();
     if (!email.includes('@')) throw new Error('Ange en e-postadress');
     const r = str(fd, 'role');
-    const role = r === 'owner' ? 'owner' : r === 'employee' ? 'employee' : 'accountant';
+    const role = r === 'owner' ? 'owner' : r === 'employee' ? 'employee' : r === 'auditor' ? 'auditor' : 'accountant';
     let employeeId: number | null = null;
     if (role === 'employee') {
       employeeId = Number(str(fd, 'employee_id')) || null;

@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
 export default async function Home({ searchParams }: { searchParams: SP }) {
   const user = await currentUser();
   if (!user) return <Landing />;
-  const companies = await sql<{ id: number; name: string; orgnr: string; role: 'owner' | 'accountant' }[]>`
+  const companies = await sql<{ id: number; name: string; orgnr: string; role: 'owner' | 'accountant' | 'employee' | 'auditor' }[]>`
     SELECT c.id, c.name, c.orgnr, m.role FROM companies c JOIN memberships m ON m.company_id = c.id
     WHERE m.user_id = ${user.id} ORDER BY c.name`;
   const firms = await sql<{ id: number; name: string }[]>`SELECT f.id, f.name FROM firms f JOIN firm_members m ON m.firm_id = f.id WHERE m.user_id = ${user.id}`;
@@ -27,6 +27,7 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
         <h1>Mina bolag</h1>
         <div className="actions" style={{ margin: 0 }}>
           <Link className="btn secondary" href="/byra">{firms.length ? 'Byråvy' : 'För byråer'}</Link>
+          {companies.filter((c) => c.role !== 'employee').length > 1 && <Link className="btn secondary" href="/koncern">Koncern</Link>}
           <Link className="btn secondary" href="/konto">Mitt konto</Link>
           <form action={logout}><button className="secondary">Logga ut ({user.name})</button></form>
         </div>

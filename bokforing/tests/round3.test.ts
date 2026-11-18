@@ -71,3 +71,22 @@ describe('månadsrapport', () => {
     expect(h.join(' ')).toContain('2 kundfakturor är förfallna');
   });
 });
+
+import { consolidate, orgDigits } from '@/lib/consolidation';
+describe('koncernsammanställning', () => {
+  it('summerar och eliminerar koncerninternt', () => {
+    const r = consolidate([
+      { id: 1, name: 'Moder AB', result: new Map([[3001, -1000000], [5010, 200000]]), balance: new Map([[1930, 500000], [1510, 300000], [2098, -800000]]), intraSales: 100000, intraOpen: 50000 },
+      { id: 2, name: 'Dotter AB', result: new Map([[3001, -400000], [6550, 100000]]), balance: new Map([[1930, 100000], [2440, -50000], [2098, -50000]]), intraSales: 0, intraOpen: 0 },
+    ]);
+    expect(r.result.revenue).toBe(1300000);
+    expect(r.result.external).toBe(200000);
+    expect(r.consolidatedResult).toBe(1100000);
+    expect(r.balance.current).toBe(250000);
+    expect(r.balance.shortterm).toBe(0);
+    expect(r.balance.cash).toBe(600000);
+  });
+  it('organisationsnummer jämförs utan bindestreck och sekelsiffror', () => {
+    expect(orgDigits('556677-8899')).toBe(orgDigits('165566778899'));
+  });
+});

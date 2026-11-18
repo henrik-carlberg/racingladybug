@@ -1,5 +1,5 @@
 import 'server-only';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { redirect, notFound } from 'next/navigation';
 import { createHash, randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
@@ -9,7 +9,7 @@ import { access, billingEnforced, type Access } from '@/lib/billing';
 const COOKIE = 'bok_session';
 const SESSION_DAYS = 14;
 
-export type Role = 'owner' | 'accountant' | 'employee';
+export type Role = 'owner' | 'accountant' | 'employee' | 'auditor';
 export interface User { id: number; email: string; name: string }
 export interface Company {
   id: number; name: string; orgnr: string; company_type: 'AB' | 'EF'; vat_period: 'month' | 'quarter' | 'year';
@@ -95,6 +95,8 @@ export async function requireCompany(companyId: number | string, opts: { owner?:
   const { role, employee_id, ...company } = row;
   if (role === 'employee' && !opts.employee) redirect(`/c/${id}/mitt`);
   if (opts.owner && role !== 'owner') throw new Error('Endast ägare får göra detta');
+  // Revisorn får läsa allt men inte ändra något: alla serveråtgärder (formulär, knappar) nekas
+  if (role === 'auditor' && (await headers()).get('next-action')) throw new Error('Revisorn har läsbehörighet och kan inte ändra i bokföringen');
   const billing = await companyAccess(id);
   if (billing.state === 'locked' && !opts.allowLocked) redirect(`/c/${id}/abonnemang`);
   return { user, company: company as Company, role, billing, employeeId: employee_id };

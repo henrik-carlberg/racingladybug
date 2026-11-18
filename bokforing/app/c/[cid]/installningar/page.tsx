@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { headers } from 'next/headers';
 import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
+import { lockChecks } from '@/lib/services/lockcheck';
 import { fiscalYears } from '@/lib/server/ledger';
 import { Flash, type SP } from '@/components/ui';
 import { ROLE_LABEL } from '@/lib/format';
@@ -14,6 +15,9 @@ export default async function Settings({ params, searchParams }: { params: Promi
   const { cid } = await params;
   const { company: c, role, user } = await requireCompany(cid);
   const sp = await searchParams;
+  const prevMonthEnd = (() => { const d = new Date(); d.setUTCDate(0); return d.toISOString().slice(0, 10); })();
+  const lockDate = typeof sp.lockcheck === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(sp.lockcheck) ? sp.lockcheck : prevMonthEnd;
+  const checks = await lockChecks(c.id, lockDate);
   const years = await fiscalYears(c.id);
   const unlinked = await sql<{ id: number; name: string; email: string }[]>`SELECT id, first_name || ' ' || last_name AS name, email FROM employees
     WHERE company_id = ${c.id} AND active AND user_id IS NULL ORDER BY last_name`;
@@ -122,9 +126,23 @@ export default async function Settings({ params, searchParams }: { params: Promi
 
       <h2>Periodlås <Help term="periodlas" /></h2>
       <p className="muted small">Inga verifikationer kan bokföras på eller före låsdatumet. Lås perioden när momsen är redovisad.</p>
+      <form className="card row" style={{ alignItems: 'end' }}>
+        <label>Kontrollera före låsning till och med<input name="lockcheck" type="date" defaultValue={lockDate} /></label>
+        <div style={{ flex: '0 0 auto' }}><button className="secondary">Kontrollera</button></div>
+      </form>
+      <div className="card stack lock-checks">
+        {checks.map((x) => (
+          <div key={x.key} className="row" style={{ alignItems: 'center' }}>
+            <span style={{ flex: '0 0 1.5rem' }}>{x.ok ? '✅' : '⚠️'}</span>
+            <span style={{ flex: '1 1 200px' }}><b>{x.title}</b> <span className="small muted">{x.detail}</span></span>
+            {!x.ok && <Link className="small" href={x.href}>Åtgärda</Link>}
+          </div>
+        ))}
+      </div>
       <form action={a.setLock.bind(null, c.id)} className="card row">
-        <label>Låst till och med<input name="locked_until" type="date" defaultValue={c.locked_until ?? ''} /></label>
+        <label>Låst till och med<input name="locked_until" type="date" defaultValue={c.locked_until ?? lockDate} /></label>
         <div style={{ flex: '0 0 auto' }}><button>Spara</button></div>
+        {checks.some((x) => !x.ok) && <span className="small" style={{ color: 'var(--warn)', alignSelf: 'center' }}>Det finns punkter kvar ovan – du kan ändå låsa.</span>}
       </form>
 
       <h2>Användare</h2>
@@ -151,7 +169,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
         <form action={a.invite.bind(null, c.id)} className="card row" style={{ marginTop: '1rem' }}>
           <label>Bjud in e-post<input name="email" type="email" required /></label>
           <label>Roll
-            <select name="role"><option value="accountant">Redovisningskonsult</option><option value="owner">Ägare</option><option value="employee">Anställd (självservice)</option></select>
+            <select name="role"><option value="accountant">Redovisningskonsult</option><option value="owner">Ägare</option><option value="employee">Anställd (självservice)</option><option value="auditor">Revisor (endast läsa)</option></select>
           </label>
           <label>Anställd (vid självservice)
             <select name="employee_id"><option value="">–</option>{unlinked.map((e) => <option key={e.id} value={e.id}>{e.name}{e.email ? ` (${e.email})` : ''}</option>)}</select>
