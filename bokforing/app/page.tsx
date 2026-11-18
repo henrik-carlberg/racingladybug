@@ -13,6 +13,10 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
   const companies = await sql<{ id: number; name: string; orgnr: string; role: 'owner' | 'accountant' }[]>`
     SELECT c.id, c.name, c.orgnr, m.role FROM companies c JOIN memberships m ON m.company_id = c.id
     WHERE m.user_id = ${user.id} ORDER BY c.name`;
+  const firms = await sql<{ id: number; name: string }[]>`SELECT f.id, f.name FROM firms f JOIN firm_members m ON m.firm_id = f.id WHERE m.user_id = ${user.id}`;
+  const clients = await sql<{ id: number; name: string; orgnr: string; firm: string }[]>`
+    SELECT DISTINCT ON (c.id) c.id, c.name, c.orgnr, f.name AS firm FROM firm_clients fc JOIN firm_members m ON m.firm_id = fc.firm_id JOIN firms f ON f.id = fc.firm_id
+    JOIN companies c ON c.id = fc.company_id WHERE m.user_id = ${user.id} AND NOT EXISTS (SELECT 1 FROM memberships x WHERE x.company_id = c.id AND x.user_id = ${user.id}) ORDER BY c.id`;
   const year = new Date().getFullYear();
   const [{ n: passkeys }] = await sql<{ n: number }[]>`SELECT count(*)::int AS n FROM passkeys WHERE user_id = ${user.id}`;
   return (
@@ -20,6 +24,7 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
       <div className="header">
         <h1>Mina bolag</h1>
         <div className="actions" style={{ margin: 0 }}>
+          <Link className="btn secondary" href="/byra">{firms.length ? 'Byråvy' : 'För byråer'}</Link>
           <Link className="btn secondary" href="/konto">Mitt konto</Link>
           <form action={logout}><button className="secondary">Logga ut ({user.name})</button></form>
         </div>
@@ -37,6 +42,12 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
             ))}
           </tbody>
         </table>
+      )}
+      {clients.length > 0 && (
+        <>
+          <h2>Klienter via byrå</h2>
+          <table><tbody>{clients.map((c) => <tr key={c.id}><td><Link href={`/c/${c.id}`}>{c.name}</Link></td><td>{c.orgnr}</td><td className="small muted">{c.firm}</td></tr>)}</tbody></table>
+        </>
       )}
       <h2>Lägg upp nytt bolag</h2>
       <form action={createCompany} className="card stack">

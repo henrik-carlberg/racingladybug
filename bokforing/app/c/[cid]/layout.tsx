@@ -44,6 +44,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
         <input type="checkbox" id="navtoggle" className="navtoggle" aria-hidden="true" />
         <label htmlFor="navtoggle" className="navbtn btn secondary">☰ Meny</label>
         <nav>
+          {role === 'accountant' && <Link href="/byra">← Byråvy</Link>}
           <Link href={b}>Översikt{urgent > 0 && <span className="badge warn" style={{ marginLeft: '.4rem' }} title="Saker som väntar på dig">{urgent}</span>}</Link>
           <Link href={`${b}/kom-igang`}>Kom igång</Link>
           <Link href={`${b}/kvitto`}>📷 Nytt kvitto</Link>
@@ -67,6 +68,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
           <Link href={`${b}/bank`}>Bankkonton</Link>
           <Link href={`${b}/bank/avstamning`}>Bankavstämning</Link>
           <Link href={`${b}/bank/regler`}>Konteringsregler</Link>
+          <Link href={`${b}/fragor`}>Frågor och svar</Link>
           <div className="group">Lön</div>
           <Link href={`${b}/lon`}>Lönekörningar</Link>
           <Link href={`${b}/lon/anstallda`}>Anställda</Link>
@@ -87,6 +89,8 @@ export default async function CompanyLayout({ children, params }: { children: Re
           <div className="group">Bolaget</div>
           <Link href={`${b}/installningar`}>Inställningar</Link>
           <Link href={`${b}/installningar/gdpr`}>Dataskydd (GDPR)</Link>
+          <Link href={`${b}/installningar/betalningar`}>Kortbetalning</Link>
+          <Link href={`${b}/installningar/byra`}>Redovisningsbyrå</Link>
           <Link href={`${b}/dokument`}>Dokument &amp; e-signering</Link>
           <Link href={`${b}/moduler`}>Moduler</Link>
           <Link href={`${b}/abonnemang`}>Abonnemang</Link>

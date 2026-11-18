@@ -51,6 +51,7 @@ export const STARTER_RULES: Omit<BankRule, 'id' | 'auto' | 'priority'>[] = [
   { name: 'Skattekontot', pattern: 'skatteverket', direction: 'any', amountMin: null, amountMax: null, account: 1630, vatRate: 0, description: 'Skattekontot' },
   { name: 'Bankavgifter', pattern: 'avgift', direction: 'out', amountMin: null, amountMax: 100000, account: 6570, vatRate: 0, description: 'Bankavgift' },
   { name: 'Ränta på bankkonto', pattern: 'ränta', direction: 'in', amountMin: null, amountMax: null, account: 8310, vatRate: 0, description: 'Ränteintäkt' },
+  { name: 'Utbetalning från Stripe', pattern: 'stripe', direction: 'in', amountMin: null, amountMax: null, account: 1580, vatRate: 0, description: 'Utbetalning av kortbetalningar' },
   { name: 'Telia', pattern: 'telia', direction: 'out', amountMin: null, amountMax: null, account: 6212, vatRate: 25, description: 'Telefon och abonnemang' },
   { name: 'Tele2', pattern: 'tele2', direction: 'out', amountMin: null, amountMax: null, account: 6212, vatRate: 25, description: 'Telefon och abonnemang' },
   { name: 'Telenor', pattern: 'telenor', direction: 'out', amountMin: null, amountMax: null, account: 6212, vatRate: 25, description: 'Telefon och abonnemang' },

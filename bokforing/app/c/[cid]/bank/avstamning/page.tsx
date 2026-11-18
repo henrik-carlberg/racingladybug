@@ -13,7 +13,7 @@ const TYPE_LABEL: Record<string, string> = { invoice: 'Kundfaktura', supplier_in
 
 export default async function Reconcile({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company, role } = await requireCompany(cid);
   const sp = await searchParams;
   const status = String(sp.status ?? 'unmatched');
   const accountId = sp.account_id ? Number(sp.account_id) : undefined;
@@ -82,6 +82,7 @@ export default async function Reconcile({ params, searchParams }: { params: Prom
                   <div style={{ flex: '0 0 auto' }}><button className="secondary">Bokför</button></div>
                 </form>
               </details>
+              <Link className="small" href={`${b}/fragor?entity=bank_transaction&id=${t.id}`}>Fråga {role === 'accountant' ? 'kunden' : 'byrån'} om transaktionen</Link>
               <form action={reconcileTx.bind(null, company.id, t.id)}>
                 <input type="hidden" name="type" value="ignore" /><input type="hidden" name="qs" value={qs} />
                 <button className="link small">Ignorera (bokförs inte, t.ex. överföring mellan egna konton som redan är bokförd)</button>

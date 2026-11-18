@@ -216,7 +216,7 @@ export async function registerPaymentTx(tx: Tx, actor: Actor, invoiceId: number,
   if (amount !== inv.total) throw new ValidationError('Delbetalningar stöds inte ännu – beloppet måste vara fakturans totalbelopp');
   const d = date(input, 'date', 'Betaldatum');
   const bank = optInt(input, 'bank_account', 'Bankkonto') ?? 1930;
-  if (bank < 1900 || bank > 1999) throw new ValidationError('Bankkonto måste vara ett 19xx-konto');
+  if ((bank < 1900 || bank > 1999) && bank !== ACC.cardClearing) throw new ValidationError('Bankkonto måste vara ett 19xx-konto');
   // Kontantmetoden: fakturan är inte bokförd än – intäkt och moms bokförs direkt mot banken
   const lines = inv.voucher_id ? invoicePaymentLines(amount, bank) : await (async () => {
     const il = await loadLines(tx, invoiceId);
