@@ -6,7 +6,7 @@ import { auditBy } from '@/lib/server/audit';
 import { emit } from '@/lib/server/events';
 import { loadLines } from '@/lib/server/invoices';
 import { proportionalLines } from '@/lib/partial';
-import { computeInvoice, defaultSalesAccount, invoiceBookingLines, invoicePaymentLines, lineNet, type InvoiceLineInput } from '@/lib/invoice';
+import { computeInvoice, CURRENCIES, defaultSalesAccount, fxPaymentLines, invoiceBookingLines, invoicePaymentLines, invoiceTotals, isForeign, lineNet, type InvoiceLineInput } from '@/lib/invoice';
 import { makeOcr, normalizePersonalNumber } from '@/lib/validate';
 import { computeReduction, labourInclVat, reductionErrors, remainingForBuyer, REDUCTION, type ReductionType } from '@/lib/rotrut';
 import { replaceAccount, type Line } from '@/lib/ledger-lines';
@@ -22,7 +22,7 @@ import { arr, date, int, list, optInt, str, type Page } from './input';
 export interface InvoiceOut {
   id: number; object: 'invoice'; number: number | null; status: 'draft' | 'booked' | 'paid' | 'credited';
   customer_id: number; customer_name: string; invoice_date: string; due_date: string; delivery_date: string;
-  ocr: string | null; our_reference: string; your_reference: string; notes: string; reverse_charge: boolean; currency: 'SEK';
+  ocr: string | null; our_reference: string; your_reference: string; notes: string; reverse_charge: boolean; currency: string; exchange_rate: number; total_currency: number | null; language: 'sv' | 'en'; fx_result: number;
   total_net: number; total_vat: number; rounding: number; total: number; paid_date: string | null;
   credit_of_id: number | null; voucher_id: number | null; payment_voucher_id: number | null; created_at: string;
   reduction_type: ReductionType | null; tax_reduction: number; buyer_pnr: string; property: string; brf_orgnr: string; apartment_no: string; work_type: string;
@@ -31,17 +31,18 @@ export interface InvoiceOut {
 }
 
 async function fetchInvoice(db: Tx | typeof sql, companyId: number, id: number): Promise<InvoiceOut> {
-  const [i] = await db<Omit<InvoiceOut, 'lines' | 'object' | 'currency'>[]>`
+  const [i] = await db<Omit<InvoiceOut, 'lines' | 'object'>[]>`
     SELECT i.id, i.invoice_number AS number, i.status, i.customer_id, c.name AS customer_name,
       to_char(i.invoice_date,'YYYY-MM-DD') AS invoice_date, to_char(i.due_date,'YYYY-MM-DD') AS due_date, i.delivery_date,
       i.ocr, i.our_reference, i.your_reference, i.notes, i.reverse_charge, i.total_net, i.total_vat, i.rounding, i.total,
       to_char(i.paid_date,'YYYY-MM-DD') AS paid_date, i.credit_of_id, i.voucher_id, i.payment_voucher_id, i.created_at,
-      i.reduction_type, i.tax_reduction, i.buyer_pnr, i.property, i.brf_orgnr, i.apartment_no, i.work_type, i.reduction_status, i.paid_amount, i.advance
+      i.reduction_type, i.tax_reduction, i.buyer_pnr, i.property, i.brf_orgnr, i.apartment_no, i.work_type, i.reduction_status, i.paid_amount, i.advance,
+      i.currency, i.exchange_rate::float8 AS exchange_rate, i.total_currency, i.language, i.fx_result
     FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.id = ${id} AND i.company_id = ${companyId}`;
   if (!i) throw new NotFoundError('Fakturan');
   const lines = await loadLines(db, id);
   return {
-    ...i, object: 'invoice', currency: 'SEK',
+    ...i, object: 'invoice',
     lines: lines.map((l) => ({ description: l.description, quantity: l.quantity, unit: l.unit, unit_price: l.unitPrice, vat_rate: l.vatRate, account: l.account, amount: lineNet(l), labor: !!l.labor })),
   };
 }
@@ -85,8 +86,8 @@ export async function saveDraft(actor: Actor, invoiceId: number | null, input: R
 export async function saveDraftTx(tx: Tx, actor: Actor, invoiceId: number | null, input: Record<string, unknown>): Promise<InvoiceOut> {
   const [company] = await tx<{ invoice_terms: number }[]>`SELECT invoice_terms FROM companies WHERE id = ${actor.companyId}`;
   const customerId = int(input, 'customer_id', 'Kund');
-  const [cust] = await tx<{ reverse_charge: boolean; payment_terms: number | null }[]>`
-    SELECT reverse_charge, payment_terms FROM customers WHERE id = ${customerId} AND company_id = ${actor.companyId}`;
+  const [cust] = await tx<{ reverse_charge: boolean; payment_terms: number | null; currency: string; language: string }[]>`
+    SELECT reverse_charge, payment_terms, currency, language FROM customers WHERE id = ${customerId} AND company_id = ${actor.companyId}`;
   if (!cust) throw new ValidationError('Kunden finns inte');
   const lines = parseLines(input, cust.reverse_charge);
   const advance = input.advance === true || input.advance === 'true' || input.advance === 'on';
@@ -97,12 +98,25 @@ export async function saveDraftTx(tx: Tx, actor: Actor, invoiceId: number | null
   }
   const invoiceDate = date(input, 'invoice_date', 'Fakturadatum');
   const dueDate = date(input, 'due_date', 'Förfallodatum', false) || addDays(invoiceDate, cust.payment_terms ?? company.invoice_terms);
-  const t = computeInvoice(lines, { reverseCharge: cust.reverse_charge });
+  const currency = (str(input, 'currency') || cust.currency || 'SEK').toUpperCase();
+  if (!(CURRENCIES as readonly string[]).includes(currency)) throw new ValidationError(`Valuta stöds inte: ${currency}`);
+  const language = (str(input, 'language') || cust.language) === 'en' ? 'en' : 'sv';
+  let rate = 1;
+  if (isForeign(currency)) {
+    rate = Number(String(input.exchange_rate ?? '').replace(',', '.'));
+    if (!Number.isFinite(rate) || rate <= 0 || rate > 1000) throw new ValidationError(`Ange växelkursen (kronor per ${currency})`);
+    rate = Math.round(rate * 1e6) / 1e6;
+    if (advance) throw new ValidationError('Förskottsfakturor i utländsk valuta stöds inte');
+    if (str(input, 'reduction_type')) throw new ValidationError('ROT/RUT kan inte kombineras med utländsk valuta');
+    if (await accountingMethod(tx, actor.companyId) === 'cash') throw new ValidationError('Fakturor i utländsk valuta kräver faktureringsmetoden');
+  }
+  const tt = invoiceTotals(lines, { reverseCharge: cust.reverse_charge, currency, rate });
+  const t = tt.sek;
   const rr = await readReduction(tx, actor.companyId, invoiceId, input, lines, t, cust.reverse_charge, invoiceDate);
   const head = {
     customer_id: customerId, invoice_date: invoiceDate, due_date: dueDate, delivery_date: str(input, 'delivery_date'),
     our_reference: str(input, 'our_reference'), your_reference: str(input, 'your_reference'), notes: str(input, 'notes'),
-    reverse_charge: cust.reverse_charge, advance, total_net: t.net, total_vat: t.vat, rounding: t.rounding, total: t.total - rr.tax_reduction, ...rr,
+    reverse_charge: cust.reverse_charge, advance, currency, exchange_rate: rate, language, total_currency: tt.foreign ? tt.doc.total : null, total_net: t.net, total_vat: t.vat, rounding: t.rounding, total: t.total - rr.tax_reduction, ...rr,
   };
   {
     let id = invoiceId ?? 0;
@@ -135,12 +149,13 @@ export async function openAdvances(db: Tx | typeof sql, companyId: number, custo
 /** Avräkna en betald förskottsfaktura på ett fakturautkast: en negativ rad mot 2420 per momssats */
 export async function settleAdvance(actor: Actor, draftId: number, advanceId: number): Promise<InvoiceOut> {
   return sql.begin(async (tx) => {
-    const [d] = await tx<{ customer_id: number; status: string; advance: boolean; reduction_type: string | null; reverse_charge: boolean }[]>`
-      SELECT customer_id, status, advance, reduction_type, reverse_charge FROM invoices WHERE id = ${draftId} AND company_id = ${actor.companyId} FOR UPDATE`;
+    const [d] = await tx<{ customer_id: number; status: string; advance: boolean; reduction_type: string | null; reverse_charge: boolean; currency: string }[]>`
+      SELECT customer_id, status, advance, reduction_type, reverse_charge, currency FROM invoices WHERE id = ${draftId} AND company_id = ${actor.companyId} FOR UPDATE`;
     if (!d) throw new NotFoundError('Fakturan');
     if (d.status !== 'draft') throw new ConflictError('Förskott kan bara avräknas på ett utkast');
     if (d.advance) throw new ConflictError('En förskottsfaktura kan inte avräkna andra förskott');
     if (d.reduction_type) throw new ConflictError('Avräkna förskottet innan du lägger till ROT/RUT');
+    if (isForeign(d.currency)) throw new ConflictError('Förskott kan inte avräknas på en faktura i utländsk valuta');
     const [a] = await tx<{ invoice_number: number }[]>`SELECT invoice_number FROM invoices WHERE id = ${advanceId} AND company_id = ${actor.companyId}
       AND customer_id = ${d.customer_id} AND advance AND status = 'paid' AND advance_settled_by IS NULL AND credit_of_id IS NULL FOR UPDATE`;
     if (!a) throw new ValidationError('Förskottsfakturan finns inte, är inte betald eller är redan avräknad');
@@ -209,14 +224,16 @@ export async function accountingMethod(tx: Tx | typeof sql, companyId: number): 
 export async function bookInvoice(actor: Actor, invoiceId: number): Promise<InvoiceOut> {
   return sql.begin(async (tx) => {
     const [inv] = await tx<{ status: string; invoice_date: string; reverse_charge: boolean; customer: string; reduction_type: ReductionType | null; tax_reduction: number;
-      reduction_max: number | null; buyer_pnr: string; property: string; brf_orgnr: string; apartment_no: string; work_type: string; f_skatt: boolean; project_id: number | null }[]>`
-      SELECT i.status, to_char(i.invoice_date,'YYYY-MM-DD') AS invoice_date, i.reverse_charge, c.name AS customer, i.reduction_type, i.tax_reduction, i.reduction_max, i.project_id,
+      reduction_max: number | null; buyer_pnr: string; property: string; brf_orgnr: string; apartment_no: string; work_type: string; f_skatt: boolean; project_id: number | null; currency: string; exchange_rate: string }[]>`
+      SELECT i.status, to_char(i.invoice_date,'YYYY-MM-DD') AS invoice_date, i.reverse_charge, i.currency, i.exchange_rate, c.name AS customer, i.reduction_type, i.tax_reduction, i.reduction_max, i.project_id,
         i.buyer_pnr, i.property, i.brf_orgnr, i.apartment_no, i.work_type, co.f_skatt
       FROM invoices i JOIN customers c ON c.id = i.customer_id JOIN companies co ON co.id = i.company_id WHERE i.id = ${invoiceId} AND i.company_id = ${actor.companyId} FOR UPDATE OF i`;
     if (!inv) throw new NotFoundError('Fakturan');
     if (inv.status !== 'draft') throw new ConflictError('Fakturan är redan bokförd');
     const lines = await loadLines(tx, invoiceId);
-    const t = computeInvoice(lines, { reverseCharge: inv.reverse_charge });
+    const tt = invoiceTotals(lines, { reverseCharge: inv.reverse_charge, currency: inv.currency, rate: inv.exchange_rate });
+    const t = tt.sek;
+    if (tt.foreign && (await accountingMethod(tx, actor.companyId)) === 'cash') throw new ValidationError('Fakturor i utländsk valuta kräver faktureringsmetoden');
     let reduction = 0;
     if (inv.reduction_type) {
       const labour = labourInclVat(lines, t, inv.reverse_charge);
@@ -236,7 +253,7 @@ export async function bookInvoice(actor: Actor, invoiceId: number): Promise<Invo
       lines: tagProject(invoiceBookingLines(lines, t, 1, reduction), inv.project_id), sourceType: 'invoice', sourceId: invoiceId, series: 'B',
     });
     await tx`UPDATE invoices SET status = ${zero ? 'paid' : 'booked'}, paid_date = ${zero ? inv.invoice_date : null}, invoice_number = ${no}, ocr = ${makeOcr(no)}, voucher_id = ${v?.id ?? null},
-      total_net = ${t.net}, total_vat = ${t.vat}, rounding = ${t.rounding}, total = ${t.total - reduction}, tax_reduction = ${reduction} WHERE id = ${invoiceId}`;
+      total_net = ${t.net}, total_vat = ${t.vat}, rounding = ${t.rounding}, total = ${t.total - reduction}, tax_reduction = ${reduction}, total_currency = ${tt.foreign ? tt.doc.total : null} WHERE id = ${invoiceId}`;
     await auditBy(tx, actor, 'book', 'invoice', invoiceId, { number: no });
     const out = await fetchInvoice(tx, actor.companyId, invoiceId);
     await emit(tx, actor.companyId, 'invoice.booked', out);
@@ -262,8 +279,8 @@ export async function registerPayment(actor: Actor, invoiceId: number, input: Re
 
 /** Som registerPayment men i en befintlig transaktion (används av bankavstämningen) */
 export async function registerPaymentTx(tx: Tx, actor: Actor, invoiceId: number, input: Record<string, unknown>): Promise<InvoiceOut> {
-  const [inv] = await tx<{ status: string; total: number; paid_amount: number; invoice_number: number; voucher_id: number | null; imported: boolean; reverse_charge: boolean; customer: string; tax_reduction: number; reduction_type: string | null; project_id: number | null }[]>`
-    SELECT i.status, i.total, i.paid_amount, i.invoice_number, i.voucher_id, i.imported, i.reverse_charge, c.name AS customer, i.tax_reduction, i.reduction_type, i.project_id
+  const [inv] = await tx<{ status: string; total: number; paid_amount: number; invoice_number: number; voucher_id: number | null; imported: boolean; currency: string; reverse_charge: boolean; customer: string; tax_reduction: number; reduction_type: string | null; project_id: number | null }[]>`
+    SELECT i.status, i.total, i.paid_amount, i.invoice_number, i.voucher_id, i.imported, i.currency, i.reverse_charge, c.name AS customer, i.tax_reduction, i.reduction_type, i.project_id
     FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.id = ${invoiceId} AND i.company_id = ${actor.companyId} FOR UPDATE OF i`;
   if (!inv) throw new NotFoundError('Fakturan');
   if (inv.status !== 'booked') throw new ConflictError('Endast bokförda, obetalda fakturor kan registreras som betalda');
@@ -271,6 +288,7 @@ export async function registerPaymentTx(tx: Tx, actor: Actor, invoiceId: number,
   const remaining = total - paidBefore;
   const amount = optInt(input, 'amount', 'Belopp') ?? remaining;
   if (amount <= 0) throw new ValidationError('Beloppet måste vara större än noll');
+  if (isForeign(inv.currency)) return registerFxPayment(tx, actor, invoiceId, inv, remaining, amount, input);
   if (amount > remaining) throw new ValidationError(`Beloppet är större än det som återstår att betala (${(remaining / 100).toFixed(2).replace('.', ',')} kr)`);
   const d = date(input, 'date', 'Betaldatum');
   const bank = optInt(input, 'bank_account', 'Bankkonto') ?? 1930;
@@ -297,11 +315,30 @@ export async function registerPaymentTx(tx: Tx, actor: Actor, invoiceId: number,
   return out;
 }
 
+/** Utländsk valuta: inbetalt belopp i kronor reglerar hela fordran; skillnaden bokförs som kursvinst/-förlust */
+async function registerFxPayment(tx: Tx, actor: Actor, invoiceId: number, inv: { invoice_number: number; customer: string; currency: string }, remaining: number, received: number, input: Record<string, unknown>) {
+  if (received < remaining * 0.8 || received > remaining * 1.2) throw new ValidationError(`Inbetalt belopp avviker mer än 20 % från fordran (${(remaining / 100).toFixed(2).replace('.', ',')} kr). Delbetalning stöds inte för fakturor i ${inv.currency}.`);
+  const d = date(input, 'date', 'Betaldatum');
+  const bank = optInt(input, 'bank_account', 'Bankkonto') ?? 1930;
+  if ((bank < 1900 || bank > 1999) && bank !== ACC.cardClearing) throw new ValidationError('Bankkonto måste vara ett 19xx-konto');
+  await tx`INSERT INTO accounts (company_id, number, name) VALUES (${actor.companyId}, 3960, 'Valutakursvinster på fordringar och skulder av rörelsekaraktär'), (${actor.companyId}, 7960, 'Valutakursförluster på fordringar och skulder av rörelsekaraktär') ON CONFLICT DO NOTHING`;
+  const v = await createVoucher(tx, {
+    actor, date: d, description: `Inbetalning kundfaktura ${inv.invoice_number} (${inv.currency}), ${inv.customer}`,
+    lines: fxPaymentLines(remaining, received, bank), sourceType: 'invoice_payment', sourceId: invoiceId, series: 'B',
+  });
+  await tx`INSERT INTO invoice_payments (company_id, invoice_id, date, amount, voucher_id) VALUES (${actor.companyId}, ${invoiceId}, ${d}, ${remaining}, ${v.id})`;
+  await tx`UPDATE invoices SET paid_amount = total, payment_voucher_id = ${v.id}, status = 'paid', paid_date = ${d}, fx_result = ${received - remaining} WHERE id = ${invoiceId}`;
+  await auditBy(tx, actor, 'paid', 'invoice', invoiceId, { received, fx: received - remaining });
+  const out = await fetchInvoice(tx, actor.companyId, invoiceId);
+  await emit(tx, actor.companyId, 'invoice.paid', out);
+  return out;
+}
+
 /** Kreditera en bokförd, obetald faktura. Returnerar kreditfakturan. */
 export async function creditInvoice(actor: Actor, invoiceId: number, input: Record<string, unknown>): Promise<InvoiceOut> {
   return sql.begin(async (tx) => {
-    const [inv] = await tx<{ status: string; customer_id: number; invoice_number: number; reverse_charge: boolean; customer: string; voucher_id: number | null; total: number; tax_reduction: number; project_id: number | null }[]>`
-      SELECT i.status, i.customer_id, i.invoice_number, i.reverse_charge, c.name AS customer, i.voucher_id, i.total, i.tax_reduction, i.project_id
+    const [inv] = await tx<{ status: string; customer_id: number; invoice_number: number; reverse_charge: boolean; customer: string; voucher_id: number | null; total: number; tax_reduction: number; project_id: number | null; currency: string; exchange_rate: string; language: string }[]>`
+      SELECT i.status, i.customer_id, i.invoice_number, i.reverse_charge, c.name AS customer, i.voucher_id, i.total, i.tax_reduction, i.project_id, i.currency, i.exchange_rate, i.language
       FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.id = ${invoiceId} AND i.company_id = ${actor.companyId} FOR UPDATE OF i`;
     if (!inv) throw new NotFoundError('Fakturan');
     if (inv.status !== 'booked' && !(inv.status === 'paid' && inv.total === 0)) throw new ConflictError('Endast bokförda, obetalda fakturor kan krediteras');
@@ -309,13 +346,16 @@ export async function creditInvoice(actor: Actor, invoiceId: number, input: Reco
     if (imported) throw new ConflictError('En importerad faktura krediteras i det tidigare systemet eller med en manuell verifikation mot 1510');
     if (Number(paid) > 0) throw new ConflictError('Fakturan är delbetald. Gör en kreditfaktura på resterande belopp manuellt eller registrera resten som betalt.');
     const lines = (await loadLines(tx, invoiceId)).map((l) => ({ ...l, quantity: -l.quantity }));
-    const t = computeInvoice(lines, { reverseCharge: inv.reverse_charge });
+    // Krediteringen bokförs till samma kurs som fakturan, så att fordran nollställs exakt
+    const tt = invoiceTotals(lines, { reverseCharge: inv.reverse_charge, currency: inv.currency, rate: inv.exchange_rate });
+    const t = tt.foreign ? { ...tt.sek, total: -Number(inv.total), rounding: -Number(inv.total) - tt.sek.net - tt.sek.vat } : tt.sek;
     const d = date(input, 'date', 'Datum');
     const no = await nextInvoiceNumber(tx, actor.companyId);
     const [{ id: creditId }] = await tx<{ id: number }[]>`INSERT INTO invoices ${tx({
       company_id: actor.companyId, customer_id: inv.customer_id, invoice_number: no, invoice_date: d, due_date: d,
       status: 'paid', notes: `Kreditering av faktura ${inv.invoice_number}`, reverse_charge: inv.reverse_charge,
       total_net: t.net, total_vat: t.vat, rounding: t.rounding, total: t.total + inv.tax_reduction, credit_of_id: invoiceId, paid_date: d, tax_reduction: -inv.tax_reduction,
+      currency: inv.currency, exchange_rate: inv.exchange_rate, language: inv.language, total_currency: tt.foreign ? tt.doc.total : null,
     })} RETURNING id`;
     await tx`INSERT INTO invoice_lines ${tx(lines.map((l, i) => ({
       invoice_id: creditId, position: i + 1, description: l.description, quantity: l.quantity, unit: l.unit,

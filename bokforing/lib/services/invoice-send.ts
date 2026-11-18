@@ -9,8 +9,8 @@ import type { Actor } from './actor';
 
 /** Skapar (vid behov) en hemlig länk till fakturan och skickar den med e-post till kunden */
 export async function sendInvoice(actor: Actor, invoiceId: number, input: { to?: string; message?: string }, origin: string) {
-  const [i] = await sql<{ status: string; number: number; total: number; due: string; ocr: string | null; token: string | null; customer: string; email: string; credit: boolean }[]>`
-    SELECT i.status, i.invoice_number AS number, i.total::bigint AS total, to_char(i.due_date,'YYYY-MM-DD') AS due, i.ocr, i.public_token AS token, c.name AS customer, c.email,
+  const [i] = await sql<{ status: string; number: number; total: number; due: string; ocr: string | null; token: string | null; customer: string; email: string; credit: boolean; language: string; currency: string; total_currency: number | null }[]>`
+    SELECT i.status, i.invoice_number AS number, i.total::bigint AS total, i.language, i.currency, i.total_currency, to_char(i.due_date,'YYYY-MM-DD') AS due, i.ocr, i.public_token AS token, c.name AS customer, c.email,
       i.credit_of_id IS NOT NULL AS credit
     FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.id = ${invoiceId} AND i.company_id = ${actor.companyId}`;
   if (!i) throw new NotFoundError('Fakturan');
@@ -19,18 +19,29 @@ export async function sendInvoice(actor: Actor, invoiceId: number, input: { to?:
   if (to && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) throw new ValidationError('Ogiltig e-postadress');
   const token = i.token ?? randomBytes(24).toString('base64url');
   const link = `${origin}/f/${token}`;
-  const [co] = await sql<{ name: string; bankgiro: string; plusgiro: string; email: string }[]>`SELECT name, bankgiro, plusgiro, email FROM companies WHERE id = ${actor.companyId}`;
-  const kind = i.credit ? 'Kreditfaktura' : 'Faktura';
-  const text = [
+  const [co] = await sql<{ name: string; bankgiro: string; plusgiro: string; email: string; iban: string; bic: string }[]>`SELECT name, bankgiro, plusgiro, email, iban, bic FROM companies WHERE id = ${actor.companyId}`;
+  const en = i.language === 'en';
+  const kind = i.credit ? (en ? 'Credit note' : 'Kreditfaktura') : en ? 'Invoice' : 'Faktura';
+  const amount = i.currency !== 'SEK' && i.total_currency != null ? `${formatAmount(Number(i.total_currency))} ${i.currency}` : `${formatAmount(Number(i.total))} kr`;
+  const lines = en ? [
+    `Dear ${i.customer},`, '',
+    input.message?.trim() || `Please find ${kind.toLowerCase()} ${i.number} from ${co.name}.`, '',
+    `${kind} ${i.number}: ${amount}`,
+    !i.credit ? `Due date: ${i.due}` : '',
+    !i.credit && co.iban ? `Pay to IBAN ${co.iban}${co.bic ? ` (BIC ${co.bic})` : ''}${i.ocr ? `, reference ${i.ocr}` : ''}.` : !i.credit && co.bankgiro ? `Pay to bankgiro ${co.bankgiro}${i.ocr ? `, reference ${i.ocr}` : ''}.` : '',
+    '', `View, print or save the invoice as PDF: ${link}`, '',
+    `Kind regards,\n${co.name}${co.email ? `\n${co.email}` : ''}`,
+  ] : [
     `Hej ${i.customer},`, '',
     input.message?.trim() || `Här kommer ${kind.toLowerCase()} ${i.number} från ${co.name}.`, '',
-    `${kind} ${i.number}: ${formatAmount(Number(i.total))} kr`,
+    `${kind} ${i.number}: ${amount}`,
     !i.credit ? `Förfallodatum: ${i.due}` : '',
     !i.credit && co.bankgiro ? `Betala till bankgiro ${co.bankgiro}${i.ocr ? ` med OCR ${i.ocr}` : ''}.` : '',
     '', `Visa, skriv ut eller spara fakturan som PDF: ${link}`, '',
     `Med vänliga hälsningar\n${co.name}${co.email ? `\n${co.email}` : ''}`,
-  ].filter((x, n, a) => x !== '' || a[n - 1] !== '').join('\n');
-  const emailed = to ? await sendMail(to, `${kind} ${i.number} från ${co.name}`, text) : false;
+  ];
+  const text = lines.filter((x, n, a) => x !== '' || a[n - 1] !== '').join('\n');
+  const emailed = to ? await sendMail(to, `${kind} ${i.number} ${en ? 'from' : 'från'} ${co.name}`, text) : false;
   await sql`UPDATE invoices SET public_token = ${token}, sent_at = ${emailed ? new Date() : sql`sent_at`}, sent_to = ${emailed ? to : sql`sent_to`} WHERE id = ${invoiceId}`;
   await auditBy(sql, actor, emailed ? 'send' : 'share_link', 'invoice', invoiceId, { to: emailed ? to : null });
   return { link, emailed, to };

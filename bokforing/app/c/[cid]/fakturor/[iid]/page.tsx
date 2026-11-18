@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic';
 interface Inv {
   id: number; invoice_number: number | null; invoice_date: string; due_date: string; delivery_date: string; status: string; ocr: string | null;
   our_reference: string; your_reference: string; notes: string; reverse_charge: boolean; total: number; rounding: number;
-  voucher_id: number | null; payment_voucher_id: number | null; paid_date: string | null; paid_amount: number; advance: boolean; advance_settled_by: number | null; customer_id: number; credit_of_id: number | null;
+  voucher_id: number | null; payment_voucher_id: number | null; paid_date: string | null; paid_amount: number; advance: boolean; currency: string; exchange_rate: string; total_currency: number | null; fx_result: number; advance_settled_by: number | null; customer_id: number; credit_of_id: number | null;
   hour_bank: { period: string; purchased: number; drawn_before: number; used_now: number; drawn: number; overage: number; remaining: number } | null;
   c_email: string; public_token: string | null; sent_local: string | null; sent_to: string | null;
   c_name: string; c_orgnr: string; c_vat: string; c_address: string; c_postal: string; c_city: string; c_country: string;
@@ -113,10 +113,11 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
           <div className="card stack">
             <form action={registerPayment.bind(null, co.id, inv.id)} className="row">
               <label>Betaldatum<input type="date" name="date" defaultValue={t0} required /></label>
-              <label>Belopp<input name="amount" defaultValue={((Number(inv.total) - Number(inv.paid_amount)) / 100).toFixed(2).replace('.', ',')} required /></label>
+              <label>{inv.currency !== 'SEK' ? 'Inbetalt i kronor' : 'Belopp'}<input name="amount" defaultValue={((Number(inv.total) - Number(inv.paid_amount)) / 100).toFixed(2).replace('.', ',')} required /></label>
               <label>Bankkonto<select name="bank_account"><option value="1930">1930 Företagskonto</option><option value="1940">1940 Övriga bankkonton</option><option value="1910">1910 Kassa</option></select></label>
               <div style={{ flex: '0 0 auto' }}><button>Registrera inbetalning</button></div>
             </form>
+            {inv.currency !== 'SEK' && <p className="small muted" style={{ margin: 0 }}>Fakturan är på {inv.total_currency != null ? kr(inv.total_currency) : ''} {inv.currency} och bokförd till {kr(inv.total)} kr (kurs {String(inv.exchange_rate).replace('.', ',')}). Ange vad som kom in på kontot i kronor – skillnaden bokförs som kursvinst (3960) eller kursförlust (7960).</p>}
             {Number(inv.paid_amount) === 0 && <form action={creditInvoice.bind(null, co.id, inv.id)} className="row">
               <label>Kreditera per datum<input type="date" name="date" defaultValue={t0} required /></label>
               <div style={{ flex: '0 0 auto' }}><button className="danger">Kreditera hela fakturan</button></div>

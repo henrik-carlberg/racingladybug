@@ -55,7 +55,7 @@ export async function disconnectStripe(actor: Actor) {
 /** Kan fakturan betalas med kort från kundens länk? */
 export async function canPayByCard(invoiceId: number) {
   const [r] = await sql<{ ok: boolean }[]>`
-    SELECT (i.status = 'booked' AND i.total > 0 AND i.credit_of_id IS NULL AND c.stripe_charges_enabled AND c.stripe_account_id IS NOT NULL) AS ok
+    SELECT (i.status = 'booked' AND i.total > 0 AND i.credit_of_id IS NULL AND i.currency = 'SEK' AND c.stripe_charges_enabled AND c.stripe_account_id IS NOT NULL) AS ok
     FROM invoices i JOIN companies c ON c.id = i.company_id WHERE i.id = ${invoiceId}`;
   return !!r?.ok && cardPaymentsAvailable();
 }

@@ -20,6 +20,7 @@ export async function registerSupplierInvoice(cid: number, fd: FormData) {
       supplier_id: str(fd, 'supplier_id'), invoice_number: str(fd, 'invoice_number'), invoice_date: str(fd, 'invoice_date'),
       due_date: str(fd, 'due_date'), payment_reference: str(fd, 'payment_reference'), description: str(fd, 'description'),
       total: amount(fd, 'total', 'Totalbelopp'), vat: amount(fd, 'vat', 'Moms') ?? 0, lines,
+      currency: str(fd, 'currency'), total_currency: amount(fd, 'total_currency', 'Belopp i valutan') ?? undefined,
       cost_center_id: str(fd, 'cost_center_id') || undefined, project_id: str(fd, 'project_id') || undefined,
     }, await fileFrom(fd))).id;
   });

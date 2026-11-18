@@ -39,7 +39,9 @@ export function SupplierInvoiceForm({ action, suppliers, accounts, today, costCe
         <div className="row">
           <label>Fakturadatum<input type="date" name="invoice_date" defaultValue={today} required /></label>
           <label>Förfallodatum<input type="date" name="due_date" required /></label>
-          <label>Att betala (inkl. moms)<input name="total" value={total} onChange={(e) => setTotal(e.target.value)} inputMode="decimal" required /></label>
+          <label style={{ flex: '0 0 110px' }}>Valuta<select name="currency" defaultValue="SEK">{['SEK', 'EUR', 'USD', 'GBP', 'NOK', 'DKK'].map((v) => <option key={v}>{v}</option>)}</select></label>
+          <label>Belopp i valutan (om ej SEK)<input name="total_currency" inputMode="decimal" placeholder="T.ex. 1 200,00" /></label>
+          <label>Att betala i kronor (inkl. moms)<input name="total" value={total} onChange={(e) => setTotal(e.target.value)} inputMode="decimal" required /></label>
           <label>Varav moms<input name="vat" value={vat} onChange={(e) => setVat(e.target.value)} inputMode="decimal" /></label>
           <div style={{ flex: '0 0 auto' }}><button type="button" className="secondary" onClick={vat25}>25 % moms</button></div>
         </div>

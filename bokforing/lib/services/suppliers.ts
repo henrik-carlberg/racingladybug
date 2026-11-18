@@ -8,6 +8,7 @@ import { supplierInvoiceLines, supplierPaymentLines, type CostLine } from '@/lib
 import { replaceAccount } from '@/lib/ledger-lines';
 import { proportionalLines } from '@/lib/partial';
 import { ACC } from '@/lib/bas';
+import { CURRENCIES, fxPaymentLines, isForeign } from '@/lib/invoice';
 import type { Actor } from './actor';
 import { arr, date, has, int, list, optInt, ore, str, type Page } from './input';
 import { insertAttachment, type AttachmentIn } from './vouchers';
@@ -119,6 +120,9 @@ export async function registerSupplierInvoice(actor: Actor, input: Record<string
       }));
   if (costs.length === 0) throw new ValidationError('Ange minst en konteringsrad');
   const invoiceNumber = str(input, 'invoice_number', { required: true, label: 'Leverantörens fakturanummer' });
+  const currency = (str(input, 'currency') || 'SEK').toUpperCase();
+  if (!(CURRENCIES as readonly string[]).includes(currency)) throw new ValidationError(`Valuta stöds inte: ${currency}`);
+  const totalCurrency = isForeign(currency) ? ore(input, 'total_currency', `Belopp i ${currency}`, { min: 1 }) : null;
   const d = date(input, 'invoice_date', 'Fakturadatum');
   const lines = supplierInvoiceLines(costs, vat, total);
   try {
@@ -126,7 +130,7 @@ export async function registerSupplierInvoice(actor: Actor, input: Record<string
       const [{ id }] = await tx<{ id: number }[]>`INSERT INTO supplier_invoices ${tx({
         company_id: actor.companyId, supplier_id: supplierId, invoice_number: invoiceNumber, invoice_date: d,
         due_date: date(input, 'due_date', 'Förfallodatum', false) || d, payment_reference: str(input, 'payment_reference'),
-        description: str(input, 'description'), total, vat, status: 'booked', cost_lines: tx.json(costs as never),
+        description: str(input, 'description'), total, vat, status: 'booked', cost_lines: tx.json(costs as never), currency, total_currency: totalCurrency,
       })} RETURNING id`;
       const [{ m }] = await tx<{ m: string }[]>`SELECT accounting_method AS m FROM companies WHERE id = ${actor.companyId}`;
       const v = m === 'cash' ? null : await createVoucher(tx, {
@@ -175,8 +179,8 @@ export async function paySupplierInvoiceTx(tx: Tx, actor: Actor, id: number, inp
   const d = date(input, 'date', 'Betaldatum');
   const bank = optInt(input, 'bank_account', 'Bankkonto') ?? 1930;
   if (bank < 1900 || bank > 1999) throw new ValidationError('Bankkonto måste vara ett 19xx-konto');
-  const [inv] = await tx<{ status: string; total: number; paid_amount: number; vat: number; invoice_number: string; supplier: string; voucher_id: number | null; imported: boolean; cost_lines: CostLine[] | null }[]>`
-    SELECT i.status, i.total, i.paid_amount, i.vat, i.invoice_number, s.name AS supplier, i.voucher_id, i.imported, i.cost_lines FROM supplier_invoices i JOIN suppliers s ON s.id = i.supplier_id
+  const [inv] = await tx<{ status: string; total: number; paid_amount: number; vat: number; invoice_number: string; supplier: string; voucher_id: number | null; imported: boolean; currency: string; cost_lines: CostLine[] | null }[]>`
+    SELECT i.status, i.total, i.paid_amount, i.vat, i.invoice_number, s.name AS supplier, i.voucher_id, i.imported, i.currency, i.cost_lines FROM supplier_invoices i JOIN suppliers s ON s.id = i.supplier_id
     WHERE i.id = ${id} AND i.company_id = ${actor.companyId} FOR UPDATE OF i`;
   if (!inv) throw new NotFoundError('Leverantörsfakturan');
   if (inv.status === 'booked' && opts.autoApprove) {
@@ -188,6 +192,21 @@ export async function paySupplierInvoiceTx(tx: Tx, actor: Actor, id: number, inp
   const total = Number(inv.total), paidBefore = Number(inv.paid_amount);
   const remaining = total - paidBefore;
   const amount = optInt(input, 'amount', 'Belopp') ?? remaining;
+  if (isForeign(inv.currency) && inv.voucher_id) {
+    // Utländsk valuta: betalt belopp i kronor reglerar hela skulden, skillnaden är kursvinst/-förlust
+    if (amount <= 0 || amount < remaining * 0.8 || amount > remaining * 1.2) throw new ValidationError(`Betalt belopp avviker mer än 20 % från skulden (${(remaining / 100).toFixed(2).replace('.', ',')} kr)`);
+    await tx`INSERT INTO accounts (company_id, number, name) VALUES (${actor.companyId}, 3960, 'Valutakursvinster på fordringar och skulder av rörelsekaraktär'), (${actor.companyId}, 7960, 'Valutakursförluster på fordringar och skulder av rörelsekaraktär') ON CONFLICT DO NOTHING`;
+    const v = await createVoucher(tx, {
+      actor, date: d, description: `Betalning leverantörsfaktura ${inv.invoice_number} (${inv.currency}), ${inv.supplier}`,
+      lines: fxPaymentLines(remaining, amount, bank, ACC.supplierDebts, -1), sourceType: 'supplier_payment', sourceId: id, series: 'C',
+    });
+    await tx`INSERT INTO supplier_invoice_payments (company_id, supplier_invoice_id, date, amount, voucher_id) VALUES (${actor.companyId}, ${id}, ${d}, ${remaining}, ${v.id})`;
+    await tx`UPDATE supplier_invoices SET paid_amount = total, status = 'paid', payment_voucher_id = ${v.id}, paid_date = ${d} WHERE id = ${id}`;
+    await auditBy(tx, actor, 'pay', 'supplier_invoice', id, { paid: amount, fx: remaining - amount });
+    const out = await fetchSI(tx, actor.companyId, id);
+    await emit(tx, actor.companyId, 'supplier_invoice.paid', out);
+    return out;
+  }
   if (amount <= 0 || amount > remaining) throw new ValidationError(`Beloppet måste vara mellan 0 och det som återstår (${(remaining / 100).toFixed(2).replace('.', ',')} kr)`);
   const full = paidBefore + amount === total;
   // Kontantmetoden: fakturan är inte bokförd än – kostnad och moms bokförs vid betalningen (vid delbetalning med betalningens andel)
