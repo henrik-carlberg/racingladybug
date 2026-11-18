@@ -10,6 +10,7 @@ import { avtal } from './avtal';
 import { reskontra } from './reskontra';
 import { likviditet } from './likviditet';
 import { utlagg } from './utlagg';
+import { arbetsorder } from './arbetsorder';
 
 /**
  * Alla tillgängliga tilläggsmoduler. För att lägga till en ny modul (t.ex. ERP, lager, projekt):
@@ -18,6 +19,6 @@ import { utlagg } from './utlagg';
  *   3. Lägg till modulen i listan nedan
  * Modulen aktiveras sedan per bolag under Inställningar → Moduler.
  */
-export const MODULES: ModuleDefinition[] = [crm, hrModule, lonerevision, lager, marknad, projekt, resurser, avtal, reskontra, likviditet, utlagg];
+export const MODULES: ModuleDefinition[] = [crm, hrModule, lonerevision, lager, marknad, projekt, resurser, avtal, reskontra, likviditet, utlagg, arbetsorder];
 
 export const getModule = (id: string) => MODULES.find((m) => m.id === id);

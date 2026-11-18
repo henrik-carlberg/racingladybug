@@ -286,13 +286,58 @@ async function MyTasks({ companyId, actor, basePath }: ModulePageProps) {
   );
 }
 
+/** Budget mot utfall för alla projekt: intäkter, kostnader, timmar och resultat med avvikelser */
+async function BudgetVsActual({ companyId, basePath, searchParams }: ModulePageProps) {
+  const projects = (await svc.listProjects(companyId, { status: searchParams.status })).filter((p) => p.details.budget_revenue || p.details.budget_cost || p.details.budget_hours);
+  const row = (p: svc.ProjectOut) => {
+    const d = p.details, e = p.economics;
+    const budgetCost = d.budget_cost + Math.round(d.budget_hours * d.internal_rate);
+    const cost = e.externalCost + e.internalCost;
+    return { p, budgetRevenue: d.budget_revenue, revenue: e.revenue, budgetCost, cost, budgetResult: d.budget_revenue - budgetCost, result: e.result, budgetHours: d.budget_hours, hours: e.hoursUsed };
+  };
+  const rows = projects.map(row);
+  const dev = (actual: number, budget: number, higherIsGood: boolean) => {
+    const d = actual - budget;
+    const bad = higherIsGood ? d < 0 : d > 0;
+    return <span style={{ color: d === 0 ? undefined : bad ? 'var(--danger)' : 'var(--ok)' }}>{d > 0 ? '+' : ''}{kr(d)}</span>;
+  };
+  const tot = (f: (r: (typeof rows)[number]) => number) => rows.reduce((s, r) => s + f(r), 0);
+  return (
+    <>
+      <h1>Budget mot utfall</h1>
+      <p className="muted small">Utfall = fakturerat på projektet, kostnader som bokförts med projektet som dimension eller kopplats till det, och rapporterad tid × internt timpris. Endast projekt med budget visas.</p>
+      <div className="table-wrap"><table>
+        <thead><tr><th>Projekt</th><th className="num">Intäkt budget</th><th className="num">Intäkt utfall</th><th className="num">Avvikelse</th>
+          <th className="num">Kostnad budget</th><th className="num">Kostnad utfall</th><th className="num">Avvikelse</th><th className="num">Resultat budget</th><th className="num">Resultat utfall</th><th className="num">Timmar</th></tr></thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.p.id}>
+              <td><Link href={`${basePath}/p/${r.p.id}`}>{r.p.name}</Link></td>
+              <td className="num">{kr(r.budgetRevenue)}</td><td className="num">{kr(r.revenue)}</td><td className="num">{dev(r.revenue, r.budgetRevenue, true)}</td>
+              <td className="num">{kr(r.budgetCost)}</td><td className="num">{kr(r.cost)}</td><td className="num">{dev(r.cost, r.budgetCost, false)}</td>
+              <td className="num">{kr(r.budgetResult)}</td><td className="num">{kr(r.result)}</td>
+              <td className="num small">{hrs(r.hours)} / {hrs(r.budgetHours)}</td>
+            </tr>
+          ))}
+          {rows.length === 0 && <tr><td colSpan={10} className="muted">Inga projekt med budget.</td></tr>}
+          {rows.length > 1 && (
+            <tr className="sum"><td><b>Summa</b></td><td className="num">{kr(tot((r) => r.budgetRevenue))}</td><td className="num">{kr(tot((r) => r.revenue))}</td><td className="num">{dev(tot((r) => r.revenue), tot((r) => r.budgetRevenue), true)}</td>
+              <td className="num">{kr(tot((r) => r.budgetCost))}</td><td className="num">{kr(tot((r) => r.cost))}</td><td className="num">{dev(tot((r) => r.cost), tot((r) => r.budgetCost), false)}</td>
+              <td className="num">{kr(tot((r) => r.budgetResult))}</td><td className="num">{kr(tot((r) => r.result))}</td><td /></tr>
+          )}
+        </tbody>
+      </table></div>
+    </>
+  );
+}
+
 export const projekt: ModuleDefinition = {
   id: 'projekt',
   name: 'Projekt',
   version: '0.1.0',
   description: 'Projektplan med budget, delmoment som faktureras, uppgifter på en tavla med tid, kostnader från bokföringen och lönsamhet per projekt. Bygger på uppdragen i tidrapporteringen.',
-  nav: [{ label: 'Projekt', path: '' }, { label: 'Mina uppgifter', path: 'mina-uppgifter' }],
-  pages: { '': Portfolio, 'p/:id': Project, 'mina-uppgifter': MyTasks },
+  nav: [{ label: 'Projekt', path: '' }, { label: 'Budget mot utfall', path: 'budget' }, { label: 'Mina uppgifter', path: 'mina-uppgifter' }],
+  pages: { '': Portfolio, 'p/:id': Project, budget: BudgetVsActual, 'mina-uppgifter': MyTasks },
   scopes: [
     { scope: 'projekt:read', description: 'Läsa projekt, uppgifter, delmoment och lönsamhet' },
     { scope: 'projekt:write', description: 'Skapa och ändra projekt, uppgifter och delmoment' },

@@ -59,7 +59,11 @@ async function load(db: Db, companyId: number, id: number): Promise<ProjectOut> 
     COALESCE((SELECT SUM(i.total_net) FROM invoices i
       WHERE i.project_id = ${id} AND i.status IN ('booked', 'paid', 'credited') AND i.company_id = ${companyId}), 0)
     + COALESCE((SELECT SUM(c.total_net) FROM invoices c JOIN invoices o ON o.id = c.credit_of_id WHERE o.project_id = ${id} AND c.company_id = ${companyId}), 0) AS revenue,
-    COALESCE((SELECT SUM(amount) FROM proj_costs WHERE project_id = ${id}), 0) AS cost`;
+    COALESCE((SELECT SUM(amount) FROM proj_costs WHERE project_id = ${id}), 0)
+    -- Kostnader som bokförts med projektet som dimension (leverantörsfakturor, kvitton, verifikationer) och inte redan kopplats manuellt
+    + COALESCE((SELECT SUM(l.debit - l.credit) FROM voucher_lines l JOIN vouchers v ON v.id = l.voucher_id
+        WHERE v.company_id = ${companyId} AND l.project_id = ${id} AND l.account_number BETWEEN 4000 AND 6999
+          AND NOT EXISTS (SELECT 1 FROM proj_costs c WHERE c.voucher_id = v.id AND c.account = l.account_number)), 0) AS cost`;
   const team = await db<{ user_id: number; name: string; minutes: number }[]>`SELECT e.user_id, u.name, SUM(e.minutes)::int AS minutes
     FROM time_entries e JOIN users u ON u.id = e.user_id WHERE e.project_id = ${id} GROUP BY e.user_id, u.name ORDER BY 3 DESC`;
   const eco = economics({
@@ -245,7 +249,7 @@ export async function costCandidates(companyId: number, projectId: number) {
     FROM vouchers v JOIN voucher_lines l ON l.voucher_id = v.id
     WHERE v.company_id = ${companyId} AND l.account_number BETWEEN ${COST_FROM} AND ${COST_TO} AND v.date BETWEEN ${from} AND ${to}::date + 30
       AND v.source_type NOT IN ('payroll', 'yearend', 'inventory')
-      AND NOT EXISTS (SELECT 1 FROM proj_costs c WHERE c.voucher_id = v.id AND c.account = l.account_number)
+      AND l.project_id IS NULL AND NOT EXISTS (SELECT 1 FROM proj_costs c WHERE c.voucher_id = v.id AND c.account = l.account_number)
     GROUP BY v.id, l.account_number HAVING SUM(l.debit - l.credit) > 0 ORDER BY v.date DESC, v.id DESC LIMIT 50`;
 }
 
