@@ -80,3 +80,15 @@ export function receiptLines(r: ReceiptInput): { lines: Line[]; net: number; vat
   ]);
   return { lines, net, vat, deductibleVat };
 }
+
+export interface ReceiptGuess { date: string; total: number | null; vatRate: 0 | 6 | 12 | 25 | null; category: string; description: string; merchant: string }
+
+/** Rensar Claudes avläsning av ett kvitto: giltigt datum, belopp i öre, känd momssats och kategori */
+export function normalizeReceipt(r: { date: string | null; total_amount: number | null; vat_rate: number | null; category: string | null; description: string | null; merchant: string | null }): ReceiptGuess {
+  const date = r.date && /^\d{4}-\d{2}-\d{2}$/.test(r.date) && !Number.isNaN(Date.parse(r.date)) ? r.date : '';
+  const total = r.total_amount != null && Number.isFinite(r.total_amount) && r.total_amount > 0 && r.total_amount < 10_000_000 ? Math.round(r.total_amount * 100) : null;
+  const vatRate = ([0, 6, 12, 25] as const).find((v) => v === r.vat_rate) ?? null;
+  const category = RECEIPT_CATEGORIES.some((c) => c.key === r.category) ? r.category! : '';
+  const clean = (s: string | null, n: number) => (s ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, n);
+  return { date, total, vatRate, category, description: clean(r.description, 80), merchant: clean(r.merchant, 80) };
+}

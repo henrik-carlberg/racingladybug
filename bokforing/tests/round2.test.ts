@@ -60,3 +60,15 @@ describe('periodiseringar', () => {
     expect(accruedEmployerFees(1610000)).toBe(505862);
   });
 });
+
+import { normalizeReceipt } from '@/lib/receipts';
+describe('kvittoavläsning', () => {
+  it('rensar avläsningen', () => {
+    expect(normalizeReceipt({ date: '2026-11-03', total_amount: 249.5, vat_rate: 12, category: 'personal_fika', description: 'Kaffe\noch bullar', merchant: 'Café Ett' }))
+      .toEqual({ date: '2026-11-03', total: 24950, vatRate: 12, category: 'personal_fika', description: 'Kaffe och bullar', merchant: 'Café Ett' });
+  });
+  it('kastar ogiltiga värden', () => {
+    const g = normalizeReceipt({ date: '3 nov', total_amount: -5, vat_rate: 20, category: 'okänd', description: null, merchant: null });
+    expect(g).toEqual({ date: '', total: null, vatRate: null, category: '', description: '', merchant: '' });
+  });
+});
