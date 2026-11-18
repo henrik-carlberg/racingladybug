@@ -40,3 +40,23 @@ describe('delbetalningar (kontantmetoden)', () => {
     expect(() => proportionalLines(full, 125000, 0, 0, 1510, 1930)).toThrow();
   });
 });
+
+import { accrualSchedule, accruedEmployerFees, dueAccrualPeriods, vacationLiability } from '@/lib/accruals';
+describe('periodiseringar', () => {
+  it('fördelar jämnt med avrundningen på sista månaden', () => {
+    const s = accrualSchedule(1000000, 12, '2026-11');
+    expect(s).toHaveLength(12);
+    expect(s[0]).toEqual({ period: '2026-11', amount: 83333 });
+    expect(s[11]).toEqual({ period: '2027-10', amount: 83337 });
+    expect(s.reduce((x, p) => x + p.amount, 0)).toBe(1000000);
+  });
+  it('bokför bara förfallna, obokförda månader', () => {
+    const d = dueAccrualPeriods(120000, 12, '2026-01', '2026-03', new Set(['2026-01']));
+    expect(d.map((p) => p.period)).toEqual(['2026-02', '2026-03']);
+  });
+  it('semesterlöneskuld och avgifter', () => {
+    expect(vacationLiability(3500000, 10)).toBe(1610000);
+    expect(vacationLiability(3500000, -2)).toBe(0);
+    expect(accruedEmployerFees(1610000)).toBe(505862);
+  });
+});
