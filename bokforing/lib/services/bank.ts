@@ -14,6 +14,7 @@ import { decimalToOre, parseBankCsv, parseCamt053, fromEnableBanking, type BankT
 import { suggestMatches, type Suggestion } from '@/lib/bank/match';
 import { learnKey } from '@/lib/bank/rules';
 import { accountSuggestions, type AccountSuggestion } from './bank-rules';
+import { dimId } from './dimensions';
 import { registerPaymentTx } from './invoices';
 import { paySupplierInvoiceTx } from './suppliers';
 import type { Actor } from './actor';
@@ -317,7 +318,7 @@ export async function reconcile(actor: Actor, txId: number, input: Record<string
       const vatAccount = sign > 0 ? ACC.vatOut[vatRate] : ACC.vatIn;
       const lines = fromSigned([
         { account: a.ledger_account, amount: t.amount },
-        { account, amount: -sign * net },
+        { account, amount: -sign * net, costCenterId: dimId(input.cost_center_id), projectId: dimId(input.project_id) },
         ...(vat ? [{ account: vatAccount, amount: -sign * vat }] : []),
       ]);
       const v = await createVoucher(tx, {
@@ -361,7 +362,7 @@ export async function bookSuggestions(actor: Actor, opts: { onlyAuto: boolean; i
     if (!a || (opts.ids && !opts.ids.includes(r.id))) continue;
     if (opts.onlyAuto && (a.source !== 'rule' || !a.auto || (r.suggestions ?? []).some((s) => s.score >= 80))) continue;
     try {
-      await reconcile(actor, r.id, { type: 'account', account: a.account, vat_rate: a.vatRate, description: a.description, rule_id: a.ruleId ?? undefined });
+      await reconcile(actor, r.id, { type: 'account', account: a.account, vat_rate: a.vatRate, description: a.description, rule_id: a.ruleId ?? undefined, cost_center_id: a.costCenterId ?? undefined });
       n++;
     } catch (e) { console.error('bokför förslag', r.id, e); }
   }

@@ -74,22 +74,28 @@ export async function createVoucher(tx: Tx, v: VoucherInput): Promise<{ id: numb
     VALUES (${companyId}, ${fy.id}, ${series}, ${next}, ${v.date}, ${v.description.trim()}, ${v.sourceType ?? 'manual'},
             ${v.sourceId ?? null}, ${v.correctsId ?? null}, ${v.actor.userId}, ${v.actor.apiKeyId})
     RETURNING id`;
+  // Kostnadsställen och projekt måste tillhöra bolaget
+  const cc = [...new Set(lines.map((l) => l.costCenterId).filter((x): x is number => !!x))];
+  if (cc.length && (await tx`SELECT id FROM cost_centers WHERE company_id = ${companyId} AND id IN ${tx(cc)}`).length !== cc.length) throw new BookkeepingError('Okänt kostnadsställe');
+  const pr = [...new Set(lines.map((l) => l.projectId).filter((x): x is number => !!x))];
+  if (pr.length && (await tx`SELECT id FROM projects WHERE company_id = ${companyId} AND id IN ${tx(pr)}`).length !== pr.length) throw new BookkeepingError('Okänt projekt');
   await tx`INSERT INTO voucher_lines ${tx(
-    lines.map((l) => ({ voucher_id: row.id, account_number: l.account, debit: l.debit, credit: l.credit, description: l.description ?? '' })),
+    lines.map((l) => ({ voucher_id: row.id, account_number: l.account, debit: l.debit, credit: l.credit, description: l.description ?? '',
+      cost_center_id: l.costCenterId ?? null, project_id: l.projectId ?? null })),
   )}`;
   await auditBy(tx, v.actor, 'create', 'voucher', row.id, { series, number: next, date: v.date });
   await emit(tx, companyId, 'voucher.created', {
     id: row.id, object: 'voucher', series, number: next, date: v.date, description: v.description.trim(),
     source_type: v.sourceType ?? 'manual', source_id: v.sourceId ?? null, corrects_id: v.correctsId ?? null,
-    lines: lines.map((l) => ({ account: l.account, debit: l.debit, credit: l.credit, description: l.description ?? '' })),
+    lines: lines.map((l) => ({ account: l.account, debit: l.debit, credit: l.credit, description: l.description ?? '', cost_center_id: l.costCenterId ?? null, project_id: l.projectId ?? null })),
   });
   return { id: row.id, number: next, series };
 }
 
 export async function voucherLines(db: Tx | typeof sql, voucherId: number): Promise<Line[]> {
-  const rows = await db<{ account_number: number; debit: number; credit: number; description: string }[]>`
-    SELECT account_number, debit, credit, description FROM voucher_lines WHERE voucher_id = ${voucherId} ORDER BY id`;
-  return rows.map((r) => ({ account: r.account_number, debit: r.debit, credit: r.credit, description: r.description }));
+  const rows = await db<{ account_number: number; debit: number; credit: number; description: string; cost_center_id: number | null; project_id: number | null }[]>`
+    SELECT account_number, debit, credit, description, cost_center_id, project_id FROM voucher_lines WHERE voucher_id = ${voucherId} ORDER BY id`;
+  return rows.map((r) => ({ account: r.account_number, debit: r.debit, credit: r.credit, description: r.description, costCenterId: r.cost_center_id, projectId: r.project_id }));
 }
 
 /** Rättelseverifikation (BFL 5 kap 5 §): ny verifikation med omvända belopp som hänvisar till originalet. */

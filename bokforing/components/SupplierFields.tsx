@@ -1,5 +1,5 @@
-export type SupplierRow = { id: number; name: string; orgnr: string; bankgiro: string; plusgiro: string; bank_account: string; default_account: number; email: string };
-export function SupplierFields({ s }: { s?: Partial<SupplierRow> }) {
+export type SupplierRow = { id: number; name: string; orgnr: string; bankgiro: string; plusgiro: string; bank_account: string; default_account: number; email: string; cost_center_id?: number | null };
+export function SupplierFields({ s, costCenters = [] }: { s?: Partial<SupplierRow>; costCenters?: { id: number; code: string; name: string }[] }) {
   return (
     <>
       <div className="row">
@@ -12,6 +12,7 @@ export function SupplierFields({ s }: { s?: Partial<SupplierRow> }) {
         <label>Plusgiro<input name="plusgiro" defaultValue={s?.plusgiro} /></label>
         <label>Bankkonto (clearing + konto)<input name="bank_account" defaultValue={s?.bank_account} /></label>
         <label>Standardkonto för kostnad<input name="default_account" inputMode="numeric" defaultValue={s?.default_account ?? 4010} /></label>
+        {costCenters.length > 0 && <label>Kostnadsställe<select name="cost_center_id" defaultValue={s?.cost_center_id ?? ''}><option value="">–</option>{costCenters.map((c) => <option key={c.id} value={c.id}>{c.code} {c.name}</option>)}</select></label>}
       </div>
     </>
   );

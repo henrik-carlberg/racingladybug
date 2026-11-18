@@ -4,9 +4,10 @@ import { parseAmount, formatAmount } from '@/lib/money';
 
 type Supplier = { id: number; name: string; default_account: number };
 
-export function SupplierInvoiceForm({ action, suppliers, accounts, today }: {
+export function SupplierInvoiceForm({ action, suppliers, accounts, today, costCenters = [], projects = [] }: {
   action: (fd: FormData) => Promise<void>;
   suppliers: Supplier[]; accounts: { number: number; name: string }[]; today: string;
+  costCenters?: { id: number; code: string; name: string }[]; projects?: { id: number; name: string }[];
 }) {
   const [sid, setSid] = useState('');
   const [total, setTotal] = useState('');
@@ -42,7 +43,11 @@ export function SupplierInvoiceForm({ action, suppliers, accounts, today }: {
           <label>Varav moms<input name="vat" value={vat} onChange={(e) => setVat(e.target.value)} inputMode="decimal" /></label>
           <div style={{ flex: '0 0 auto' }}><button type="button" className="secondary" onClick={vat25}>25 % moms</button></div>
         </div>
-        <label>Beskrivning<input name="description" /></label>
+        <div className="row">
+          <label style={{ flex: '2 1 260px' }}>Beskrivning<input name="description" /></label>
+          {costCenters.length > 0 && <label>Kostnadsställe<select name="cost_center_id" defaultValue=""><option value="">Leverantörens standard</option>{costCenters.map((c) => <option key={c.id} value={c.id}>{c.code} {c.name}</option>)}</select></label>}
+          {projects.length > 0 && <label>Projekt<select name="project_id" defaultValue=""><option value="">–</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>}
+        </div>
       </div>
       <datalist id="cost-accounts">{accounts.map((a) => <option key={a.number} value={a.number}>{a.name}</option>)}</datalist>
       <table>

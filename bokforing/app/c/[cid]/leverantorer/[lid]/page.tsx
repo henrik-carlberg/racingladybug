@@ -3,6 +3,7 @@ import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
 import { Flash, type SP } from '@/components/ui';
 import { SupplierFields, type SupplierRow } from '@/components/SupplierFields';
+import { listCostCenters } from '@/lib/services/dimensions';
 import { saveSupplier } from '../actions';
 
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,7 @@ export default async function Supplier({ params, searchParams }: { params: Promi
       <h1>{s.name}</h1>
       <Flash searchParams={searchParams} />
       <form action={saveSupplier.bind(null, company.id, s.id)} className="card stack">
-        <SupplierFields s={s} />
+        <SupplierFields costCenters={await listCostCenters(company.id, true)} s={s} />
         <div><button>Spara</button></div>
       </form>
     </>

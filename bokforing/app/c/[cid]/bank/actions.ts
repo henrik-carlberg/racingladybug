@@ -64,6 +64,7 @@ export async function reconcileTx(cid: number, txId: number, fd: FormData) {
   await attempt(ret, () => bank.reconcile(actor, txId, {
     type: str(fd, 'type'), id: str(fd, 'id') || undefined, account: str(fd, 'account') || undefined,
     vat_rate: str(fd, 'vat_rate') || undefined, description: str(fd, 'description') || undefined, rule_id: str(fd, 'rule_id') || undefined,
+    cost_center_id: str(fd, 'cost_center_id') || undefined, project_id: str(fd, 'project_id') || undefined,
   }));
   done(ret, 'Transaktionen är avstämd');
 }

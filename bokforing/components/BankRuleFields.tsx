@@ -2,7 +2,7 @@ import type { RuleOut } from '@/lib/services/bank-rules';
 
 const dec = (ore: number | null | undefined) => (ore == null ? '' : (ore / 100).toFixed(2).replace('.', ','));
 
-export function BankRuleFields({ r, prefill }: { r?: RuleOut; prefill?: { pattern?: string; account?: string; vat?: string; direction?: string; description?: string } }) {
+export function BankRuleFields({ r, prefill, costCenters = [] }: { r?: RuleOut; prefill?: { pattern?: string; account?: string; vat?: string; direction?: string; description?: string }; costCenters?: { id: number; code: string; name: string }[] }) {
   return (
     <>
       <div className="row">
@@ -16,6 +16,7 @@ export function BankRuleFields({ r, prefill }: { r?: RuleOut; prefill?: { patter
         <label>Text på verifikationen<input name="description" defaultValue={r?.description ?? prefill?.description} /></label>
         <label style={{ flex: '0 0 120px' }}>Från belopp<input name="amount_min" inputMode="decimal" defaultValue={dec(r?.amountMin)} /></label>
         <label style={{ flex: '0 0 120px' }}>Till belopp<input name="amount_max" inputMode="decimal" defaultValue={dec(r?.amountMax)} /></label>
+        {costCenters.length > 0 && <label style={{ flex: '0 0 160px' }}>Kostnadsställe<select name="cost_center_id" defaultValue={r?.costCenterId ?? ''}><option value="">–</option>{costCenters.map((c) => <option key={c.id} value={c.id}>{c.code} {c.name}</option>)}</select></label>}
       </div>
       <label className="check"><input type="checkbox" name="auto" defaultChecked={r?.auto} /> Bokför automatiskt (utan granskning) när transaktionen kommer från banken</label>
     </>

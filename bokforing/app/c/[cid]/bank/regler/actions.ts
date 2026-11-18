@@ -7,7 +7,7 @@ import * as svc from '@/lib/services/bank-rules';
 const base = (cid: number) => `/c/${cid}/bank/regler`;
 const fields = (fd: FormData) => ({
   name: str(fd, 'name'), pattern: str(fd, 'pattern'), direction: str(fd, 'direction'), account: str(fd, 'account'), vat_rate: str(fd, 'vat_rate'),
-  description: str(fd, 'description'), auto: fd.get('auto') === 'on', priority: str(fd, 'priority') || undefined,
+  description: str(fd, 'description'), auto: fd.get('auto') === 'on', cost_center_id: str(fd, 'cost_center_id'), priority: str(fd, 'priority') || undefined,
   amount_min: amount(fd, 'amount_min', 'Lägsta belopp') ?? undefined, amount_max: amount(fd, 'amount_max', 'Högsta belopp') ?? undefined,
 });
 

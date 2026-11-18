@@ -21,9 +21,10 @@ export default async function VoucherPage({ params, searchParams }: { params: Pr
       u.name AS created_by, to_char(v.created_at AT TIME ZONE 'Europe/Stockholm','YYYY-MM-DD HH24:MI') AS created_at
     FROM vouchers v JOIN users u ON u.id = v.created_by WHERE v.id = ${Number(vid)} AND v.company_id = ${company.id}`;
   if (!v) notFound();
-  const lines = await sql<{ account_number: number; name: string | null; debit: number; credit: number; description: string }[]>`
-    SELECT l.account_number, a.name, l.debit, l.credit, l.description FROM voucher_lines l
-    LEFT JOIN accounts a ON a.company_id = ${company.id} AND a.number = l.account_number WHERE l.voucher_id = ${v.id} ORDER BY l.id`;
+  const lines = await sql<{ account_number: number; name: string | null; debit: number; credit: number; description: string; cc: string | null; project: string | null }[]>`
+    SELECT l.account_number, a.name, l.debit, l.credit, l.description, cc.code AS cc, p.name AS project FROM voucher_lines l
+    LEFT JOIN accounts a ON a.company_id = ${company.id} AND a.number = l.account_number
+    LEFT JOIN cost_centers cc ON cc.id = l.cost_center_id LEFT JOIN projects p ON p.id = l.project_id WHERE l.voucher_id = ${v.id} ORDER BY l.id`;
   const files = await sql<{ id: number; filename: string }[]>`SELECT id, filename FROM attachments WHERE voucher_id = ${v.id} ORDER BY id`;
   const [corr] = await sql<{ id: number; label: string }[]>`SELECT id, series || number AS label FROM vouchers WHERE corrects_id = ${v.id}`;
   const [orig] = v.corrects_id ? await sql<{ id: number; label: string }[]>`SELECT id, series || number AS label FROM vouchers WHERE id = ${v.corrects_id}` : [];
@@ -48,7 +49,7 @@ export default async function VoucherPage({ params, searchParams }: { params: Pr
         <thead><tr><th>Konto</th><th>Namn</th><th>Text</th><th className="num">Debet</th><th className="num">Kredit</th></tr></thead>
         <tbody>
           {lines.map((l, i) => (
-            <tr key={i}><td>{l.account_number}</td><td>{l.name}</td><td className="small">{l.description}</td>
+            <tr key={i}><td>{l.account_number}</td><td>{l.name}</td><td className="small">{l.description}{(l.cc || l.project) && <span className="muted">{l.description ? ' · ' : ''}{[l.cc && `KS ${l.cc}`, l.project && `Projekt ${l.project}`].filter(Boolean).join(' · ')}</span>}</td>
               <td className="num">{l.debit ? kr(l.debit) : ''}</td><td className="num">{l.credit ? kr(l.credit) : ''}</td></tr>
           ))}
           <tr className="sum"><td colSpan={3}>Summa</td><td className="num">{kr(d)}</td><td className="num">{kr(c)}</td></tr>

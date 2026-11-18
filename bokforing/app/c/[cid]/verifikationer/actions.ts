@@ -11,10 +11,10 @@ export async function saveVoucher(cid: number, _prev: FormState, fd: FormData): 
   const actor = userActor(await requireCompany(cid));
   let id = 0;
   try {
-    const raw = JSON.parse(str(fd, 'lines') || '[]') as { account: string; debit: string; credit: string; description: string }[];
+    const raw = JSON.parse(str(fd, 'lines') || '[]') as { account: string; debit: string; credit: string; description: string; cc?: string; project?: string }[];
     const lines = raw.filter((r) => r.account || r.debit || r.credit).map((r, i) => ({
       account: r.account, debit: amount(r.debit, undefined, `Rad ${i + 1}: debet`) ?? 0,
-      credit: amount(r.credit, undefined, `Rad ${i + 1}: kredit`) ?? 0, description: r.description,
+      credit: amount(r.credit, undefined, `Rad ${i + 1}: kredit`) ?? 0, description: r.description, cost_center_id: r.cc || undefined, project_id: r.project || undefined,
     }));
     id = (await createManualVoucher(actor, { date: str(fd, 'date'), description: str(fd, 'description'), lines }, await fileFrom(fd))).id;
   } catch (e) {

@@ -3,14 +3,16 @@ export interface Line {
   debit: number;
   credit: number;
   description?: string;
+  costCenterId?: number | null; // kostnadsställe (SIE-dimension 1)
+  projectId?: number | null;    // projekt/uppdrag (SIE-dimension 6)
 }
 
 /** Bygger debet/kredit-rader från signerade belopp (positivt = debet). Slår ihop per konto. */
-export function fromSigned(entries: { account: number; amount: number; description?: string }[]): Line[] {
-  const map = new Map<string, { account: number; amount: number; description?: string }>();
+export function fromSigned(entries: { account: number; amount: number; description?: string; costCenterId?: number | null; projectId?: number | null }[]): Line[] {
+  const map = new Map<string, { account: number; amount: number; description?: string; costCenterId?: number | null; projectId?: number | null }>();
   for (const e of entries) {
     if (e.amount === 0) continue;
-    const key = `${e.account}|${e.description ?? ''}`;
+    const key = `${e.account}|${e.description ?? ''}|${e.costCenterId ?? ''}|${e.projectId ?? ''}`;
     const cur = map.get(key);
     if (cur) cur.amount += e.amount;
     else map.set(key, { ...e });
@@ -22,6 +24,8 @@ export function fromSigned(entries: { account: number; amount: number; descripti
       debit: e.amount > 0 ? e.amount : 0,
       credit: e.amount < 0 ? -e.amount : 0,
       description: e.description,
+      ...(e.costCenterId ? { costCenterId: e.costCenterId } : {}),
+      ...(e.projectId ? { projectId: e.projectId } : {}),
     }));
 }
 

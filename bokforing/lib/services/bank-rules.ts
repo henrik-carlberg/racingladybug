@@ -5,11 +5,12 @@ import { auditBy } from '@/lib/server/audit';
 import { learnKey, pickRule, ruleMatches, STARTER_RULES, type BankRule, type RuleTx } from '@/lib/bank/rules';
 import type { Actor } from './actor';
 import { int, optInt, str } from './input';
+import { dimId } from './dimensions';
 
 export interface RuleOut extends BankRule { hits: number; last_used_at: string | null; open_matches?: number }
 
 const COLS = () => sql`id, name, pattern, direction, amount_min::int AS "amountMin", amount_max::int AS "amountMax", account, vat_rate AS "vatRate",
-  description, auto, priority, hits, to_char(last_used_at,'YYYY-MM-DD') AS last_used_at`;
+  description, auto, priority, hits, to_char(last_used_at,'YYYY-MM-DD') AS last_used_at, cost_center_id AS "costCenterId"`;
 
 export async function listRules(companyId: number): Promise<RuleOut[]> {
   return [...await sql<RuleOut[]>`SELECT ${COLS()} FROM bank_rules WHERE company_id = ${companyId} ORDER BY priority DESC, name`];
@@ -29,6 +30,7 @@ function readRule(input: Record<string, unknown>) {
     name: str(input, 'name') || pattern, pattern, direction, amount_min: min, amount_max: max,
     account: int(input, 'account', 'Konto'), vat_rate: vat, description: str(input, 'description'),
     auto: input.auto === true || input.auto === 'on' || input.auto === 'true', priority: optInt(input, 'priority', 'Prioritet') ?? 0,
+    cost_center_id: dimId(input.cost_center_id),
   };
 }
 
@@ -77,7 +79,7 @@ export async function addStarterRules(actor: Actor) {
 
 export interface AccountSuggestion {
   account: number; accountName: string; vatRate: number; description: string;
-  source: 'rule' | 'history'; ruleId: number | null; ruleName: string; auto: boolean; count: number;
+  source: 'rule' | 'history'; ruleId: number | null; ruleName: string; auto: boolean; count: number; costCenterId?: number | null;
 }
 
 /** Kontoförslag per transaktion: först regler, därefter hur samma motpart har bokförts tidigare (minst 2 gånger, samma konto) */
@@ -96,7 +98,7 @@ export async function accountSuggestions(companyId: number, txs: (RuleTx & { id:
     const r = pickRule(rules, t);
     if (r) {
       out.set(t.id, { account: r.account, accountName: names.get(r.account) ?? '', vatRate: r.vatRate, description: r.description || t.counterparty || t.description,
-        source: 'rule', ruleId: r.id, ruleName: r.name, auto: r.auto, count: r.hits });
+        source: 'rule', ruleId: r.id, ruleName: r.name, auto: r.auto, count: r.hits, costCenterId: r.costCenterId ?? null });
       continue;
     }
     const key = learnKey(t);

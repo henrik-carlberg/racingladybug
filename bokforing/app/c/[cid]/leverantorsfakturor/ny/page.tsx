@@ -5,6 +5,7 @@ import { Flash, type SP } from '@/components/ui';
 import { SupplierInvoiceForm } from '@/components/SupplierInvoiceForm';
 import { registerSupplierInvoice } from '../actions';
 import { today } from '@/lib/format';
+import { listCostCenters, listProjectRefs } from '@/lib/services/dimensions';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +19,8 @@ export default async function NewSupplierInvoice({ params, searchParams }: { par
       <h1>Registrera leverantörsfaktura</h1>
       <Flash searchParams={searchParams} />
       {suppliers.length === 0 ? <p>Lägg först upp en <Link href={`/c/${company.id}/leverantorer`}>leverantör</Link>.</p> :
-        <SupplierInvoiceForm action={registerSupplierInvoice.bind(null, company.id)} suppliers={[...suppliers]} accounts={[...accounts]} today={today()} />}
+        <SupplierInvoiceForm action={registerSupplierInvoice.bind(null, company.id)} suppliers={[...suppliers]} accounts={[...accounts]} today={today()}
+          costCenters={await listCostCenters(company.id, true)} projects={await listProjectRefs(company.id, true)} />}
     </>
   );
 }

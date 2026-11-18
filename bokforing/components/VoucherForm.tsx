@@ -3,13 +3,15 @@ import { useActionState, useState } from 'react';
 import { parseAmount, formatAmount } from '@/lib/money';
 import type { FormState } from '@/app/c/[cid]/verifikationer/actions';
 
-type Row = { account: string; debit: string; credit: string; description: string };
-const empty = (): Row => ({ account: '', debit: '', credit: '', description: '' });
+type Row = { account: string; debit: string; credit: string; description: string; cc: string; project: string };
+const empty = (): Row => ({ account: '', debit: '', credit: '', description: '', cc: '', project: '' });
 
-export function VoucherForm({ action, accounts, today }: {
+export function VoucherForm({ action, accounts, today, costCenters = [], projects = [] }: {
   action: (s: FormState, fd: FormData) => Promise<FormState>;
   accounts: { number: number; name: string }[];
   today: string;
+  costCenters?: { id: number; code: string; name: string }[];
+  projects?: { id: number; name: string }[];
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const [rows, setRows] = useState<Row[]>([empty(), empty()]);
@@ -27,7 +29,7 @@ export function VoucherForm({ action, accounts, today }: {
       <datalist id="accounts">{accounts.map((a) => <option key={a.number} value={a.number}>{a.name}</option>)}</datalist>
       <div className="table-wrap">
         <table>
-          <thead><tr><th style={{ width: 130 }}>Konto</th><th>Kontonamn</th><th className="num" style={{ width: 150 }}>Debet</th><th className="num" style={{ width: 150 }}>Kredit</th><th>Radtext</th><th></th></tr></thead>
+          <thead><tr><th style={{ width: 130 }}>Konto</th><th>Kontonamn</th><th className="num" style={{ width: 150 }}>Debet</th><th className="num" style={{ width: 150 }}>Kredit</th><th>Radtext</th>{costCenters.length > 0 && <th>Kostnadsställe</th>}{projects.length > 0 && <th>Projekt</th>}<th></th></tr></thead>
           <tbody>
             {rows.map((r, i) => (
               <tr key={i}>
@@ -36,12 +38,14 @@ export function VoucherForm({ action, accounts, today }: {
                 <td><input value={r.debit} onChange={(e) => set(i, 'debit', e.target.value)} inputMode="decimal" style={{ textAlign: 'right' }} /></td>
                 <td><input value={r.credit} onChange={(e) => set(i, 'credit', e.target.value)} inputMode="decimal" style={{ textAlign: 'right' }} /></td>
                 <td><input value={r.description} onChange={(e) => set(i, 'description', e.target.value)} /></td>
+                {costCenters.length > 0 && <td><select aria-label="Kostnadsställe" value={r.cc} onChange={(e) => set(i, 'cc', e.target.value)}><option value="">–</option>{costCenters.map((c) => <option key={c.id} value={c.id}>{c.code} {c.name}</option>)}</select></td>}
+                {projects.length > 0 && <td><select aria-label="Projekt" value={r.project} onChange={(e) => set(i, 'project', e.target.value)}><option value="">–</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></td>}
                 <td><button type="button" className="link" onClick={() => setRows((x) => x.filter((_, j) => j !== i))}>✕</button></td>
               </tr>
             ))}
             <tr className="sum">
               <td colSpan={2}>Summa {diff !== 0 && <span style={{ color: 'var(--danger)' }}>(diff {formatAmount(diff)})</span>}</td>
-              <td className="num">{formatAmount(sum('debit'))}</td><td className="num">{formatAmount(sum('credit'))}</td><td colSpan={2}></td>
+              <td className="num">{formatAmount(sum('debit'))}</td><td className="num">{formatAmount(sum('credit'))}</td><td colSpan={2 + (costCenters.length > 0 ? 1 : 0) + (projects.length > 0 ? 1 : 0)}></td>
             </tr>
           </tbody>
         </table>
