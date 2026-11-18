@@ -262,8 +262,8 @@ export async function registerPayment(actor: Actor, invoiceId: number, input: Re
 
 /** Som registerPayment men i en befintlig transaktion (används av bankavstämningen) */
 export async function registerPaymentTx(tx: Tx, actor: Actor, invoiceId: number, input: Record<string, unknown>): Promise<InvoiceOut> {
-  const [inv] = await tx<{ status: string; total: number; paid_amount: number; invoice_number: number; voucher_id: number | null; reverse_charge: boolean; customer: string; tax_reduction: number; reduction_type: string | null; project_id: number | null }[]>`
-    SELECT i.status, i.total, i.paid_amount, i.invoice_number, i.voucher_id, i.reverse_charge, c.name AS customer, i.tax_reduction, i.reduction_type, i.project_id
+  const [inv] = await tx<{ status: string; total: number; paid_amount: number; invoice_number: number; voucher_id: number | null; imported: boolean; reverse_charge: boolean; customer: string; tax_reduction: number; reduction_type: string | null; project_id: number | null }[]>`
+    SELECT i.status, i.total, i.paid_amount, i.invoice_number, i.voucher_id, i.imported, i.reverse_charge, c.name AS customer, i.tax_reduction, i.reduction_type, i.project_id
     FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.id = ${invoiceId} AND i.company_id = ${actor.companyId} FOR UPDATE OF i`;
   if (!inv) throw new NotFoundError('Fakturan');
   if (inv.status !== 'booked') throw new ConflictError('Endast bokförda, obetalda fakturor kan registreras som betalda');
@@ -277,13 +277,13 @@ export async function registerPaymentTx(tx: Tx, actor: Actor, invoiceId: number,
   if ((bank < 1900 || bank > 1999) && bank !== ACC.cardClearing) throw new ValidationError('Bankkonto måste vara ett 19xx-konto');
   const full = paidBefore + amount === total;
   // Kontantmetoden: fakturan är inte bokförd än – intäkt och moms bokförs vid betalningen, vid delbetalning med betalningens andel
-  const lines = inv.voucher_id ? invoicePaymentLines(amount, bank) : await (async () => {
+  const lines = inv.voucher_id || inv.imported ? invoicePaymentLines(amount, bank) : await (async () => {
     const il = await loadLines(tx, invoiceId);
     const booking = tagProject(invoiceBookingLines(il, computeInvoice(il, { reverseCharge: inv.reverse_charge }), 1, inv.tax_reduction), inv.project_id);
     return proportionalLines(booking, total, paidBefore, amount, ACC.customerReceivables, bank);
   })();
   const v = await createVoucher(tx, {
-    actor, date: d, description: `${full && !paidBefore ? 'Inbetalning' : full ? 'Slutbetalning' : 'Delbetalning'} kundfaktura ${inv.invoice_number}${inv.voucher_id ? '' : `, ${inv.customer} (kontantmetoden)`}`,
+    actor, date: d, description: `${full && !paidBefore ? 'Inbetalning' : full ? 'Slutbetalning' : 'Delbetalning'} kundfaktura ${inv.invoice_number}${inv.voucher_id || inv.imported ? '' : `, ${inv.customer} (kontantmetoden)`}`,
     lines, sourceType: 'invoice_payment', sourceId: invoiceId, series: 'B',
   });
   await tx`INSERT INTO invoice_payments (company_id, invoice_id, date, amount, voucher_id) VALUES (${actor.companyId}, ${invoiceId}, ${d}, ${amount}, ${v.id})`;
@@ -305,7 +305,8 @@ export async function creditInvoice(actor: Actor, invoiceId: number, input: Reco
       FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.id = ${invoiceId} AND i.company_id = ${actor.companyId} FOR UPDATE OF i`;
     if (!inv) throw new NotFoundError('Fakturan');
     if (inv.status !== 'booked' && !(inv.status === 'paid' && inv.total === 0)) throw new ConflictError('Endast bokförda, obetalda fakturor kan krediteras');
-    const [{ paid }] = await tx<{ paid: number }[]>`SELECT paid_amount AS paid FROM invoices WHERE id = ${invoiceId}`;
+    const [{ paid, imported }] = await tx<{ paid: number; imported: boolean }[]>`SELECT paid_amount AS paid, imported FROM invoices WHERE id = ${invoiceId}`;
+    if (imported) throw new ConflictError('En importerad faktura krediteras i det tidigare systemet eller med en manuell verifikation mot 1510');
     if (Number(paid) > 0) throw new ConflictError('Fakturan är delbetald. Gör en kreditfaktura på resterande belopp manuellt eller registrera resten som betalt.');
     const lines = (await loadLines(tx, invoiceId)).map((l) => ({ ...l, quantity: -l.quantity }));
     const t = computeInvoice(lines, { reverseCharge: inv.reverse_charge });
@@ -346,7 +347,7 @@ export async function creditInvoice(actor: Actor, invoiceId: number, input: Reco
 export async function bookOpenInvoicesAtYearEnd(tx: Tx, actor: Actor, endDate: string): Promise<number> {
   const open = await tx<{ id: number; invoice_number: number; reverse_charge: boolean; customer: string; tax_reduction: number; project_id: number | null; total: number; paid_amount: number }[]>`
     SELECT i.id, i.invoice_number, i.reverse_charge, c.name AS customer, i.tax_reduction, i.project_id, i.total, i.paid_amount FROM invoices i JOIN customers c ON c.id = i.customer_id
-    WHERE i.company_id = ${actor.companyId} AND i.status = 'booked' AND i.voucher_id IS NULL AND i.invoice_date <= ${endDate}
+    WHERE i.company_id = ${actor.companyId} AND i.status = 'booked' AND i.voucher_id IS NULL AND NOT i.imported AND i.invoice_date <= ${endDate}
     ORDER BY i.invoice_number FOR UPDATE OF i`;
   for (const inv of open) {
     const lines = await loadLines(tx, inv.id);

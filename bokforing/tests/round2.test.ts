@@ -94,3 +94,25 @@ describe('e-postsammandrag', () => {
     expect(m.text).toContain('/avregistrera/x');
   });
 });
+
+import { decodeCsv, mapColumns, parseCsv, previewImport } from '@/lib/csv-import';
+describe('CSV-import', () => {
+  it('tolkar semikolon, citat och Windows-1252', () => {
+    expect(parseCsv('Namn;Ort\n"Ek; AB";"Malmö ""C"""\n\n')).toEqual([['Namn', 'Ort'], ['Ek; AB', 'Malmö "C"']]);
+    const latin = new Uint8Array([0x4f, 0x72, 0x74, 0x0a, 0x4d, 0x61, 0x6c, 0x6d, 0xf6]);
+    expect(decodeCsv(latin)).toBe('Ort\nMalmö');
+  });
+  it('känner igen Fortnox-rubriker och föredrar restbelopp', () => {
+    const m = mapColumns('customer_invoices', ['Fakturanr', 'Kundnamn', 'Fakturadatum', 'Förfallodatum', 'Total', 'Restbelopp', 'OCR']);
+    expect(m.get(5)).toBe('amount');
+    expect(m.get(4)).toBeUndefined();
+  });
+  it('validerar och räknar om belopp och datum', () => {
+    const p = previewImport('customer_invoices', 'Fakturanummer;Kund;Fakturadatum;Förfallodatum;Restbelopp\n1042;Ek AB;2026-10-01;31.10.2026;1 250,50\nX1;Ek AB;2026-10-01;2026-10-31;10\n1043;Ek AB;2026-02-30;2026-10-31;10');
+    expect(p.rows).toEqual([{ number: '1042', customer: 'Ek AB', invoice_date: '2026-10-01', due_date: '2026-10-31', amount: 125050 }]);
+    expect(p.errors.map((e) => e.row)).toEqual([3, 4]);
+  });
+  it('anger saknade kolumner', () => {
+    expect(previewImport('suppliers', 'Bankgiro\n123-4567').missing).toEqual(['name']);
+  });
+});

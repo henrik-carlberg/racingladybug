@@ -175,8 +175,8 @@ export async function paySupplierInvoiceTx(tx: Tx, actor: Actor, id: number, inp
   const d = date(input, 'date', 'Betaldatum');
   const bank = optInt(input, 'bank_account', 'Bankkonto') ?? 1930;
   if (bank < 1900 || bank > 1999) throw new ValidationError('Bankkonto måste vara ett 19xx-konto');
-  const [inv] = await tx<{ status: string; total: number; paid_amount: number; vat: number; invoice_number: string; supplier: string; voucher_id: number | null; cost_lines: CostLine[] | null }[]>`
-    SELECT i.status, i.total, i.paid_amount, i.vat, i.invoice_number, s.name AS supplier, i.voucher_id, i.cost_lines FROM supplier_invoices i JOIN suppliers s ON s.id = i.supplier_id
+  const [inv] = await tx<{ status: string; total: number; paid_amount: number; vat: number; invoice_number: string; supplier: string; voucher_id: number | null; imported: boolean; cost_lines: CostLine[] | null }[]>`
+    SELECT i.status, i.total, i.paid_amount, i.vat, i.invoice_number, s.name AS supplier, i.voucher_id, i.imported, i.cost_lines FROM supplier_invoices i JOIN suppliers s ON s.id = i.supplier_id
     WHERE i.id = ${id} AND i.company_id = ${actor.companyId} FOR UPDATE OF i`;
   if (!inv) throw new NotFoundError('Leverantörsfakturan');
   if (inv.status === 'booked' && opts.autoApprove) {
@@ -191,7 +191,7 @@ export async function paySupplierInvoiceTx(tx: Tx, actor: Actor, id: number, inp
   if (amount <= 0 || amount > remaining) throw new ValidationError(`Beloppet måste vara mellan 0 och det som återstår (${(remaining / 100).toFixed(2).replace('.', ',')} kr)`);
   const full = paidBefore + amount === total;
   // Kontantmetoden: fakturan är inte bokförd än – kostnad och moms bokförs vid betalningen (vid delbetalning med betalningens andel)
-  const cash = !inv.voucher_id;
+  const cash = !inv.voucher_id && !inv.imported;
   if (cash && !inv.cost_lines) throw new ConflictError(`Faktura ${inv.invoice_number} saknar kontering`);
   const v = await createVoucher(tx, {
     actor, date: d, description: `${full && !paidBefore ? 'Betalning' : full ? 'Slutbetalning' : 'Delbetalning'} leverantörsfaktura ${inv.invoice_number}, ${inv.supplier}${cash ? ' (kontantmetoden)' : ''}`,
@@ -211,7 +211,7 @@ export async function paySupplierInvoiceTx(tx: Tx, actor: Actor, id: number, inp
 export async function bookOpenSupplierInvoicesAtYearEnd(tx: Tx, actor: Actor, endDate: string): Promise<number> {
   const open = await tx<{ id: number; invoice_number: string; supplier: string; total: number; paid_amount: number; vat: number; cost_lines: CostLine[] | null }[]>`
     SELECT i.id, i.invoice_number, s.name AS supplier, i.total, i.paid_amount, i.vat, i.cost_lines FROM supplier_invoices i JOIN suppliers s ON s.id = i.supplier_id
-    WHERE i.company_id = ${actor.companyId} AND i.status IN ('booked', 'approved') AND i.voucher_id IS NULL AND i.invoice_date <= ${endDate}
+    WHERE i.company_id = ${actor.companyId} AND i.status IN ('booked', 'approved') AND i.voucher_id IS NULL AND NOT i.imported AND i.invoice_date <= ${endDate}
     ORDER BY i.invoice_date, i.id FOR UPDATE OF i`;
   for (const inv of open) {
     if (!inv.cost_lines) throw new ConflictError(`Faktura ${inv.invoice_number} saknar kontering`);

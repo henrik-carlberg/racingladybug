@@ -28,7 +28,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
   return (
     <>
       <h1>Inställningar</h1>
-      <p className="small"><Link href={`/c/${c.id}/installningar/gdpr`}>Dataskydd (GDPR): personuppgiftsbiträdesavtal och gallring</Link> · <Link href={`/c/${c.id}/kom-igang/sie-import`}>Importera SIE-fil</Link> · <Link href={`/c/${c.id}/installningar/betalningar`}>Kortbetalning</Link> · <Link href={`/c/${c.id}/installningar/byra`}>Redovisningsbyrå</Link></p>
+      <p className="small"><Link href={`/c/${c.id}/installningar/gdpr`}>Dataskydd (GDPR): personuppgiftsbiträdesavtal och gallring</Link> · <Link href={`/c/${c.id}/kom-igang/sie-import`}>Importera SIE-fil</Link> · <Link href={`/c/${c.id}/installningar/import`}>Importera från CSV</Link> · <Link href={`/c/${c.id}/installningar/betalningar`}>Kortbetalning</Link> · <Link href={`/c/${c.id}/installningar/byra`}>Redovisningsbyrå</Link></p>
       <Flash searchParams={searchParams} />
       {sp.invite && (
         <div className="flash ok">
