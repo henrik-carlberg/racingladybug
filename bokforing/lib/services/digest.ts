@@ -54,3 +54,33 @@ export async function unsubscribe(token: string) {
   const r = await sql`UPDATE users SET digest = 'off' WHERE unsubscribe_token = ${token} RETURNING id`;
   return r.length > 0;
 }
+
+/** Månadsrapport till ägarna några dagar in i månaden, för föregående månad. Skickas en gång per bolag och månad. */
+export async function sendMonthlyReports(now = new Date()) {
+  if (!mailConfigured()) return { sent: 0, skipped: 'e-post inte konfigurerad' };
+  const local = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Stockholm', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  if (Number(local.slice(8, 10)) < 3) return { sent: 0, skipped: 'för tidigt i månaden' };
+  const { addMonths } = await import('@/lib/assets');
+  const { monthlyReport, monthlyReportText } = await import('./monthly');
+  const period = addMonths(local.slice(0, 7), -1);
+  const companies = await sql<{ id: number; name: string }[]>`
+    SELECT c.id, c.name FROM companies c WHERE NOT c.is_demo
+      AND NOT EXISTS (SELECT 1 FROM monthly_reports_sent s WHERE s.company_id = c.id AND s.period = ${period})
+      AND EXISTS (SELECT 1 FROM vouchers v WHERE v.company_id = c.id AND v.date BETWEEN ${period + '-01'} AND ${period + '-28'}::date + 3)`;
+  const origin = appOrigin();
+  let sent = 0;
+  for (const c of companies) {
+    const owners = await sql<{ email: string }[]>`SELECT u.email FROM memberships m JOIN users u ON u.id = m.user_id
+      WHERE m.company_id = ${c.id} AND m.role = 'owner' AND u.monthly_report`;
+    await sql`INSERT INTO monthly_reports_sent (company_id, period) VALUES (${c.id}, ${period}) ON CONFLICT DO NOTHING`;
+    if (!owners.length) continue;
+    const r = await monthlyReport(c.id, period);
+    const text = monthlyReportText(r, c.name, `${origin}/c/${c.id}/rapporter/manad?period=${period}`) + `\n\nStäng av månadsrapporten under Mitt konto: ${origin}/konto`;
+    for (const o of owners) if (await sendMail(o.email, `Månadsrapport ${period} – ${c.name}`, text)) sent++;
+  }
+  return { sent, companies: companies.length, period };
+}
+
+export async function setMonthlyReport(userId: number, on: boolean) {
+  await sql`UPDATE users SET monthly_report = ${on} WHERE id = ${userId}`;
+}

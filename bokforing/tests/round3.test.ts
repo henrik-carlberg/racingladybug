@@ -55,3 +55,19 @@ describe('EU-rapporter', () => {
     expect(periodRange('2026-13')).toBeNull();
   });
 });
+
+import { change, groupSums, highlights } from '@/lib/monthly';
+describe('månadsrapport', () => {
+  it('grupperar resultatkonton', () => {
+    const g = groupSums(new Map([[3001, -1000000], [4010, 200000], [5010, 100000], [7210, 300000], [7832, 50000], [8310, -1000]]));
+    expect(g).toMatchObject({ revenue: 1000000, goods: 200000, external: 100000, staff: 300000, depreciation: 50000, financial: 1000, result: 351000 });
+  });
+  it('förändring och iakttagelser', () => {
+    expect(change(120, 100)).toBe(20);
+    expect(change(5, 0)).toBeNull();
+    const h = highlights({ revenue: 150000, revenuePrev: 100000, result: -5000, cash: 10000, cashPrev: 20000, overdue: 30000, overdueCount: 2, vatDue: 0 });
+    expect(h[0]).toContain('ökade med 50 %');
+    expect(h.join(' ')).toContain('förlust');
+    expect(h.join(' ')).toContain('2 kundfakturor är förfallna');
+  });
+});

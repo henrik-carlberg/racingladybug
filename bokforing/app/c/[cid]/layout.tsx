@@ -81,6 +81,8 @@ export default async function CompanyLayout({ children, params }: { children: Re
           <Link href={`${b}/lon/skattetabeller`}>Skattetabeller</Link>
           <div className="group">Rapporter</div>
           <Link href={`${b}/rapporter`}>Resultat &amp; balans</Link>
+          <Link href={`${b}/rapporter/manad`}>Månadsrapport</Link>
+          <Link href={`${b}/assistent`}>Fråga assistenten</Link>
           <Link href={`${b}/rapporter/huvudbok`}>Huvudbok</Link>
           <Link href={`${b}/rapporter/moms`}>Moms</Link>
           <Link href={`${b}/rapporter/eu`}>EU-handel</Link>
