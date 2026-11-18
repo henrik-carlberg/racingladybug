@@ -58,6 +58,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
           <Link href={`${b}/tid`}>⏱ Tidrapportering</Link>
           <Link href={`${b}/uppdrag`}>Uppdrag &amp; timbanker</Link>
           <div className="group">Inköp</div>
+          <Link href={`${b}/leverantorsfakturor/inkorg`}>Inkorg för fakturor</Link>
           <Link href={`${b}/leverantorsfakturor`}>Leverantörsfakturor</Link>
           <Link href={`${b}/leverantorsfakturor/betalning`}>Betalningar</Link>
           <Link href={`${b}/leverantorer`}>Leverantörer</Link>

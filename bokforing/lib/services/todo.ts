@@ -13,6 +13,7 @@ export async function companyTodos(companyId: number, opts: { modules: string[];
   const [c] = await sql<Record<string, number | boolean>[]>`
     SELECT
       (SELECT count(*)::int FROM supplier_invoices WHERE company_id = ${companyId} AND status = 'booked') AS attest,
+      (SELECT count(*)::int FROM inbox_documents WHERE company_id = ${companyId} AND status IN ('ready','failed')) AS inbox,
       (SELECT count(*)::int FROM supplier_invoices WHERE company_id = ${companyId} AND status = 'approved' AND due_date <= ${addDays(t, 7)}) AS pay,
       (SELECT count(*)::int FROM invoices WHERE company_id = ${companyId} AND status = 'booked' AND due_date < ${t}) AS overdue,
       (SELECT count(*)::int FROM invoices WHERE company_id = ${companyId} AND status = 'draft') AS drafts,
@@ -29,6 +30,7 @@ export async function companyTodos(companyId: number, opts: { modules: string[];
     deadlines.some((d) => d.status === 'overdue') && { key: 'deadline', title: 'Försenade deadlines', count: deadlines.filter((d) => d.status === 'overdue').length, href: `${b}/deadlines`, level: 'danger' },
     n('overdue') > 0 && { key: 'overdue', title: 'Förfallna kundfakturor', count: n('overdue'), href: has('reskontra') ? `${b}/m/reskontra` : `${b}/fakturor`, level: 'danger' },
     n('pay') > 0 && { key: 'pay', title: 'Leverantörsfakturor att betala inom en vecka', count: n('pay'), href: `${b}/leverantorsfakturor/betalning`, level: 'warn' },
+    n('inbox') > 0 && { key: 'inbox', title: 'Fakturor i inkorgen att granska', count: n('inbox'), href: `${b}/leverantorsfakturor/inkorg`, level: 'warn' },
     n('attest') > 0 && { key: 'attest', title: 'Leverantörsfakturor att attestera', count: n('attest'), href: `${b}/leverantorsfakturor`, level: 'warn' },
     has('utlagg') && n('claims') > 0 && { key: 'claims', title: 'Utläggsräkningar att attestera', count: n('claims'), href: `${b}/m/utlagg`, level: 'warn' },
     n('absence') > 0 && { key: 'absence', title: 'Ledighetsansökningar', count: n('absence'), href: `${b}/lon/franvaro`, level: 'warn' },
