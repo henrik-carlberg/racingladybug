@@ -23,7 +23,9 @@ export default async function Ledger({ params, searchParams }: { params: Promise
     WHERE v.company_id = ${company.id} AND v.date BETWEEN ${from} AND ${to}
       AND v.source_type IS DISTINCT FROM 'opening_balance'
       ${accFilter ? sql`AND l.account_number = ${Number(accFilter)}` : sql``}
-    ORDER BY l.account_number, v.date, v.series, v.number, l.id`;
+    ORDER BY l.account_number, v.date, v.series, v.number, l.id LIMIT 5001`;
+  const truncated = rows.length > 5000;
+  if (truncated) rows.pop();
   const names = new Map((await sql<{ number: number; name: string }[]>`SELECT number, name FROM accounts WHERE company_id = ${company.id}`).map((a) => [a.number, a.name]));
   // Ingående saldo: balanskonton från tidigare perioder, resultatkonton från räkenskapsårets början
   const ibBal = await openingBalances(company.id, from);
@@ -38,6 +40,7 @@ export default async function Ledger({ params, searchParams }: { params: Promise
   return (
     <>
       <h1>Huvudbok</h1>
+      {truncated && <div className="card small" style={{ borderColor: 'var(--warn)' }}>Huvudboken visar de första 5 000 raderna. Välj ett konto eller en kortare period för att se resten.</div>}
       <form className="card row">
         <label>Från<input type="date" name="from" defaultValue={from} /></label>
         <label>Till<input type="date" name="to" defaultValue={to} /></label>

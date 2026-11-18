@@ -6,6 +6,7 @@ import { authenticateApiKey } from '@/lib/server/apikeys';
 import { companyAccess } from '@/lib/server/auth';
 import { MODULES } from '@/modules/registry';
 import { CORE_ROUTES } from './routes';
+import { hit, LIMITS } from '@/lib/server/ratelimit';
 import { hasScope, matchRoute, type ApiRoute } from './router';
 
 const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
@@ -29,6 +30,8 @@ export async function handleApi(req: Request, pathParts: string[]): Promise<Resp
     if (!token) return error(401, 'unauthorized', 'Ange API-nyckel: Authorization: Bearer <nyckel>', { 'WWW-Authenticate': 'Bearer' });
     const who = await authenticateApiKey(token);
     if (!who) return error(401, 'unauthorized', 'Ogiltig eller återkallad API-nyckel', { 'WWW-Authenticate': 'Bearer' });
+    const rl = await hit(`api:${who.actor.apiKeyId}`, LIMITS.api.max, LIMITS.api.window);
+    if (!rl.ok) return error(429, 'rate_limited', `För många anrop – högst ${LIMITS.api.max} per minut per nyckel`, { 'Retry-After': String(rl.retryAfter) });
 
     const acc = await companyAccess(who.actor.companyId);
     if (acc.state === 'locked') return error(402, 'payment_required', 'Bolagets provperiod eller abonnemang har gått ut');

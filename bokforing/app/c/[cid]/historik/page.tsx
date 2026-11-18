@@ -1,16 +1,21 @@
 import { sql } from '@/lib/db';
+import { Pager, pageOf, pageSql, PAGE_SIZE } from '@/components/Pager';
 import { requireCompany } from '@/lib/server/auth';
 
 export const dynamic = 'force-dynamic';
 
-export default async function History({ params }: { params: Promise<{ cid: string }> }) {
+export default async function History({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { cid } = await params;
   const { company } = await requireCompany(cid);
-  const rows = await sql<{ id: number; at: string; user: string | null; action: string; entity: string; entity_id: number | null; details: unknown }[]>`
+  const sp = await searchParams;
+  const page = pageOf(sp);
+  const all = await sql<{ id: number; at: string; user: string | null; action: string; entity: string; entity_id: number | null; details: unknown }[]>`
     SELECT a.id, to_char(a.created_at AT TIME ZONE 'Europe/Stockholm', 'YYYY-MM-DD HH24:MI') AS at,
            u.name || COALESCE(' (API: ' || k.name || ')', '') AS user,
            a.action, a.entity, a.entity_id, a.details
-    FROM audit_log a LEFT JOIN users u ON u.id = a.user_id LEFT JOIN api_keys k ON k.id = a.api_key_id WHERE a.company_id = ${company.id} ORDER BY a.id DESC LIMIT 500`;
+    FROM audit_log a LEFT JOIN users u ON u.id = a.user_id LEFT JOIN api_keys k ON k.id = a.api_key_id WHERE a.company_id = ${company.id} ORDER BY a.id DESC LIMIT ${pageSql(page).limit} OFFSET ${pageSql(page).offset}`;
+  const hasMore = all.length > PAGE_SIZE;
+  const rows = all.slice(0, PAGE_SIZE);
   return (
     <>
       <h1>Behandlingshistorik</h1>
@@ -28,6 +33,7 @@ export default async function History({ params }: { params: Promise<{ cid: strin
             ))}
           </tbody>
         </table>
+        <Pager base={`/c/${company.id}/historik`} sp={sp} page={page} hasMore={hasMore} count={rows.length} />
       </div>
     </>
   );

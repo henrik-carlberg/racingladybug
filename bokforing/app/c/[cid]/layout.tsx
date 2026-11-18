@@ -4,6 +4,7 @@ import { requireCompany } from '@/lib/server/auth';
 import { ROLE_LABEL } from '@/lib/format';
 import { enabledModules } from '@/lib/modules/enabled';
 import { companyTodos, urgentCount } from '@/lib/services/todo';
+import { deleteDemo } from '@/app/company-actions';
 
 export default async function CompanyLayout({ children, params }: { children: ReactNode; params: Promise<{ cid: string }> }) {
   const { cid } = await params;
@@ -108,6 +109,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
         </nav>
       </aside>
       <main>
+        {(company as { is_demo?: boolean }).is_demo && <div className="flash ok no-print demo-banner">Det här är ett demobolag med exempeldata. {role === 'owner' && <form action={deleteDemo.bind(null, company.id)} style={{ display: 'inline' }}><button className="link">Ta bort demobolaget</button></form>}</div>}
         {banner && <div className="flash error no-print">{banner} <Link href={`${b}/abonnemang`}>{role === 'owner' ? 'Starta abonnemang' : 'Se abonnemang'}</Link></div>}
         {children}
       </main>

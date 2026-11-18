@@ -36,3 +36,27 @@ export async function createCompany(fd: FormData) {
   });
   done(`/c/${id}/kom-igang`, 'Bolaget är skapat! Följ stegen nedan för att komma igång.');
 }
+
+export async function createDemo() {
+  const user = await requireUser();
+  const { createDemoCompany } = await import('@/lib/services/demo');
+  let id = 0;
+  await attempt('/', async () => {
+    const [{ n }] = await sql<{ n: number }[]>`SELECT count(*)::int AS n FROM companies c JOIN memberships m ON m.company_id = c.id WHERE m.user_id = ${user.id} AND c.is_demo`;
+    if (n >= 2) throw new Error('Du har redan demobolag');
+    id = await createDemoCompany(user.id);
+  });
+  done(`/c/${id}`, 'Demobolaget är skapat med exempeldata. Prova fritt!');
+}
+
+/** Tar bort ett demobolag helt (bara demobolag kan tas bort) */
+export async function deleteDemo(cid: number) {
+  const user = await requireUser();
+  await attempt(`/c/${cid}`, async () => {
+    const [c] = await sql`SELECT 1 FROM companies c JOIN memberships m ON m.company_id = c.id WHERE c.id = ${cid} AND c.is_demo AND m.user_id = ${user.id} AND m.role = 'owner'`;
+    if (!c) throw new Error('Bara demobolag kan tas bort');
+    await sql`DELETE FROM companies WHERE id = ${cid} AND is_demo`;
+    await audit(sql, { companyId: null, userId: user.id, action: 'delete_demo', entity: 'company', entityId: cid });
+  });
+  done('/', 'Demobolaget är borttaget');
+}
