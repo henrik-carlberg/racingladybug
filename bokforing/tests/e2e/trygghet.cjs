@@ -7,7 +7,7 @@ const BASE = process.env.BASE_URL || 'http://localhost:3000';
 const OUT = process.argv[2] || '/tmp';
 const log = (...a) => console.log('✔', ...a);
 const assert = (c, m) => { if (!c) throw new Error(m); };
-const text = async (page) => { await page.waitForLoadState('networkidle'); await page.waitForSelector('main h1, h1'); return (await page.locator('body').textContent()).replace(/\s+/g, ' '); };
+const text = async (page) => { await page.waitForLoadState('networkidle'); await page.waitForSelector('main h1, h1'); const m = (await page.locator('main').count()) ? page.locator('main').first() : page.locator('body'); return (await m.textContent()).replace(/\s+/g, ' '); };
 const login = async (p, email, pw) => {
   await p.goto(BASE + '/login');
   await p.fill('input[name=email]', email);
@@ -43,14 +43,14 @@ function totp(secret, t = Date.now()) {
   log('översikten visar att göra-lista med biträdesavtal och tvåstegsverifiering');
 
   // ---------- GDPR: biträdesavtal ----------
-  await page.click('a:has-text("Dataskydd (GDPR)")');
+  await page.goto(B + '/installningar/gdpr');
   await page.waitForURL(/installningar\/gdpr/);
   t = await text(page);
   assert(t.includes('Inte godkänt') && t.includes('Underbiträde') && t.includes('Register över behandlingar'), 'gdpr-sida: ' + t.slice(0, 1500));
   await page.click('button:has-text("Godkänn avtalet")');
   await page.waitForURL(/ok=/);
   t = await text(page);
-  assert(t.includes('Godkänt') && !t.includes('Inte godkänt'), 'godkänt avtal');
+  assert(t.includes('Godkänt') && !t.includes('Inte godkänt'), 'godkänt avtal: ' + page.url() + ' ' + t.slice(0, 1500));
   await page.goto(B);
   assert(!(await text(page)).includes('Godkänn personuppgiftsbiträdesavtalet'), 'försvinner från att göra');
   log('personuppgiftsbiträdesavtal godkänt och borta från att göra-listan');

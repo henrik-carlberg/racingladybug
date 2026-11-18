@@ -121,8 +121,8 @@ export function InvoiceForm({ action, customers, accounts, initial }: {
         {foreign && Number(rate.replace(',', '.')) > 0 && <div className="row small muted"><span>Bokförs som</span><span style={{ textAlign: 'right' }}>{formatAmount(Math.round(t.total * Number(rate.replace(',', '.'))))} kr</span></div>}
         {red?.capped && <p className="small muted" style={{ margin: 0 }}>Avdraget är begränsat av köparens återstående utrymme.</p>}
       </div>
-      <label className="row" style={{ alignItems: 'center', gap: '.5rem' }}>
-        <input type="checkbox" name="advance" checked={advance} style={{ width: 'auto' }} onChange={(e) => {
+      <label className="check">
+        <input type="checkbox" name="advance" checked={advance} onChange={(e) => {
           const on = e.target.checked; setAdvance(on); if (on) setRr('');
           setRows((r) => r.map((x) => ({ ...x, account: String(on ? 2420 : defaultSalesAccount(Number(x.vat), rc)) })));
         }} />

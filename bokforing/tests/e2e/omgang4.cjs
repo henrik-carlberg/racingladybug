@@ -63,7 +63,7 @@ async function accept(browser, link, name, password) {
   await waitMsg(owner, 'Behörigheterna är sparade');
   assert((await text(owner)).includes('Begränsad (1 av 6)'), 'begränsning visas');
   await kons.goto(B);
-  const nav = await kons.locator('nav').innerText();
+  const nav = await kons.locator('nav').evaluate((n) => n.textContent);
   assert(nav.includes('Kundfakturor') && !nav.includes('Lönekörningar') && !nav.includes('Verifikationer'), 'menyn visar bara det tillåtna: ' + nav);
   await kons.goto(B + '/lon');
   await kons.waitForURL((u) => !u.pathname.endsWith('/lon'));
@@ -212,7 +212,7 @@ async function accept(browser, link, name, password) {
   assert(await mob.locator('html').getAttribute('lang') === 'en', 'html lang=en');
   await mob.goto(B);
   await mob.click('label.navbtn');
-  const navEn = await mob.locator('nav').innerText();
+  const navEn = await mob.locator('nav').evaluate((n) => n.textContent);
   assert(navEn.includes('Customer invoices') && navEn.includes('Overview') && !navEn.includes('Kundfakturor'), 'engelsk meny: ' + navEn.slice(0, 300));
   for (const u of ['', '/fakturor', '/kunder', '/kvitto']) {
     await mob.goto(B + u);
@@ -322,6 +322,21 @@ async function accept(browser, link, name, password) {
   t = await text(owner);
   assert(t.includes('Beläggning') && t.includes('Debiterbart') && t.includes('Ägare Testsson'), 'beläggning: ' + t.slice(0, 800));
   log('beläggning per person med debiterbar tid och värde');
+
+  // ================= Nytt gränssnitt: sök och skapa =================
+  await owner.goto(B);
+  await owner.waitForLoadState('networkidle');
+  for (let i = 0; i < 10 && !(await owner.locator('.palette input').count()); i++) { await owner.keyboard.press('Control+k'); await owner.waitForTimeout(300); }
+  await owner.locator('.palette input').fill('momsdekl');
+  await owner.keyboard.press('Enter');
+  await owner.waitForURL(/rapporter\/moms/);
+  await owner.click('.create-btn');
+  await owner.click('.create-menu a:has-text("Ny kundfaktura")');
+  await owner.waitForURL(/fakturor\/ny/);
+  await owner.goto(B + '/leverantorsfakturor');
+  assert(await owner.locator('.nav-link.active:has-text("Leverantörsfakturor")').count(), 'aktiv sida markerad i menyn');
+  assert(await owner.locator('.nav-section.open .nav-head:has-text("Köpa och betala")').count(), 'sektionen för aktiv sida är öppen');
+  log('sök och gå till (Ctrl+K), Skapa-menyn och markerad aktiv sida');
 
   await browser.close();
   console.log('Omgång 4: alla steg gick igenom');
