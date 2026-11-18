@@ -11,6 +11,7 @@ import type { Actor } from './actor';
 export async function exportUserData(userId: number) {
   const [user] = await sql`SELECT id, email, name, created_at, totp_enabled_at IS NOT NULL AS two_factor FROM users WHERE id = ${userId}`;
   const memberships = await sql`SELECT c.id AS company_id, c.name AS company, m.role, m.created_at FROM memberships m JOIN companies c ON c.id = m.company_id WHERE m.user_id = ${userId}`;
+  const firms = await sql`SELECT f.name, m.role, m.created_at FROM firm_members m JOIN firms f ON f.id = m.firm_id WHERE m.user_id = ${userId}`;
   const passkeys = await sql`SELECT name, device_type, created_at, last_used_at FROM passkeys WHERE user_id = ${userId}`;
   const sessions = await sql`SELECT expires_at FROM sessions WHERE user_id = ${userId}`;
   const employee = await sql`SELECT e.company_id, e.first_name, e.last_name, e.personal_number, e.email, e.address, e.postal_code, e.city, e.bank_clearing, e.bank_account,
@@ -21,7 +22,7 @@ export async function exportUserData(userId: number) {
     FROM absences a JOIN employees e ON e.id = a.employee_id WHERE e.user_id = ${userId}`;
   const time = await sql`SELECT to_char(date,'YYYY-MM-DD') AS date, minutes, description FROM time_entries WHERE user_id = ${userId} ORDER BY date`;
   const activity = await sql`SELECT created_at, company_id, action, entity, entity_id FROM audit_log WHERE user_id = ${userId} ORDER BY created_at DESC LIMIT 1000`;
-  return { exported_at: new Date().toISOString(), user, memberships, passkeys, active_sessions: sessions.length, employee, payslips, absences, time_entries: time, activity_log: activity };
+  return { exported_at: new Date().toISOString(), user, memberships, firms, passkeys, active_sessions: sessions.length, employee, payslips, absences, time_entries: time, activity_log: activity };
 }
 
 /** Radering av konto (art. 17). Uppgifter som ingår i bokföringen (vem som bokförde) måste sparas – användaren anonymiseras. */
@@ -38,6 +39,7 @@ export async function deleteAccount(userId: number, password: string, confirm: s
     await tx`DELETE FROM passkeys WHERE user_id = ${userId}`;
     await tx`DELETE FROM mfa_challenges WHERE user_id = ${userId}`;
     await tx`DELETE FROM memberships WHERE user_id = ${userId}`;
+    await tx`DELETE FROM firm_members WHERE user_id = ${userId}`;
     await tx`UPDATE employees SET user_id = NULL WHERE user_id = ${userId}`;
     await tx`UPDATE users SET email = ${`raderad-${userId}@invalid`}, name = 'Raderad användare', password_hash = ${await hashPassword(randomBytes(24).toString('hex'))},
       totp_secret = NULL, totp_enabled_at = NULL, backup_codes = '{}' WHERE id = ${userId}`;

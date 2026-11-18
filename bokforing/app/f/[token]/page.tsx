@@ -7,13 +7,17 @@ import { listTimeEntries } from '@/lib/services/time';
 import { InvoiceDoc, type InvoiceDocData } from '@/components/InvoiceDoc';
 import { PrintButton } from '@/components/PrintButton';
 import type { Company } from '@/lib/server/auth';
+import { canPayByCard } from '@/lib/services/payments';
+import { kr } from '@/lib/format';
+import { payInvoice } from './actions';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { robots: { index: false, follow: false }, title: 'Faktura' };
 
 /** Kundens länk till en skickad faktura – ingen inloggning, men länken är hemlig och slumpad */
-export default async function PublicInvoice({ params }: { params: Promise<{ token: string }> }) {
+export default async function PublicInvoice({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { token } = await params;
+  const sp = await searchParams;
   const ref = await invoiceByToken(token);
   if (!ref) notFound();
   const [inv] = await sql<(InvoiceDocData & { status: string; credit_of_id: number | null; paid_date: string | null })[]>`
@@ -25,12 +29,19 @@ export default async function PublicInvoice({ params }: { params: Promise<{ toke
   const lines = await loadLines(sql, ref.id);
   const [orig] = inv.credit_of_id ? await sql<{ invoice_number: number }[]>`SELECT invoice_number FROM invoices WHERE id = ${inv.credit_of_id}` : [];
   const time = await listTimeEntries(ref.company_id, { invoice_id: ref.id });
+  const card = await canPayByCard(ref.id);
+  const [{ total }] = await sql<{ total: number }[]>`SELECT total FROM invoices WHERE id = ${ref.id}`;
   return (
     <main style={{ maxWidth: 900, margin: '0 auto', padding: '1.5rem 16px' }}>
       <div className="no-print header" style={{ marginBottom: '1rem' }}>
         <span>{inv.status === 'paid' ? <span className="badge ok">Betald {inv.paid_date}</span> : inv.status === 'credited' ? <span className="badge">Krediterad</span> : null}</span>
-        <PrintButton />
+        <div className="actions" style={{ margin: 0 }}>
+          {card && sp.betalning !== 'klar' && <form action={payInvoice.bind(null, token)}><button>Betala nu {kr(total)} kr</button></form>}
+          <PrintButton />
+        </div>
       </div>
+      {sp.betalning === 'klar' && inv.status !== 'paid' && <div className="flash ok no-print">Tack! Betalningen är mottagen och fakturan markeras som betald inom kort.</div>}
+      {sp.betalning === 'fel' && <div className="flash error no-print">Betalningen kunde inte startas. Försök igen eller betala till bankgiro med OCR-numret.</div>}
       <InvoiceDoc inv={inv} lines={lines} co={co} orig={orig} isCredit={!!inv.credit_of_id} time={time} />
       <p className="no-print small muted" style={{ marginTop: '1rem' }}>Välj ”Skriv ut” och sedan ”Spara som PDF” för att spara fakturan.</p>
     </main>

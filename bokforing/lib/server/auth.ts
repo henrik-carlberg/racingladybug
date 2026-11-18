@@ -83,13 +83,15 @@ export async function requireCompany(companyId: number | string, opts: { owner?:
   const user = await requireUser();
   const id = Number(companyId);
   if (!Number.isInteger(id)) notFound();
+  // Medlemskap i bolaget, eller åtkomst via en redovisningsbyrå som bolaget har gett behörighet (roll redovisningskonsult)
   const rows = await sql<(Company & { role: Role; employee_id: number | null })[]>`
-    SELECT c.*, to_char(c.locked_until, 'YYYY-MM-DD') AS locked_until, m.role,
+    SELECT c.*, to_char(c.locked_until, 'YYYY-MM-DD') AS locked_until,
+      COALESCE((SELECT m.role FROM memberships m WHERE m.company_id = c.id AND m.user_id = ${user.id}),
+        (SELECT 'accountant' FROM firm_clients fc JOIN firm_members fm ON fm.firm_id = fc.firm_id WHERE fc.company_id = c.id AND fm.user_id = ${user.id} LIMIT 1)) AS role,
       (SELECT e.id FROM employees e WHERE e.company_id = c.id AND e.user_id = ${user.id} LIMIT 1) AS employee_id
-    FROM companies c JOIN memberships m ON m.company_id = c.id
-    WHERE c.id = ${id} AND m.user_id = ${user.id}`;
+    FROM companies c WHERE c.id = ${id}`;
   const row = rows[0];
-  if (!row) notFound();
+  if (!row || !row.role) notFound();
   const { role, employee_id, ...company } = row;
   if (role === 'employee' && !opts.employee) redirect(`/c/${id}/mitt`);
   if (opts.owner && role !== 'owner') throw new Error('Endast ägare får göra detta');

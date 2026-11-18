@@ -21,10 +21,14 @@ export function formEncode(obj: Record<string, unknown>, prefix = ''): string {
   return parts.filter(Boolean).join('&');
 }
 
-export async function stripe<T = Record<string, unknown>>(method: 'GET' | 'POST', path: string, body?: Record<string, unknown>): Promise<T> {
+/** Anrop till Stripe. account: anropet görs för ett anslutet konto (Stripe Connect, huvudet Stripe-Account). */
+export async function stripe<T = Record<string, unknown>>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: Record<string, unknown>, opts: { account?: string; idempotencyKey?: string } = {}): Promise<T> {
   const res = await fetch(`${api()}/v1${path}`, {
     method,
-    headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`, 'Content-Type': 'application/x-www-form-urlencoded', 'Stripe-Version': '2024-06-20' },
+    headers: {
+      Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`, 'Content-Type': 'application/x-www-form-urlencoded', 'Stripe-Version': '2024-06-20',
+      ...(opts.account ? { 'Stripe-Account': opts.account } : {}), ...(opts.idempotencyKey ? { 'Idempotency-Key': opts.idempotencyKey } : {}),
+    },
     body: body ? formEncode(body) : undefined,
     signal: AbortSignal.timeout(15_000),
   });
