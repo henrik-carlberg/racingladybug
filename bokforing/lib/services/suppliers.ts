@@ -10,14 +10,15 @@ import { ACC } from '@/lib/bas';
 import type { Actor } from './actor';
 import { arr, date, has, int, list, optInt, ore, str, type Page } from './input';
 import { insertAttachment, type AttachmentIn } from './vouchers';
+import { dimId } from './dimensions';
 
 // ---------- Leverantörer ----------
 
 export interface SupplierOut {
   id: number; object: 'supplier'; name: string; orgnr: string; bankgiro: string; plusgiro: string; bank_account: string;
-  default_account: number; email: string; created_at: string;
+  default_account: number; email: string; created_at: string; cost_center_id: number | null;
 }
-const SCOLS = () => sql`id, 'supplier' AS object, name, orgnr, bankgiro, plusgiro, bank_account, default_account, email, created_at`;
+const SCOLS = () => sql`id, 'supplier' AS object, name, orgnr, bankgiro, plusgiro, bank_account, default_account, email, created_at, cost_center_id`;
 
 export async function getSupplier(companyId: number, id: number): Promise<SupplierOut> {
   const [s] = await sql<SupplierOut[]>`SELECT ${SCOLS()} FROM suppliers WHERE id = ${id} AND company_id = ${companyId}`;
@@ -38,6 +39,7 @@ function readSupplier(input: Record<string, unknown>, partial: boolean) {
     if (k === 'default_account') f[k] = optInt(input, k, 'Standardkonto') ?? 4010;
     else f[k] = str(input, k, { required: k === 'name', label: k === 'name' ? 'Namn' : k });
   }
+  if (!partial || has(input, 'cost_center_id')) f.cost_center_id = dimId(input.cost_center_id);
   return f;
 }
 
@@ -100,15 +102,19 @@ export async function listSupplierInvoices(companyId: number, p: Page, f: { stat
  *  och bokförs när fakturan betalas (eller per bokslutsdagen). Belopp i öre. */
 export async function registerSupplierInvoice(actor: Actor, input: Record<string, unknown>, attachment?: AttachmentIn | null) {
   const supplierId = int(input, 'supplier_id', 'Leverantör');
-  const [sup] = await sql<{ name: string; default_account: number }[]>`SELECT name, default_account FROM suppliers WHERE id = ${supplierId} AND company_id = ${actor.companyId}`;
+  const [sup] = await sql<{ name: string; default_account: number; cost_center_id: number | null }[]>`SELECT name, default_account, cost_center_id FROM suppliers WHERE id = ${supplierId} AND company_id = ${actor.companyId}`;
   if (!sup) throw new ValidationError('Leverantören finns inte');
   const total = ore(input, 'total', 'Totalbelopp', { min: 1 });
   const vat = optInt(input, 'vat', 'Moms') ?? 0;
   if (vat < 0) throw new ValidationError('Ogiltigt momsbelopp');
+  // Kostnadsställe/projekt: per rad, annars för hela fakturan, annars leverantörens standard
+  const cc = dimId(input.cost_center_id) ?? sup.cost_center_id;
+  const pr = dimId(input.project_id);
   const costs: CostLine[] = input.lines == null
-    ? [{ account: sup.default_account, amount: total - vat }]
+    ? [{ account: sup.default_account, amount: total - vat, costCenterId: cc, projectId: pr }]
     : arr(input, 'lines', 'Konteringsrader').map((r, i) => ({
         account: int(r, 'account', `Rad ${i + 1}: konto`), amount: int(r, 'amount', `Rad ${i + 1}: belopp`), description: str(r, 'description'),
+        costCenterId: dimId(r.cost_center_id) ?? cc, projectId: dimId(r.project_id) ?? pr,
       }));
   if (costs.length === 0) throw new ValidationError('Ange minst en konteringsrad');
   const invoiceNumber = str(input, 'invoice_number', { required: true, label: 'Leverantörens fakturanummer' });

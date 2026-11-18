@@ -6,6 +6,7 @@ import { Flash, type SP } from '@/components/ui';
 import { kr } from '@/lib/format';
 import { autoMatch, bookAllSuggestions, reconcileTx, reopenTx } from '../actions';
 import { learnKey } from '@/lib/bank/rules';
+import { listCostCenters, listProjectRefs } from '@/lib/services/dimensions';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +20,7 @@ export default async function Reconcile({ params, searchParams }: { params: Prom
   const accountId = sp.account_id ? Number(sp.account_id) : undefined;
   const accounts = await listBankAccounts(company.id);
   const rows = await listTransactions(company.id, { status, account_id: accountId, limit: 300, withSuggestions: status === 'unmatched' });
+  const [ccs, projs] = await Promise.all([listCostCenters(company.id, true), listProjectRefs(company.id, true)]);
   const accNames = new Map(accounts.map((a) => [a.id, a.name]));
   const chart = await sql<{ number: number; name: string }[]>`SELECT number, name FROM accounts WHERE company_id = ${company.id} AND active ORDER BY number`;
   const b = `/c/${company.id}`;
@@ -68,6 +70,7 @@ export default async function Reconcile({ params, searchParams }: { params: Prom
                   <input type="hidden" name="type" value="account" /><input type="hidden" name="qs" value={qs} />
                   <input type="hidden" name="account" value={a.account} /><input type="hidden" name="vat_rate" value={a.vatRate} /><input type="hidden" name="description" value={a.description} />
                   {a.ruleId && <input type="hidden" name="rule_id" value={a.ruleId} />}
+                  {a.costCenterId && <input type="hidden" name="cost_center_id" value={a.costCenterId} />}
                   <span style={{ flex: '3 1 300px' }}><span className="badge ok">Konto</span> {a.account} {a.accountName}{a.vatRate ? `, ${a.vatRate} % moms` : ''}
                     <span className="small muted"> – {a.source === 'rule' ? `regel ”${a.ruleName}”${a.auto ? ' (automatisk)' : ''}` : `bokförd så ${a.count} gånger tidigare`}</span></span>
                   <div style={{ flex: '0 0 auto' }}><button className={(t.suggestions ?? []).some((x) => x.score >= 80) ? 'secondary' : ''}>Bokför</button></div>
@@ -79,6 +82,8 @@ export default async function Reconcile({ params, searchParams }: { params: Prom
                   <label style={{ flex: '0 0 130px' }}>Konto<input name="account" list="chart" required defaultValue={t.accountSuggestion?.account} placeholder={t.amount < 0 ? '6570' : '3001'} /></label>
                   <label style={{ flex: '0 0 110px' }}>Moms<select name="vat_rate" defaultValue="0"><option value="0">Ingen</option><option value="25">25 %</option><option value="12">12 %</option><option value="6">6 %</option></select></label>
                   <label style={{ flex: '2 1 200px' }}>Text<input name="description" defaultValue={t.counterparty || t.description} /></label>
+                  {ccs.length > 0 && <label style={{ flex: '0 0 150px' }}>Kostnadsställe<select name="cost_center_id" defaultValue=""><option value="">–</option>{ccs.map((c) => <option key={c.id} value={c.id}>{c.code} {c.name}</option>)}</select></label>}
+                  {projs.length > 0 && <label style={{ flex: '0 0 150px' }}>Projekt<select name="project_id" defaultValue=""><option value="">–</option>{projs.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>}
                   <div style={{ flex: '0 0 auto' }}><button className="secondary">Bokför</button></div>
                 </form>
               </details>

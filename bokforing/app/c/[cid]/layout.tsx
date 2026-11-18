@@ -25,6 +25,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
             <Link href={`${b}/tid`}>⏱ Tidrapport</Link>
             {modules.some((m) => m.id === 'utlagg') && <Link href={`${b}/m/utlagg`}>Utlägg och resor</Link>}
             <Link href={`${b}/mitt/franvaro`}>Frånvaro och semester</Link>
+            <Link href={`${b}/mitt/schema`}>Schema och stämpling</Link>
             <Link href={`${b}/mitt/lon`}>Lönespecifikationer</Link>
             <div className="group">Konto</div>
             <Link href="/konto">Mitt konto</Link>
@@ -56,6 +57,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
           <div className="group">Försäljning</div>
           <Link href={`${b}/fakturor`}>Kundfakturor</Link>
           <Link href={`${b}/fakturor/rotrut`}>ROT och RUT</Link>
+          <Link href={`${b}/kassa`}>Kassa och e-handel</Link>
           <Link href={`${b}/kunder`}>Kunder</Link>
           <Link href={`${b}/tid`}>⏱ Tidrapportering</Link>
           <Link href={`${b}/uppdrag`}>Uppdrag &amp; timbanker</Link>
@@ -73,12 +75,16 @@ export default async function CompanyLayout({ children, params }: { children: Re
           <Link href={`${b}/lon`}>Lönekörningar</Link>
           <Link href={`${b}/lon/anstallda`}>Anställda</Link>
           <Link href={`${b}/lon/franvaro`}>Frånvaro och semester</Link>
+          <Link href={`${b}/schema`}>Schema</Link>
+          <Link href={`${b}/personalliggare`}>Personalliggare</Link>
           <Link href={`${b}/lon/skattetabeller`}>Skattetabeller</Link>
           <div className="group">Rapporter</div>
           <Link href={`${b}/rapporter`}>Resultat &amp; balans</Link>
           <Link href={`${b}/rapporter/huvudbok`}>Huvudbok</Link>
           <Link href={`${b}/rapporter/moms`}>Moms</Link>
           <Link href={`${b}/rapporter/export`}>Export (SIE)</Link>
+          <Link href={`${b}/rapporter/dimensioner`}>Resultat per dimension</Link>
+          <Link href={`${b}/anlaggningar`}>Anläggningsregister</Link>
           <Link href={`${b}/bokslut`}>Bokslut &amp; deklaration</Link>
           {modules.map((m) => (
             <div key={m.id}>
@@ -90,6 +96,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
           <Link href={`${b}/installningar`}>Inställningar</Link>
           <Link href={`${b}/installningar/gdpr`}>Dataskydd (GDPR)</Link>
           <Link href={`${b}/installningar/betalningar`}>Kortbetalning</Link>
+          <Link href={`${b}/installningar/kostnadsstallen`}>Kostnadsställen</Link>
           <Link href={`${b}/installningar/byra`}>Redovisningsbyrå</Link>
           <Link href={`${b}/dokument`}>Dokument &amp; e-signering</Link>
           <Link href={`${b}/moduler`}>Moduler</Link>

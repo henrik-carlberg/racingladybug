@@ -16,8 +16,10 @@ export interface SieInput {
     date: string;
     description: string;
     created: string; // ÅÅÅÅ-MM-DD
-    lines: { account: number; amount: number; description?: string }[]; // amount: D positiv, K negativ
+    lines: { account: number; amount: number; description?: string; costCenter?: string | null; project?: string | null }[]; // amount: D positiv, K negativ
   }[];
+  costCenters?: { code: string; name: string }[]; // SIE-dimension 1
+  projects?: { code: string; name: string }[];    // SIE-dimension 6
   programName?: string;
   generated?: Date;
 }
@@ -41,6 +43,10 @@ export function buildSie4(input: SieInput): string {
   out.push(`#RAR 0 ${d8(input.fiscalYear.start)} ${d8(input.fiscalYear.end)}`);
   if (input.previousYear) out.push(`#RAR -1 ${d8(input.previousYear.start)} ${d8(input.previousYear.end)}`);
   out.push('#KPTYP BAS2014');
+  if (input.costCenters?.length) out.push('#DIM 1 "Kostnadsställe"');
+  if (input.projects?.length) out.push('#DIM 6 "Projekt"');
+  for (const c of input.costCenters ?? []) out.push(`#OBJEKT 1 ${quote(c.code)} ${quote(c.name)}`);
+  for (const p of input.projects ?? []) out.push(`#OBJEKT 6 ${quote(p.code)} ${quote(p.name)}`);
   for (const a of [...input.accounts].sort((x, y) => x.number - y.number)) {
     out.push(`#KONTO ${a.number} ${quote(a.name)}`);
     const t = a.number < 2000 ? 'T' : a.number < 3000 ? 'S' : a.number < 4000 ? 'I' : 'K';
@@ -54,7 +60,8 @@ export function buildSie4(input: SieInput): string {
     out.push(`#VER ${quote(v.series)} ${v.number} ${d8(v.date)} ${quote(v.description)} ${d8(v.created)}`);
     out.push('{');
     for (const l of v.lines) {
-      out.push(`   #TRANS ${l.account} {} ${toDecimalString(l.amount)}${l.description ? ` "" ${quote(l.description)}` : ''}`);
+      const obj = [l.costCenter ? `1 ${quote(l.costCenter)}` : '', l.project ? `6 ${quote(l.project)}` : ''].filter(Boolean).join(' ');
+      out.push(`   #TRANS ${l.account} {${obj}} ${toDecimalString(l.amount)}${l.description ? ` "" ${quote(l.description)}` : ''}`);
     }
     out.push('}');
   }
@@ -148,8 +155,19 @@ export interface SieFile {
   openingBalances: Record<number, Record<number, number>>; // år → konto → öre (D−K)
   closingBalances: Record<number, Record<number, number>>;
   results: Record<number, Record<number, number>>;
-  vouchers: { series: string; number: string; date: string; description: string; lines: { account: number; amount: number; description: string }[] }[];
+  vouchers: { series: string; number: string; date: string; description: string; lines: { account: number; amount: number; description: string; objects?: Record<string, string> }[] }[];
+  objects?: Record<string, Record<string, string>>; // dimension → kod → namn
   warnings: string[];
+}
+
+/** Objektlista "{1 "10" 6 "P1"}" → { 1: '10', 6: 'P1' } */
+export function sieObjects(token: string): Record<string, string> {
+  const inner = token.replace(/^\{|\}$/g, '').trim();
+  if (!inner) return {};
+  const t = sieTokens(inner);
+  const out: Record<string, string> = {};
+  for (let i = 0; i + 1 < t.length; i += 2) out[t[i]] = t[i + 1];
+  return out;
 }
 
 export function parseSie(text: string): SieFile {
@@ -176,6 +194,7 @@ export function parseSie(text: string): SieFile {
         case '#PROGRAM': f.program = a.join(' '); break;
         case '#RAR': if (iso(a[1]) && iso(a[2])) f.years[Number(a[0])] = { start: iso(a[1]), end: iso(a[2]) }; break;
         case '#KONTO': if (/^\d{4}$/.test(a[0])) f.accounts.push({ number: Number(a[0]), name: a[1] ?? '' }); break;
+        case '#OBJEKT': if (a[0] && a[1]) ((f.objects ??= {})[a[0]] ??= {})[a[1]] = a[2] ?? ''; break;
         case '#IB': put(f.openingBalances, a[0], a[1], a[2]); break;
         case '#UB': put(f.closingBalances, a[0], a[1], a[2]); break;
         case '#RES': put(f.results, a[0], a[1], a[2]); break;
@@ -186,7 +205,7 @@ export function parseSie(text: string): SieFile {
         case '#TRANS':
           if (!ver) break;
           // #TRANS kontonr {objektlista} belopp [transdat] [transtext] [kvantitet] [sign]
-          ver.lines.push({ account: Number(a[0]), amount: sieAmount(a[2]), description: a[4] ?? '' });
+          { const o = sieObjects(a[1] ?? ''); ver.lines.push({ account: Number(a[0]), amount: sieAmount(a[2]), description: a[4] ?? '', ...(Object.keys(o).length ? { objects: o } : {}) }); }
           break;
         // #RTRANS/#BTRANS (tillagda/borttagna rader) följs av en #TRANS – de räknas inte
       }

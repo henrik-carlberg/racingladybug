@@ -5,6 +5,7 @@ import { createVoucher, reverseVoucher } from '@/lib/server/ledger';
 import { auditBy } from '@/lib/server/audit';
 import type { Line } from '@/lib/ledger-lines';
 import type { Actor } from './actor';
+import { dimId } from './dimensions';
 import { arr, date, list, optInt, str, type Page } from './input';
 
 export interface VoucherOut {
@@ -45,7 +46,7 @@ export async function createManualVoucher(actor: Actor, input: Record<string, un
     const credit = optInt(r, 'credit', `Rad ${i + 1}: kredit`) ?? 0;
     if (!account) throw new ValidationError(`Rad ${i + 1}: konto saknas`);
     if (debit && credit) throw new ValidationError(`Rad ${i + 1}: ange antingen debet eller kredit`);
-    return { account, debit, credit, description: str(r, 'description') };
+    return { account, debit, credit, description: str(r, 'description'), costCenterId: dimId(r.cost_center_id), projectId: dimId(r.project_id) };
   });
   const id = await sql.begin(async (tx) => {
     const v = await createVoucher(tx, {

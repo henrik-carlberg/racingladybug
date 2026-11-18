@@ -14,3 +14,11 @@ export async function saveCustomer(cid: number, id: number | null, fd: FormData)
   await attempt(id ? `/c/${cid}/kunder/${id}` : `/c/${cid}/kunder`, () => (id ? updateCustomer(actor, id, input) : createCustomer(actor, input)));
   done(`/c/${cid}/kunder`, 'Kunden är sparad');
 }
+
+export async function portal(cid: number, kid: number, rotate: boolean) {
+  const { userActor } = await import('@/lib/services/actor');
+  const { portalLink } = await import('@/lib/services/portal');
+  const actor = userActor(await requireCompany(cid));
+  await attempt(`/c/${cid}/kunder/${kid}`, () => portalLink(actor, kid, rotate));
+  done(`/c/${cid}/kunder/${kid}`, rotate ? 'Kundportalen har fått en ny länk' : 'Länken till kundportalen är klar');
+}

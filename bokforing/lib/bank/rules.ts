@@ -3,7 +3,7 @@
 export interface BankRule {
   id: number; name: string; pattern: string; direction: 'in' | 'out' | 'any';
   amountMin: number | null; amountMax: number | null; // öre, absolutbelopp
-  account: number; vatRate: number; description: string; auto: boolean; priority: number;
+  account: number; vatRate: number; description: string; auto: boolean; priority: number; costCenterId?: number | null;
 }
 export interface RuleTx { amount: number; description: string; reference: string; counterparty: string }
 

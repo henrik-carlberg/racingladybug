@@ -88,7 +88,18 @@ export async function importSie(actor: Actor, id: number, opts: { accounts: bool
       if (!fyId) {
         [{ id: fyId }] = await tx<{ id: number }[]>`INSERT INTO fiscal_years (company_id, start_date, end_date) VALUES (${actor.companyId}, ${p.year!.start}, ${p.year!.end}) RETURNING id`;
       }
-      type Row = { series: string; date: string; description: string; source_type: string; lines: { account: number; amount: number; description: string }[] };
+      // Kostnadsställen (dimension 1) följer med: de skapas om de saknas
+      const ccNames = f.objects?.['1'] ?? {};
+      const ccCodes = new Set<string>([...Object.keys(ccNames), ...f.vouchers.flatMap((v) => v.lines.map((l) => l.objects?.['1']).filter((x): x is string => !!x))]);
+      const ccMap = new Map<string, number>();
+      for (const code of ccCodes) {
+        const c = code.toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 20);
+        if (!c) continue;
+        await tx`INSERT INTO cost_centers (company_id, code, name) VALUES (${actor.companyId}, ${c}, ${(ccNames[code] || c).slice(0, 100)}) ON CONFLICT DO NOTHING`;
+        const [r] = await tx<{ id: number }[]>`SELECT id FROM cost_centers WHERE company_id = ${actor.companyId} AND code = ${c}`;
+        ccMap.set(code, r.id);
+      }
+      type Row = { series: string; date: string; description: string; source_type: string; lines: { account: number; amount: number; description: string; objects?: Record<string, string> }[] };
       const rows: Row[] = [];
       if (opts.opening) {
         const lines = Object.entries(f.openingBalances[0]).map(([a, v]) => ({ account: Number(a), amount: v, description: '' })).filter((l) => l.account < 3000 && l.amount !== 0);
@@ -116,6 +127,7 @@ export async function importSie(actor: Actor, id: number, opts: { accounts: bool
         const lines = part.flatMap((r) => r.lines.map((l) => ({
           voucher_id: byKey.get(`${r.series}|${r.number}`)!, account_number: l.account,
           debit: l.amount > 0 ? l.amount : 0, credit: l.amount < 0 ? -l.amount : 0, description: (l.description || '').slice(0, 200),
+          cost_center_id: (l.objects?.['1'] && ccMap.get(l.objects['1'])) || null,
         })));
         for (const lp of chunk(lines, 8000)) await tx`INSERT INTO voucher_lines ${tx(lp)}`;
       }

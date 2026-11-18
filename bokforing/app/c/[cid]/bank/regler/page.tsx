@@ -5,6 +5,7 @@ import { Flash, type SP } from '@/components/ui';
 import { kr } from '@/lib/format';
 import { BankRuleFields } from '@/components/BankRuleFields';
 import { listRules, openMatches } from '@/lib/services/bank-rules';
+import { listCostCenters } from '@/lib/services/dimensions';
 import { create, remove, starters, update } from './actions';
 
 export const dynamic = 'force-dynamic';
@@ -16,6 +17,7 @@ export default async function Rules({ params, searchParams }: { params: Promise<
   const rules = await openMatches(company.id, await listRules(company.id));
   const chart = await sql<{ number: number; name: string }[]>`SELECT number, name FROM accounts WHERE company_id = ${company.id} AND active ORDER BY number`;
   const names = new Map(chart.map((a) => [a.number, a.name]));
+  const ccs = await listCostCenters(company.id, true);
   const b = `/c/${company.id}/bank`;
   const p = (k: string) => (typeof sp[k] === 'string' ? String(sp[k]) : undefined);
   return (
@@ -29,7 +31,7 @@ export default async function Rules({ params, searchParams }: { params: Promise<
       <h2>Ny regel</h2>
       <form action={create.bind(null, company.id)} className="card stack">
         <input type="hidden" name="back" value={p('back') ?? ''} />
-        <BankRuleFields prefill={{ pattern: p('pattern'), account: p('account'), vat: p('vat'), direction: p('direction'), description: p('description') }} />
+        <BankRuleFields costCenters={ccs} prefill={{ pattern: p('pattern'), account: p('account'), vat: p('vat'), direction: p('direction'), description: p('description') }} />
         <div><button>Spara regel</button></div>
       </form>
 
@@ -48,7 +50,7 @@ export default async function Rules({ params, searchParams }: { params: Promise<
               <td className="num">{r.open_matches ? <Link href={`${b}/avstamning`}>{r.open_matches}</Link> : 0}</td>
               <td className="num">
                 <details><summary className="small">Ändra</summary>
-                  <form action={update.bind(null, company.id, r.id)} className="stack" style={{ minWidth: 520, textAlign: 'left' }}><BankRuleFields r={r} /><div><button className="secondary">Spara</button></div></form>
+                  <form action={update.bind(null, company.id, r.id)} className="stack" style={{ minWidth: 520, textAlign: 'left' }}><BankRuleFields costCenters={ccs} r={r} /><div><button className="secondary">Spara</button></div></form>
                   <form action={remove.bind(null, company.id, r.id)}><button className="link small">Ta bort regeln</button></form>
                 </details>
               </td>

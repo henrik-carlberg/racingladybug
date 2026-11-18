@@ -3,6 +3,7 @@ import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
 import { Flash, type SP } from '@/components/ui';
 import { SupplierFields, type SupplierRow } from '@/components/SupplierFields';
+import { listCostCenters } from '@/lib/services/dimensions';
 import { kr } from '@/lib/format';
 import { saveSupplier } from './actions';
 
@@ -33,7 +34,7 @@ export default async function Suppliers({ params, searchParams }: { params: Prom
       </div>
       <h2>Ny leverantör</h2>
       <form action={saveSupplier.bind(null, company.id, null)} className="card stack">
-        <SupplierFields />
+        <SupplierFields costCenters={await listCostCenters(company.id, true)} />
         <div><button>Spara leverantör</button></div>
       </form>
     </>
