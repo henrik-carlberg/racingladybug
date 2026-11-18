@@ -12,7 +12,7 @@ const STATUS: Record<string, [string, string]> = { requested: ['Ansökan', 'warn
 
 export default async function Absence({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'payroll' });
   const sp = await searchParams;
   const year = Number(sp.ar) || Number(today().slice(0, 4));
   const [list, pending, balances, emps] = await Promise.all([

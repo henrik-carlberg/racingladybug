@@ -2,7 +2,7 @@ import 'server-only';
 import { sql, type Tx } from '@/lib/db';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import { createVoucher } from '@/lib/server/ledger';
-import { auditBy } from '@/lib/server/audit';
+import { auditBy, changes } from '@/lib/server/audit';
 import { emit } from '@/lib/server/events';
 import { recomputeSlip } from '@/lib/server/payroll';
 import { fromSigned } from '@/lib/ledger-lines';
@@ -105,7 +105,7 @@ export async function updateEmployee(actor: Actor, id: number, input: Record<str
   const run = async (tx: Tx) => {
     if (Object.keys(f).length) await tx`UPDATE employees SET ${tx(f)} WHERE id = ${id} AND company_id = ${actor.companyId}`;
     const [e] = await tx<EmployeeOut[]>`SELECT ${ECOLS()} FROM employees WHERE id = ${id}`;
-    await auditBy(tx, actor, 'update', 'employee', id, Object.keys(f));
+    await auditBy(tx, actor, 'update', 'employee', id, { changes: changes(cur as unknown as Record<string, unknown>, f) });
     await emit(tx, actor.companyId, 'employee.updated', e);
     return e;
   };

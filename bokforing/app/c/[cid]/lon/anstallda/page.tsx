@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function Employees({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'payroll' });
   const rows = await sql<EmployeeRow[]>`SELECT * FROM employees WHERE company_id = ${company.id} ORDER BY active DESC, last_name, first_name`;
   return (
     <>

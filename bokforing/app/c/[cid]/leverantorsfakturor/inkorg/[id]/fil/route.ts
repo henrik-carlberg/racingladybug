@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ cid: string; id: string }> }) {
   const { cid, id } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'purchasing' });
   const f = await inboxFile(company.id, Number(id)).catch(() => null);
   if (!f) return new Response('Filen finns inte', { status: 404 });
   return new Response(new Uint8Array(f.data!), {

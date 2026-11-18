@@ -3,13 +3,13 @@ import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
 import { Flash, type SP } from '@/components/ui';
 import { kr, today } from '@/lib/format';
-import { markManyPaid } from '../actions';
+import { importPaymentNotification, markManyPaid } from '../actions';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Payments({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'payments' });
   const rows = await sql<{ id: number; supplier: string; to: string; invoice_number: string; due_date: string; reference: string; total: number }[]>`
     SELECT i.id, s.name AS supplier, COALESCE(NULLIF('BG ' || NULLIF(s.bankgiro,''), ''), NULLIF('PG ' || NULLIF(s.plusgiro,''), ''), s.bank_account) AS to,
       i.invoice_number, to_char(i.due_date,'YYYY-MM-DD') AS due_date, i.payment_reference AS reference, (i.total - i.paid_amount)::bigint AS total
@@ -50,6 +50,14 @@ export default async function Payments({ params, searchParams }: { params: Promi
             <div style={{ flex: '0 0 auto' }}><a className="btn secondary" href={`${b}/leverantorsfakturor/betalning/fil`}>Lista (CSV)</a></div>
           </div>
         )}
+      </form>
+
+      <h2>Bankens kvitto på betalningarna</h2>
+      <form action={importPaymentNotification.bind(null, company.id)} className="card row" style={{ alignItems: 'end' }}>
+        <label style={{ flex: '2 1 260px' }}>Avisering från banken (camt.054 XML)<input type="file" name="file" accept=".xml,text/xml,application/xml" required /></label>
+        <label>Konto<select name="bank_account"><option value="1930">1930 Företagskonto</option><option value="1940">1940 Övriga bankkonton</option></select></label>
+        <div style={{ flex: '0 0 auto' }}><button className="secondary">Läs in</button></div>
+        <span className="small muted" style={{ flex: '1 1 100%' }}>När banken har genomfört betalfilen kan du hämta en avisering (camt.054) i internetbanken. Fakturorna i filen bokförs då som betalda på bankens bokföringsdag, och avvisade betalningar visas.</span>
       </form>
     </>
   );

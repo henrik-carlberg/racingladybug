@@ -4,7 +4,7 @@ import { toDecimalString } from '@/lib/money';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ cid: string }> }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'payments' });
   const rows = await sql<{ supplier: string; bankgiro: string; plusgiro: string; bank_account: string; invoice_number: string; due_date: string; reference: string; total: number }[]>`
     SELECT s.name AS supplier, s.bankgiro, s.plusgiro, s.bank_account, i.invoice_number, to_char(i.due_date,'YYYY-MM-DD') AS due_date,
       i.payment_reference AS reference, i.total

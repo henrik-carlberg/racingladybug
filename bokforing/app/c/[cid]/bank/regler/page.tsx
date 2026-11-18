@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function Rules({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'ledger' });
   const sp = await searchParams;
   const rules = await openMatches(company.id, await listRules(company.id));
   const chart = await sql<{ number: number; name: string }[]>`SELECT number, name FROM accounts WHERE company_id = ${company.id} AND active ORDER BY number`;

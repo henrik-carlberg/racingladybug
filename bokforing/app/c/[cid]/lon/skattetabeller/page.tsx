@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function TaxTables({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'payroll' });
   const rows = await sql<{ year: number; table_no: number; n: number }[]>`
     SELECT year, table_no, count(*)::int AS n FROM tax_table_rows GROUP BY year, table_no ORDER BY year DESC, table_no`;
   const needed = await sql<{ tax_table: number }[]>`

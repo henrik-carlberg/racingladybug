@@ -8,7 +8,7 @@ import { addAttachment, createManualVoucher, reverse as reverseSvc } from '@/lib
 export type FormState = { error?: string } | undefined;
 
 export async function saveVoucher(cid: number, _prev: FormState, fd: FormData): Promise<FormState> {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'ledger' }));
   let id = 0;
   try {
     const raw = JSON.parse(str(fd, 'lines') || '[]') as { account: string; debit: string; credit: string; description: string; cc?: string; project?: string }[];
@@ -25,7 +25,7 @@ export async function saveVoucher(cid: number, _prev: FormState, fd: FormData): 
 }
 
 export async function reverse(cid: number, vid: number, fd: FormData) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'ledger' }));
   let newId = 0;
   await attempt(`/c/${cid}/verifikationer/${vid}`, async () => {
     newId = (await reverseSvc(actor, vid, { date: str(fd, 'date'), reason: str(fd, 'reason') })).id;
@@ -34,7 +34,7 @@ export async function reverse(cid: number, vid: number, fd: FormData) {
 }
 
 export async function uploadAttachment(cid: number, vid: number, fd: FormData) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'ledger' }));
   await attempt(`/c/${cid}/verifikationer/${vid}`, async () => {
     const f = await fileFrom(fd);
     if (!f) throw new Error('Välj en fil');

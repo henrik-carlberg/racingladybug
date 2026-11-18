@@ -1,3 +1,4 @@
+import { History } from '@/components/History';
 import { notFound } from 'next/navigation';
 import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
@@ -10,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function Customer({ params, searchParams }: { params: Promise<{ cid: string; kid: string }>; searchParams: SP }) {
   const { cid, kid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'invoicing' });
   const [c] = await sql<CustomerRow[]>`SELECT * FROM customers WHERE id = ${Number(kid)} AND company_id = ${company.id}`;
   if (!c) notFound();
   const [{ token }] = await sql<{ token: string | null }[]>`SELECT portal_token AS token FROM customers WHERE id = ${c.id}`;
@@ -32,6 +33,7 @@ export default async function Customer({ params, searchParams }: { params: Promi
           {token && <form action={portal.bind(null, company.id, c.id, true)}><button className="link">Ny länk (den gamla slutar fungera)</button></form>}
         </div>
       </div>
+      <History companyId={company.id} entity="customer" id={c.id} />
     </>
   );
 }

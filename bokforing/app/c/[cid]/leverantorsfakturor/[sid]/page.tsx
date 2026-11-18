@@ -1,3 +1,4 @@
+import { History } from '@/components/History';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { sql } from '@/lib/db';
@@ -5,12 +6,13 @@ import { requireCompany } from '@/lib/server/auth';
 import { Flash, Status, type SP } from '@/components/ui';
 import { kr, today } from '@/lib/format';
 import { approve, markPaid } from '../actions';
+import { requiredApprovals } from '@/lib/attest';
 
 export const dynamic = 'force-dynamic';
 
 export default async function SupplierInvoice({ params, searchParams }: { params: Promise<{ cid: string; sid: string }>; searchParams: SP }) {
   const { cid, sid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'purchasing' });
   const [i] = await sql<{ id: number; paid_amount: number; supplier: string; bankgiro: string; plusgiro: string; bank_account: string; invoice_number: string; invoice_date: string; due_date: string;
     payment_reference: string; description: string; total: number; vat: number; status: string; approved_by: string | null; approved_at: string | null;
     voucher_id: number | null; payment_voucher_id: number | null; paid_date: string | null }[]>`
@@ -20,6 +22,9 @@ export default async function SupplierInvoice({ params, searchParams }: { params
     FROM supplier_invoices i JOIN suppliers s ON s.id = i.supplier_id LEFT JOIN users u ON u.id = i.approved_by
     WHERE i.id = ${Number(sid)} AND i.company_id = ${company.id}`;
   if (!i) notFound();
+  const approvals = await sql<{ name: string; at: string }[]>`SELECT u.name, to_char(a.approved_at AT TIME ZONE 'Europe/Stockholm','YYYY-MM-DD HH24:MI') AS at
+    FROM supplier_invoice_approvals a JOIN users u ON u.id = a.user_id WHERE a.supplier_invoice_id = ${i.id} ORDER BY a.approved_at`;
+  const needed = requiredApprovals(Number(i.total), { threshold: company.attest_threshold == null ? null : Number(company.attest_threshold), notRegistrant: company.attest_not_registrant });
   const payments = await sql<{ id: number; date: string; amount: number; voucher_id: number | null }[]>`SELECT id, to_char(date,'YYYY-MM-DD') AS date, amount, voucher_id FROM supplier_invoice_payments WHERE supplier_invoice_id = ${i.id} ORDER BY date, id`;
   const files = await sql<{ id: number; filename: string }[]>`SELECT id, filename FROM attachments WHERE supplier_invoice_id = ${i.id}`;
   const b = `/c/${company.id}`;
@@ -44,8 +49,8 @@ export default async function SupplierInvoice({ params, searchParams }: { params
       {files.length > 0 && <p>Underlag: {files.map((f) => <a key={f.id} href={`${b}/underlag/${f.id}`} target="_blank">{f.filename} </a>)}</p>}
       {i.status === 'booked' && (
         <form action={approve.bind(null, company.id, i.id)} className="card actions">
-          <button>Attestera för betalning</button>
-          <span className="muted small">Attesten loggas med ditt namn.</span>
+          <button>{needed > 1 ? `Attestera (${approvals.length + 1} av ${needed})` : 'Attestera för betalning'}</button>
+          <span className="muted small">{needed > 1 ? 'Fakturan kräver två attester av olika personer. ' : ''}Attesten loggas med ditt namn.{approvals.length > 0 && <> Attesterad av {approvals.map((x) => `${x.name} ${x.at}`).join(', ')}.</>}</span>
         </form>
       )}
       {payments.length > 0 && (
@@ -62,6 +67,7 @@ export default async function SupplierInvoice({ params, searchParams }: { params
           <div style={{ flex: '0 0 auto' }}><button>Bokför betalning</button></div>
         </form>
       )}
+      <History companyId={company.id} entity="supplier_invoice" id={i.id} />
     </>
   );
 }

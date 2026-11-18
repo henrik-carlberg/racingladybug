@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function AnnualReport({ params, searchParams }: { params: Promise<{ cid: string; fyid: string }>; searchParams: SP }) {
   const { cid, fyid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'ledger' });
   const r = await annualReport(company.id, Number(fyid)).catch((e) => { if (e instanceof NotFoundError) notFound(); throw e; });
   const ab = company.company_type === 'AB';
   const b = `/c/${company.id}/bokslut/${fyid}`;

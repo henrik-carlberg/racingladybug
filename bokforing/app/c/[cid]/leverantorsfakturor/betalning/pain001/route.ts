@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 /** Betalfil (ISO 20022 pain.001) för attesterade leverantörsfakturor – laddas upp i internetbanken */
 export async function GET(_req: Request, { params }: { params: Promise<{ cid: string }> }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'payments' });
   const rows = await sql<{ id: number; supplier: string; bankgiro: string; plusgiro: string; bank_account: string; invoice_number: string; due: string; reference: string; total: number }[]>`
     SELECT i.id, s.name AS supplier, s.bankgiro, s.plusgiro, s.bank_account, i.invoice_number, to_char(i.due_date,'YYYY-MM-DD') AS due, i.payment_reference AS reference, (i.total - i.paid_amount)::bigint AS total
     FROM supplier_invoices i JOIN suppliers s ON s.id = i.supplier_id WHERE i.company_id = ${company.id} AND i.status = 'approved' ORDER BY i.due_date`;

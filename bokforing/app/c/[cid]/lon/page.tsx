@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function Payroll({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'payroll' });
   const runs = await sql<{ id: number; period: string; payment_date: string; status: string; n: number; gross: number; tax: number; fee: number; net: number }[]>`
     SELECT r.id, r.period, to_char(r.payment_date,'YYYY-MM-DD') AS payment_date, r.status, count(p.id)::int AS n,
       COALESCE(SUM(p.gross_cash),0)::bigint AS gross, COALESCE(SUM(p.tax),0)::bigint AS tax,

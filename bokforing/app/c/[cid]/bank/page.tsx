@@ -15,7 +15,7 @@ const CONN: Record<string, [string, string]> = {
 
 export default async function Bank({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company, role } = await requireCompany(cid);
+  const { company, role } = await requireCompany(cid, { perm: 'ledger' });
   const accounts = await listBankAccounts(company.id);
   const ledger = new Map((await sql<{ account_number: number; b: number }[]>`
     SELECT l.account_number, SUM(l.debit - l.credit)::bigint AS b FROM voucher_lines l JOIN vouchers v ON v.id = l.voucher_id

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { requireCompany } from '@/lib/server/auth';
+import { canView, type Permission } from '@/lib/permissions';
 import { ROLE_LABEL } from '@/lib/format';
 import { enabledModules } from '@/lib/modules/enabled';
 import { companyTodos, urgentCount } from '@/lib/services/todo';
@@ -8,7 +9,8 @@ import { deleteDemo } from '@/app/company-actions';
 
 export default async function CompanyLayout({ children, params }: { children: ReactNode; params: Promise<{ cid: string }> }) {
   const { cid } = await params;
-  const { company, role, user, billing } = await requireCompany(cid, { employee: true, allowLocked: true });
+  const { company, role, user, billing, permissions } = await requireCompany(cid, { employee: true, allowLocked: true });
+  const see = (p: Permission) => canView(role, permissions, p);
   const b = `/c/${company.id}`;
   const modules = await enabledModules(company.id);
   const banner = billing.state === 'trial' && (billing.daysLeft ?? 99) <= 14 ? `Provperioden slutar om ${billing.daysLeft} dagar.`
@@ -52,34 +54,35 @@ export default async function CompanyLayout({ children, params }: { children: Re
           <Link href={`${b}/kvitto`}>📷 Nytt kvitto</Link>
           <Link href={`${b}/deadlines`}>Deadlines</Link>
           <div className="group">Bokföring</div>
-          <Link href={`${b}/verifikationer`}>Verifikationer</Link>
-          <Link href={`${b}/verifikationer/ny`}>Ny verifikation</Link>
+          {see('ledger') && <Link href={`${b}/verifikationer`}>Verifikationer</Link>}
+          {see('ledger') && <Link href={`${b}/verifikationer/ny`}>Ny verifikation</Link>}
           <Link href={`${b}/konton`}>Kontoplan</Link>
           <div className="group">Försäljning</div>
-          <Link href={`${b}/fakturor`}>Kundfakturor</Link>
-          <Link href={`${b}/fakturor/rotrut`}>ROT och RUT</Link>
+          {see('invoicing') && <Link href={`${b}/fakturor`}>Kundfakturor</Link>}
+          {see('invoicing') && <Link href={`${b}/fakturor/rotrut`}>ROT och RUT</Link>}
           <Link href={`${b}/kassa`}>Kassa och e-handel</Link>
-          <Link href={`${b}/kunder`}>Kunder</Link>
+          {see('invoicing') && <Link href={`${b}/kunder`}>Kunder</Link>}
           <Link href={`${b}/tid`}>⏱ Tidrapportering</Link>
           <Link href={`${b}/uppdrag`}>Uppdrag &amp; timbanker</Link>
           <div className="group">Inköp</div>
-          <Link href={`${b}/leverantorsfakturor/inkorg`}>Inkorg för fakturor</Link>
-          <Link href={`${b}/leverantorsfakturor`}>Leverantörsfakturor</Link>
-          <Link href={`${b}/leverantorsfakturor/betalning`}>Betalningar</Link>
+          {see('purchasing') && <Link href={`${b}/leverantorsfakturor/inkorg`}>Inkorg för fakturor</Link>}
+          {see('purchasing') && <Link href={`${b}/leverantorsfakturor`}>Leverantörsfakturor</Link>}
+          {see('payments') && <Link href={`${b}/leverantorsfakturor/betalning`}>Betalningar</Link>}
           <Link href={`${b}/leverantorer`}>Leverantörer</Link>
           <div className="group">Bank</div>
-          <Link href={`${b}/bank`}>Bankkonton</Link>
-          <Link href={`${b}/bank/avstamning`}>Bankavstämning</Link>
-          <Link href={`${b}/bank/regler`}>Konteringsregler</Link>
+          {see('ledger') && <Link href={`${b}/bank`}>Bankkonton</Link>}
+          {see('ledger') && <Link href={`${b}/bank/avstamning`}>Bankavstämning</Link>}
+          {see('ledger') && <Link href={`${b}/bank/regler`}>Konteringsregler</Link>}
+          {see('ledger') && <Link href={`${b}/skattekonto`}>Skattekontot</Link>}
           <Link href={`${b}/fragor`}>Frågor och svar</Link>
           <div className="group">Lön</div>
-          <Link href={`${b}/lon`}>Lönekörningar</Link>
-          <Link href={`${b}/lon/anstallda`}>Anställda</Link>
-          <Link href={`${b}/lon/franvaro`}>Frånvaro och semester</Link>
+          {see('payroll') && <Link href={`${b}/lon`}>Lönekörningar</Link>}
+          {see('payroll') && <Link href={`${b}/lon/anstallda`}>Anställda</Link>}
+          {see('payroll') && <Link href={`${b}/lon/franvaro`}>Frånvaro och semester</Link>}
           <Link href={`${b}/schema`}>Schema</Link>
           <Link href={`${b}/personalliggare`}>Personalliggare</Link>
-          <Link href={`${b}/lon/skattetabeller`}>Skattetabeller</Link>
-          <Link href={`${b}/lon/bilforman`}>Bilförmån</Link>
+          {see('payroll') && <Link href={`${b}/lon/skattetabeller`}>Skattetabeller</Link>}
+          {see('payroll') && <Link href={`${b}/lon/bilforman`}>Bilförmån</Link>}
           <div className="group">Rapporter</div>
           <Link href={`${b}/rapporter`}>Resultat &amp; balans</Link>
           <Link href={`${b}/rapporter/manad`}>Månadsrapport</Link>
@@ -91,7 +94,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
           <Link href={`${b}/rapporter/dimensioner`}>Resultat per dimension</Link>
           <Link href={`${b}/anlaggningar`}>Anläggningsregister</Link>
           <Link href={`${b}/periodiseringar`}>Periodiseringar</Link>
-          <Link href={`${b}/bokslut`}>Bokslut &amp; deklaration</Link>
+          {see('ledger') && <Link href={`${b}/bokslut`}>Bokslut &amp; deklaration</Link>}
           {modules.map((m) => (
             <div key={m.id}>
               <div className="group">{m.name}</div>

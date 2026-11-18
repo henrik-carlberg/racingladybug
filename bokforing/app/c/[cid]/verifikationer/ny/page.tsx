@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function NewVoucher({ params }: { params: Promise<{ cid: string }> }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'ledger' });
   const accounts = await sql<{ number: number; name: string }[]>`SELECT number, name FROM accounts WHERE company_id = ${company.id} AND active ORDER BY number`;
   return (
     <>

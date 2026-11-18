@@ -5,7 +5,7 @@ import { userActor } from '@/lib/services/actor';
 import * as svc from '@/lib/services/suppliers';
 
 export async function registerSupplierInvoice(cid: number, fd: FormData) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'purchasing' }));
   let id = 0;
   await attempt(`/c/${cid}/leverantorsfakturor/ny`, async () => {
     const lines = [];
@@ -28,20 +28,35 @@ export async function registerSupplierInvoice(cid: number, fd: FormData) {
 }
 
 export async function approve(cid: number, id: number) {
-  const actor = userActor(await requireCompany(cid));
-  await attempt(`/c/${cid}/leverantorsfakturor/${id}`, () => svc.approveSupplierInvoice(actor, id));
-  done(`/c/${cid}/leverantorsfakturor/${id}`, 'Fakturan är attesterad för betalning');
+  const actor = userActor(await requireCompany(cid, { perm: 'attest' }));
+  let full = true;
+  await attempt(`/c/${cid}/leverantorsfakturor/${id}`, async () => { full = (await svc.approveSupplierInvoice(actor, id)).status === 'approved'; });
+  done(`/c/${cid}/leverantorsfakturor/${id}`, full ? 'Fakturan är attesterad för betalning' : 'Första attesten är gjord – fakturan behöver en attest av en annan person');
 }
 
 export async function markPaid(cid: number, id: number, fd: FormData) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'payments' }));
   await attempt(`/c/${cid}/leverantorsfakturor/${id}`, () => svc.paySupplierInvoices(actor, [id], { date: str(fd, 'date'), bank_account: str(fd, 'bank_account'), amount: amount(fd, 'amount') ?? undefined }));
   done(`/c/${cid}/leverantorsfakturor/${id}`, 'Betalningen är bokförd');
 }
 
 export async function markManyPaid(cid: number, fd: FormData) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'payments' }));
   const ids = fd.getAll('ids').map(Number).filter(Boolean);
   await attempt(`/c/${cid}/leverantorsfakturor/betalning`, () => svc.paySupplierInvoices(actor, ids, { date: str(fd, 'date'), bank_account: str(fd, 'bank_account') }));
   done(`/c/${cid}/leverantorsfakturor/betalning`, `${ids.length} betalning(ar) bokförda`);
+}
+
+export async function importPaymentNotification(cid: number, fd: FormData) {
+  const actor = userActor(await requireCompany(cid, { perm: 'payments' }));
+  const back = `/c/${cid}/leverantorsfakturor/betalning`;
+  let msg = '';
+  await attempt(back, async () => {
+    const f = await fileFrom(fd);
+    if (!f) throw new Error('Välj bankens fil (camt.054)');
+    if (f.data.length > 5 * 1024 * 1024) throw new Error('Filen är för stor');
+    const r = await svc.applyPaymentNotification(actor, f.data.toString('utf8'), Number(str(fd, 'bank_account')) || 1930);
+    msg = [r.paid.length && `${r.paid.length} betalningar bokförda`, r.rejected.length && `avvisade av banken: ${r.rejected.join(', ')}`, r.skipped.length && `hoppade över: ${r.skipped.join(', ')}`].filter(Boolean).join('. ') || 'Inga betalningar att bokföra';
+  });
+  done(back, msg);
 }

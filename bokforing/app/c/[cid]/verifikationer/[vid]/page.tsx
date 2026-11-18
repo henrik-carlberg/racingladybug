@@ -1,3 +1,4 @@
+import { History } from '@/components/History';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { sql } from '@/lib/db';
@@ -15,7 +16,7 @@ const SOURCE: Record<string, string> = {
 
 export default async function VoucherPage({ params, searchParams }: { params: Promise<{ cid: string; vid: string }>; searchParams: SP }) {
   const { cid, vid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'ledger' });
   const [v] = await sql<{ id: number; series: string; number: number; date: string; description: string; source_type: string; corrects_id: number | null; created_by: string; created_at: string }[]>`
     SELECT v.id, v.series, v.number, to_char(v.date,'YYYY-MM-DD') AS date, v.description, v.source_type, v.corrects_id,
       u.name AS created_by, to_char(v.created_at AT TIME ZONE 'Europe/Stockholm','YYYY-MM-DD HH24:MI') AS created_at
@@ -77,6 +78,7 @@ export default async function VoucherPage({ params, searchParams }: { params: Pr
           </form>
         </>
       )}
+      <History companyId={company.id} entity="voucher" id={v.id} />
     </>
   );
 }

@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function EditInvoice({ params }: { params: Promise<{ cid: string; iid: string }> }) {
   const { cid, iid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'invoicing' });
   const [inv] = await sql<{ id: number; status: string; customer_id: number; invoice_date: string; due_date: string; delivery_date: string; our_reference: string; your_reference: string; notes: string; advance: boolean; currency: string; exchange_rate: number; language: string }[]>`
     SELECT id, status, customer_id, to_char(invoice_date,'YYYY-MM-DD') AS invoice_date, to_char(due_date,'YYYY-MM-DD') AS due_date,
       delivery_date, our_reference, your_reference, notes, advance, currency, exchange_rate::float8 AS exchange_rate, language, reduction_type, buyer_pnr, property, brf_orgnr, apartment_no, work_type, reduction_max::int AS reduction_max FROM invoices WHERE id = ${Number(iid)} AND company_id = ${company.id}`;

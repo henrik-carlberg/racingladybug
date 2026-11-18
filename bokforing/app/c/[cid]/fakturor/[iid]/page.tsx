@@ -1,3 +1,4 @@
+import { History } from '@/components/History';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { sql } from '@/lib/db';
@@ -27,7 +28,7 @@ interface Inv {
 
 export default async function InvoicePage({ params, searchParams }: { params: Promise<{ cid: string; iid: string }>; searchParams: SP }) {
   const { cid, iid } = await params;
-  const { company: co } = await requireCompany(cid);
+  const { company: co } = await requireCompany(cid, { perm: 'invoicing' });
   const [inv] = await sql<Inv[]>`
     SELECT i.*, to_char(i.invoice_date,'YYYY-MM-DD') AS invoice_date, to_char(i.due_date,'YYYY-MM-DD') AS due_date,
       to_char(i.paid_date,'YYYY-MM-DD') AS paid_date,
@@ -136,6 +137,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
       </div>
 
       <InvoiceDoc inv={inv} lines={lines} co={co} orig={orig} isCredit={isCredit} time={time} />
+      <History companyId={co.id} entity="invoice" id={inv.id} />
     </>
   );
 }

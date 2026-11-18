@@ -11,7 +11,7 @@ export type FormState = { error?: string } | undefined;
 
 /** Sparar ett fakturautkast (nytt eller befintligt) */
 export async function saveDraft(cid: number, invoiceId: number | null, _prev: FormState, fd: FormData): Promise<FormState> {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'invoicing' }));
   let id = invoiceId ?? 0;
   try {
     const raw = JSON.parse(str(fd, 'lines') || '[]') as (Record<string, string> & { labor?: boolean })[];
@@ -36,33 +36,33 @@ export async function saveDraft(cid: number, invoiceId: number | null, _prev: Fo
 }
 
 export async function bookInvoice(cid: number, invoiceId: number) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'invoicing' }));
   await attempt(`/c/${cid}/fakturor/${invoiceId}`, () => svc.bookInvoice(actor, invoiceId));
   done(`/c/${cid}/fakturor/${invoiceId}`, 'Fakturan är bokförd och klar att skicka');
 }
 
 export async function deleteDraft(cid: number, invoiceId: number) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'invoicing' }));
   await attempt(`/c/${cid}/fakturor/${invoiceId}`, () => svc.deleteDraft(actor, invoiceId));
   done(`/c/${cid}/fakturor`, 'Utkastet är borttaget');
 }
 
 export async function registerPayment(cid: number, invoiceId: number, fd: FormData) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'invoicing' }));
   await attempt(`/c/${cid}/fakturor/${invoiceId}`, async () =>
     svc.registerPayment(actor, invoiceId, { date: str(fd, 'date'), amount: amount(fd, 'amount'), bank_account: str(fd, 'bank_account') }));
   done(`/c/${cid}/fakturor/${invoiceId}`, 'Inbetalningen är bokförd');
 }
 
 export async function creditInvoice(cid: number, invoiceId: number, fd: FormData) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'invoicing' }));
   let creditId = 0;
   await attempt(`/c/${cid}/fakturor/${invoiceId}`, async () => { creditId = (await svc.creditInvoice(actor, invoiceId, { date: str(fd, 'date') })).id; });
   done(`/c/${cid}/fakturor/${creditId}`, 'Kreditfakturan är bokförd');
 }
 
 export async function sendInvoice(cid: number, invoiceId: number, fd: FormData) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'invoicing' }));
   let msg = '';
   await attempt(`/c/${cid}/fakturor/${invoiceId}`, async () => {
     const r = await sendSvc(actor, invoiceId, { to: str(fd, 'to'), message: str(fd, 'message') }, await requestOrigin());
@@ -72,7 +72,7 @@ export async function sendInvoice(cid: number, invoiceId: number, fd: FormData) 
 }
 
 export async function settleAdvance(cid: number, invoiceId: number, advanceId: number) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'invoicing' }));
   await attempt(`/c/${cid}/fakturor/${invoiceId}`, () => svc.settleAdvance(actor, invoiceId, advanceId));
   done(`/c/${cid}/fakturor/${invoiceId}`, 'Förskottet är avräknat på fakturan');
 }

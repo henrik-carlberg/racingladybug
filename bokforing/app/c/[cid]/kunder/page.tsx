@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function Customers({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'invoicing' });
   const sp = await searchParams;
   const page = pageOf(sp);
   const q = typeof sp.q === 'string' ? sp.q.trim() : '';

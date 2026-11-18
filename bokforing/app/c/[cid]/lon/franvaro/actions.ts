@@ -18,7 +18,7 @@ export async function register(cid: number, back: string, fd: FormData) {
 }
 
 export async function decide(cid: number, id: number, approve: boolean) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'payroll' }));
   await attempt(`/c/${cid}/lon/franvaro`, () => svc.decide(actor, id, approve));
   done(`/c/${cid}/lon/franvaro`, approve ? 'Ansökan är godkänd' : 'Ansökan är avslagen');
 }

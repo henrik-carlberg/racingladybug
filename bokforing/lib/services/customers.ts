@@ -1,7 +1,7 @@
 import 'server-only';
 import { sql } from '@/lib/db';
 import { NotFoundError, ValidationError } from '@/lib/errors';
-import { auditBy } from '@/lib/server/audit';
+import { auditBy, changes } from '@/lib/server/audit';
 import { emit } from '@/lib/server/events';
 import type { Actor } from './actor';
 import { bool, has, list, optInt, str, type Page } from './input';
@@ -66,7 +66,7 @@ export async function updateCustomer(actor: Actor, id: number, input: Record<str
     if (merged.reverse_charge && !merged.vat_number) throw new ValidationError('Omvänd skattskyldighet kräver kundens momsregistreringsnummer');
     if (Object.keys(f).length) await tx`UPDATE customers SET ${tx(f)} WHERE id = ${id}`;
     const [c] = await tx<CustomerOut[]>`SELECT ${COLS()} FROM customers WHERE id = ${id}`;
-    await auditBy(tx, actor, 'update', 'customer', id, Object.keys(f));
+    await auditBy(tx, actor, 'update', 'customer', id, { changes: changes(cur as unknown as Record<string, unknown>, f) });
     await emit(tx, actor.companyId, 'customer.updated', c);
     return c;
   });

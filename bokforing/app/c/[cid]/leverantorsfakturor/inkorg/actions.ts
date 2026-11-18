@@ -8,7 +8,7 @@ import * as svc from '@/lib/services/inbox';
 const base = (cid: number) => `/c/${cid}/leverantorsfakturor/inkorg`;
 
 export async function upload(cid: number, fd: FormData) {
-  const ctx = await requireCompany(cid);
+  const ctx = await requireCompany(cid, { perm: 'purchasing' });
   const ids: number[] = [];
   await attempt(base(cid), async () => {
     const files = fd.getAll('files').filter((f): f is File => f instanceof File && f.size > 0);
@@ -23,7 +23,7 @@ export async function upload(cid: number, fd: FormData) {
 }
 
 export async function register(cid: number, id: number, fd: FormData) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'purchasing' }));
   let siId = 0;
   await attempt(`${base(cid)}/${id}`, async () => {
     siId = (await svc.registerFromInbox(actor, id, {
@@ -38,25 +38,25 @@ export async function register(cid: number, id: number, fd: FormData) {
 }
 
 export async function reject(cid: number, id: number) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'purchasing' }));
   await attempt(`${base(cid)}/${id}`, () => svc.rejectDocument(actor, id));
   done(base(cid), 'Dokumentet är borttaget ur inkorgen');
 }
 
 export async function reopen(cid: number, id: number) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'purchasing' }));
   await attempt(base(cid), () => svc.reopenDocument(actor, id));
   done(`${base(cid)}/${id}`);
 }
 
 export async function retry(cid: number, id: number) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'purchasing' }));
   await attempt(`${base(cid)}/${id}`, () => svc.retryDocument(actor, id));
   done(`${base(cid)}/${id}`, 'Fakturan är tolkad igen');
 }
 
 export async function rotateAddress(cid: number) {
-  const actor = userActor(await requireCompany(cid, { owner: true }));
+  const actor = userActor(await requireCompany(cid, { owner: true, perm: 'purchasing' }));
   await attempt(base(cid), () => svc.newInboxAddress(actor));
   done(base(cid), 'Inkorgen har fått en ny adress. Den gamla tar inte längre emot fakturor.');
 }

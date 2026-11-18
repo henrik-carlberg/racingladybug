@@ -9,7 +9,7 @@ import * as bank from '@/lib/services/bank';
 const back = (cid: number) => `/c/${cid}/bank`;
 
 export async function connectBank(cid: number, fd: FormData) {
-  const actor = userActor(await requireCompany(cid, { owner: true }));
+  const actor = userActor(await requireCompany(cid, { owner: true, perm: 'ledger' }));
   let url = '';
   await attempt(back(cid), async () => {
     url = await bank.startConnection(actor, { aspsp: str(fd, 'aspsp'), country: 'SE', psu_type: str(fd, 'psu_type') }, `${await requestOrigin()}/bank/callback`);
@@ -18,32 +18,32 @@ export async function connectBank(cid: number, fd: FormData) {
 }
 
 export async function disconnectBank(cid: number, connectionId: number) {
-  const actor = userActor(await requireCompany(cid, { owner: true }));
+  const actor = userActor(await requireCompany(cid, { owner: true, perm: 'ledger' }));
   await attempt(back(cid), () => bank.disconnect(actor, connectionId));
   done(back(cid), 'Banken är bortkopplad');
 }
 
 export async function addManualAccount(cid: number, fd: FormData) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'ledger' }));
   await attempt(back(cid), () => bank.createManualAccount(actor, { name: str(fd, 'name'), iban: str(fd, 'iban'), ledger_account: str(fd, 'ledger_account') }));
   done(back(cid), 'Bankkontot är tillagt');
 }
 
 export async function setLedger(cid: number, accountId: number, fd: FormData) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'ledger' }));
   await attempt(back(cid), () => bank.updateAccountLedger(actor, accountId, Number(str(fd, 'ledger_account'))));
   done(back(cid), 'Bokföringskontot är ändrat');
 }
 
 export async function sync(cid: number, accountId: number) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'ledger' }));
   let r = { imported: 0, duplicates: 0 };
   await attempt(back(cid), async () => { r = await bank.syncAccount(actor, accountId); });
   done(`/c/${cid}/bank/avstamning`, `${r.imported} nya transaktioner hämtade från banken`);
 }
 
 export async function importStatement(cid: number, accountId: number, fd: FormData) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'ledger' }));
   let r = { imported: 0, duplicates: 0 };
   await attempt(back(cid), async () => {
     const f = fd.get('file');
@@ -59,7 +59,7 @@ export async function importStatement(cid: number, accountId: number, fd: FormDa
 }
 
 export async function reconcileTx(cid: number, txId: number, fd: FormData) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'ledger' }));
   const ret = `/c/${cid}/bank/avstamning${str(fd, 'qs') ? `?${str(fd, 'qs')}` : ''}`;
   await attempt(ret, () => bank.reconcile(actor, txId, {
     type: str(fd, 'type'), id: str(fd, 'id') || undefined, account: str(fd, 'account') || undefined,
@@ -70,20 +70,20 @@ export async function reconcileTx(cid: number, txId: number, fd: FormData) {
 }
 
 export async function reopenTx(cid: number, txId: number) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'ledger' }));
   await attempt(`/c/${cid}/bank/avstamning?status=matched`, () => bank.reopen(actor, txId));
   done(`/c/${cid}/bank/avstamning`, 'Transaktionen är öppnad igen');
 }
 
 export async function autoMatch(cid: number) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'ledger' }));
   let n = 0;
   await attempt(`/c/${cid}/bank/avstamning`, async () => { n = await bank.autoMatch(actor); });
   done(`/c/${cid}/bank/avstamning`, `${n} transaktioner stämdes av automatiskt`);
 }
 
 export async function bookAllSuggestions(cid: number) {
-  const actor = userActor(await requireCompany(cid));
+  const actor = userActor(await requireCompany(cid, { perm: 'ledger' }));
   let n = 0;
   await attempt(`/c/${cid}/bank/avstamning`, async () => { n = await bank.bookSuggestions(actor, { onlyAuto: false }); });
   done(`/c/${cid}/bank/avstamning`, `${n} transaktioner bokfördes enligt förslagen`);

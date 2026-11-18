@@ -5,6 +5,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { sql } from '@/lib/db';
 import { access, billingEnforced, type Access } from '@/lib/billing';
+import { canView, hasPermission, PERMISSIONS, type Permission } from '@/lib/permissions';
 
 const COOKIE = 'bok_session';
 const SESSION_DAYS = 14;
@@ -15,7 +16,7 @@ export interface Company {
   id: number; name: string; orgnr: string; company_type: 'AB' | 'EF'; vat_period: 'month' | 'quarter' | 'year';
   address: string; postal_code: string; city: string; email: string; phone: string; vat_number: string;
   bankgiro: string; plusgiro: string; iban: string; f_skatt: boolean; invoice_terms: number; late_interest: string;
-  locked_until: string | null; next_invoice_no: number;
+  locked_until: string | null; next_invoice_no: number; attest_threshold: number | null; attest_not_registrant: boolean;
   accounting_method: 'invoice' | 'cash'; prelskatt_from: string | null; bic: string; swish_number: string;
 }
 
@@ -60,7 +61,7 @@ export async function requireUser(): Promise<User> {
   return u;
 }
 
-export interface Ctx { user: User; company: Company; role: Role; billing: Access; employeeId: number | null }
+export interface Ctx { user: User; company: Company; role: Role; billing: Access; employeeId: number | null; permissions: Permission[] | null; can: (p: Permission) => boolean }
 
 /** Åtkomst enligt abonnemanget (alltid öppet om betalning inte är påslagen) */
 export async function companyAccess(companyId: number): Promise<Access> {
@@ -74,36 +75,58 @@ export async function companyAccess(companyId: number): Promise<Access> {
 }
 
 /**
+ * Är anropet en ändring? Serveråtgärder skickas med fetch (header Next-Action) eller, utan JavaScript,
+ * som vanligt formulär (multipart/urlencoded POST utan header). En sidvisning (GET) har varken header eller body.
+ */
+async function isMutation() {
+  const h = await headers();
+  return !!(h.get('next-action') || h.get('content-type') || (h.get('content-length') && h.get('content-length') !== '0'));
+}
+
+/** Nekad åtgärd: tillbaka till sidan man kom från, med felmeddelandet */
+async function denyAction(companyId: number, msg: string): Promise<never> {
+  const ref = (await headers()).get('referer');
+  let back = `/c/${companyId}`;
+  try { const u = new URL(ref ?? ''); if (u.pathname.startsWith(`/c/${companyId}`)) back = u.pathname; } catch { /* ingen referer */ }
+  redirect(`${back}?error=${encodeURIComponent(msg)}`);
+}
+
+/**
  * Kräver inloggning och medlemskap i bolaget.
  * - owner: bara ägaren
  * - employee: sidan är öppen även för anställda (självservice); annars skickas de till Min sida
  * - allowLocked: sidan fungerar även när abonnemanget har gått ut (abonnemang, export)
  */
-export async function requireCompany(companyId: number | string, opts: { owner?: boolean; employee?: boolean; allowLocked?: boolean } = {}): Promise<Ctx> {
+export async function requireCompany(companyId: number | string, opts: { owner?: boolean; employee?: boolean; allowLocked?: boolean; perm?: Permission } = {}): Promise<Ctx> {
   const user = await requireUser();
   const id = Number(companyId);
   if (!Number.isInteger(id)) notFound();
   // Medlemskap i bolaget, eller åtkomst via en redovisningsbyrå som bolaget har gett behörighet (roll redovisningskonsult)
-  const rows = await sql<(Company & { role: Role; employee_id: number | null })[]>`
+  const rows = await sql<(Company & { role: Role; employee_id: number | null; permissions: Permission[] | null })[]>`
     SELECT c.*, to_char(c.locked_until, 'YYYY-MM-DD') AS locked_until,
       COALESCE((SELECT m.role FROM memberships m WHERE m.company_id = c.id AND m.user_id = ${user.id}),
         (SELECT 'accountant' FROM firm_clients fc JOIN firm_members fm ON fm.firm_id = fc.firm_id WHERE fc.company_id = c.id AND fm.user_id = ${user.id} LIMIT 1)) AS role,
-      (SELECT e.id FROM employees e WHERE e.company_id = c.id AND e.user_id = ${user.id} LIMIT 1) AS employee_id
+      (SELECT e.id FROM employees e WHERE e.company_id = c.id AND e.user_id = ${user.id} LIMIT 1) AS employee_id,
+      (SELECT m.permissions FROM memberships m WHERE m.company_id = c.id AND m.user_id = ${user.id}) AS permissions
     FROM companies c WHERE c.id = ${id}`;
   const row = rows[0];
   if (!row || !row.role) notFound();
-  const { role, employee_id, ...company } = row;
+  const { role, employee_id, permissions, ...company } = row;
   if (role === 'employee' && !opts.employee) redirect(`/c/${id}/mitt`);
   if (opts.owner && role !== 'owner') throw new Error('Endast ägare får göra detta');
-  // Revisorn får läsa allt men inte ändra något: alla serveråtgärder (formulär, knappar) nekas
-  if (role === 'auditor' && (await headers()).get('next-action')) {
-    const msg = 'Revisorn har läsbehörighet och kan inte ändra i bokföringen';
-    const ref = (await headers()).get('referer');
-    let back = `/c/${id}`;
-    try { const u = new URL(ref ?? ''); if (u.pathname.startsWith(`/c/${id}`)) back = u.pathname; } catch { /* ingen referer */ }
-    redirect(`${back}?error=${encodeURIComponent(msg)}`);
+  // Behörighet per användare: åtgärder kräver behörigheten, sidor kräver läsbehörighet
+  if (opts.perm) {
+    const isAction = await isMutation();
+    const ok = isAction ? hasPermission(role, permissions, opts.perm) || role === 'auditor' : canView(role, permissions, opts.perm);
+    if (!ok) {
+      if (isAction) await denyAction(id, `Du saknar behörighet: ${PERMISSIONS[opts.perm]}`);
+      redirect(`/c/${id}?error=${encodeURIComponent(`Du saknar behörighet: ${PERMISSIONS[opts.perm]}`)}`);
+    }
   }
+  // Revisorn får läsa allt men inte ändra något: alla serveråtgärder (formulär, knappar) nekas
+  if (role === 'auditor' && (await isMutation())) await denyAction(id, 'Revisorn har läsbehörighet och kan inte ändra i bokföringen');
+
   const billing = await companyAccess(id);
   if (billing.state === 'locked' && !opts.allowLocked) redirect(`/c/${id}/abonnemang`);
-  return { user, company: company as Company, role, billing, employeeId: employee_id };
+  return { user, company: company as Company, role, billing, employeeId: employee_id, permissions, can: (p: Permission) => hasPermission(role, permissions, p) };
 }

@@ -1,3 +1,4 @@
+import { History } from '@/components/History';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { sql } from '@/lib/db';
@@ -10,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function Employee({ params, searchParams }: { params: Promise<{ cid: string; eid: string }>; searchParams: SP }) {
   const { cid, eid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'payroll' });
   const [e] = await sql<EmployeeRow[]>`
     SELECT *, to_char(employment_start,'YYYY-MM-DD') AS employment_start, to_char(employment_end,'YYYY-MM-DD') AS employment_end
     FROM employees WHERE id = ${Number(eid)} AND company_id = ${company.id}`;
@@ -24,6 +25,7 @@ export default async function Employee({ params, searchParams }: { params: Promi
         <EmployeeFields e={e} />
         <div><button>Spara</button></div>
       </form>
+      <History companyId={company.id} entity="employee" id={e.id} />
     </>
   );
 }

@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function Invoices({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'invoicing' });
   const sp = await searchParams;
   const status = String(sp.status ?? '');
   const page = pageOf(sp);

@@ -3,15 +3,16 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 /** Filtyper som kan tolkas och visas */
 export const INBOX_TYPES: Record<string, string> = {
-  'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
+  'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'application/xml': 'xml',
 };
 export const INBOX_MAX_BYTES = 10 * 1024 * 1024;
 
 export function mimeFor(filename: string, given: string): string {
   const g = given.toLowerCase().split(';')[0].trim();
   if (INBOX_TYPES[g]) return g;
+  if (g === 'text/xml') return 'application/xml';
   const ext = filename.toLowerCase().split('.').pop() ?? '';
-  return { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' }[ext] ?? g;
+  return { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', xml: 'application/xml' }[ext] ?? g;
 }
 
 /** Slumpad del av bolagets inkorgsadress, t.ex. "f-k3x9q2m7pa" */

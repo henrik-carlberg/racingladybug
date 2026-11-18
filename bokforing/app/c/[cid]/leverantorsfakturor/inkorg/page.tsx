@@ -14,7 +14,7 @@ const STATUS: Record<string, [string, string]> = {
 
 export default async function Inbox({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company, role } = await requireCompany(cid);
+  const { company, role } = await requireCompany(cid, { perm: 'purchasing' });
   const [address, open, handled] = await Promise.all([companyInboxAddress(company.id), listInbox(company.id, { open: true }), listInbox(company.id)]);
   const b = `/c/${company.id}/leverantorsfakturor`;
   const ai = invoiceAiEnabled();
@@ -29,7 +29,7 @@ export default async function Inbox({ params, searchParams }: { params: Promise<
             {role === 'owner' && <form action={rotateAddress.bind(null, company.id)} style={{ display: 'inline', marginLeft: '.5rem' }}><button className="link small">Byt adress (vid skräppost)</button></form>}</div>
         ) : <div className="small muted">E-postmottagning är inte uppsatt (INBOX_DOMAIN och Resend). Du kan ladda upp fakturor här så länge.</div>}
         <form action={upload.bind(null, company.id)} className="row" style={{ alignItems: 'end' }}>
-          <label style={{ flex: '3 1 300px' }}>Ladda upp fakturor (PDF, JPG, PNG)<input type="file" name="files" multiple accept="application/pdf,image/jpeg,image/png,image/webp" required /></label>
+          <label style={{ flex: '3 1 300px' }}>Ladda upp fakturor (PDF, JPG, PNG eller e-faktura XML)<input type="file" name="files" multiple accept="application/pdf,image/jpeg,image/png,image/webp,.xml,application/xml,text/xml" required /></label>
           <div style={{ flex: '0 0 auto' }}><button>Ladda upp</button></div>
         </form>
         <p className="small muted" style={{ margin: 0 }}>{ai ? 'Fakturorna läses av automatiskt (leverantör, belopp, moms, OCR, förfallodag och konto). Du granskar och godkänner innan något bokförs.'

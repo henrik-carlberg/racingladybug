@@ -19,7 +19,7 @@ const fmt = (o: number) => (o / 100).toFixed(2).replace('.', ',');
 
 export default async function Run({ params, searchParams }: { params: Promise<{ cid: string; rid: string }>; searchParams: SP }) {
   const { cid, rid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'payroll' });
   const [run] = await sql<{ id: number; period: string; payment_date: string; status: string; voucher_id: number | null; booked_by: string | null }[]>`
     SELECT r.id, r.period, to_char(r.payment_date,'YYYY-MM-DD') AS payment_date, r.status, r.voucher_id, u.name AS booked_by
     FROM payroll_runs r LEFT JOIN users u ON u.id = r.booked_by WHERE r.id = ${Number(rid)} AND r.company_id = ${company.id}`;

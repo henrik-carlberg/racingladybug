@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function Vouchers({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid);
+  const { company } = await requireCompany(cid, { perm: 'ledger' });
   const sp = await searchParams;
   const years = await fiscalYears(company.id);
   const fy = years.find((y) => String(y.id) === sp.fy) ?? years[0];

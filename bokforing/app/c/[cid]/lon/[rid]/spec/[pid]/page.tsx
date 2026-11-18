@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function Spec({ params }: { params: Promise<{ cid: string; rid: string; pid: string }> }) {
   const { cid, rid, pid } = await params;
-  const { company: co } = await requireCompany(cid);
+  const { company: co } = await requireCompany(cid, { perm: 'payroll' });
   const [p] = await sql<{ items: PayItem[]; gross_cash: number; benefits: number; tax: number; net_pay: number; employer_fee: number;
     name: string; personal_number: string; address: string; postal_code: string; city: string; bank: string; period: string; payment_date: string; status: string }[]>`
     SELECT p.items, p.gross_cash, p.benefits, p.tax, p.net_pay, p.employer_fee, e.first_name || ' ' || e.last_name AS name, e.personal_number,
