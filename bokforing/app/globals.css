@@ -90,3 +90,19 @@ details.help > summary::-webkit-details-marker { display: none; }
 
 /* Innehållet får inte tänjas ut av breda tavlor/tabeller – de scrollar själva */
 main { min-width: 0; }
+
+/* Diagram: färger per roll (validerade mot ljus och mörk yta) */
+:root { --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --viz-grid: #e8eaee; --viz-axis: #9aa3b2; }
+@media (prefers-color-scheme: dark) { :root { --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --viz-grid: #2a313c; --viz-axis: #6b7587; } }
+.viz { width: 100%; height: auto; display: block; overflow: visible; }
+.viz text { fill: var(--muted); font-size: 11px; }
+.viz .grid { stroke: var(--viz-grid); stroke-width: 1; }
+.viz .base { stroke: var(--viz-axis); stroke-width: 1; }
+.viz .hit { fill: transparent; }
+.viz .hit:hover { fill: var(--row); }
+.viz-legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .8rem; color: var(--muted); margin: .25rem 0 .5rem; }
+.viz-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: .35rem; vertical-align: -1px; }
+.viz-legend i.line { height: 2px; width: 14px; border-radius: 1px; vertical-align: 3px; }
+.viz-legend i.dash { height: 0; width: 18px; border-top: 2px dashed var(--series-1); background: none; vertical-align: 3px; }
+.kpi .value { font-size: 1.6rem; font-weight: 700; }
+.kpi .status { font-size: .8rem; }

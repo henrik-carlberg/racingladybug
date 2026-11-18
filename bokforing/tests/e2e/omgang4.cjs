@@ -179,6 +179,23 @@ async function accept(browser, link, name, password) {
   assert(t.includes('Saldo 2026-11-14') && t.includes('Skillnad 5 000,00'), 'saldo jämförs (inbetalningen stäms av via banken): ' + t.slice(0, 900));
   log('skattekontot läses in, konteras och stäms av mot 1630');
 
+  // ================= Del 3: överblick =================
+  await owner.goto(B + '/rapporter/panel');
+  t = await text(owner);
+  assert(t.includes('Soliditet') && t.includes('Kassalikviditet') && t.includes('Kundernas betaltid') && (await owner.locator('svg.viz').count()) >= 2, 'instrumentpanel: ' + t.slice(0, 600));
+  log('instrumentpanel med nyckeltal och diagram');
+  await owner.goto(B + '/rapporter/budget?year=2027');
+  await owner.click('button:has-text("Fyll från 2026")');
+  await waitMsg(owner, 'Budgeten är ifylld från 2026 års utfall');
+  await owner.goto(B + '/rapporter/budget?year=2026');
+  await owner.fill('input[name=new_account]', '6110');
+  await owner.fill('input[name=new_amount]', '12000');
+  await owner.click('button:has-text("Spara budget")');
+  await waitMsg(owner, 'Budgeten är sparad');
+  t = await text(owner);
+  assert(t.includes('Budget mot utfall hittills i år') && t.includes('6110'), 'budget mot utfall: ' + t.slice(0, 900));
+  log('budget per konto och månad, förifylld från förra året, jämförd med utfallet');
+
   await browser.close();
   console.log('Omgång 4: alla steg gick igenom');
 })().catch((e) => { console.error('✘', e.message); process.exit(1); });

@@ -78,3 +78,21 @@ describe('camt.054', () => {
     expect(p[0].creditor).toBe('Hyresvärden AB');
   });
 });
+
+import { kpis, payBins } from '@/lib/kpi';
+describe('nyckeltal', () => {
+  it('soliditet, kassalikviditet och marginaler', () => {
+    const balance = new Map([[1220, 20000000], [1510, 30000000], [1930, 50000000], [2081, -5000000], [2091, -25000000], [2440, -40000000], [2150, -10000000]]);
+    const result = new Map([[3001, -100000000], [4010, 40000000], [5010, 20000000], [7210, 30000000], [8310, -1000000]]);
+    const k = Object.fromEntries(kpis({ balance, result, avgPayDays: 28 }).map((x) => [x.key, x]));
+    expect(k.solidity.value).toBe(Math.round(((30000000 + 7940000) / 100000000) * 1000) / 10);
+    expect(k.quick.value).toBe(200);
+    expect(k.quick.status).toBe('good');
+    expect(k.gross.value).toBe(60);
+    expect(k.operating.value).toBe(10);
+    expect(k.paydays.status).toBe('good');
+  });
+  it('betaltider i intervall', () => {
+    expect(payBins([3, 10, 11, 30, 31, 90]).map((b) => b.count)).toEqual([2, 1, 1, 1, 0, 1]);
+  });
+});
