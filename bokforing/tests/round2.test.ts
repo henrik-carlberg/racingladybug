@@ -72,3 +72,25 @@ describe('kvittoavläsning', () => {
     expect(g).toEqual({ date: '', total: null, vatRate: null, category: '', description: '', merchant: '' });
   });
 });
+
+import { buildDigest, digestDue } from '@/lib/digest';
+describe('e-postsammandrag', () => {
+  const mon = new Date('2026-11-16T05:45:00Z'), tue = new Date('2026-11-17T05:45:00Z'), sat = new Date('2026-11-21T05:45:00Z');
+  it('skickar veckovis på måndagar och dagligen på vardagar', () => {
+    expect(digestDue('weekly', null, mon)).toBe(true);
+    expect(digestDue('weekly', null, tue)).toBe(false);
+    expect(digestDue('weekly', new Date('2026-11-16T05:45:00Z'), new Date('2026-11-16T12:00:00Z'))).toBe(false);
+    expect(digestDue('daily', null, tue)).toBe(true);
+    expect(digestDue('daily', null, sat)).toBe(false);
+    expect(digestDue('off', null, mon)).toBe(false);
+  });
+  it('bygger ett sammandrag bara när något brådskar', () => {
+    const base = { name: 'Anna Ek', origin: 'https://app.test', unsubscribeUrl: 'https://app.test/avregistrera/x', freq: 'weekly' as const };
+    expect(buildDigest({ ...base, companies: [{ id: 1, name: 'AB', todos: [{ title: 'Utkast', count: 2, href: '/c/1/fakturor', level: 'info' }] }] })).toBeNull();
+    const m = buildDigest({ ...base, companies: [{ id: 1, name: 'Ek AB', todos: [{ title: 'Förfallna kundfakturor', count: 3, href: '/c/1/fakturor', level: 'danger' }] }] })!;
+    expect(m.subject).toBe('3 saker väntar i Ek AB');
+    expect(m.text).toContain('Hej Anna!');
+    expect(m.text).toContain('https://app.test/c/1/fakturor');
+    expect(m.text).toContain('/avregistrera/x');
+  });
+});

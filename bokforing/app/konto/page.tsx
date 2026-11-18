@@ -11,12 +11,14 @@ import { AddPasskey } from '@/components/Passkeys';
 import { changePassword, removePasskey } from '../passkey-actions';
 import { logout } from '../auth-actions';
 import { removeAccount } from '../gdpr-actions';
+import { saveDigest } from '../digest-actions';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Account({ searchParams }: { searchParams: SP }) {
   const user = await requireUser();
   const passkeys = await listPasskeys(user.id);
+  const [{ digest }] = await sql<{ digest: string }[]>`SELECT digest FROM users WHERE id = ${user.id}`;
   const [mfa] = await sql<{ secret: string | null; on: string | null; codes: number }[]>`
     SELECT totp_secret AS secret, to_char(totp_enabled_at,'YYYY-MM-DD') AS on, cardinality(backup_codes)::int AS codes FROM users WHERE id = ${user.id}`;
   const setupQr = mfa.secret && !mfa.on ? await QRCode.toString(otpauthUri(mfa.secret, user.email), { type: 'svg', margin: 1, width: 180 }) : null;
@@ -90,6 +92,15 @@ export default async function Account({ searchParams }: { searchParams: SP }) {
       ) : (
         <form action={startTotp}><button className="secondary">Slå på tvåstegsverifiering</button></form>
       )}
+
+      <h2 id="sammandrag">Sammandrag via e-post</h2>
+      <form action={saveDigest} className="card row" style={{ alignItems: 'end' }}>
+        <label>Skicka det som väntar i mina bolag<select name="digest" defaultValue={digest}>
+          <option value="weekly">Varje måndag</option><option value="daily">Varje vardagsmorgon</option><option value="off">Aldrig</option>
+        </select></label>
+        <div style={{ flex: '0 0 auto' }}><button className="secondary">Spara</button></div>
+        <span className="small muted">Förfallna fakturor, betalningar, attester, frågor från byrån m.m. Skickas bara när något väntar.</span>
+      </form>
 
       <h2>Byt lösenord</h2>
       <form action={changePassword} className="card stack">
