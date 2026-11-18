@@ -22,11 +22,11 @@ export function InvoiceForm({ action, customers, accounts, initial }: {
   const [state, formAction, pending] = useActionState(action, undefined);
   const [customerId, setCustomerId] = useState(String(initial.customer_id ?? ''));
   const rc = customers.find((c) => String(c.id) === customerId)?.reverse_charge ?? false;
+  const [advance, setAdvance] = useState(!!initial.advance);
   const salesAcc = (vat: number) => (advance ? 2420 : defaultSalesAccount(vat, rc));
   const blank = (): Row => ({ description: '', quantity: '1', unit: 'st', price: '', vat: '25', account: String(salesAcc(25)) });
   const [rows, setRows] = useState<Row[]>(initial.lines?.length ? initial.lines : [blank()]);
   const [rr, setRr] = useState<string>(initial.reduction_type ?? '');
-  const [advance, setAdvance] = useState(!!initial.advance);
   const [rrMax, setRrMax] = useState(initial.reduction_max != null ? (initial.reduction_max / 100).toFixed(2).replace('.', ',') : '');
   const set = (i: number, k: keyof Row, v: string | boolean) =>
     setRows((r) => r.map((x, j) => {

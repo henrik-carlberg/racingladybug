@@ -129,7 +129,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
         {(inv.voucher_id || inv.payment_voucher_id) && (
           <p className="small">
             {inv.voucher_id && <>Bokförd: <Link href={`${b}/verifikationer/${inv.voucher_id}`}>verifikation</Link>. </>}
-            {inv.payment_voucher_id && <>Betald {inv.paid_date}: <Link href={`${b}/verifikationer/${inv.payment_voucher_id}`}>verifikation</Link>.</>}
+            {inv.payment_voucher_id && inv.status === 'paid' && <>Betald {inv.paid_date}: <Link href={`${b}/verifikationer/${inv.payment_voucher_id}`}>verifikation</Link>.</>}
           </p>
         )}
       </div>
