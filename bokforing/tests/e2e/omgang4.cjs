@@ -124,6 +124,61 @@ async function accept(browser, link, name, password) {
   assert(t.includes('ort: – → Umeå') && t.includes('Kim Fakturerare'), 'kundhistorik: ' + t.slice(-600));
   log('ändringshistorik visar vem som ändrade vad');
 
+  // ================= Del 2: automatisering =================
+  // ---- Bankens avisering (camt.054) ----
+  await owner.goto(B + '/leverantorsfakturor/ny');
+  await owner.selectOption('select[name=supplier_id]', { label: 'Hyresvärden AB' });
+  await owner.fill('input[name=invoice_number]', 'H-CAMT-1');
+  await owner.fill('input[name=invoice_date]', '2026-11-12');
+  await owner.fill('input[name=due_date]', '2026-11-30');
+  await owner.fill('input[name=total]', '1250');
+  await owner.click('button:has-text("25 % moms")');
+  await owner.click('button:has-text("Registrera och bokför")');
+  await owner.waitForURL(/leverantorsfakturor\/\d+\?ok/);
+  const siId = owner.url().match(/leverantorsfakturor\/(\d+)/)[1];
+  await att.goto(`${B}/leverantorsfakturor/${siId}`);
+  await att.click('button:has-text("Attestera")');
+  await waitMsg(att, 'attesterad för betalning');
+  const camt = `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.054.001.02"><BkToCstmrDbtCdtNtfctn><Ntfctn><Ntry><Amt Ccy="SEK">1250.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><Sts>BOOK</Sts><BookgDt><Dt>2026-11-29</Dt></BookgDt><NtryDtls><TxDtls><Refs><EndToEndId>LF${siId}</EndToEndId></Refs><Amt Ccy="SEK">1250.00</Amt></TxDtls></NtryDtls></Ntry></Ntfctn></BkToCstmrDbtCdtNtfctn></Document>`;
+  await owner.goto(B + '/leverantorsfakturor/betalning');
+  await owner.setInputFiles('form:has-text("camt.054") input[name=file]', { name: 'camt054.xml', mimeType: 'application/xml', buffer: Buffer.from(camt) });
+  await owner.click('button:has-text("Läs in")');
+  await waitMsg(owner, '1 betalningar bokförda');
+  await owner.goto(`${B}/leverantorsfakturor/${siId}`);
+  t = await text(owner);
+  assert(t.includes('Betald') && t.includes('2026-11-29'), 'leverantörsfakturan betald via camt.054: ' + t.slice(0, 600));
+  log('bankens avisering (camt.054) bokför betalningen på bankens datum');
+
+  // ---- Mottagen e-faktura ----
+  const ubl = `<?xml version="1.0" encoding="UTF-8"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+<cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0</cbc:CustomizationID><cbc:ID>EF-7781</cbc:ID><cbc:IssueDate>2026-11-14</cbc:IssueDate><cbc:DueDate>2026-12-14</cbc:DueDate><cbc:DocumentCurrencyCode>SEK</cbc:DocumentCurrencyCode>
+<cac:AccountingSupplierParty><cac:Party><cac:PartyName><cbc:Name>Elbolaget</cbc:Name></cac:PartyName><cac:PartyTaxScheme><cbc:CompanyID>SE559900112201</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme><cac:PartyLegalEntity><cbc:RegistrationName>Elbolaget i Norden AB</cbc:RegistrationName><cbc:CompanyID>5599001122</cbc:CompanyID></cac:PartyLegalEntity></cac:Party></cac:AccountingSupplierParty>
+<cac:AccountingCustomerParty><cac:Party><cac:PartyLegalEntity><cbc:RegistrationName>Testbolaget AB</cbc:RegistrationName></cac:PartyLegalEntity></cac:Party></cac:AccountingCustomerParty>
+<cac:PaymentMeans><cbc:PaymentMeansCode>30</cbc:PaymentMeansCode><cbc:PaymentID>778100</cbc:PaymentID><cac:PayeeFinancialAccount><cbc:ID>55551234</cbc:ID><cac:FinancialInstitutionBranch><cbc:ID>9900</cbc:ID></cac:FinancialInstitutionBranch></cac:PayeeFinancialAccount></cac:PaymentMeans>
+<cac:TaxTotal><cbc:TaxAmount currencyID="SEK">500.00</cbc:TaxAmount></cac:TaxTotal><cac:LegalMonetaryTotal><cbc:PayableAmount currencyID="SEK">2500.00</cbc:PayableAmount></cac:LegalMonetaryTotal>
+<cac:InvoiceLine><cbc:ID>1</cbc:ID><cac:Item><cbc:Name>El november</cbc:Name></cac:Item></cac:InvoiceLine></Invoice>`;
+  await owner.goto(B + '/leverantorsfakturor/inkorg');
+  await owner.setInputFiles('input[name=files]', { name: 'efaktura.xml', mimeType: 'application/xml', buffer: Buffer.from(ubl) });
+  await owner.click('button:has-text("Ladda upp")');
+  await owner.waitForURL(/ok=/);
+  for (let i = 0; i < 30; i++) { t = await text(owner); if (t.includes('Elbolaget i Norden AB')) break; await owner.waitForTimeout(500); await owner.reload(); }
+  assert(t.includes('Elbolaget i Norden AB') && t.includes('2 500,00'), 'e-faktura i inkorgen: ' + t.slice(0, 900));
+  log('mottagen e-faktura (Peppol BIS/UBL) läses av direkt ur XML-filen');
+
+  // ---- Skattekontot ----
+  await owner.goto(B + '/skattekonto');
+  await owner.fill('textarea[name=text]', 'Datum\tTransaktion\tBelopp\tSaldo\n2026-11-12\tMoms okt 2026\t-5 000\t-5 000\n2026-11-12\tInbetalning bokförd\t5 000\t0\n2026-11-14\tIntäktsränta\t3\t3');
+  await owner.click('button:has-text("Läs in")');
+  await waitMsg(owner, '3 nya transaktioner av 3');
+  t = await text(owner);
+  assert(t.includes('Moms okt 2026') && t.includes('Via banken') && await owner.inputValue('input[name^=account_] >> nth=0') !== '', 'skattekontot inläst: ' + t.slice(0, 900));
+  await owner.click('button:has-text("Bokför markerade")');
+  await waitMsg(owner, '2 transaktioner bokförda mot 1630');
+  await owner.locator('td:text-is("Bokförd") >> nth=1').waitFor();
+  t = await text(owner);
+  assert(t.includes('Saldo 2026-11-14') && t.includes('Skillnad 5 000,00'), 'saldo jämförs (inbetalningen stäms av via banken): ' + t.slice(0, 900));
+  log('skattekontot läses in, konteras och stäms av mot 1630');
+
   await browser.close();
-  console.log('Omgång 4 del 1: alla steg gick igenom');
+  console.log('Omgång 4: alla steg gick igenom');
 })().catch((e) => { console.error('✘', e.message); process.exit(1); });

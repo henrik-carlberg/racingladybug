@@ -19,7 +19,7 @@ const claude = http.createServer((req, res) => {
     const ok = sys.includes('Bolagsdata') && sys.includes('Resultat per månad');
     res.writeHead(200, { 'Content-Type': 'application/json', 'request-id': 'req_a' });
     res.end(JSON.stringify({ id: 'msg_a', type: 'message', role: 'assistant', model: j.model, stop_sequence: null, usage: { input_tokens: 900, output_tokens: 40 },
-      content: [{ type: 'text', text: ok ? `Svar: resultatet framgår av bolagsdatan (${j.messages.length} meddelanden).` : 'Ingen data' }], stop_reason: 'end_turn' }));
+      content: [{ type: 'text', text: JSON.stringify({ answer: ok ? `Svar: resultatet framgår av bolagsdatan (${j.messages.length} meddelanden).` : 'Ingen data', actions: [{ type: 'open', label: 'Öppna momsrapporten', path: '/rapporter/moms', invoice_number: null, bank_transaction_id: null }, { type: 'open', label: 'Farlig länk', path: 'https://evil.example', invoice_number: null, bank_transaction_id: null }] }) }], stop_reason: 'end_turn' }));
   });
 });
 
@@ -133,6 +133,7 @@ const claude = http.createServer((req, res) => {
   await page.locator('.assistant-assistant').waitFor();
   t = await text(page);
   assert(t.includes('Svar: resultatet framgår av bolagsdatan (1 meddelanden)') && claudeCalls === 1, 'assistent: ' + t.slice(0, 600));
+  assert(await page.locator('.assistant-actions a:has-text("Öppna momsrapporten")').getAttribute('href') === '/c/1/rapporter/moms' && !(await page.locator('text=Farlig länk').count()), 'förslag: bara interna länkar');
   await page.fill('textarea[name=q]', 'Och oktober?');
   await page.click('button:has-text("Fråga")');
   await page.locator('.assistant-assistant >> nth=1').waitFor();
