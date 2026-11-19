@@ -4,6 +4,7 @@ import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import { auditBy } from '@/lib/server/audit';
 import { emit } from '@/lib/server/events';
 import { sendMail } from '@/lib/server/mail';
+import { customTemplate, renderTemplate } from '@/lib/services/templates';
 import { formatAmount } from '@/lib/money';
 import { today } from '@/lib/format';
 import type { Actor } from '@/lib/services/actor';
@@ -129,7 +130,15 @@ export async function createReminder(actor: Actor, invoiceId: number, opts: { em
   const text = reminderText({ company: co.name, customer: inv.customer, number: inv.number, invoice_date: inv.invoice_date, due_date: inv.due_date, total: inv.total,
     fee: s.fee, interest: inv.interest, level, bankgiro: co.bankgiro, ocr: ocr.ocr, message: s.message });
   let emailed: string | null = null;
-  if (opts.email && inv.email && (await sendMail(inv.email, text.split('\n')[0], text))) emailed = inv.email;
+  let subject = text.split('\n')[0], body = text;
+  // Egen mall för påminnelser
+  const tpl = await customTemplate(actor.companyId, 'reminder');
+  if (tpl?.enabled) {
+    const fmt = (o: number) => formatAmount(o) + ' kr';
+    const r = renderTemplate(tpl, { kund: inv.customer, företag: co.name, fakturanummer: String(inv.number), belopp: fmt(inv.total), förfallodatum: inv.due_date, ocr: ocr.ocr ?? '', bankgiro: co.bankgiro, länk: '', meddelande: s.message ?? '', att_betala: fmt(inv.total + s.fee + inv.interest) });
+    subject = r.subject; body = r.body;
+  }
+  if (opts.email && inv.email && (await sendMail(inv.email, subject, body))) emailed = inv.email;
   const [{ id }] = await sql<{ id: number }[]>`INSERT INTO rk_reminders (company_id, invoice_id, level, date, fee, interest, emailed_to, created_by)
     VALUES (${actor.companyId}, ${invoiceId}, ${level}, ${today()}, ${s.fee}, ${inv.interest}, ${emailed}, ${actor.userId}) RETURNING id`;
   await auditBy(sql, actor, 'reminder', 'invoice', invoiceId, { level, emailed });

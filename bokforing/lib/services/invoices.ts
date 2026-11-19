@@ -1,5 +1,7 @@
 import 'server-only';
 import { notify } from './push';
+import { later } from '@/lib/server/later';
+import { sendThanks } from './templates';
 import { sql, type Tx } from '@/lib/db';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import { createVoucher } from '@/lib/server/ledger';
@@ -320,6 +322,7 @@ export async function registerPaymentTx(tx: Tx, actor: Actor, invoiceId: number,
   const out = await fetchInvoice(tx, actor.companyId, invoiceId);
   await emit(tx, actor.companyId, full ? 'invoice.paid' : 'invoice.partly_paid', out);
   notify.paid(actor.companyId, inv.customer, inv.invoice_number, amount, invoiceId);
+  if (full) later(() => sendThanks(actor.companyId, invoiceId), 'tackmejl');
   return out;
 }
 

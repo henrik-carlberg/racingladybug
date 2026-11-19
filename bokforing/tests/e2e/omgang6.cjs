@@ -201,6 +201,63 @@ async function accept(browser, link, name, password) {
   log('dokument signeras med BankID av inloggad undertecknare och via länk; fel person nekas');
   idp.close();
 
+  // ================= Del 3: e-postmallar, autogiro =================
+  await owner.goto(B + '/installningar/mallar');
+  const inv = owner.locator('section#invoice');
+  await inv.locator('input[name=subject]').fill('Faktura {fakturanummer} – tack för att du handlar hos {företag}');
+  await inv.locator('textarea[name=body]').fill('Hej {kund}!\n\nAtt betala: {belopp} senast {förfallodatum}.\n{foo}\n\n{företag}');
+  await inv.locator('button:has-text("Spara")').click();
+  await owner.waitForURL(/ok=/);
+  const inv2 = owner.locator('section#invoice');
+  t = await inv2.innerText();
+  assert(t.includes('Egen text') && t.includes('Faktura 1042 – tack för att du handlar hos Testbolaget AB') && t.includes('Hej Exempelkunden AB!') && t.includes('Okända fält: {foo}'), 'mall med förhandsvisning och varning: ' + t.slice(0, 600));
+  await inv2.locator('button:has-text("Återställ standardtext")').click();
+  await owner.locator('section#invoice .badge:has-text("Standardtext")').waitFor();
+  log('e-postmall med fält, förhandsvisning, varning för okända fält och återställning');
+
+  await owner.goto(B + '/fakturor?status=booked');
+  const custName = (await owner.locator('tbody tr').first().locator('td').nth(1).innerText()).trim();
+  await owner.goto(B + '/autogiro');
+  await owner.fill('input[name=customer_no]', '123456');
+  await owner.click('form:has(input[name=customer_no]) button');
+  await owner.waitForURL(/ok=/);
+  await owner.selectOption('select[name=customer_id]', { label: custName });
+  await owner.fill('input[name=id_number]', '556026-9986');
+  await owner.fill('input[name=clearing]', '8327');
+  await owner.fill('input[name=account]', '9123456789');
+  await owner.click('button:has-text("Registrera medgivande")');
+  await owner.locator('button:has-text("Skapa medgivandefil"):not([disabled])').waitFor();
+  await owner.click('button:has-text("Skapa medgivandefil")');
+  await owner.waitForURL(/fil=\d+/);
+  const mfile = await (await owner.request.get(BASE + await owner.locator('a:has-text("Ladda ner filen")').getAttribute('href'))).text();
+  const ml = mfile.split('\r\n').filter(Boolean);
+  assert(ml.length === 2 && ml.every((l) => l.length === 80) && ml[0].startsWith('01') && ml[0].includes('AUTOGIRO') && ml[1].startsWith('04'), 'medgivandefil: ' + JSON.stringify(ml));
+  await owner.click('button:has-text("Godkänt av banken")');
+  await owner.locator('.badge:has-text("Aktiv")').waitFor();
+  const rows = owner.locator('form:has(button:has-text("Skapa dragningsfil")) tbody tr');
+  assert(await rows.count() >= 1, 'obetalda fakturor kan dras');
+  const firstInv = (await rows.first().locator('td').nth(1).innerText()).trim();
+  for (let i = 1; i < await rows.count(); i++) await rows.nth(i).locator('input[type=checkbox]').uncheck();
+  const before = owner.url();
+  await owner.click('button:has-text("Skapa dragningsfil")');
+  await owner.waitForURL((u) => /fil=\d+/.test(u.href) && u.href !== before);
+  const dfile = await (await owner.request.get(BASE + await owner.locator('a:has-text("Ladda ner filen")').getAttribute('href'))).text();
+  const tk82 = dfile.split('\r\n').find((l) => l.startsWith('82'));
+  assert(tk82 && tk82.length === 80, 'dragningspost: ' + dfile);
+  // Bankgirots återrapport: samma post med statuskod 0 (genomförd)
+  const OUT = process.argv[2] || require('node:os').tmpdir();
+  const resultFile = require('node:path').join(OUT, 'ag-retur.txt');
+  require('node:fs').writeFileSync(resultFile, dfile.split('\r\n')[0] + '\r\n' + tk82.slice(0, 79) + '0\r\n', 'latin1');
+  await owner.setInputFiles('form:has(button:has-text("Läs in och bokför")) input[type=file]', resultFile);
+  await owner.click('button:has-text("Läs in och bokför")');
+  await owner.waitForURL((u) => decodeURIComponent(u.href).includes('dragningar bokförda') || u.href.includes('error='));
+  assert(decodeURIComponent(owner.url()).includes('1 dragningar bokförda som betalda'), 'återrapporten bokförs: ' + owner.url());
+  await owner.locator('tr:has(.badge:has-text("Betald"))').first().waitFor({ timeout: 5000 }).catch(() => {});
+  assert((await owner.locator('tr:has(.badge:has-text("Betald"))').count()) >= 1, 'dragningen är betald: ' + (await text(owner)).slice(-900));
+  await owner.goto(B + '/fakturor?status=paid');
+  assert((await text(owner)).includes(firstInv), 'fakturan är betald');
+  log('autogiro: medgivande, medgivandefil, dragningsfil i Bankgirots format och återrapport som bokför betalningen');
+
   await browser.close();
   console.log('Omgång 6: alla steg gick igenom');
 })().catch((e) => { console.error('✘', e.message, (e.stack || '').split('\n').find((l) => l.includes('omgang6.cjs'))); process.exit(1); });

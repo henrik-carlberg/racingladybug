@@ -88,3 +88,43 @@ describe('BankID (OIDC id_token)', () => {
     expect(personalNumberFrom({ ...good, ssn: '8001010019' } as never)).toBeNull();
   });
 });
+
+import { bankDay, drawFile, mandateFile, parseResultFile } from '@/lib/autogiro';
+import { DEFAULT_TEMPLATES, renderTemplate, unknownPlaceholders } from '@/lib/email-templates';
+import { behavior, predict } from '@/lib/payment-forecast';
+describe('autogiro', () => {
+  const c = { bankgiro: '123-4567', customerNo: '123456' };
+  it('poster om 80 tecken: öppning, medgivande, dragning', () => {
+    const m = mandateFile(c, '2026-11-20', [{ payerNumber: '42', clearing: '8327', account: '9123456789', idNumber: '198001010019' }]).split('\r\n').filter(Boolean);
+    expect(m.every((l) => l.length === 80)).toBe(true);
+    expect(m[0]).toMatch(/^0120261120AUTOGIRO\s+1234560001234567\s*$/);
+    expect(m[1].slice(0, 2)).toBe('04');
+    expect(m[1].slice(2, 12)).toBe('0001234567');
+    expect(m[1].slice(12, 28)).toBe('0000000000000042');
+    const d = drawFile(c, '2026-11-20', [{ date: '2026-11-30', payerNumber: '42', amount: 125000, reference: '104205' }]).split('\r\n').filter(Boolean);
+    expect(d[1].length).toBe(80);
+    expect(d[1].slice(0, 11)).toBe('82202611300');
+    expect(d[1].slice(31, 43)).toBe('000000125000');
+  });
+  it('återrapporten läses tillbaka med status', () => {
+    const line = drawFile(c, '2026-11-20', [{ date: '2026-11-30', payerNumber: '42', amount: 125000, reference: '104205' }]).split('\r\n')[1];
+    const ok = parseResultFile(line.slice(0, 79) + '0');
+    expect(ok[0]).toMatchObject({ payerNumber: '42', amount: 125000, reference: '104205', ok: true, date: '2026-11-30' });
+    expect(parseResultFile(line.slice(0, 79) + '1')[0]).toMatchObject({ ok: false, status: 'Täckning saknas' });
+  });
+  it('bankdag', () => { expect(bankDay('2026-11-21')).toBe('2026-11-23'); expect(bankDay('2026-11-20')).toBe('2026-11-20'); });
+});
+describe('e-postmallar och betalningsprognos', () => {
+  it('fält ersätts, tomma rader slås ihop, okända fält hittas', () => {
+    const r = renderTemplate(DEFAULT_TEMPLATES.invoice, { kund: 'Kund AB', företag: 'Bolaget', fakturanummer: '7', belopp: '100,00 kr', förfallodatum: '2026-12-01', ocr: '75', bankgiro: '123-4567', länk: 'L', meddelande: '' });
+    expect(r.subject).toBe('Faktura 7 från Bolaget');
+    expect(r.body).toContain('Hej Kund AB,\n\nFaktura 7: 100,00 kr');
+    expect(unknownPlaceholders({ subject: '{kund}', body: '{okänt}' })).toEqual(['okänt']);
+  });
+  it('kund som brukar betala sent', () => {
+    const b = behavior([{ due: '2026-01-31', paid: '2026-02-14' }, { due: '2026-02-28', paid: '2026-03-10' }, { due: '2026-03-31', paid: '2026-03-30' }]);
+    expect(b).toMatchObject({ count: 3, avgDelay: 8 });
+    expect(predict('2026-12-01', b)).toEqual({ expected: '2026-12-09', late: true, delay: 8 });
+    expect(behavior([{ due: '2026-01-31', paid: '2026-02-14' }])).toBeNull();
+  });
+});
