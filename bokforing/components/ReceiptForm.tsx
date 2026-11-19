@@ -3,11 +3,14 @@ import { useActionState, useState } from 'react';
 import { RECEIPT_CATEGORIES, receiptLines, type ReceiptGuess } from '@/lib/receipts';
 import { formatAmount, parseAmount } from '@/lib/money';
 import { receiptKey, type ReceiptCoding } from '@/lib/coding-memory';
+import { dateChecks, type Period } from '@/lib/checks';
+import { Checks } from './Checks';
 
 type State = { error?: string } | undefined;
 
-export function ReceiptForm({ action, read, today, companyType, accountNames, learned = {} }: {
+export function ReceiptForm({ action, read, today, companyType, accountNames, learned = {}, period }: {
   learned?: Record<string, ReceiptCoding & { streak: number }>;
+  period?: Period;
   action: (s: State, fd: FormData) => Promise<State>;
   read?: (fd: FormData) => Promise<{ guess?: ReceiptGuess; error?: string }>;
   today: string;
@@ -52,6 +55,8 @@ export function ReceiptForm({ action, read, today, companyType, accountNames, le
   const vatRate = (vat === '' ? cat?.vat ?? 25 : Number(vat)) as 0 | 6 | 12 | 25;
   const totalOre = parseAmount(total) ?? 0;
   const preview = cat && totalOre > 0 ? receiptLines({ category: cat, total: totalOre, vatRate, persons: Number(persons) || 1, paidWith, companyType }) : null;
+  const checks = period ? dateChecks(date, period, today) : [];
+  const blocked = checks.some((c) => c.level === 'error');
   const groups = [...new Set(RECEIPT_CATEGORIES.map((c) => c.group))];
   return (
     <form action={formAction} className="stack">
@@ -108,9 +113,10 @@ export function ReceiptForm({ action, read, today, companyType, accountNames, le
           {preview.deductibleVat < preview.vat && <div className="muted">Momsavdraget begränsas till {formatAmount(preview.deductibleVat)} kr (representation). Resten blir kostnad.</div>}
         </div>
       )}
+      <Checks items={checks} />
       <div className="actions" style={{ margin: 0 }}>
-        <button disabled={pending || reading === 'busy' || !cat || totalOre <= 0}>{pending ? 'Bokför…' : 'Bokför kvitto'}</button>
-        <button name="another" value="1" className="secondary" disabled={pending || !cat || totalOre <= 0}>Bokför och registrera nästa</button>
+        <button disabled={pending || reading === 'busy' || !cat || totalOre <= 0 || blocked}>{pending ? 'Bokför…' : 'Bokför kvitto'}</button>
+        <button name="another" value="1" className="secondary" disabled={pending || !cat || totalOre <= 0 || blocked}>Bokför och registrera nästa</button>
       </div>
     </form>
   );

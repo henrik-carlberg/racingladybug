@@ -2,11 +2,14 @@
 import { useEffect, useState } from 'react';
 import { parseAmount, formatAmount } from '@/lib/money';
 import { splitVat, type SupplierCoding } from '@/lib/coding-memory';
+import { supplierInvoiceChecks, type Period, type SupplierHistory } from '@/lib/checks';
+import { Checks } from './Checks';
 
 type Supplier = { id: number; name: string; default_account: number };
 
-export function SupplierInvoiceForm({ action, suppliers, accounts, today, costCenters = [], projects = [], learned = {}, initialSupplier }: {
+export function SupplierInvoiceForm({ action, suppliers, accounts, today, costCenters = [], projects = [], learned = {}, initialSupplier, period, histories = {} }: {
   initialSupplier?: number;
+  period?: Period; histories?: Record<string, SupplierHistory>;
   action: (fd: FormData) => Promise<void>;
   learned?: Record<string, SupplierCoding & { streak: number }>;
   suppliers: Supplier[]; accounts: { number: number; name: string }[]; today: string;
@@ -17,6 +20,8 @@ export function SupplierInvoiceForm({ action, suppliers, accounts, today, costCe
   const [vat, setVat] = useState('');
   const [rows, setRows] = useState([{ account: '', amount: '', text: '' }]);
   const [cc, setCc] = useState('');
+  const [invDate, setInvDate] = useState(today);
+  const [invNo, setInvNo] = useState('');
   const [pr, setPr] = useState('');
   const hint = sid ? learned[sid] : undefined;
   // Leverantören förvald (t.ex. från ett förslag på översikten)
@@ -44,6 +49,8 @@ export function SupplierInvoiceForm({ action, suppliers, accounts, today, costCe
     setVat(fmt(x.vat));
     if (rows.length === 1) setRows((r) => [{ ...r[0], amount: fmt(x.net) }]);
   };
+  const checks = period ? supplierInvoiceChecks({ total: tot, vat: v, account: Number(rows[0]?.account) || null, invoiceDate: invDate, invoiceNumber: invNo, today, period, history: sid ? histories[sid] : null }) : [];
+  const blocked = checks.some((c) => c.level === 'error');
   const onTotalBlur = () => { if (hint?.vatRate != null && !vat) applyVat(hint.vatRate); };
   const vat25 = () => { if (tot) { const x = Math.round(tot / 5); setVat(fmt(x)); if (rows.length === 1) setRows([{ ...rows[0], amount: fmt(tot - x) }]); } };
   return (
@@ -55,11 +62,11 @@ export function SupplierInvoiceForm({ action, suppliers, accounts, today, costCe
               <option value="">Välj…</option>{suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </label>
-          <label>Leverantörens fakturanr<input name="invoice_number" required /></label>
+          <label>Leverantörens fakturanr<input name="invoice_number" value={invNo} onChange={(e) => setInvNo(e.target.value)} required /></label>
           <label>OCR / meddelande<input name="payment_reference" /></label>
         </div>
         <div className="row">
-          <label>Fakturadatum<input type="date" name="invoice_date" defaultValue={today} required /></label>
+          <label>Fakturadatum<input type="date" name="invoice_date" value={invDate} onChange={(e) => setInvDate(e.target.value)} required /></label>
           <label>Förfallodatum<input type="date" name="due_date" required /></label>
           <label style={{ flex: '0 0 110px' }}>Valuta<select name="currency" defaultValue="SEK">{['SEK', 'EUR', 'USD', 'GBP', 'NOK', 'DKK'].map((v) => <option key={v}>{v}</option>)}</select></label>
           <label>Belopp i valutan (om ej SEK)<input name="total_currency" inputMode="decimal" placeholder="T.ex. 1 200,00" /></label>
@@ -99,7 +106,8 @@ export function SupplierInvoiceForm({ action, suppliers, accounts, today, costCe
         {rows.length < 6 && <button type="button" className="secondary" onClick={() => setRows((x) => [...x, { account: '', amount: diff > 0 ? fmt(diff) : '', text: '' }])}>+ Rad</button>}
       </div>
       <label>Fakturan som fil (PDF/bild)<input type="file" name="file" accept="image/*,application/pdf" /></label>
-      <div><button disabled={diff !== 0 || !tot}>Registrera och bokför</button></div>
+      <Checks items={checks} />
+      <div><button disabled={diff !== 0 || !tot || blocked}>Registrera och bokför</button></div>
       <p className="muted small">Bokförs enligt faktureringsmetoden: kostnad och ingående moms mot leverantörsskuld (2440) på fakturadatum.</p>
     </form>
   );

@@ -7,6 +7,7 @@ import { registerSupplierInvoice } from '../actions';
 import { today } from '@/lib/format';
 import { listCostCenters, listProjectRefs } from '@/lib/services/dimensions';
 import { learnedCodings } from '@/lib/services/coding-memory';
+import { companyPeriod, supplierHistories } from '@/lib/services/period';
 import type { SupplierCoding } from '@/lib/coding-memory';
 
 export const dynamic = 'force-dynamic';
@@ -22,7 +23,8 @@ export default async function NewSupplierInvoice({ params, searchParams }: { par
       <Flash searchParams={searchParams} />
       {suppliers.length === 0 ? <p>Lägg först upp en <Link href={`/c/${company.id}/leverantorer`}>leverantör</Link>.</p> :
         <SupplierInvoiceForm action={registerSupplierInvoice.bind(null, company.id)} suppliers={[...suppliers]} accounts={[...accounts]} today={today()}
-          costCenters={await listCostCenters(company.id, true)} projects={await listProjectRefs(company.id, true)} learned={await learnedCodings<SupplierCoding>(company.id, 'supplier')} initialSupplier={Number((await searchParams).leverantor) || undefined} />}
+          costCenters={await listCostCenters(company.id, true)} projects={await listProjectRefs(company.id, true)} learned={await learnedCodings<SupplierCoding>(company.id, 'supplier')} initialSupplier={Number((await searchParams).leverantor) || undefined}
+          period={await companyPeriod(company.id)} histories={await supplierHistories(company.id)} />}
     </>
   );
 }

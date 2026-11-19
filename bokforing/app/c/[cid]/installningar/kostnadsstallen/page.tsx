@@ -1,3 +1,4 @@
+import { Help } from '@/components/Help';
 import Link from 'next/link';
 import { requireCompany } from '@/lib/server/auth';
 import { Flash, type SP } from '@/components/ui';
@@ -12,7 +13,7 @@ export default async function CostCenters({ params, searchParams }: { params: Pr
   const list = await listCostCenters(company.id);
   return (
     <div style={{ maxWidth: 760 }}>
-      <h1>Kostnadsställen</h1>
+      <h1>Kostnadsställen <Help term="kostnadsstalle" /></h1>
       <Flash searchParams={searchParams} />
       <p className="muted">Kostnadsställen (t.ex. avdelning, butik eller verksamhetsgren) och projekt kan anges på varje verifikationsrad. Projekten är bolagets <Link href={`/c/${company.id}/uppdrag`}>uppdrag</Link>.
         Se resultatet per kostnadsställe eller projekt under <Link href={`/c/${company.id}/rapporter/dimensioner`}>Resultat per dimension</Link>. De följer med i SIE-exporten.</p>

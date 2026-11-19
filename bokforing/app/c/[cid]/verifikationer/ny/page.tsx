@@ -6,6 +6,7 @@ import { saveVoucher } from '../actions';
 import { today } from '@/lib/format';
 import { Help } from '@/components/Help';
 import { getVoucher } from '@/lib/services/vouchers';
+import { companyPeriod } from '@/lib/services/period';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +22,7 @@ export default async function NewVoucher({ params, searchParams }: { params: Pro
       <h1>Ny verifikation <Help term="verifikation" /> <Help term="debet_kredit" /></h1>
       <p className="muted small">Tips: för vanliga kvitton är det enklare att använda <a href={`/c/${company.id}/kvitto`}>Nytt kvitto</a> – då väljer appen konton åt dig.</p>
       {copy && <div className="learned small" role="status">✨ Ifyllt som verifikation {copy.series}{copy.number} ({copy.date}). Kontrollera datum och belopp innan du bokför.</div>}
-      <VoucherForm initial={copy ? { description: copy.description, rows: copy.lines } : undefined} action={saveVoucher.bind(null, company.id)} accounts={[...accounts]} today={today()}
+      <VoucherForm period={await companyPeriod(company.id)} initial={copy ? { description: copy.description, rows: copy.lines } : undefined} action={saveVoucher.bind(null, company.id)} accounts={[...accounts]} today={today()}
         costCenters={await listCostCenters(company.id, true)} projects={await listProjectRefs(company.id, true)} />
     </>
   );

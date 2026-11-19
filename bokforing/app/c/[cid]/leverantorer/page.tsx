@@ -3,7 +3,7 @@ import { uiLang } from '@/lib/server/lang';
 import Link from 'next/link';
 import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
-import { Flash, type SP } from '@/components/ui';
+import { Flash, type SP, EmptyState } from '@/components/ui';
 import { SupplierFields, type SupplierRow } from '@/components/SupplierFields';
 import { listCostCenters } from '@/lib/services/dimensions';
 import { kr } from '@/lib/format';
@@ -31,7 +31,7 @@ export default async function Suppliers({ params, searchParams }: { params: Prom
                 <td>{s.bankgiro ? `BG ${s.bankgiro}` : s.plusgiro ? `PG ${s.plusgiro}` : s.bank_account}</td>
                 <td>{s.default_account}</td><td className="num">{s.open ? kr(s.open) : ''}</td></tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={4} className="muted">{L("Inga leverantörer ännu.")}</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={4}><EmptyState icon="briefcase" title={L('Inga leverantörer ännu')}>Lägg upp leverantören ovan med bankgiro och standardkonto. Fakturor som kommer till inkorgen kan också skapa leverantören åt dig.</EmptyState></td></tr>}
           </tbody>
         </table>
       </div>

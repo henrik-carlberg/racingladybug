@@ -9,6 +9,9 @@ const iso = (d) => d.toISOString().slice(0, 10);
 /** Samma dag i månaden n månader bakåt (sista dagen om månaden är kortare) */
 const monthsAgo = (n) => { const t = new Date(); const y = t.getUTCFullYear(), m = t.getUTCMonth() - n; const len = new Date(Date.UTC(y, m + 1, 0)).getUTCDate(); return iso(new Date(Date.UTC(y, m, Math.min(t.getUTCDate(), len)))); };
 
+/** Organisationsnummer med rätt kontrollsiffra */
+const orgnr = (base9) => { let sum = 0; [...base9].forEach((c, i) => { let d = Number(c) * (i % 2 === 0 ? 2 : 1); sum += d > 9 ? d - 9 : d; }); return base9 + ((10 - (sum % 10)) % 10); };
+
 async function login(browser, email, password, opts = {}) {
   const p = await (await browser.newContext(opts)).newPage();
   p.setDefaultTimeout(20000);
@@ -117,6 +120,62 @@ async function login(browser, email, password, opts = {}) {
   const gone = await owner.goto(BASE + draftHref);
   assert(gone.status() === 404, 'utkastet borttaget när tiden gått: ' + gone.status());
   log('ta bort utkast kan ångras i några sekunder, sedan tas det bort');
+
+  // ================= Del 2: hjälp, tomma sidor och kontroller =================
+  await owner.goto(B + '/bank/avstamning');
+  await owner.locator('h1 details.help summary').click();
+  assert((await owner.locator('h1 details.help .help-pop').innerText()).includes('Varje transaktion på bankkontot'), 'ordförklaring visas');
+  log('ordförklaring med frågetecken (bankavstämning)');
+
+  const fresh = await (await browser.newContext()).newPage();
+  fresh.setDefaultTimeout(20000);
+  await fresh.goto(BASE + '/register');
+  await fresh.fill('input[name=name]', 'Nya Nilsson');
+  await fresh.fill('input[name=email]', 'ny.omg5@example.com');
+  await fresh.fill('input[name=password]', 'nyttlosen123');
+  await fresh.check('input[name=terms]');
+  await fresh.click('button:has-text("Skapa konto")');
+  await fresh.waitForURL(BASE + '/');
+  await fresh.fill('input[name=name]', 'Nystartat AB');
+  await fresh.fill('input[name=orgnr]', orgnr('559912345'));
+  await fresh.fill('input[name=fy_start]', '2026-01-01');
+  await fresh.click('button:has-text("Skapa bolag")');
+  await fresh.waitForURL(/kom-igang/);
+  const NB = fresh.url().match(/(.*\/c\/\d+)/)[1];
+  await fresh.goto(NB + '/fakturor');
+  t = await text(fresh);
+  assert(t.includes('Här hamnar dina kundfakturor') && await fresh.locator('.empty-state a:has-text("Skapa första fakturan")').count(), 'tom sida för kundfakturor: ' + t.slice(0, 400));
+  await fresh.goto(NB + '/leverantorsfakturor');
+  assert((await text(fresh)).includes('Inga leverantörsfakturor än'), 'tom sida för leverantörsfakturor');
+  await fresh.goto(NB + '/bank/avstamning');
+  assert((await text(fresh)).includes('Allt är avstämt'), 'tom bankavstämning');
+  log('tomma sidor visar vad man gör först (nytt bolag)');
+
+  await owner.goto(B + `/leverantorsfakturor/ny?leverantor=${supplierId}`);
+  await owner.fill('input[name=invoice_number]', 'LB-1');
+  await owner.fill('input[name=total]', '1250');
+  await owner.locator('input[name=total]').blur();
+  await owner.locator('.check-item.error:has-text("redan registrerat")').waitFor();
+  assert(await owner.locator('.check-item.warn:has-text("samma belopp")').count(), 'varning för samma belopp');
+  assert(await owner.locator('button:has-text("Registrera och bokför")').isDisabled(), 'kan inte registrera dubblett');
+  await owner.fill('input[name=invoice_number]', 'LB-3');
+  await owner.fill('input[name=invoice_date]', '2019-03-01');
+  await owner.locator('.check-item.error:has-text("inget räkenskapsår")').waitFor();
+  log('leverantörsfaktura: varning för dubblett, samma belopp och datum utan räkenskapsår');
+
+  await owner.goto(B + '/verifikationer/ny');
+  await owner.fill('input[name=description]', 'Kontrolltest');
+  const vr = owner.locator('tbody tr');
+  await vr.nth(0).locator('input').nth(0).fill('5410');
+  await vr.nth(0).locator('input').nth(1).fill('1000');
+  await vr.nth(1).locator('input').nth(0).fill('2640');
+  await vr.nth(1).locator('input').nth(1).fill('200');
+  await owner.click('button:has-text("+ Rad")');
+  await vr.nth(2).locator('input').nth(0).fill('1930');
+  await vr.nth(2).locator('input').nth(2).fill('1200');
+  await owner.locator('.check-item.warn:has-text("20 %")').waitFor();
+  assert(!(await owner.locator('button:text-is("Bokför")').isDisabled()), 'varning stoppar inte bokföringen');
+  log('verifikation: varning när momsen inte är 25, 12 eller 6 %');
 
   await browser.close();
   console.log('Omgång 5: alla steg gick igenom');

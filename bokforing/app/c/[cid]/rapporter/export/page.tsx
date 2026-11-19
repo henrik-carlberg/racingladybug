@@ -1,3 +1,4 @@
+import { Help } from '@/components/Help';
 import Link from 'next/link';
 import { requireCompany } from '@/lib/server/auth';
 import { fiscalYears } from '@/lib/server/ledger';
@@ -10,7 +11,7 @@ export default async function Export({ params }: { params: Promise<{ cid: string
   const years = await fiscalYears(company.id);
   return (
     <>
-      <h1>Export</h1>
+      <h1>Export <Help term="sie" /></h1>
       <p className="muted">SIE 4 innehåller kontoplan, ingående och utgående balanser, resultat och alla verifikationer. Filen kan läsas in i de flesta bokförings- och bokslutsprogram och används ofta av revisorer.</p>
       <table>
         <thead><tr><th>Räkenskapsår</th><th></th></tr></thead>

@@ -1,9 +1,10 @@
+import { Help } from '@/components/Help';
 import Link from 'next/link';
 import { UndoButton } from '@/components/Undo';
 import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
 import { listBankAccounts, listTransactions } from '@/lib/services/bank';
-import { Flash, type SP } from '@/components/ui';
+import { Flash, type SP, EmptyState } from '@/components/ui';
 import { kr } from '@/lib/format';
 import { autoMatch, bookAllSuggestions, ignoreTxNow, reconcileTx, reopenTx } from '../actions';
 import { learnKey } from '@/lib/bank/rules';
@@ -32,7 +33,7 @@ export default async function Reconcile({ params, searchParams }: { params: Prom
   return (
     <>
       <div className="header">
-        <h1>Bankavstämning</h1>
+        <h1>Bankavstämning <Help term="avstamning" /></h1>
         <div className="actions" style={{ margin: 0 }}>
           {status === 'unmatched' && <form action={autoMatch.bind(null, company.id)}><button>Stäm av säkra matchningar automatiskt</button></form>}
           {withAccount > 0 && <form action={bookAllSuggestions.bind(null, company.id)}><button className="secondary">Bokför alla kontoförslag ({withAccount})</button></form>}
@@ -47,7 +48,9 @@ export default async function Reconcile({ params, searchParams }: { params: Prom
         ))}
       </div>
       <datalist id="chart">{chart.map((a) => <option key={a.number} value={a.number}>{a.name}</option>)}</datalist>
-      {rows.length === 0 && <p className="muted">Inga transaktioner.</p>}
+      {rows.length === 0 && (status === 'unmatched'
+        ? <EmptyState icon="check" title="Allt är avstämt" actions={[{ href: `${b}/bank`, label: 'Hämta nya transaktioner', secondary: true }]}>Det finns inga banktransaktioner som väntar. Nya transaktioner hämtas från banken automatiskt varje natt om banken är kopplad.</EmptyState>
+        : <p className="muted">Inga transaktioner.</p>)}
       {rows.map((t) => (
         <div key={t.id} className="card" id={`t${t.id}`} data-undo-row>
           <div className="header" style={{ marginBottom: '.5rem' }}>

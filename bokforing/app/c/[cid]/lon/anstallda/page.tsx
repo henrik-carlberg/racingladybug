@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
-import { Flash, type SP } from '@/components/ui';
+import { Flash, type SP, EmptyState } from '@/components/ui';
 import { EmployeeFields, type EmployeeRow } from '@/components/EmployeeFields';
 import { kr } from '@/lib/format';
 import { saveEmployee } from './actions';
@@ -29,7 +29,7 @@ export default async function Employees({ params, searchParams }: { params: Prom
                 <td>{!e.active && <span className="badge">Inaktiv</span>}</td>
               </tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={5} className="muted">Inga anställda ännu.</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={5}><EmptyState icon="users" title="Inga anställda ännu">Lägg upp den första anställda med personnummer, lön och skattetabell. Du kan också bjuda in personen så att den själv ser sina lönespecar och rapporterar frånvaro.</EmptyState></td></tr>}
           </tbody>
         </table>
       </div>

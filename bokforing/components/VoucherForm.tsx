@@ -2,11 +2,14 @@
 import { useActionState, useState } from 'react';
 import { parseAmount, formatAmount } from '@/lib/money';
 import type { FormState } from '@/app/c/[cid]/verifikationer/actions';
+import { voucherChecks, type Period } from '@/lib/checks';
+import { Checks } from './Checks';
 
 type Row = { account: string; debit: string; credit: string; description: string; cc: string; project: string };
 const empty = (): Row => ({ account: '', debit: '', credit: '', description: '', cc: '', project: '' });
 
-export function VoucherForm({ action, accounts, today, costCenters = [], projects = [], initial }: {
+export function VoucherForm({ action, accounts, today, costCenters = [], projects = [], initial, period }: {
+  period?: Period;
   initial?: { description: string; rows: { account: number; debit: number; credit: number; description: string }[] };
   action: (s: FormState, fd: FormData) => Promise<FormState>;
   accounts: { number: number; name: string }[];
@@ -20,12 +23,15 @@ export function VoucherForm({ action, accounts, today, costCenters = [], project
   const set = (i: number, k: keyof Row, v: string) => setRows((r) => r.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
   const sum = (k: 'debit' | 'credit') => rows.reduce((s, r) => s + (parseAmount(r[k]) ?? 0), 0);
   const diff = sum('debit') - sum('credit');
+  const [date, setDate] = useState(today);
+  const checks = period ? voucherChecks({ date, today, period, lines: rows.filter((r) => r.account).map((r) => ({ account: Number(r.account), debit: parseAmount(r.debit) ?? 0, credit: parseAmount(r.credit) ?? 0 })) }) : [];
+  const blocked = checks.some((c) => c.level === 'error');
   const name = (n: string) => accounts.find((a) => String(a.number) === n)?.name;
   return (
     <form action={formAction} className="stack">
       {state?.error && <div className="flash error">{state.error}</div>}
       <div className="card row">
-        <label style={{ flex: '0 0 180px' }}>Datum<input type="date" name="date" defaultValue={today} required /></label>
+        <label style={{ flex: '0 0 180px' }}>Datum<input type="date" name="date" value={date} onChange={(e) => setDate(e.target.value)} required /></label>
         <label style={{ flex: '3 1 300px' }}>Beskrivning<input name="description" required placeholder="T.ex. Kvitto kontorsmaterial" defaultValue={initial?.description} /></label>
       </div>
       <datalist id="accounts">{accounts.map((a) => <option key={a.number} value={a.number}>{a.name}</option>)}</datalist>
@@ -69,7 +75,8 @@ export function VoucherForm({ action, accounts, today, costCenters = [], project
       </div>
       <label>Underlag (kvitto, faktura – valfritt)<input type="file" name="file" accept="image/*,application/pdf" /></label>
       <input type="hidden" name="lines" value={JSON.stringify(rows)} />
-      <div><button disabled={pending || diff !== 0}>{pending ? 'Bokför…' : 'Bokför'}</button></div>
+      <Checks items={checks} />
+      <div><button disabled={pending || diff !== 0 || blocked}>{pending ? 'Bokför…' : 'Bokför'}</button></div>
       <p className="muted small">En bokförd verifikation kan inte ändras eller raderas. Fel rättas med en rättelseverifikation.</p>
     </form>
   );
