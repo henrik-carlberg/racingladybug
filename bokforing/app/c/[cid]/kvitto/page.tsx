@@ -16,9 +16,11 @@ export const dynamic = 'force-dynamic';
 
 export default async function Receipt({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid);
+  const ctx = await requireCompany(cid);
+  const { company } = ctx;
   const sp = await searchParams;
-  const card = sp.tx ? await cardLedger(company.id, Number(sp.tx)) : null;
+  // Kvitto för ett kortköp kräver behörighet till bokföringen (banktransaktionerna)
+  const card = sp.tx && ctx.can('ledger') ? await cardLedger(company.id, Number(sp.tx)) : null;
   const names = Object.fromEntries((await sql<{ number: number; name: string }[]>`SELECT number, name FROM accounts WHERE company_id = ${company.id}`).map((a) => [a.number, a.name]));
   const recent = await sql<{ id: number; date: string; description: string; amount: number; files: number }[]>`
     SELECT v.id, to_char(v.date,'YYYY-MM-DD') AS date, v.description,

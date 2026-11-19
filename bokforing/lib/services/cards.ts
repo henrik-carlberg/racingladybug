@@ -69,7 +69,7 @@ export async function linkReceipt(actor: Actor, txId: number, voucherId: number)
 export async function cardLedger(companyId: number, txId: number) {
   const [r] = await sql<{ ledger_account: number; amount: number; date: string; text: string }[]>`SELECT a.ledger_account, t.amount::float8 AS amount,
       to_char(t.booking_date,'YYYY-MM-DD') AS date, COALESCE(NULLIF(t.counterparty,''), t.description) AS text
-    FROM bank_transactions t JOIN bank_accounts a ON a.id = t.bank_account_id WHERE t.id = ${txId} AND t.company_id = ${companyId} AND t.status = 'unmatched' AND t.amount < 0`;
+    FROM bank_transactions t JOIN bank_accounts a ON a.id = t.bank_account_id WHERE t.id = ${txId} AND t.company_id = ${companyId} AND a.is_card AND t.status = 'unmatched' AND t.amount < 0`;
   return r ?? null;
 }
 

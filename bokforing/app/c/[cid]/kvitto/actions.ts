@@ -9,12 +9,14 @@ import { cardLedger, linkReceipt } from '@/lib/services/cards';
 export type ReceiptState = { error?: string } | undefined;
 
 export async function saveReceipt(cid: number, _prev: ReceiptState, fd: FormData): Promise<ReceiptState> {
-  const actor = userActor(await requireCompany(cid));
+  const ctx = await requireCompany(cid);
+  const actor = userActor(ctx);
   const txId = Number(str(fd, 'tx')) || 0;
   let linked = false;
   try {
     // Kvitto för ett kortköp: bokförs mot kortets konto och kopplas till köpet
-    const card = txId ? await cardLedger(actor.companyId, txId) : null;
+    const card = txId && ctx.can('ledger') ? await cardLedger(actor.companyId, txId) : null;
+    if (txId && !ctx.can('ledger')) throw new Error('Du saknar behörighet till bokföringen');
     if (txId && !card) throw new Error('Kortköpet finns inte eller har redan ett kvitto');
     const v = await createReceipt(actor, {
       category: str(fd, 'category'), total: amount(fd, 'total', 'Belopp'), vat_rate: str(fd, 'vat_rate'), persons: str(fd, 'persons'),

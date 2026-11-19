@@ -88,7 +88,7 @@ async function groupResults(companyId: number, date: string, userId: number) {
   const links = await sql<{ other: number; name: string; ownership: number }[]>`
     SELECT CASE WHEN g.parent_company_id = ${companyId} THEN g.subsidiary_company_id ELSE g.parent_company_id END AS other, c.name, g.ownership::float8 AS ownership
     FROM group_links g JOIN companies c ON c.id = CASE WHEN g.parent_company_id = ${companyId} THEN g.subsidiary_company_id ELSE g.parent_company_id END
-    JOIN memberships m ON m.company_id = c.id AND m.user_id = ${userId} AND m.role IN ('owner','accountant')
+    JOIN memberships m ON m.company_id = c.id AND m.user_id = ${userId} AND (m.role = 'owner' OR (m.role = 'accountant' AND (m.permissions IS NULL OR 'ledger' = ANY(m.permissions))))
     WHERE (g.parent_company_id = ${companyId} OR g.subsidiary_company_id = ${companyId}) AND c.company_type = 'AB'`;
   const out: { name: string; result: number; ownership: number }[] = [];
   for (const l of links) {
