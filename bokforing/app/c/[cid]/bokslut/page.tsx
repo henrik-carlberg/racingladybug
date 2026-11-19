@@ -14,7 +14,6 @@ export default async function Yearend({ params }: { params: Promise<{ cid: strin
       <p className="muted">{company.company_type === 'AB'
         ? 'För aktiebolag: bokslut, beräknad skatt, inkomstdeklaration 2 (INK2) och årsredovisning till Bolagsverket.'
         : 'För enskild firma: årsbokslut (förenklat om omsättningen normalt är högst 3 Mkr) och NE-bilagan till din inkomstdeklaration.'}</p>
-      <div className="actions"><Link className="btn secondary" href={`/c/${company.id}/bokslut/valuta`}>Omvärdering av valuta</Link></div>
       <table>
         <thead><tr><th>Räkenskapsår</th><th>Status</th><th></th></tr></thead>
         <tbody>{years.map((y) => (
@@ -22,6 +21,7 @@ export default async function Yearend({ params }: { params: Promise<{ cid: strin
             <td className="num"><Link className="btn secondary" href={`/c/${company.id}/bokslut/${y.id}`}>Öppna</Link></td></tr>
         ))}</tbody>
       </table>
+      <div className="actions"><Link className="btn secondary" href={`/c/${company.id}/bokslut/valuta`}>Omvärdering av valuta</Link></div>
     </div>
   );
 }
