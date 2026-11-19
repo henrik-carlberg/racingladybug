@@ -38,7 +38,7 @@ export default async function Customers({ params, searchParams }: { params: Prom
             {rows.map((c) => (
               <tr key={c.id}><td><Link href={`/c/${company.id}/kunder/${c.id}`}>{c.name}</Link></td><td>{c.orgnr}</td><td>{c.email}</td><td className="num">{c.open ? kr(c.open) : ''}{(() => { const x = behaviors.get(c.id); return x && x.avgDelay > 5 ? <div className="small" style={{ color: 'var(--warn)' }} title={`Snitt för de ${x.count} senaste betalda fakturorna`}>Betalar i snitt {x.avgDelay} dagar sent</div> : null; })()}</td></tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={4}><EmptyState icon="users" title={L('Inga kunder ännu')}>Lägg upp kunden i formuläret ovan, eller importera en lista från ditt gamla program under Inställningar → Import. Sedan kan du fakturera med några klick.</EmptyState></td></tr>}
+            {rows.length === 0 && <tr><td colSpan={4}><EmptyState icon="users" title={L('Inga kunder ännu')}>Lägg upp kunden i formuläret nedan, eller importera en lista från ditt gamla program under Inställningar → Import. Sedan kan du fakturera med några klick.</EmptyState></td></tr>}
           </tbody>
         </table>
         <Pager base={`/c/${company.id}/kunder`} sp={sp} page={page} hasMore={hasMore} count={rows.length} />

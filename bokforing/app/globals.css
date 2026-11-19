@@ -323,3 +323,29 @@ main { min-width: 0; }
 /* Engelska: sidans innehåll visas när översättningen är klar (högst en kort stund; utan JavaScript visas svenska) */
 html.i18n-pending main { animation: i18n-reveal 0s linear 1.2s forwards; visibility: hidden; }
 @keyframes i18n-reveal { to { visibility: visible; } }
+
+/* Årshjul: en färg per modul (kategorisk palett), status med form och etikett */
+:root { --wheel-1: #2a78d6; --wheel-2: #eb6834; --wheel-3: #1baf7a; --wheel-4: #eda100; --wheel-5: #e87ba4; --wheel-6: #008300; --wheel-7: #6250d6; --wheel-8: #8a8f98; }
+@media (prefers-color-scheme: dark) { :root { --wheel-1: #3987e5; --wheel-2: #d95926; --wheel-3: #199e70; --wheel-4: #c98500; --wheel-5: #d55181; --wheel-6: #0ca30c; --wheel-7: #9085e9; --wheel-8: #7b818c; } }
+.wheel { margin: 0 auto; max-width: 640px; }
+.wheel svg { width: 100%; height: auto; display: block; }
+.wheel-band { fill: var(--viz-grid); opacity: .55; }
+.wheel-band.odd { opacity: .9; }
+.wheel a:hover .wheel-band, .wheel a:focus .wheel-band { fill: var(--viz-axis); opacity: .5; }
+.wheel-label { fill: var(--text, currentColor); }
+.wheel-ring { fill: none; stroke: var(--viz-grid); opacity: .35; }
+.wheel-grid { stroke: var(--viz-grid); stroke-width: 1; }
+.wheel-today { stroke: var(--text, currentColor); stroke-width: 2; stroke-dasharray: 4 3; }
+.wheel-dot circle { fill: var(--dot); stroke: var(--panel); stroke-width: 2; }
+.wheel-dot.done circle { opacity: .5; }
+.wheel-dot.overdue circle { stroke: var(--danger); stroke-width: 3; }
+.wheel-check { fill: none; stroke: #fff; stroke-width: 1.8; }
+.wheel a:hover circle, .wheel a:focus circle { r: 8; }
+.wheel-center { font-size: 26px; font-weight: 600; fill: var(--text, currentColor); }
+.wheel-sub { font-size: 14px; fill: var(--viz-axis); }
+.wheel-sub.late { fill: var(--danger); }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: 0; }
+.wheel-item.overdue td:first-child { color: var(--danger); font-weight: 600; }
+.wheel-item.done td { color: var(--muted); }
+.ok-text { color: var(--ok); }
+.danger-text { color: var(--danger); }

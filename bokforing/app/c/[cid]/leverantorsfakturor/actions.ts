@@ -60,3 +60,26 @@ export async function importPaymentNotification(cid: number, fd: FormData) {
   });
   done(back, msg);
 }
+
+export async function payViaBank(cid: number, fd: FormData) {
+  const { userActor } = await import('@/lib/services/actor');
+  const { payInvoices } = await import('@/lib/services/bankpay');
+  const { requestOrigin } = await import('@/lib/server/origin');
+  const { redirect } = await import('next/navigation');
+  const actor = userActor(await requireCompany(cid, { perm: 'payments' }));
+  const back = `/c/${cid}/leverantorsfakturor/betalning`;
+  let url = '';
+  await attempt(back, async () => {
+    const r = await payInvoices(actor, fd.getAll('ids').map(Number).filter(Boolean), Number(fd.get('pay_account')), String(fd.get('date') ?? ''), await requestOrigin());
+    url = r.url;
+  });
+  if (!/^https?:\/\//.test(url)) done(back, 'Betalningen kunde inte startas');
+  redirect(url);
+}
+export async function refreshBankPayments(cid: number) {
+  const { refreshPayments } = await import('@/lib/services/bankpay');
+  const { company } = await requireCompany(cid, { perm: 'payments' });
+  let n = 0;
+  await attempt(`/c/${cid}/leverantorsfakturor/betalning`, async () => { n = await refreshPayments(company.id, 'supplier'); });
+  done(`/c/${cid}/leverantorsfakturor/betalning`, n ? `${n} betalning(ar) har ny status` : 'Ingen ny status från banken');
+}

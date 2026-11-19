@@ -25,6 +25,8 @@ export const INTEGRATIONS: Integration[] = [
     steps: ['Teckna avtal om API-anslutning hos Skatteverket (ombudsbehörighet för byrån).', 'Lägg in API-adress, klient-id och hemlighet i Vercel.', 'Utan anslutning laddar användaren ner filen och lämnar den i e-tjänsten.'] },
   { key: 'bv', name: 'Bolagsverket (årsredovisning)', enables: 'Årsredovisningen lämnas in digitalt med kvittens', vars: ['BV_API_URL', 'BV_CLIENT_ID', 'BV_CLIENT_SECRET'], testable: true,
     steps: ['Ansök om anslutning till Bolagsverkets tjänst för digital inlämning.', 'Lägg in API-adress, klient-id och hemlighet i Vercel.'] },
+  { key: 'bvinfo', name: 'Bolagsverket (firmatecknare)', enables: 'Bolag verifieras automatiskt när en firmatecknare bekräftar med BankID', vars: ['BV_INFO_URL', 'BV_INFO_KEY'],
+    steps: ['Teckna avtal om Bolagsverkets tjänst för företrädare och firmateckning.', 'Lägg in API-adress och nyckel i Vercel. BankID måste också vara uppsatt.'] },
   { key: 'cron', name: 'Schemalagda körningar', enables: 'Banksynk, påminnelser, avtalsfakturor, notiser, integritetskontroll', vars: ['CRON_SECRET'],
     steps: ['Lägg in CRON_SECRET (en lång slumpmässig sträng) i Vercel. Körningarna i vercel.json använder den automatiskt.'] },
 ];

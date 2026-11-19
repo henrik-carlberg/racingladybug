@@ -9,6 +9,7 @@ import { PrintButton } from '@/components/PrintButton';
 import { today } from '@/lib/format';
 import { minutes, saveReport } from '../../actions';
 import { prepareAnnual } from '../../../inlamning/actions';
+import { representativeNames } from '@/lib/services/signatory';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,7 @@ export default async function AnnualReport({ params, searchParams }: { params: P
   const { company } = await requireCompany(cid, { perm: 'ledger' });
   const r = await annualReport(company.id, Number(fyid)).catch((e) => { if (e instanceof NotFoundError) notFound(); throw e; });
   const ab = company.company_type === 'AB';
+  const reps = (await representativeNames(company.id)).filter((x) => x.roles.some((r) => !/revisor/i.test(r)));
   const b = `/c/${company.id}/bokslut/${fyid}`;
   return (
     <div style={{ maxWidth: 900 }}>
@@ -35,7 +37,7 @@ export default async function AnnualReport({ params, searchParams }: { params: P
               <label>Föreslagen utdelning (kr)<input name="dividend" defaultValue={r.data.dividend ? String(r.data.dividend / 100) : ''} placeholder="0" inputMode="decimal" /></label>
               <label>Ort för underskrift<input name="place" defaultValue={r.data.place ?? company.city} /></label>
             </div>
-            <label>Styrelse och VD – en per rad: Namn, roll<textarea name="board" rows={3} defaultValue={(r.data.board ?? []).map((x) => `${x.name}, ${x.role}`).join('\n')} placeholder={'Anna Andersson, Styrelseledamot\nBo Berg, Styrelsesuppleant'} /></label>
+            <label>Styrelse och VD – en per rad: Namn, roll<textarea name="board" rows={3} defaultValue={(r.data.board?.length ? r.data.board : reps.map((x) => ({ name: x.name, role: x.roles.filter((y) => !/revisor/i.test(y)).join(' och ') }))).map((x) => `${x.name}, ${x.role}`).join('\n')} placeholder={'Anna Andersson, Styrelseledamot\nBo Berg, Styrelsesuppleant'} /></label>
             <label className="check"><input type="checkbox" name="auditor" defaultChecked={r.data.auditorWaived === false} /> Bolaget har revisor</label>
             <div><button className="secondary">Spara och uppdatera utkastet</button></div>
           </form>
