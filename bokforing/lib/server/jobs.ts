@@ -6,6 +6,7 @@ type Handler = (payload: Record<string, unknown>) => Promise<unknown>;
 const handlers = new Map<string, () => Promise<Handler>>([
   ['mail.thanks', async () => { const { sendThanks } = await import('@/lib/services/templates'); return (p) => sendThanks(Number(p.companyId), Number(p.invoiceId)); }],
   ['inbox.process', async () => { const { processDocument } = await import('@/lib/services/inbox'); return (p) => processDocument(Number(p.id)); }],
+  ['attachment.text', async () => { const { indexAttachment } = await import('@/lib/services/doc-text'); return (p) => indexAttachment(Number(p.id)); }],
 ]);
 const MAX_ATTEMPTS = 5;
 

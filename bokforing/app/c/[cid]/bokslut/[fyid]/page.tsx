@@ -44,6 +44,7 @@ export default async function YearendYear({ params, searchParams }: { params: Pr
         {ab && <div className="card stat"><div className="label">Bokförd skatt</div><div className="value">{kr(s.taxBooked)}</div></div>}
         <div className="card stat"><div className="label">Årets resultat <Help term="arets_resultat" /></div><div className="value">{kr(s.resultAfterTax)}</div></div>
       </div>
+      <p className="small"><Link href={`${b}/bokslut/${s.fy.id}/dispositioner`}>Bokslutsdispositioner</Link> – periodiseringsfond, överavskrivningar och koncernbidrag som sänker skatten (gör dem före skatten).</p>
       {!ended && <div className="flash ok">Räkenskapsåret pågår till {s.fy.end_date}. Du kan förbereda bokslutet, men vänta med att stänga året tills det är slut.</div>}
 
       <Step n={1} title="Stäm av och bokför allt för året" done={issues.length === 0}>

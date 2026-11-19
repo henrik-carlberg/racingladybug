@@ -25,7 +25,9 @@ export async function login(fd: FormData) {
       await hit(`loginip:${ip}`, L.loginFailIp.max, L.loginFailIp.window);
       throw new Error('Fel e-post eller lösenord');
     }
-    next = await startLogin(u.id);
+    // Tillbaka dit användaren skulle (t.ex. en apps samtyckessida) – bara sökvägar inom appen
+    const want = str(fd, 'next');
+    next = await startLogin(u.id, /^\/(?![\/\\])[\w\-./?=&%:~+]*$/.test(want) ? want : '/');
   });
   done(next);
 }

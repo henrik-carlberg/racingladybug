@@ -12,6 +12,7 @@ import { date, int, optInt, str } from '@/lib/services/input';
 import { updatePayslip } from '@/lib/services/payroll';
 import { insertAttachment, type AttachmentIn } from '@/lib/services/vouchers';
 import { allowance, approvalEntries, mileage, vatPart } from './calc';
+import { allowanceDays } from '@/lib/cards';
 
 type Db = Tx | typeof sql;
 
@@ -79,7 +80,6 @@ async function draft(db: Db, companyId: number, id: number) {
 export async function addLine(actor: Actor, id: number, input: Record<string, unknown>, file?: AttachmentIn | null) {
   const s = await settings(sql, actor.companyId);
   const kind = str(input, 'kind') as Line['kind'];
-  const d = date(input, 'date', 'Datum');
   let row: Omit<Line, 'id' | 'date' | 'attachment_id'>;
   if (kind === 'receipt') {
     const cat = RECEIPT_CATEGORIES.find((c) => c.key === str(input, 'category'));
@@ -92,11 +92,19 @@ export async function addLine(actor: Actor, id: number, input: Record<string, un
     if (!Number.isFinite(km) || km <= 0 || km > 10000) throw new ValidationError('Ange antal kilometer');
     row = { kind, description: str(input, 'description') || 'Resa med egen bil', amount: mileage(km, s.mileage_rate), vat: 0, account: s.mileage_account, km, days_full: null, days_half: null, nights: null };
   } else if (kind === 'allowance') {
-    const full = optInt(input, 'days_full', 'Hela dagar') ?? 0, half = optInt(input, 'days_half', 'Halva dagar') ?? 0, nights = optInt(input, 'nights', 'Nätter') ?? 0;
+    // Avresa och hemkomst räknas om till hela och halva dagar; annars anges dagarna för hand
+    const dep = str(input, 'depart'), ret = str(input, 'return');
+    const ok = (v: string) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v);
+    if ((dep || ret) && !(ok(dep) && ok(ret))) throw new ValidationError('Ange både avresa och hemkomst med datum och klockslag');
+    const auto = dep ? allowanceDays(dep, ret) : null;
+    if (auto && auto.nights === 0) throw new ValidationError('Traktamente kräver övernattning – resan ska pågå över minst en natt');
+    const full = auto ? auto.full : optInt(input, 'days_full', 'Hela dagar') ?? 0, half = auto ? auto.half : optInt(input, 'days_half', 'Halva dagar') ?? 0, nights = auto ? auto.nights : optInt(input, 'nights', 'Nätter') ?? 0;
+    if (auto) input = { ...input, date: dep.slice(0, 10), description: `${str(input, 'description') || 'Tjänsteresa'} (avresa ${dep.replace('T', ' ')}, hemkomst ${ret.replace('T', ' ')})` };
     if (full < 0 || half < 0 || nights < 0 || full + half + nights === 0) throw new ValidationError('Ange antal dagar eller nätter');
     row = { kind, description: str(input, 'description') || 'Traktamente tjänsteresa', amount: allowance(full, half, nights, { full: s.allowance_full, half: s.allowance_half, night: s.allowance_night }),
       vat: 0, account: s.allowance_account, km: null, days_full: full, days_half: half, nights };
   } else throw new ValidationError('Okänd typ');
+  const d = date(input, 'date', 'Datum');
   return sql.begin(async (tx) => {
     await draft(tx, actor.companyId, id);
     const attachmentId = file ? await insertAttachment(tx, actor, null, file) : null;
@@ -183,5 +191,58 @@ export async function payDirect(actor: Actor, id: number, input: Record<string, 
     });
     await tx`UPDATE exp_claims SET status = 'paid', paid_voucher_id = ${v.id} WHERE id = ${id}`;
     await auditBy(tx, actor, 'pay_direct', 'utlagg.claim', id);
+  });
+}
+
+// ---------- Körjournal ----------
+export interface Trip { id: number; employee_id: number; employee: string; date: string; from_place: string; to_place: string; purpose: string; km: number; odo_start: number | null; odo_end: number | null; vehicle: 'private' | 'company'; line_id: number | null; claim_id: number | null }
+
+export async function listTrips(companyId: number, f: { employeeId?: number; year?: number } = {}): Promise<Trip[]> {
+  return [...await sql<Trip[]>`SELECT t.id, t.employee_id, e.first_name || ' ' || e.last_name AS employee, to_char(t.date,'YYYY-MM-DD') AS date, t.from_place, t.to_place, t.purpose,
+      t.km::float8 AS km, t.odo_start, t.odo_end, t.vehicle, t.line_id, l.claim_id
+    FROM exp_trips t JOIN employees e ON e.id = t.employee_id LEFT JOIN exp_lines l ON l.id = t.line_id
+    WHERE t.company_id = ${companyId} ${f.employeeId ? sql`AND t.employee_id = ${f.employeeId}` : sql``} ${f.year ? sql`AND extract(year FROM t.date) = ${f.year}` : sql``}
+    ORDER BY t.date DESC, t.id DESC LIMIT 500`];
+}
+
+/** En resa i körjournalen: datum, start och mål, ärende och mätarställning eller kilometer (Skatteverkets krav på körjournal) */
+export async function addTrip(actor: Actor, employeeId: number, input: Record<string, unknown>) {
+  if (!(await sql`SELECT 1 FROM employees WHERE id = ${employeeId} AND company_id = ${actor.companyId}`).length) throw new ValidationError('Den anställda finns inte');
+  const odoStart = optInt(input, 'odo_start', 'Mätarställning start') ?? null, odoEnd = optInt(input, 'odo_end', 'Mätarställning slut') ?? null;
+  let km = Number(String(input.km ?? '').replace(',', '.'));
+  if (odoStart != null && odoEnd != null) {
+    if (odoEnd <= odoStart) throw new ValidationError('Mätarställningen vid slutet ska vara större än vid start');
+    km = odoEnd - odoStart;
+  }
+  if (!Number.isFinite(km) || km <= 0 || km > 5000) throw new ValidationError('Ange kilometer eller mätarställning');
+  const vehicle = str(input, 'vehicle') === 'company' ? 'company' : 'private';
+  const [{ id }] = await sql<{ id: number }[]>`INSERT INTO exp_trips (company_id, employee_id, date, from_place, to_place, purpose, km, odo_start, odo_end, vehicle, created_by)
+    VALUES (${actor.companyId}, ${employeeId}, ${date(input, 'date', 'Datum')}, ${str(input, 'from', { required: true, label: 'Från', max: 120 })}, ${str(input, 'to', { required: true, label: 'Till', max: 120 })},
+      ${str(input, 'purpose', { required: true, label: 'Ärende', max: 200 })}, ${Math.round(km * 10) / 10}, ${odoStart}, ${odoEnd}, ${vehicle}, ${actor.userId}) RETURNING id`;
+  await auditBy(sql, actor, 'trip', 'utlagg.trip', id, { km, vehicle });
+  return id;
+}
+
+export async function removeTrip(actor: Actor, tripId: number, employeeId?: number) {
+  const r = await sql`DELETE FROM exp_trips WHERE id = ${tripId} AND company_id = ${actor.companyId} AND line_id IS NULL
+    ${employeeId ? sql`AND employee_id = ${employeeId}` : sql``} RETURNING id`;
+  if (!r.length) throw new ConflictError('Resan finns inte eller är redan ersatt');
+}
+
+/** Resor med egen bil som inte är ersatta läggs till som milersättning på räkningen, en rad per resa */
+export async function claimTrips(actor: Actor, claimId: number) {
+  const s = await settings(sql, actor.companyId);
+  return sql.begin(async (tx) => {
+    const c = await draft(tx, actor.companyId, claimId);
+    const trips = await tx<{ id: number; date: string; from_place: string; to_place: string; purpose: string; km: number }[]>`SELECT id, to_char(date,'YYYY-MM-DD') AS date, from_place, to_place, purpose, km::float8 AS km
+      FROM exp_trips WHERE company_id = ${actor.companyId} AND employee_id = ${c.employee_id} AND vehicle = 'private' AND line_id IS NULL ORDER BY date, id FOR UPDATE`;
+    if (!trips.length) throw new ValidationError('Det finns inga oersatta resor med egen bil i körjournalen');
+    for (const t of trips) {
+      const [l] = await tx<{ id: number }[]>`INSERT INTO exp_lines (claim_id, kind, date, description, amount, vat, account, km)
+        VALUES (${claimId}, 'mileage', ${t.date}, ${`${t.from_place} – ${t.to_place}, ${t.purpose}`}, ${mileage(t.km, s.mileage_rate)}, 0, ${s.mileage_account}, ${t.km}) RETURNING id`;
+      await tx`UPDATE exp_trips SET line_id = ${l.id} WHERE id = ${t.id}`;
+    }
+    await auditBy(tx, actor, 'claim_trips', 'utlagg.claim', claimId, { trips: trips.length });
+    return trips.length;
   });
 }

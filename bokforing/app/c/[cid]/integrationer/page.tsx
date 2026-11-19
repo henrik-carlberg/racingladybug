@@ -34,7 +34,7 @@ export default async function Integrations({ params, searchParams }: { params: P
       <h1>Integrationer</h1>
       <Flash searchParams={searchParams} />
       <p className="muted">Koppla andra system (CRM, ERP, e-handel, BI m.m.) via REST-API och webhooks.
-        Dokumentation: <a href="/api-docs">API-dokumentation</a> · <a href="/api/v1/openapi.json">OpenAPI-specifikation</a>. Bas-URL: <code className="mono">{origin}/api/v1</code></p>
+        Dokumentation: <a href="/api-docs">API-dokumentation</a> · <a href="/api/v1/openapi.json">OpenAPI-specifikation</a> · <a href="/utvecklare">Bygg en app (OAuth)</a> · <a href={`/c/${company.id}/installningar/appar`}>Kopplade appar</a>. Bas-URL: <code className="mono">{origin}/api/v1</code></p>
 
       <h2>API-nycklar</h2>
       <table>

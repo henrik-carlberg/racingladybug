@@ -1,4 +1,5 @@
 import 'server-only';
+import { enqueue } from '@/lib/server/jobs';
 import { sql, type Tx } from '@/lib/db';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { createVoucher, reverseVoucher } from '@/lib/server/ledger';
@@ -66,6 +67,8 @@ async function insertAttachment(tx: typeof sql | Tx, actor: Actor, voucherId: nu
   const [r] = await tx<{ id: number }[]>`INSERT INTO attachments (company_id, voucher_id, supplier_invoice_id, filename, mime_type, data, uploaded_by)
     VALUES (${actor.companyId}, ${voucherId}, ${supplierInvoiceId}, ${a.filename}, ${a.mimeType || 'application/octet-stream'}, ${a.data}, ${actor.userId}) RETURNING id`;
   await auditBy(tx, actor, 'upload', 'attachment', r.id, { voucher: voucherId, filename: a.filename });
+  // Texten i underlaget görs sökbar i bakgrunden
+  await enqueue('attachment.text', { id: r.id }, tx as never);
   return r.id;
 }
 export { insertAttachment };

@@ -9,7 +9,9 @@ import { PrintButton } from '@/components/PrintButton';
 import type { Company } from '@/lib/server/auth';
 import { canPayByCard } from '@/lib/services/payments';
 import { kr } from '@/lib/format';
-import { payInvoice } from './actions';
+import { payInvoice, swish, swishCheck } from './actions';
+import { installments, swishAvailable, swishStatusFor } from '@/lib/services/paid-faster';
+import { requestOrigin } from '@/lib/server/origin';
 import { PUBLIC, langOf } from '@/lib/i18n';
 
 export const dynamic = 'force-dynamic';
@@ -33,6 +35,12 @@ export default async function PublicInvoice({ params, searchParams }: { params: 
   const card = await canPayByCard(ref.id);
   const [{ total }] = await sql<{ total: number }[]>`SELECT (total - paid_amount)::bigint AS total FROM invoices WHERE id = ${ref.id}`;
   const L = PUBLIC[langOf(inv.language)];
+  const sw = await swishAvailable(ref.id);
+  const instr = typeof sp.swish === 'string' && /^[0-9A-F]{32}$/.test(sp.swish) ? sp.swish : null;
+  const swSt = instr ? await swishStatusFor(token, instr) : null;
+  const appLink = typeof sp.st === 'string' ? `swish://paymentrequest?token=${encodeURIComponent(sp.st)}&callbackurl=${encodeURIComponent(`${await requestOrigin()}/f/${token}?swish=${instr}`)}` : null;
+  const plan = await installments(ref.id);
+  const paidSoFar = Number((inv as unknown as { paid_amount: number }).paid_amount ?? 0);
   return (
     <main style={{ maxWidth: 900, margin: '0 auto', padding: '1.5rem 16px' }}>
       <div className="no-print header" style={{ marginBottom: '1rem' }}>
@@ -44,6 +52,30 @@ export default async function PublicInvoice({ params, searchParams }: { params: 
       </div>
       {sp.betalning === 'klar' && inv.status !== 'paid' && <div className="flash ok no-print">{L.thanks}</div>}
       {sp.betalning === 'fel' && <div className="flash error no-print">{L.payFailed}</div>}
+      {typeof sp.swishfel === 'string' && <div className="flash error no-print">{sp.swishfel}</div>}
+      {swSt && swSt.status === 'paid' && <div className="flash ok no-print swish-paid">Tack! Swish-betalningen på {kr(swSt.amount)} kr är mottagen.</div>}
+      {swSt && ['declined', 'error', 'cancelled'].includes(swSt.status) && <div className="flash error no-print">Swish-betalningen genomfördes inte{swSt.message ? `: ${swSt.message}` : ''}. Försök igen.</div>}
+      {swSt && swSt.status === 'created' && (
+        <div className="card stack no-print swish-wait">
+          <b>Öppna Swish och godkänn betalningen på {kr(swSt.amount)} kr</b>
+          {appLink && <a className="btn" href={appLink}>Öppna Swish</a>}
+          <form action={swishCheck.bind(null, token, instr!)}><button className="secondary">Jag har godkänt – kontrollera</button></form>
+        </div>
+      )}
+      {sw && !(swSt && swSt.status === 'created') && inv.status !== 'paid' && (
+        <form action={swish.bind(null, token)} className="card row no-print swish-form" style={{ alignItems: 'end' }}>
+          <label>Betala {kr(sw.amount)} kr med Swish – ditt mobilnummer<input name="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="Lämna tomt på mobilen" /></label>
+          <div style={{ flex: '0 0 auto' }}><button>Betala med Swish</button></div>
+        </form>
+      )}
+      {plan.length > 0 && (
+        <div className="card no-print installments"><b>Delbetalning</b>
+          <table className="small"><tbody>{plan.reduce<{ rows: React.ReactNode[]; cum: number }>((acc, p) => {
+            acc.cum += p.amount;
+            acc.rows.push(<tr key={p.n}><td>Del {p.n}</td><td>{p.due}</td><td className="num">{kr(p.amount)}</td><td>{acc.cum <= paidSoFar ? <span className="badge ok">Betald</span> : ''}</td></tr>);
+            return acc;
+          }, { rows: [], cum: 0 }).rows}</tbody></table></div>
+      )}
       <InvoiceDoc inv={inv} lines={lines} co={co} orig={orig} isCredit={!!inv.credit_of_id} time={time} />
       <p className="no-print small muted" style={{ marginTop: '1rem' }}>{L.savePdf}</p>
     </main>

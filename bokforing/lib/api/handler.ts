@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { sql } from '@/lib/db';
 import { AppError } from '@/lib/errors';
 import { authenticateApiKey } from '@/lib/server/apikeys';
+import { authenticateOAuth } from '@/lib/services/oauth';
 import { companyAccess } from '@/lib/server/auth';
 import { MODULES } from '@/modules/registry';
 import { CORE_ROUTES } from './routes';
@@ -21,16 +22,28 @@ function resolve(path: string): { routes: ApiRoute[]; sub: string; moduleId: str
   return mod ? { routes: mod.api ?? [], sub: m[2] ?? '/', moduleId: mod.id } : null;
 }
 
+/** Loggar varje anrop (bolag, nyckel eller app, metod, sökväg, status) för bolagets översikt över kopplade appar */
 export async function handleApi(req: Request, pathParts: string[]): Promise<Response> {
+  const seen: { companyId?: number; keyId?: number | null; grantId?: number | null } = {};
+  const res = await handleInner(req, pathParts, seen);
+  if (seen.companyId) await sql`INSERT INTO api_requests (company_id, api_key_id, oauth_grant_id, method, path, status)
+    VALUES (${seen.companyId}, ${seen.keyId ?? null}, ${seen.grantId ?? null}, ${req.method.toUpperCase()}, ${('/' + pathParts.join('/')).slice(0, 200)}, ${res.status})`.catch(() => {});
+  return res;
+}
+
+async function handleInner(req: Request, pathParts: string[], seen: { companyId?: number; keyId?: number | null; grantId?: number | null }): Promise<Response> {
   const method = req.method.toUpperCase();
   const path = '/' + pathParts.map(encodeURIComponent).join('/');
   try {
     const auth = req.headers.get('authorization') ?? '';
     const token = auth.replace(/^Bearer\s+/i, '').trim();
     if (!token) return error(401, 'unauthorized', 'Ange API-nyckel: Authorization: Bearer <nyckel>', { 'WWW-Authenticate': 'Bearer' });
-    const who = await authenticateApiKey(token);
-    if (!who) return error(401, 'unauthorized', 'Ogiltig eller återkallad API-nyckel', { 'WWW-Authenticate': 'Bearer' });
-    const rl = await hit(`api:${who.actor.apiKeyId}`, LIMITS.api.max, LIMITS.api.window);
+    const key = await authenticateApiKey(token);
+    const app = key ? null : await authenticateOAuth(token);
+    const who = key ? { ...key, grantId: null as number | null } : app;
+    if (!who) return error(401, 'unauthorized', 'Ogiltig, återkallad eller utgången nyckel eller token', { 'WWW-Authenticate': 'Bearer' });
+    Object.assign(seen, { companyId: who.actor.companyId, keyId: who.actor.apiKeyId, grantId: who.grantId });
+    const rl = await hit(who.grantId ? `oauth:${who.grantId}` : `api:${who.actor.apiKeyId}`, LIMITS.api.max, LIMITS.api.window);
     if (!rl.ok) return error(429, 'rate_limited', `För många anrop – högst ${LIMITS.api.max} per minut per nyckel`, { 'Retry-After': String(rl.retryAfter) });
 
     const acc = await companyAccess(who.actor.companyId);
@@ -84,7 +97,7 @@ export async function handleApi(req: Request, pathParts: string[]): Promise<Resp
     try {
       const url = new URL(req.url);
       const origin = process.env.APP_ORIGIN ?? `${req.headers.get('x-forwarded-proto') ?? url.protocol.replace(':', '')}://${req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? url.host}`;
-      const result = await route.handler({ actor: who.actor, params, query: url.searchParams, body, origin });
+      const result = await route.handler({ actor: who.actor, params, query: url.searchParams, body, origin, auth: { scopes: who.scopes, grantId: who.grantId } });
       if (result instanceof Response) return result;
       return finish(route.status ?? 200, result);
     } catch (e) {

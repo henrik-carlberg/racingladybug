@@ -9,7 +9,9 @@ import { queueReceipt } from '@/lib/client/outbox';
 
 type State = { error?: string } | undefined;
 
-export function ReceiptForm({ action, read, today, companyType, accountNames, learned = {}, period }: {
+export function ReceiptForm({ action, read, today, companyType, accountNames, learned = {}, period, card }: {
+  /** Kvittot fotas för ett kortköp: belopp och datum är förifyllda och kvittot kopplas till köpet */
+  card?: { tx: number; total: string; date: string; text: string };
   learned?: Record<string, ReceiptCoding & { streak: number }>;
   period?: Period;
   action: (s: State, fd: FormData) => Promise<State>;
@@ -20,11 +22,11 @@ export function ReceiptForm({ action, read, today, companyType, accountNames, le
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const [catKey, setCatKey] = useState('');
-  const [total, setTotal] = useState('');
+  const [total, setTotal] = useState(card?.total ?? '');
   const [vat, setVat] = useState<string>('');
   const [persons, setPersons] = useState('1');
   const [paidWith, setPaidWith] = useState<'company' | 'private'>('company');
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useState(card?.date ?? today);
   const [description, setDescription] = useState('');
   const [reading, setReading] = useState<'' | 'busy' | 'done' | string>('');
   const [picked, setPicked] = useState(false);
@@ -76,6 +78,7 @@ export function ReceiptForm({ action, read, today, companyType, accountNames, le
     }}>
       {offline && <div className="flash ok" role="status">Du är utan uppkoppling – kvittot är sparat i telefonen och bokförs automatiskt när du är uppkopplad igen.</div>}
       {state?.error && <div className="flash error">{state.error}</div>}
+      {card && <div className="flash ok card-tx">Kvitto för kortköpet {card.text} {card.date} – det kopplas till köpet när du bokför.<input type="hidden" name="tx" value={card.tx} /></div>}
       <label className="card" style={{ cursor: 'pointer', textAlign: 'center', borderStyle: 'dashed' }}>
         <span style={{ fontSize: '1.1rem' }}>📷 Fota eller välj kvitto</span>
         <span className="small muted">Bild eller PDF sparas som underlag (krav enligt bokföringslagen)</span>

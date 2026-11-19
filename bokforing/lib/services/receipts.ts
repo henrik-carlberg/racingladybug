@@ -4,7 +4,7 @@ import { receiptKey } from '@/lib/coding-memory';
 import { sql } from '@/lib/db';
 import { ValidationError } from '@/lib/errors';
 import { createVoucher } from '@/lib/server/ledger';
-import { RECEIPT_CATEGORIES, receiptLines, type PaidWith } from '@/lib/receipts';
+import { paymentAccount, RECEIPT_CATEGORIES, receiptLines, type PaidWith } from '@/lib/receipts';
 import type { Actor } from './actor';
 import { date, int, optInt, str } from './input';
 import { getVoucher, insertAttachment, type AttachmentIn } from './vouchers';
@@ -20,7 +20,10 @@ export async function createReceipt(actor: Actor, input: Record<string, unknown>
   const paidWith = (str(input, 'paid_with') || 'company') as PaidWith;
   const [c] = await sql<{ company_type: 'AB' | 'EF' }[]>`SELECT company_type FROM companies WHERE id = ${actor.companyId}`;
   const what = str(input, 'description', { max: 200 }) || cat.label;
-  const { lines } = receiptLines({ category: cat, total, vatRate, persons: optInt(input, 'persons') ?? 1, paidWith, companyType: c.company_type, description: what });
+  const { lines: raw } = receiptLines({ category: cat, total, vatRate, persons: optInt(input, 'persons') ?? 1, paidWith, companyType: c.company_type, description: what });
+  // Kvitto för ett kortköp: betalningen bokförs på kortets konto i stället för 1930
+  const payAccount = optInt(input, 'pay_account');
+  const lines = payAccount ? raw.map((l) => (l.account === paymentAccount('company', c.company_type) ? { ...l, account: payAccount } : l)) : raw;
   const id = await sql.begin(async (tx) => {
     const v = await createVoucher(tx, {
       actor, date: date(input, 'date', 'Datum'), lines, sourceType: 'receipt',

@@ -5,13 +5,16 @@ import { kr, today } from '@/lib/format';
 import { RECEIPT_CATEGORIES } from '@/lib/receipts';
 import * as svc from './service';
 import * as a from './actions';
+import { BankPaymentList } from '@/components/BankPaymentList';
+import { hasPermission } from '@/lib/permissions';
+import { bankPayEnabled, listBankPayments, payAccounts } from '@/lib/services/bankpay';
 
 const krIn = (ore: number) => (ore / 100).toFixed(2).replace('.', ',').replace(/,00$/, '');
 const STATUS: Record<string, [string, string]> = { draft: ['Utkast', ''], submitted: ['Väntar på attest', 'warn'], approved: ['Attesterad', 'ok'], rejected: ['Avslagen', 'danger'], paid: ['Utbetald', 'ok'] };
 const KIND: Record<string, string> = { receipt: 'Kvitto', mileage: 'Milersättning', allowance: 'Traktamente' };
 
 function Nav({ basePath }: { basePath: string }) {
-  return <p className="small"><Link href={basePath}>Utläggsräkningar</Link> · <Link href={`${basePath}/installningar`}>Ersättningar och konton</Link></p>;
+  return <p className="small"><Link href={basePath}>Utläggsräkningar</Link> · <Link href={`${basePath}/korjournal`}>Körjournal</Link> · <Link href={`${basePath}/installningar`}>Ersättningar och konton</Link></p>;
 }
 
 async function Overview({ companyId, actor, basePath, searchParams }: ModulePageProps) {
@@ -56,6 +59,12 @@ async function Claim({ companyId, actor, basePath, params }: ModulePageProps) {
   }
   const s = await svc.settings(sql, companyId);
   const editable = c.status === 'draft' || c.status === 'rejected';
+  const trips = editable ? Number((await sql<{ n: number }[]>`SELECT count(*)::int AS n FROM exp_trips WHERE company_id = ${companyId} AND employee_id = ${c.employee_id} AND vehicle = 'private' AND line_id IS NULL`)[0].n) : 0;
+  const [mem] = actor.role === 'employee' ? [] : await sql<{ role: string; permissions: string[] | null }[]>`SELECT role, permissions FROM memberships WHERE company_id = ${companyId} AND user_id = ${actor.userId}`;
+  const canPay = !!mem && hasPermission(mem.role, mem.permissions, 'payments');
+  const payOn = canPay && (c.status === 'approved' || c.status === 'paid') && bankPayEnabled();
+  const [payAccts, payments] = payOn ? await Promise.all([payAccounts(companyId), listBankPayments(companyId, { claimId: c.id })]) : [[], []];
+  const pending = payments.some((p) => p.status === 'authorization' || p.status === 'accepted');
   const runs = c.status === 'approved' ? await sql<{ id: number; period: string }[]>`SELECT id, period FROM payroll_runs WHERE company_id = ${companyId} AND status = 'draft' ORDER BY period DESC` : [];
   return (
     <>
@@ -99,6 +108,8 @@ async function Claim({ companyId, actor, basePath, params }: ModulePageProps) {
           </form>
           <form action={a.addLine.bind(null, companyId, c.id, 'allowance')} className="card stack">
             <b>🧳 Traktamente</b>
+            <div className="row"><label>Avresa<input type="datetime-local" name="depart" /></label><label>Hemkomst<input type="datetime-local" name="return" /></label></div>
+            <p className="small muted" style={{ margin: 0 }}>Med avresa och hemkomst räknas hela och halva dagar ut åt dig. Annars anger du dagarna själv:</p>
             <div className="row"><label>Avresedag<input type="date" name="date" defaultValue={today()} /></label></div>
             <div className="row"><label>Hela dagar<input name="days_full" type="number" min={0} defaultValue={0} /></label><label>Halva dagar<input name="days_half" type="number" min={0} defaultValue={0} /></label><label>Nätter<input name="nights" type="number" min={0} defaultValue={0} /></label></div>
             <label>Resmål och syfte<input name="description" required placeholder="T.ex. Stockholm, mässa" /></label>
@@ -106,6 +117,7 @@ async function Claim({ companyId, actor, basePath, params }: ModulePageProps) {
             <div><button className="secondary">Lägg till traktamente</button></div>
           </form>
         </div>
+        {trips > 0 && <form action={a.claimTrips.bind(null, companyId, c.id)} className="card actions"><span>🚗 {trips} oersatta resor med egen bil i körjournalen</span><button className="secondary">Lägg till resorna</button></form>}
         <form action={a.submit.bind(null, companyId, c.id)} className="card actions"><button>Skicka in för attest</button><span className="small muted">Alla kvitton måste ha en bild.</span></form>
       </>)}
 
@@ -126,13 +138,63 @@ async function Claim({ companyId, actor, basePath, params }: ModulePageProps) {
               <div style={{ flex: '0 0 auto', alignSelf: 'end' }}><button>Lägg till i lönen</button></div>
             </form>
           )}
+          {payOn && payAccts.length > 0 && !pending && (
+            <form action={a.payBank.bind(null, companyId, c.id)} className="row pay-bank">
+              <label>Till {c.employee}s konto via banken, från<select name="pay_account">{payAccts.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+              <div style={{ flex: '0 0 auto', alignSelf: 'end' }}><button>Betala med BankID</button></div>
+            </form>
+          )}
+          {pending && <p className="small">Betalningen väntar på banken – den bokförs när banken har genomfört den.</p>}
           <form action={a.payDirect.bind(null, companyId, c.id)} className="row">
             <label>Eller direkt från banken, datum<input type="date" name="date" defaultValue={today()} /></label>
             <div style={{ flex: '0 0 auto', alignSelf: 'end' }}><button className="secondary">Bokför utbetalning</button></div>
           </form>
         </div>
       )}
+      {payments.length > 0 && <BankPaymentList payments={payments} refresh={a.refreshBank.bind(null, companyId, c.id)} />}
       {c.status === 'paid' && <p className="small">Utbetald{c.payroll_run_id ? <> med <Link href={`/c/${companyId}/lon/${c.payroll_run_id}`}>lönekörningen</Link></> : c.paid_voucher_id ? <> – <Link href={`/c/${companyId}/verifikationer/${c.paid_voucher_id}`}>verifikation</Link></> : ''}.</p>}
+    </>
+  );
+}
+
+async function Journal({ companyId, actor, basePath, searchParams }: ModulePageProps) {
+  const self = actor.role === 'employee' ? (await sql<{ id: number }[]>`SELECT id FROM employees WHERE company_id = ${companyId} AND user_id = ${actor.userId}`)[0]?.id ?? -1 : undefined;
+  const year = Number(searchParams.year) || Number(today().slice(0, 4));
+  const [trips, emps, s] = await Promise.all([
+    svc.listTrips(companyId, { employeeId: self, year }),
+    sql<{ id: number; name: string }[]>`SELECT id, first_name || ' ' || last_name AS name FROM employees WHERE company_id = ${companyId} AND active ${self ? sql`AND id = ${self}` : sql``} ORDER BY last_name`,
+    svc.settings(sql, companyId),
+  ]);
+  const sum = (v: 'private' | 'company') => trips.filter((t) => t.vehicle === v).reduce((x, t) => x + t.km, 0);
+  const km = (n: number) => n.toLocaleString('sv-SE', { maximumFractionDigits: 1 });
+  return (
+    <>
+      <h1>Körjournal</h1>
+      <Nav basePath={basePath} />
+      <p className="muted">Skriv in varje tjänsteresa: datum, start och mål, ärende och kilometer (eller mätarställning). Resor med egen bil lägger du sedan till på en utläggsräkning
+        med ett klick – {krIn(s.mileage_rate)} kr per mil skattefritt. Resor med förmånsbil eller företagets bil sparas som körjournal (underlag för förmånsvärde och moms).</p>
+      <form action={a.addTrip.bind(null, companyId)} className="card stack">
+        <div className="row">
+          {!self && <label>Anställd<select name="employee_id">{emps.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}</select></label>}
+          <label>Datum<input type="date" name="date" defaultValue={today()} required /></label>
+          <label>Bil<select name="vehicle"><option value="private">Egen bil (milersättning)</option><option value="company">Företagets bil eller förmånsbil</option></select></label>
+        </div>
+        <div className="row"><label>Från<input name="from" required /></label><label>Till<input name="to" required /></label><label style={{ flex: '2 1 220px' }}>Ärende<input name="purpose" required placeholder="T.ex. kundmöte" /></label></div>
+        <div className="row"><label>Kilometer<input name="km" inputMode="decimal" /></label><label>Eller mätarställning start<input name="odo_start" inputMode="numeric" /></label><label>slut<input name="odo_end" inputMode="numeric" /></label></div>
+        <div><button>Spara resa</button></div>
+      </form>
+      <h2>Resor {year}</h2>
+      <p className="small">{[year - 1, year, year + 1].map((y, i) => <span key={y}>{i > 0 && ' · '}{y === year ? <b>{y}</b> : <Link href={`${basePath}/korjournal?year=${y}`}>{y}</Link>}</span>)}
+        {' '}· Egen bil {km(sum('private'))} km · företagets bil {km(sum('company'))} km</p>
+      <div className="table-wrap"><table>
+        <thead><tr><th>Datum</th>{!self && <th>Anställd</th>}<th>Resa</th><th>Bil</th><th className="num">Km</th><th>Ersättning</th><th></th></tr></thead>
+        <tbody>{trips.map((t) => (
+          <tr key={t.id} className="trip"><td>{t.date}</td>{!self && <td>{t.employee}</td>}<td>{t.from_place} – {t.to_place}<div className="small muted">{t.purpose}{t.odo_start != null ? ` · mätare ${t.odo_start}–${t.odo_end}` : ''}</div></td>
+            <td>{t.vehicle === 'private' ? 'Egen' : 'Företagets'}</td><td className="num">{km(t.km)}</td>
+            <td>{t.vehicle === 'company' ? <span className="muted">–</span> : t.claim_id ? <Link href={`${basePath}/r/${t.claim_id}`}>På räkning</Link> : <span className="badge warn">Ej ersatt</span>}</td>
+            <td className="num">{!t.line_id && <form action={a.removeTrip.bind(null, companyId, t.id)}><button className="link">Ta bort</button></form>}</td></tr>
+        ))}{trips.length === 0 && <tr><td colSpan={7} className="muted">Inga resor {year}. Skriv in den första resan i formuläret ovan.</td></tr>}</tbody>
+      </table></div>
     </>
   );
 }
@@ -170,8 +232,8 @@ export const utlagg: ModuleDefinition = {
   version: '0.1.0',
   description: 'Anställdas kvitton, milersättning och traktamente med skattefria belopp, attest av ägaren, bokföring mot skuld till anställda och utbetalning via lönen eller banken.',
   employeeAccess: true,
-  nav: [{ label: 'Utläggsräkningar', path: '' }, { label: 'Ersättningar', path: 'installningar' }],
-  pages: { '': Overview, 'r/:id': Claim, installningar: Settings },
+  nav: [{ label: 'Utläggsräkningar', path: '' }, { label: 'Körjournal', path: 'korjournal' }, { label: 'Ersättningar', path: 'installningar' }],
+  pages: { '': Overview, 'r/:id': Claim, korjournal: Journal, installningar: Settings },
   scopes: [
     { scope: 'utlagg:read', description: 'Läsa utläggsräkningar' },
     { scope: 'utlagg:write', description: 'Skapa och skicka in utläggsräkningar' },

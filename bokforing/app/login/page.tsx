@@ -10,6 +10,8 @@ import { bankidLogin } from '../bankid-actions';
 export const dynamic = 'force-dynamic';
 
 export default async function Login({ searchParams }: { searchParams: SP }) {
+  const sp = await searchParams;
+  const next = typeof sp.next === 'string' && /^\/(?![\/\\])/.test(sp.next) ? sp.next : '';
   const [{ count }] = await sql<{ count: number }[]>`SELECT count(*)::int AS count FROM users`;
   return (
     <div className="center">
@@ -18,6 +20,7 @@ export default async function Login({ searchParams }: { searchParams: SP }) {
       {bankidEnabled() && <form action={bankidLogin}><button className="bankid-btn">Fortsätt med BankID</button></form>}
       <PasskeyLogin />
       <form action={login} className="card stack">
+        {next && <input type="hidden" name="next" value={next} />}
         <label>E-post<input name="email" type="email" required autoComplete="username webauthn" /></label>
         <label>Lösenord<input name="password" type="password" required autoComplete="current-password" /></label>
         <button>Logga in</button>

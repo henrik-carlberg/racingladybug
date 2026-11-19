@@ -30,6 +30,7 @@ export const CORE_SCOPES = [
   { scope: 'documents:read', description: 'Läsa dokument och signeringsstatus' },
   { scope: 'documents:write', description: 'Skapa dokument och skicka dem för e-signering' },
   { scope: 'events:read', description: 'Läsa händelseloggen' },
+  { scope: 'hooks:write', description: 'Prenumerera på händelser (Zapier, Make) – bara för områden appen har läsrätt till' },
 ];
 
 const id = (p: Record<string, string>, k = 'id') => {
@@ -287,6 +288,12 @@ export const CORE_ROUTES: ApiRoute[] = [
     handler: ({ actor, params }) => docs.cancelDocument(actor, id(params)) },
 
   // Händelser
+  { method: 'POST', path: '/hooks', scope: 'hooks:write', tag: 'Händelser', status: 201, summary: 'Prenumerera på en händelse (REST hook för Zapier/Make)',
+    description: 'Händelsen skickas som POST till target_url, signerad som vanliga webhooks. Kräver läsrätt till händelsens område.',
+    body: { type: 'object', required: ['target_url', 'event'], properties: { target_url: { type: 'string' }, event: { type: 'string' } } },
+    handler: async ({ actor, body, auth }) => (await import('@/lib/services/oauth')).subscribeHook(actor, auth?.grantId ?? null, auth?.scopes ?? [], body) },
+  { method: 'DELETE', path: '/hooks/:id', scope: 'hooks:write', tag: 'Händelser', summary: 'Avsluta en prenumeration',
+    handler: async ({ actor, params, auth }) => (await import('@/lib/services/oauth')).unsubscribeHook(actor, auth?.grantId ?? null, id(params)) },
   { method: 'GET', path: '/events', scope: 'events:read', tag: 'Händelser', summary: 'Händelselogg (alternativ till webhooks)',
     description: 'Hämta händelser i ordning. Spara seq för sista händelsen och fråga med after=<seq> nästa gång.',
     query: [{ name: 'after', description: 'Endast händelser med seq större än detta', type: 'integer' }, { name: 'type', description: 'Filtrera på händelsetyp' },

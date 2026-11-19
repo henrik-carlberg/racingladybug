@@ -4,6 +4,7 @@ import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
 import { Flash, type SP } from '@/components/ui';
 import { ReceiptForm } from '@/components/ReceiptForm';
+import { cardLedger } from '@/lib/services/cards';
 import { kr, today } from '@/lib/format';
 import { readReceipt, saveReceipt } from './actions';
 import { invoiceAiEnabled } from '@/lib/services/invoice-ai';
@@ -15,7 +16,11 @@ export const dynamic = 'force-dynamic';
 
 export default async function Receipt({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid);
+  const ctx = await requireCompany(cid);
+  const { company } = ctx;
+  const sp = await searchParams;
+  // Kvitto för ett kortköp kräver behörighet till bokföringen (banktransaktionerna)
+  const card = sp.tx && ctx.can('ledger') ? await cardLedger(company.id, Number(sp.tx)) : null;
   const names = Object.fromEntries((await sql<{ number: number; name: string }[]>`SELECT number, name FROM accounts WHERE company_id = ${company.id}`).map((a) => [a.number, a.name]));
   const recent = await sql<{ id: number; date: string; description: string; amount: number; files: number }[]>`
     SELECT v.id, to_char(v.date,'YYYY-MM-DD') AS date, v.description,
@@ -28,7 +33,7 @@ export default async function Receipt({ params, searchParams }: { params: Promis
       <p className="muted">{invoiceAiEnabled() ? 'Fota kvittot – appen läser av datum, belopp och moms och föreslår vad det gäller. Kontrollera och bokför.' : 'Fota kvittot, välj vad det gäller – appen väljer konto och moms.'} Fakturor från leverantörer med betalning senare registrerar du under <Link href={`/c/${company.id}/leverantorsfakturor/ny`}>Leverantörsfakturor</Link>.</p>
       <Flash searchParams={searchParams} />
       <UseSharedFile input="file" />
-      <ReceiptForm action={saveReceipt.bind(null, company.id)} read={invoiceAiEnabled() ? readReceipt.bind(null, company.id) : undefined} today={today()} companyType={company.company_type} accountNames={names} learned={await learnedCodings<ReceiptCoding>(company.id, 'receipt')} period={await companyPeriod(company.id)} />
+      <ReceiptForm card={card ? { tx: Number(sp.tx), total: (-card.amount / 100).toFixed(2).replace('.', ','), date: card.date, text: card.text } : undefined} action={saveReceipt.bind(null, company.id)} read={invoiceAiEnabled() ? readReceipt.bind(null, company.id) : undefined} today={today()} companyType={company.company_type} accountNames={names} learned={await learnedCodings<ReceiptCoding>(company.id, 'receipt')} period={await companyPeriod(company.id)} />
       {recent.length > 0 && (
         <>
           <h2>Senaste kvitton</h2>

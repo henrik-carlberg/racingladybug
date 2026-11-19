@@ -3,7 +3,8 @@ import { requireCompany } from '@/lib/server/auth';
 import { Flash, type SP } from '@/components/ui';
 import { kr } from '@/lib/format';
 import { cardPaymentsAvailable, paymentIssues, paymentStatus, refreshStripeAccount } from '@/lib/services/payments';
-import { connect, disconnect, refresh, resolve } from './actions';
+import { connect, disconnect, refresh, resolve, savePayOptions } from './actions';
+import { swishConfigured } from '@/lib/server/swish';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,6 +41,19 @@ export default async function Payments({ params, searchParams }: { params: Promi
           {st.account && owner && <form action={disconnect.bind(null, company.id)}><button className="link small">Stäng av kortbetalning</button></form>}
         </div>
       )}
+      <h2>Swish och delbetalning</h2>
+      <form action={savePayOptions.bind(null, company.id)} className="card stack pay-options">
+        <label className="check"><input type="checkbox" name="swish_commerce" defaultChecked={company.swish_commerce} disabled={!owner || !swishConfigured() || !company.swish_number} />
+          {' '}Kunden kan betala med Swish direkt från fakturalänken – betalningen bokförs på fakturan automatiskt
+          {!swishConfigured() ? ' (Swish Handel är inte uppsatt på tjänsten)' : !company.swish_number ? ' (ange Swishnummer under Inställningar)' : ''}</label>
+        <div className="row">
+          <label>Kunden får dela upp betalningen i kundportalen<select name="part_payment_max" defaultValue={String(company.part_payment_max)} disabled={!owner}>
+            <option value="0">Nej</option><option value="2">Upp till 2 delar</option><option value="3">Upp till 3 delar</option><option value="4">Upp till 4 delar</option><option value="6">Upp till 6 delar</option></select></label>
+          <label>För fakturor från (kr)<input name="part_payment_min" defaultValue={String(Number(company.part_payment_min) / 100)} inputMode="decimal" disabled={!owner} /></label>
+        </div>
+        {owner && <div><button className="secondary">Spara</button></div>}
+        <p className="small muted" style={{ margin: 0 }}>Delarna förfaller med en månads mellanrum från fakturans förfallodag och betalas med samma OCR. Påminnelser följer delarna.</p>
+      </form>
       <h2>Så bokförs det</h2>
       <ul className="small">
         <li>När kunden har betalat bokförs inbetalningen mot <b>1580 Fordringar för kontokort</b> (kundfordran 1510 kvittas).</li>

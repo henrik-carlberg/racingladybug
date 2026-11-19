@@ -3,7 +3,8 @@ import type { Metadata } from 'next';
 import { kr, today } from '@/lib/format';
 import { portalByToken, portalInvoices, portalQuotes } from '@/lib/services/portal';
 import { payInvoice } from '../../f/[token]/actions';
-import { accept, contact } from './actions';
+import { accept, contact, plan } from './actions';
+import { planOptions } from '@/lib/services/paid-faster';
 import { PUBLIC, langOf } from '@/lib/i18n';
 
 export const dynamic = 'force-dynamic';
@@ -19,6 +20,7 @@ export default async function Portal({ params, searchParams }: { params: Promise
   const L = PUBLIC[langOf(p.language)];
   const open = invoices.filter((i) => i.status === 'booked');
   const due = open.reduce((s, i) => s + Number(i.remaining), 0);
+  const plans = (await Promise.all(open.map(async (i) => [i.id, await planOptions(p.company_id, i.id)] as const))).filter((x) => x[1]);
   return (
     <main style={{ maxWidth: 900, margin: '0 auto', padding: '1.5rem 16px' }}>
       <div className="header"><div><h1 style={{ marginBottom: 0 }}>{p.customer}</h1><div className="muted">{L.portalAt(p.company)}</div></div></div>
@@ -59,6 +61,21 @@ export default async function Portal({ params, searchParams }: { params: Promise
           </tr>
         ))}{invoices.length === 0 && <tr><td colSpan={6} className="muted">{L.noInvoices}</td></tr>}</tbody>
       </table></div>
+
+      {plans.map(([id, o]) => {
+        const inv = open.find((i) => i.id === id)!;
+        return (
+          <form key={id} action={plan.bind(null, token, id)} className="card stack part-payment">
+            <b>Dela upp betalningen av faktura {inv.number} ({kr(inv.remaining)} kr)</b>
+            <div className="row">{o!.options.map((x) => (
+              <label key={x.n} className="check" style={{ flex: '1 1 200px' }}><input type="radio" name="n" value={x.n} defaultChecked={x.n === 2} />
+                {x.n} delar à {kr(x.plan[0].amount)} kr <span className="small muted">({x.plan.map((d) => d.due).join(', ')})</span></label>
+            ))}</div>
+            <p className="small muted" style={{ margin: 0 }}>Utan extra avgift. Varje del betalas med samma OCR-nummer; påminnelse skickas bara om en del inte betalas i tid.</p>
+            <div><button className="secondary">Dela upp betalningen</button></div>
+          </form>
+        );
+      })}
 
       <details className="card"><summary>{L.updateContact}</summary>
         <form action={contact.bind(null, token)} className="stack" style={{ marginTop: '.5rem' }}>
