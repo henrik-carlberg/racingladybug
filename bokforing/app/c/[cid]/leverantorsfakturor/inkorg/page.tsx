@@ -1,3 +1,4 @@
+import { UseSharedFile } from '@/components/SharedFile';
 import Link from 'next/link';
 import { requireCompany } from '@/lib/server/auth';
 import { Flash, type SP, EmptyState } from '@/components/ui';
@@ -23,6 +24,7 @@ export default async function Inbox({ params, searchParams }: { params: Promise<
       {open.some((d) => d.status === 'new') && <meta httpEquiv="refresh" content="5" />}
       <div className="header"><h1>Inkorg för leverantörsfakturor</h1><Link className="btn secondary" href={b}>Alla leverantörsfakturor</Link></div>
       <Flash searchParams={searchParams} />
+      <UseSharedFile input="files" />
       <div className="card stack">
         {address ? (
           <div>Be leverantörerna skicka fakturor till <code className="inbox-address" style={{ fontSize: '1.05em' }}>{address}</code>, eller vidarebefordra dem dit. PDF och bilder i mejlet hamnar här.

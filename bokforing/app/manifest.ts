@@ -15,5 +15,13 @@ export default function manifest(): MetadataRoute.Manifest {
       { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
       { src: '/icon-maskable.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' },
     ],
+    // Genvägar när man håller in appikonen
+    shortcuts: [
+      { name: 'Nytt kvitto', short_name: 'Kvitto', description: 'Fota ett kvitto', url: '/genvag/kvitto', icons: [{ src: '/icon.svg', sizes: 'any' }] },
+      { name: 'Skanna leverantörsfaktura', short_name: 'Faktura', description: 'Ladda upp en faktura till inkorgen', url: '/genvag/faktura', icons: [{ src: '/icon.svg', sizes: 'any' }] },
+      { name: 'Att göra', short_name: 'Att göra', url: '/genvag/oversikt', icons: [{ src: '/icon.svg', sizes: 'any' }] },
+    ],
+    // Dela en bild eller PDF från andra appar direkt hit (tas emot av service workern)
+    share_target: { action: '/dela', method: 'POST', enctype: 'multipart/form-data', params: { title: 'title', text: 'text', files: [{ name: 'file', accept: ['image/*', 'application/pdf'] }] } },
   };
 }

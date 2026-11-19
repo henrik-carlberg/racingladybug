@@ -10,7 +10,7 @@ const empty = (): Row => ({ account: '', debit: '', credit: '', description: '',
 
 export function VoucherForm({ action, accounts, today, costCenters = [], projects = [], initial, period }: {
   period?: Period;
-  initial?: { description: string; rows: { account: number; debit: number; credit: number; description: string }[] };
+  initial?: { date?: string; description: string; rows: { account: number; debit: number; credit: number; description: string }[] };
   action: (s: FormState, fd: FormData) => Promise<FormState>;
   accounts: { number: number; name: string }[];
   today: string;
@@ -23,7 +23,7 @@ export function VoucherForm({ action, accounts, today, costCenters = [], project
   const set = (i: number, k: keyof Row, v: string) => setRows((r) => r.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
   const sum = (k: 'debit' | 'credit') => rows.reduce((s, r) => s + (parseAmount(r[k]) ?? 0), 0);
   const diff = sum('debit') - sum('credit');
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useState(initial?.date ?? today);
   const checks = period ? voucherChecks({ date, today, period, lines: rows.filter((r) => r.account).map((r) => ({ account: Number(r.account), debit: parseAmount(r.debit) ?? 0, credit: parseAmount(r.credit) ?? 0 })) }) : [];
   const blocked = checks.some((c) => c.level === 'error');
   const name = (n: string) => accounts.find((a) => String(a.number) === n)?.name;

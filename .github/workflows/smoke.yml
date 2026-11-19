@@ -1,0 +1,29 @@
+# Kontroll efter varje deploy till produktion: ett testkonto loggar in och öppnar de viktigaste sidorna.
+# Hemligheter: SMOKE_EMAIL och SMOKE_PASSWORD (ett eget testkonto med ett testbolag, inte ett riktigt bolag).
+name: Kontroll efter deploy
+on:
+  deployment_status: {}
+  workflow_dispatch:
+    inputs:
+      url: { description: 'Adress att kontrollera', required: false, default: 'https://bokforing-pearl.vercel.app' }
+permissions: { contents: read }
+jobs:
+  smoke:
+    if: github.event_name == 'workflow_dispatch' || (github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production')
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: bokforing } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm i --no-save playwright@1.56.1 && npx playwright install --with-deps chromium
+      - name: Kontrollera
+        env:
+          SMOKE_URL: ${{ github.event.inputs.url || 'https://bokforing-pearl.vercel.app' }}
+          SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+          SMOKE_VERSION: ${{ github.event.deployment.sha }}
+        run: |
+          # Inloggningsuppgifterna skickas bara till tjänstens egna adresser
+          case "$SMOKE_URL" in https://bokforing-pearl.vercel.app) ;; *) echo "Okänd adress: $SMOKE_URL"; exit 1;; esac
+          node tests/smoke/smoke.cjs

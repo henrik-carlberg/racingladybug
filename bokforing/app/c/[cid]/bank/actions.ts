@@ -93,3 +93,13 @@ export async function ignoreTxNow(cid: number, txId: number) {
   const actor = userActor(await requireCompany(cid, { perm: 'ledger' }));
   return result(() => bank.reconcile(actor, txId, { type: 'ignore' }));
 }
+
+/** AI föreslår konto för transaktioner som varken regler eller tidigare konteringar känner igen */
+export async function aiSuggest(cid: number, ids: number[]) {
+  const { suggestBankAccounts } = await import('@/lib/services/ai-bookkeeping');
+  const { limit } = await import('@/lib/server/ratelimit');
+  const actor = userActor(await requireCompany(cid, { perm: 'ledger' }));
+  let n = 0;
+  await attempt(`/c/${cid}/bank/avstamning`, async () => { await limit(`ai-bank:${cid}`, 200, 3600); n = await suggestBankAccounts(actor, ids); });
+  done(`/c/${cid}/bank/avstamning`, n ? `AI har föreslagit konto för ${n} ${n === 1 ? 'transaktion' : 'transaktioner'} – kontrollera och bokför` : 'AI kunde inte föreslå något konto');
+}

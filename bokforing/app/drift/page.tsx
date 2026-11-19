@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { jobStats } from '@/lib/server/jobs';
 import { notFound } from 'next/navigation';
 import { sql } from '@/lib/db';
@@ -29,9 +30,10 @@ export default async function Ops({ searchParams }: { searchParams: SP }) {
     sql<{ key: string; count: number }[]>`SELECT split_part(key, ':', 1) AS key, SUM(count)::int AS count FROM rate_limits WHERE window_start > now() - interval '1 hour' GROUP BY 1 ORDER BY 2 DESC LIMIT 10`,
   ]);
   const jobs = await jobStats();
+  const [integ] = await sql<{ n: number }[]>`SELECT count(*)::int AS n FROM (SELECT DISTINCT ON (company_id) errors FROM integrity_runs ORDER BY company_id, run_at DESC) x WHERE errors > 0`;
   return (
     <div className="center" style={{ maxWidth: 1100 }}>
-      <h1>Drift</h1>
+      <div className="header"><h1>Drift</h1><Link className="btn secondary" href="/drift/installningar">Integrationer</Link></div>
       <Flash searchParams={searchParams} />
       <div className="grid">
         {[['Bolag', stats.companies], ['Användare', stats.users], ['Betalande abonnemang', stats.active], ['Verifikationer senaste 7 dagarna', stats.vouchers]].map(([l, v]) => (
@@ -47,6 +49,8 @@ export default async function Ops({ searchParams }: { searchParams: SP }) {
           <form action={resolveError.bind(null, e.id)}><button className="secondary">Markera som åtgärdat</button></form>
         </details>
       ))}
+      <h2>Integritetskontroll</h2>
+      <p className="small" style={integ.n ? { color: 'var(--danger)' } : undefined}>{integ.n} bolag med avvikelser i senaste kontrollen</p>
       <h2>Jobbkö</h2>
       <p className="small">{jobs.queued} i kö{jobs.oldest ? ` (äldst ${jobs.oldest})` : ''} · <span style={jobs.failed ? { color: 'var(--danger)' } : undefined}>{jobs.failed} misslyckade</span></p>
       <h2>Schemalagda jobb</h2>

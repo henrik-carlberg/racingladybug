@@ -8,7 +8,8 @@ import { requireCompany } from '@/lib/server/auth';
 import { listBankAccounts, listTransactions } from '@/lib/services/bank';
 import { Flash, type SP, EmptyState } from '@/components/ui';
 import { kr } from '@/lib/format';
-import { autoMatch, bookAllSuggestions, ignoreTxNow, reconcileTx, reopenTx } from '../actions';
+import { aiSuggest, autoMatch, bookAllSuggestions, ignoreTxNow, reconcileTx, reopenTx } from '../actions';
+import { aiEnabled, type AiBankSuggestion } from '@/lib/services/ai-bookkeeping';
 import { learnKey } from '@/lib/bank/rules';
 import { listCostCenters, listProjectRefs } from '@/lib/services/dimensions';
 
@@ -34,6 +35,9 @@ export default async function Reconcile({ params, searchParams }: { params: Prom
     SELECT q.entity_id AS id, bool_or(q.status = 'open' AND q.needs_document) AS requested, max(a.id) AS attachment
     FROM client_questions q LEFT JOIN attachments a ON a.question_id = q.id
     WHERE q.company_id = ${company.id} AND q.entity = 'bank_transaction' AND q.entity_id IN ${sql(ids)} GROUP BY q.entity_id` : []).map((r) => [r.id, r]));
+  const aiMap = new Map((ids.length ? await sql<{ id: number; s: AiBankSuggestion }[]>`SELECT id, ai_suggestion AS s FROM bank_transactions WHERE company_id = ${company.id} AND id IN ${sql(ids)} AND ai_suggestion IS NOT NULL` : []).map((r) => [r.id, r.s]));
+  const unknown = rows.filter((r) => r.status === 'unmatched' && !(r.suggestions ?? []).length && !r.accountSuggestion && !aiMap.has(r.id)).map((r) => r.id);
+  const ai = aiEnabled();
   const withAccount = rows.filter((r) => r.accountSuggestion && !(r.suggestions ?? []).some((x) => x.score >= 80)).length;
   const ruleLink = (t: (typeof rows)[number], account?: number | null) => `${b}/bank/regler?${new URLSearchParams({ pattern: learnKey(t), direction: t.amount < 0 ? 'out' : 'in',
     ...(account ? { account: String(account) } : {}), description: t.counterparty || t.description, back: `${b}/bank/avstamning` }).toString()}`;
@@ -55,6 +59,7 @@ export default async function Reconcile({ params, searchParams }: { params: Prom
           <Link key={s} className={`btn ${status === s ? '' : 'secondary'}`} href={`${b}/bank/avstamning?status=${s}${accountId ? `&account_id=${accountId}` : ''}`}>{l}</Link>
         ))}
       </div>
+      {ai && unknown.length > 1 && <form action={aiSuggest.bind(null, company.id, unknown.slice(0, 20))} className="card row" style={{ alignItems: 'center' }}><span style={{ flex: 1 }}>{unknown.length} transaktioner känns inte igen av regler eller tidigare konteringar.</span><button className="secondary">✨ Föreslå konton med AI{unknown.length > 20 ? ' (20 första)' : ''}</button></form>}
       <datalist id="chart">{chart.map((a) => <option key={a.number} value={a.number}>{a.name}</option>)}</datalist>
       {rows.length === 0 && (status === 'unmatched'
         ? <EmptyState icon="check" title="Allt är avstämt" actions={[{ href: `${b}/bank`, label: 'Hämta nya transaktioner', secondary: true }]}>Det finns inga banktransaktioner som väntar. Nya transaktioner hämtas från banken automatiskt varje natt om banken är kopplad.</EmptyState>
@@ -79,6 +84,14 @@ export default async function Reconcile({ params, searchParams }: { params: Prom
                   <div style={{ flex: '0 0 auto' }}><button className={s.score >= 90 ? '' : 'secondary'}>{s.type === 'voucher' ? 'Koppla' : 'Matcha och bokför'}</button></div>
                 </form>
               ))}
+              {aiMap.get(t.id) && !t.accountSuggestion && (() => { const a = aiMap.get(t.id)!; return (
+                <form action={reconcileTx.bind(null, company.id, t.id)} className="row" style={{ alignItems: 'center' }}>
+                  <input type="hidden" name="type" value="account" /><input type="hidden" name="qs" value={qs} />
+                  <input type="hidden" name="account" value={a.account} /><input type="hidden" name="vat_rate" value={a.vatRate} /><input type="hidden" name="description" value={a.description} />
+                  <span style={{ flex: '3 1 300px' }}><span className="badge">✨ AI</span> {a.account} {a.accountName}{a.vatRate ? `, ${a.vatRate} % moms` : ''} <span className="small muted">– {a.reason}</span></span>
+                  <div style={{ flex: '0 0 auto' }}><button className="secondary">Bokför</button></div>
+                </form>); })()}
+              {ai && unknown.includes(t.id) && <form action={aiSuggest.bind(null, company.id, [t.id])}><button className="link small">✨ Föreslå konto med AI</button></form>}
               {t.accountSuggestion && (() => { const a = t.accountSuggestion; return (
                 <form action={reconcileTx.bind(null, company.id, t.id)} className="row" style={{ alignItems: 'center' }}>
                   <input type="hidden" name="type" value="account" /><input type="hidden" name="qs" value={qs} />

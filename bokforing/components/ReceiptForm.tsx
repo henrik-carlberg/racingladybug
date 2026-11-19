@@ -129,7 +129,7 @@ export function ReceiptForm({ action, read, today, companyType, accountNames, le
         </div>
       )}
       <Checks items={checks} />
-      <div className="actions" style={{ margin: 0 }}>
+      <div className="actions receipt-actions" style={{ margin: 0 }}>
         <button disabled={pending || reading === 'busy' || !cat || totalOre <= 0 || blocked}>{pending ? 'Bokför…' : 'Bokför kvitto'}</button>
         <button name="another" value="1" className="secondary" disabled={pending || !cat || totalOre <= 0 || blocked}>Bokför och registrera nästa</button>
       </div>

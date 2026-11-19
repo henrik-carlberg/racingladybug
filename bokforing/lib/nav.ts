@@ -82,6 +82,7 @@ export function buildNav(o: {
     }) },
     { id: 'inst', label: t('Inställningar'), icon: 'settings', items: items([
       { path: '/installningar', label: 'Inställningar', hint: 'Företagsuppgifter, räkenskapsår och användare' },
+      { path: '/installningar/status', label: 'Kopplingar och status', hint: 'Bank, e-post, BankID och notiser – vad som saknas' },
       { path: '/moduler', label: 'Moduler', hint: 'Slå på CRM, lager, projekt m.m.' },
       { path: '/abonnemang', label: 'Abonnemang' },
       { path: '/installningar/betalningar', label: 'Kortbetalning' },
@@ -92,6 +93,8 @@ export function buildNav(o: {
       { path: '/integrationer', label: 'Integrationer (API)' },
       { path: '/installningar/gdpr', label: 'Dataskydd (GDPR)' },
       { path: '/historik', label: 'Behandlingshistorik' },
+      { path: '/installningar/systemdokumentation', label: 'Systemdokumentation och arkiv', perm: 'ledger', hint: 'Bokföringslagen: dokumentation och arkivpaket per år' },
+      { path: '/installningar/integritet', label: 'Integritetskontroll', perm: 'ledger', hint: 'Nattlig kontroll av balans, nummerserier och låsta perioder' },
     ]) },
   ].filter((s) => s.items.length);
   return { top, sections };

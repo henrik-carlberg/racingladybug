@@ -3,6 +3,8 @@ import { unstable_rethrow } from 'next/navigation';
 import { attempt, amount, done, fileFrom, str } from '@/lib/server/action';
 import { requireCompany } from '@/lib/server/auth';
 import { userActor } from '@/lib/services/actor';
+import { suggestVoucher } from '@/lib/services/ai-bookkeeping';
+import { limit } from '@/lib/server/ratelimit';
 import { addAttachment, createManualVoucher, reverse as reverseSvc } from '@/lib/services/vouchers';
 
 export type FormState = { error?: string } | undefined;
@@ -41,4 +43,12 @@ export async function uploadAttachment(cid: number, vid: number, fd: FormData) {
     await addAttachment(actor, vid, f);
   });
   done(`/c/${cid}/verifikationer/${vid}`, 'Underlaget är uppladdat');
+}
+
+/** Beskriv med egna ord → AI föreslår en verifikation som öppnas i formuläret */
+export async function aiVoucher(cid: number, fd: FormData) {
+  const actor = userActor(await requireCompany(cid, { perm: 'ledger' }));
+  let id = 0;
+  await attempt(`/c/${cid}/verifikationer/ny`, async () => { await limit(`ai-voucher:${cid}`, 60, 3600); id = await suggestVoucher(actor, str(fd, 'text')); });
+  done(`/c/${cid}/verifikationer/ny?ai=${id}`);
 }
