@@ -84,6 +84,34 @@ const mailServer = http.createServer((req, res) => { req.resume(); req.on('end',
   await owner.locator('text=Protokollet är skickat för e-signering').waitFor();
   log('styrelseprotokoll skickas för e-signering');
 
+  // ================= Del 2: klimatbokföring =================
+  await owner.goto(B + '/klimat');
+  const ton = async (sel) => Number((await owner.locator(sel).innerText()).replace(/\s| /g, '').replace('ton', '').replace(',', '.'));
+  const tot0 = await ton('.climate-total');
+  const s1 = await ton('[data-scope="1"]'), s2 = await ton('[data-scope="2"]'), s3 = await ton('[data-scope="3"]');
+  assert(tot0 > 0 && Math.abs(tot0 - (s1 + s2 + s3)) < 0.21, 'totalt = scope 1+2+3: ' + [tot0, s1, s2, s3]);
+  t = await text(owner);
+  assert(t.includes('Största källorna') && /Schablon på [\d\s ]+ kr/.test(t) && t.includes('Per månad'), 'rapport: ' + t.slice(0, 1500));
+  log('utsläpp räknas fram ur bokföringen per kategori och scope 1–3, med trend per månad');
+
+  await owner.selectOption('select[name=kind]', 'diesel_l');
+  await owner.fill('input[name=quantity]', '500');
+  await owner.fill('input[name=note]', 'Tankning enligt kort');
+  await owner.click('form:has(select[name=kind]) button:has-text("Spara")');
+  await owner.locator('text=Mängden är sparad').waitFor();
+  t = await text(owner);
+  assert(/Diesel 1 Mängd 1[\s ]300/.test(t), 'exakt mängd: ' + t.slice(0, 2000));
+  assert(!t.includes('Drivmedel till egna fordon 1 Schablon'), 'schablonen för drivmedel ersatt');
+  const tot1 = await ton('.climate-total');
+  const csv = await (await owner.request.get(`${B}/klimat/csv?ar=${day(0).slice(0, 4)}`)).text();
+  assert(csv.includes('Kategori;Scope;Källa;Kostnad (kr);kg CO2e') && csv.includes('"Diesel";1;Mängd;0,00;1300'), 'csv: ' + csv.slice(0, 600));
+  await owner.click('summary:has-text("Faktorer per kategori")');
+  await owner.fill('input[aria-label="Faktor Inköp av varor och material"]', '0');
+  await owner.click('form:has(input[aria-label="Faktor Inköp av varor och material"]) button');
+  await owner.locator('text=Faktorn är sparad').waitFor();
+  assert(await ton('.climate-total') <= tot1, 'egen faktor används');
+  log('exakta mängder (liter, kWh) ersätter schablonen, egna faktorer per kategori och underlag som CSV');
+
   //@@NEXT@@
   await browser.close(); mailServer.close();
   console.log('Omgång 12: alla steg gick igenom');

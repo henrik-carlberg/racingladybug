@@ -22,3 +22,18 @@ describe('Aktiebok', () => {
     expect(o[0].pct).toBe(10); expect(Math.round(o[0].votePct * 10) / 10).toBe(52.6);
   });
 });
+
+import { DEFAULT_CATEGORIES, emissions } from '@/lib/climate';
+describe('Klimatbokföring', () => {
+  it('schabloner per konto och scope', () => {
+    const e = emissions({ costs: new Map([[5611, 1000000], [5020, 500000], [4010, 2000000], [1930, 999999]]), categories: DEFAULT_CATEGORIES, activities: [], privateKm: 0 });
+    expect(e.byScope).toEqual({ 1: 2500, 2: 150, 3: 6000 });
+    expect(e.rows[0].label).toBe('Inköp av varor och material');
+  });
+  it('exakta värden ersätter schablonen för samma kategori', () => {
+    const e = emissions({ costs: new Map([[5611, 1000000], [5020, 500000]]), categories: DEFAULT_CATEGORIES, activities: [{ kind: 'diesel_l', quantity: 500 }], privateKm: 1000 });
+    expect(e.byScope[1]).toBe(1300);
+    expect(e.rows.find((r) => r.key === 'car')!.kg).toBe(120);
+    expect(e.total).toBe(1300 + 150 + 120);
+  });
+});
