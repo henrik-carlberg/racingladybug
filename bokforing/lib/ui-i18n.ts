@@ -3,7 +3,7 @@ export type UiLang = 'sv' | 'en';
 
 const EN: Record<string, string> = {
   // Meny
-  'Bokföring': 'Bookkeeping', 'Översikt': 'Overview', 'Kom igång': 'Get started', '📷 Nytt kvitto': '📷 New receipt', 'Deadlines': 'Deadlines', 'Inlämning': 'Filing', 'Skatteverket och Bolagsverket': 'Swedish Tax Agency and Companies Registration Office',
+  'Bokföring': 'Bookkeeping', 'Översikt': 'Overview', 'Kom igång': 'Get started', '📷 Nytt kvitto': '📷 New receipt', 'Deadlines': 'Deadlines', 'Inlämning': 'Filing', 'E-faktura (Peppol)': 'E-invoicing (Peppol)', 'Skickade och mottagna e-fakturor': 'Sent and received e-invoices', 'Fakturor som kommit in via e-post och Peppol': 'Invoices received by email and Peppol', 'Skatteverket och Bolagsverket': 'Swedish Tax Agency and Companies Registration Office',
   'Verifikationer': 'Vouchers', 'Ny verifikation': 'New voucher', 'Kontoplan': 'Chart of accounts', 'Försäljning': 'Sales', 'Kundfakturor': 'Customer invoices',
   'ROT och RUT': 'ROT and RUT', 'Kassa och e-handel': 'POS and e-commerce', 'Kunder': 'Customers', '⏱ Tidrapportering': '⏱ Time tracking',
   'Uppdrag & timbanker': 'Engagements & hour banks', 'Inköp': 'Purchasing', 'Inkorg för fakturor': 'Invoice inbox', 'Leverantörsfakturor': 'Supplier invoices',

@@ -6,6 +6,8 @@ import { Flash, type SP } from '@/components/ui';
 import { CustomerFields, type CustomerRow } from '@/components/CustomerFields';
 import { saveCustomer, portal } from '../actions';
 import { requestOrigin } from '@/lib/server/origin';
+import { apEnabled } from '@/lib/server/peppol-ap';
+import { lookupCustomer } from '../../peppol/actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +26,7 @@ export default async function Customer({ params, searchParams }: { params: Promi
         <CustomerFields c={c} />
         <div><button>Spara</button></div>
       </form>
+      {apEnabled() && <form action={lookupCustomer.bind(null, company.id, c.id)} className="actions"><button className="secondary">Slå upp i Peppol</button><span className="small muted">Kontrollerar om kunden kan ta emot e-faktura och sparar Peppol-ID:t.</span></form>}
       <h2>Kundportal</h2>
       <div className="card stack small">
         <p style={{ margin: 0 }}>En hemlig länk där kunden ser alla sina fakturor, betalar med kort (om kortbetalning är påslagen), godkänner offerter och uppdaterar sina kontaktuppgifter.</p>

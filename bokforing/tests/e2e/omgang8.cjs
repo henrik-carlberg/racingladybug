@@ -58,6 +58,24 @@ const skvServer = http.createServer((req, res) => {
   });
 }).listen(3308);
 
+// Fejkad Peppol-åtkomstpunkt: SMP-uppslag, skicka, status
+const ap = { sent: [], status: {} };
+const apServer = http.createServer((req, res) => {
+  let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => {
+    const send = (code, j) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(j)); };
+    if (req.headers.authorization !== 'Bearer ap-test') return send(401, {});
+    const u = decodeURIComponent(req.url);
+    if (u === '/participants/0007:5567071234') return send(200, { name: 'Regionen AB', documentTypes: ['urn:oasis:names:specification:ubl:schema:xsd:Invoice-2::Invoice##urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0::2.1'] });
+    if (u.startsWith('/participants/')) return send(404, {});
+    if (req.method === 'POST' && u === '/documents') { const j = JSON.parse(b); const id = 'D-' + (ap.sent.length + 1); ap.sent.push({ id, ...j }); ap.status[id] = 'in_transit'; return send(202, { id, status: 'accepted_for_transport' }); }
+    const m = /^\/documents\/(.+)$/.exec(u);
+    if (m && ap.status[m[1]]) return send(200, { status: ap.status[m[1]] });
+    send(404, {});
+  });
+}).listen(3309);
+const apHook = (event) => { const body = JSON.stringify(event); const ts = String(Math.floor(Date.now() / 1000));
+  return fetch(BASE + '/api/peppol/inbound', { method: 'POST', body, headers: { 'content-type': 'application/json', 'x-peppol-timestamp': ts, 'x-peppol-signature': crypto.createHmac('sha256', 'apsecret').update(`${ts}.${body}`).digest('hex') } }); };
+
 (async () => {
   const browser = await chromium.launch();
   const owner = await login(browser, 'agare@example.com', 'hemligtlosen1');
@@ -128,8 +146,73 @@ const skvServer = http.createServer((req, res) => {
   assert(decodeURIComponent(owner.url()).includes('Inloggningen hos Skatteverket fungerar'), 'test av Skatteverket: ' + owner.url());
   log('Skatteverket och Bolagsverket finns bland integrationerna och inloggningen kan testas');
 
+  // ================= Del 2: Peppol via åtkomstpunkt =================
+  await owner.goto(B + '/integrationer');
+  await owner.fill('input[name=name]', 'Omgång 8');
+  for (const sc of ['sales:write', 'purchasing:write']) await owner.check(`input[name=scopes][value="${sc}"]`);
+  await owner.click('button:has-text("Skapa API-nyckel")');
+  const token = (await owner.locator('.flash.ok code').textContent({ timeout: 10000 })).trim();
+  const api = async (method, path, body) => { const r = await fetch(`${BASE}/api/v1${path}`, { method, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined }); return { status: r.status, json: await r.json() }; };
+
+  const reg = await api('POST', '/customers', { name: 'Regionen AB', orgnr: '556707-1234', address: 'Storgatan 1', postal_code: '111 22', city: 'Stockholm' });
+  const none = await api('POST', '/customers', { name: 'Lilla Firman', orgnr: '556000-0000' });
+  await owner.goto(`${B}/kunder/${none.json.id}`);
+  await owner.click('button:has-text("Slå upp i Peppol")');
+  await owner.waitForURL(/ok=/);
+  assert(decodeURIComponent(owner.url()).includes('finns inte i Peppol'), 'okänd mottagare: ' + owner.url());
+  await owner.goto(`${B}/kunder/${reg.json.id}`);
+  await owner.click('button:has-text("Slå upp i Peppol")');
+  await owner.waitForURL(/ok=/);
+  assert(decodeURIComponent(owner.url()).includes('tar emot e-faktura via Peppol (0007:5567071234)'), 'uppslag: ' + owner.url());
+  assert(await owner.inputValue('input[name=peppol_id]') === '0007:5567071234', 'Peppol-ID sparat på kunden');
+  log('mottagare slås upp i Peppol: okänd kund ger besked, registrerad kund får Peppol-ID sparat');
+
+  const pinv = await api('POST', '/invoices', { customer_id: reg.json.id, invoice_date: iso(new Date()), your_reference: 'Inköp 42', book: true, lines: [{ description: 'Utbildning', quantity: 1, unit: 'st', unit_price: 800000, vat_rate: 25 }] });
+  await owner.goto(`${B}/fakturor/${pinv.json.id}`);
+  await owner.click('button:has-text("Skicka via Peppol")');
+  await owner.locator('.peppol-status:has-text("väntar på leveranskvittens")').waitFor();
+  const doc = Buffer.from(ap.sent[0].document, 'base64').toString();
+  assert(ap.sent[0].receiver === '0007:5567071234' && ap.sent[0].sender === '0007:5560269986' && doc.includes('<cbc:BuyerReference>Inköp 42</cbc:BuyerReference>') && doc.includes('10000.00'), 'skickad till åtkomstpunkten');
+  assert(!(await owner.locator('button:has-text("Skicka via Peppol")').count()), 'kan inte skickas två gånger');
+  ap.status['D-1'] = 'delivered';
+  await owner.click('button:has-text("Hämta leveransstatus")');
+  await owner.locator('.peppol-status:has-text("levererad till mottagaren")').waitFor();
+  log('faktura skickas via åtkomstpunkten och leveransstatus hämtas (skickad → levererad)');
+
+  // Statusändring via webhook (misslyckad leverans) och mottagen e-faktura
+  const pinv2 = await api('POST', '/invoices', { customer_id: reg.json.id, invoice_date: iso(new Date()), your_reference: 'Inköp 43', book: true, lines: [{ description: 'Kurs', quantity: 1, unit: 'st', unit_price: 100000, vat_rate: 25 }] });
+  await owner.goto(`${B}/fakturor/${pinv2.json.id}`);
+  await owner.click('button:has-text("Skicka via Peppol")');
+  await owner.locator('.peppol-status').waitFor();
+  assert((await apHook({ type: 'document.status', id: 'D-2', status: 'failed', message: 'Mottagaren avvisade: fel referens' })).status === 200, 'statuswebhook');
+  await owner.reload();
+  assert((await text(owner)).includes('misslyckades') && (await owner.locator('button:has-text("Skicka via Peppol")').count()) === 1, 'misslyckad leverans kan skickas om');
+  const bad = await fetch(BASE + '/api/peppol/inbound', { method: 'POST', body: '{"type":"document.status","id":"D-1","status":"failed"}', headers: { 'x-peppol-timestamp': String(Math.floor(Date.now() / 1000)), 'x-peppol-signature': 'ab'.repeat(32) } });
+  assert(bad.status === 401, 'osignerad webhook avvisas');
+  log('leveransstatus via signerad webhook; misslyckad leverans kan skickas om, osignerad webhook avvisas');
+
+  const ubl = `<?xml version="1.0" encoding="UTF-8"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+<cbc:ID>LF-9001</cbc:ID><cbc:IssueDate>${iso(new Date())}</cbc:IssueDate><cbc:DueDate>${iso(new Date(Date.now() + 30 * 864e5))}</cbc:DueDate><cbc:DocumentCurrencyCode>SEK</cbc:DocumentCurrencyCode>
+<cac:AccountingSupplierParty><cac:Party><cbc:EndpointID schemeID="0007">5569998887</cbc:EndpointID><cac:PartyName><cbc:Name>Kontorsvaror Peppol AB</cbc:Name></cac:PartyName><cac:PartyLegalEntity><cbc:RegistrationName>Kontorsvaror Peppol AB</cbc:RegistrationName><cbc:CompanyID>5569998887</cbc:CompanyID></cac:PartyLegalEntity></cac:Party></cac:AccountingSupplierParty>
+<cac:AccountingCustomerParty><cac:Party><cbc:EndpointID schemeID="0007">5560269986</cbc:EndpointID></cac:Party></cac:AccountingCustomerParty>
+<cac:PaymentMeans><cbc:PaymentMeansCode>30</cbc:PaymentMeansCode><cbc:PaymentID>900123</cbc:PaymentID><cac:PayeeFinancialAccount><cbc:ID>5050-1055</cbc:ID></cac:PayeeFinancialAccount></cac:PaymentMeans>
+<cac:TaxTotal><cbc:TaxAmount currencyID="SEK">250.00</cbc:TaxAmount></cac:TaxTotal>
+<cac:LegalMonetaryTotal><cbc:TaxExclusiveAmount currencyID="SEK">1000.00</cbc:TaxExclusiveAmount><cbc:PayableAmount currencyID="SEK">1250.00</cbc:PayableAmount></cac:LegalMonetaryTotal>
+<cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="EA">1</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="SEK">1000.00</cbc:LineExtensionAmount><cac:Item><cbc:Name>Papper</cbc:Name></cac:Item></cac:InvoiceLine></Invoice>`;
+  const inEvt = { type: 'document.received', id: 'IN-1', sender: '0007:5569998887', receiver: '0007:5560269986', document: Buffer.from(ubl).toString('base64') };
+  assert((await (await apHook(inEvt)).json()).received === 1, 'mottagen e-faktura');
+  assert((await (await apHook(inEvt)).json()).received === 0, 'samma e-faktura tas bara emot en gång');
+  await owner.goto(B + '/peppol');
+  t = await text(owner);
+  assert(t.includes('Mottagen') && t.includes('0007:5569998887') && t.includes('Levererad') && t.includes('Misslyckad') && t.includes('0007:5560269986'), 'Peppol-loggen: ' + t.slice(0, 1200));
+  await owner.click('a:has-text("Leverantörsfaktura")');
+  await owner.waitForURL(/inkorg\/\d+/);
+  t = await text(owner);
+  assert(t.includes('E-faktura via Peppol från 0007:5569998887') && await owner.inputValue('input[name=invoice_number]') === 'LF-9001', 'mottagen e-faktura tolkad i inkorgen: ' + t.slice(0, 600));
+  log('e-faktura tas emot via Peppol, hamnar tolkad i inkorgen och visas i Peppol-loggen');
+
   //@@NEXT@@
   await browser.close();
-  skvServer.close();
+  skvServer.close(); apServer.close();
   console.log('Omgång 8: alla steg gick igenom');
 })().catch((e) => { console.error(e); process.exit(1); });

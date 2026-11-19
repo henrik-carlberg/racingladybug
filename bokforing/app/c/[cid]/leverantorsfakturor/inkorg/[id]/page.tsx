@@ -29,7 +29,7 @@ export default async function InboxDoc({ params, searchParams }: { params: Promi
       {doc.status === 'new' && <meta httpEquiv="refresh" content="4" />}
       <div className="header"><h1>{doc.filename || doc.subject || 'Mejl utan bilaga'}</h1><Link className="btn secondary" href={`${b}/inkorg`}>Tillbaka till inkorgen</Link></div>
       <Flash searchParams={searchParams} />
-      <p className="small muted">{doc.source === 'email' ? <>Från {doc.from_address} · {doc.subject} · </> : 'Uppladdad · '}{doc.created_at}</p>
+      <p className="small muted">{doc.source === 'email' ? <>Från {doc.from_address} · {doc.subject} · </> : doc.source === 'peppol' ? <>E-faktura via Peppol från {doc.from_address} · </> : 'Uppladdad · '}{doc.created_at}</p>
       {doc.status === 'new' && <div className="card">Fakturan läses av – sidan uppdateras automatiskt.</div>}
       {doc.error && <div className="card" style={{ borderColor: 'var(--danger)' }}>{doc.error}</div>}
       {x && x.documentType !== 'invoice' && <div className="card" style={{ borderColor: 'var(--warn)' }}>{TYPE[x.documentType]}</div>}

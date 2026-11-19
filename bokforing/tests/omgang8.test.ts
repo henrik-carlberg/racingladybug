@@ -21,3 +21,18 @@ describe('eSKD momsdeklaration', () => {
     expect(buildEskd({ orgnr: '5566778899', periodEnd: '2026-01-31', boxes: [{ box: '49', amount: 0 }] })).toContain('<MomsBetala>0</MomsBetala>');
   });
 });
+
+import { createHmac } from 'node:crypto';
+import { verifyApWebhook } from '@/lib/peppol-webhook';
+describe('Peppol-webhook', () => {
+  const body = '{"type":"document.received"}';
+  const now = 1_800_000_000_000, ts = String(now / 1000);
+  const sig = createHmac('sha256', 'hemligt').update(`${ts}.${body}`).digest('hex');
+  it('godtar rätt signatur', () => { expect(verifyApWebhook('hemligt', { timestamp: ts, signature: sig }, body, now)).toBe(true); expect(verifyApWebhook('hemligt', { timestamp: ts, signature: `sha256=${sig}` }, body, now)).toBe(true); });
+  it('avvisar fel hemlighet, ändrad kropp och gammal tidsstämpel', () => {
+    expect(verifyApWebhook('annat', { timestamp: ts, signature: sig }, body, now)).toBe(false);
+    expect(verifyApWebhook('hemligt', { timestamp: ts, signature: sig }, body + ' ', now)).toBe(false);
+    expect(verifyApWebhook('hemligt', { timestamp: ts, signature: sig }, body, now + 301_000)).toBe(false);
+    expect(verifyApWebhook('hemligt', { timestamp: null, signature: sig }, body, now)).toBe(false);
+  });
+});
