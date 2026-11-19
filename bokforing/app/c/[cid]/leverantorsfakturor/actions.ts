@@ -83,3 +83,16 @@ export async function refreshBankPayments(cid: number) {
   await attempt(`/c/${cid}/leverantorsfakturor/betalning`, async () => { n = await refreshPayments(company.id, 'supplier'); });
   done(`/c/${cid}/leverantorsfakturor/betalning`, n ? `${n} betalning(ar) har ny status` : 'Ingen ny status från banken');
 }
+
+/** Koppla fakturan till en inköpsorder (trevägsmatchning, eventuellt automatisk attest) */
+export async function matchPO(cid: number, siId: number, fd: FormData) {
+  const actor = userActor(await requireCompany(cid, { perm: 'purchasing' }));
+  const { matchInvoice } = await import('@/modules/lager/service');
+  const { MATCH_LABEL } = await import('@/lib/purchasing');
+  let msg = '';
+  await attempt(`/c/${cid}/leverantorsfakturor/${siId}`, async () => {
+    const m = await matchInvoice(actor, Number(str(fd, 'po_id')), siId);
+    msg = `${MATCH_LABEL[m.status]}${m.approved ? ' – fakturan är attesterad automatiskt' : ''}`;
+  });
+  done(`/c/${cid}/leverantorsfakturor/${siId}`, msg);
+}

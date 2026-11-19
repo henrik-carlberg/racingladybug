@@ -4,10 +4,11 @@ import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import { auditBy } from '@/lib/server/audit';
 import { hasPermission } from '@/lib/permissions';
 import { BANK_FIELDS, duplicateOf, isWeekend, unusualPayments, type BankField } from '@/lib/fraud';
+import { priceIncrease } from '@/lib/purchasing';
 import type { Actor } from './actor';
 
 type Db = Tx | typeof sql;
-export const KIND_LABEL: Record<string, string> = { bank_change: 'Ändrade bankuppgifter', duplicate: 'Möjlig dubblett', large: 'Ovanligt stort belopp', new_recipient: 'Ny mottagare', weekend: 'Bokfört på helgen' };
+export const KIND_LABEL: Record<string, string> = { price_increase: 'Prishöjning', bank_change: 'Ändrade bankuppgifter', duplicate: 'Möjlig dubblett', large: 'Ovanligt stort belopp', new_recipient: 'Ny mottagare', weekend: 'Bokfört på helgen' };
 
 async function alert(db: Db, companyId: number, a: { kind: string; entity: string; entityId: number; title: string; detail: string }) {
   const r = await db`INSERT INTO risk_alerts (company_id, kind, entity, entity_id, title, detail) VALUES (${companyId}, ${a.kind}, ${a.entity}, ${a.entityId}, ${a.title}, ${a.detail})
@@ -87,6 +88,22 @@ export async function blockedInvoices(db: Db, companyId: number, ids: number[], 
       EXISTS (SELECT 1 FROM risk_alerts a WHERE a.company_id = ${companyId} AND a.kind = 'duplicate' AND a.entity = 'supplier_invoice' AND a.entity_id = i.id AND a.status <> 'ok')
       OR (${opts.forPayment ?? true} AND EXISTS (SELECT 1 FROM supplier_bank_changes c WHERE c.supplier_id = i.supplier_id AND c.status = 'pending')))`;
   return new Map(rows.map((r) => [r.id, r.reason]));
+}
+
+// ---------- Prisbevakning ----------
+/** Återkommande fakturor från samma leverantör (stabila belopp) som plötsligt blir dyrare */
+export async function checkPriceIncrease(tx: Tx, companyId: number, invoiceId: number) {
+  const [n] = await tx<{ supplier_id: number; net: number; supplier: string; number: string }[]>`SELECT i.supplier_id, (i.total - i.vat)::float8 AS net, s.name AS supplier, i.invoice_number AS number
+    FROM supplier_invoices i JOIN suppliers s ON s.id = i.supplier_id WHERE i.id = ${invoiceId}`;
+  const prev = (await tx<{ net: number }[]>`SELECT (total - vat)::float8 AS net FROM supplier_invoices WHERE company_id = ${companyId} AND supplier_id = ${n.supplier_id} AND id <> ${invoiceId}
+    AND NOT EXISTS (SELECT 1 FROM risk_alerts a WHERE a.company_id = ${companyId} AND a.kind = 'duplicate' AND a.entity = 'supplier_invoice' AND a.entity_id = supplier_invoices.id)
+    ORDER BY invoice_date DESC, id DESC LIMIT 3`).map((r) => r.net).reverse();
+  if (prev.length < 2 || Math.max(...prev) > Math.min(...prev) * 1.25) return null; // bara stabila, återkommande belopp
+  const p = priceIncrease(prev, n.net);
+  if (!p) return null;
+  await alert(tx, companyId, { kind: 'price_increase', entity: 'supplier_invoice', entityId: invoiceId, title: `${n.supplier} har höjt priset med ${String(p.pct).replace('.', ',')} %`,
+    detail: `Faktura ${n.number}: ${(p.to / 100).toLocaleString('sv-SE')} kr exkl. moms mot normalt ${(p.from / 100).toLocaleString('sv-SE')} kr.` });
+  return p;
 }
 
 // ---------- Ovanliga transaktioner ----------

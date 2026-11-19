@@ -67,3 +67,26 @@ describe('Kivra och digital post', () => {
     expect(t).toContain('Faktura 1009'); expect(t).toContain('Kund (privat)'); expect(t).toContain('med OCR 10094');
   });
 });
+
+import { contractDates, contractState, priceIncrease, threeWayMatch } from '@/lib/purchasing';
+describe('Inköp med matchning', () => {
+  it('trevägsmatchning', () => {
+    const lines = [{ qty: 10, received: 10, unit_price: 10000 }];
+    expect(threeWayMatch({ lines, invoiceNet: 100000 }).status).toBe('matched');
+    expect(threeWayMatch({ lines, invoiceNet: 100900 }).status).toBe('matched');
+    expect(threeWayMatch({ lines, invoiceNet: 120000 }).status).toBe('price_diff');
+    expect(threeWayMatch({ lines: [{ qty: 10, received: 6, unit_price: 10000 }], invoiceNet: 100000 }).status).toBe('qty_diff');
+    expect(threeWayMatch({ lines: [{ qty: 10, received: 0, unit_price: 10000 }], invoiceNet: 100000 }).status).toBe('no_receipt');
+  });
+  it('avtal: uppsägningstid och automatisk förlängning', () => {
+    expect(contractDates({ end: '2026-12-31', noticeMonths: 3, autoRenew: false, renewMonths: 0 }, '2026-11-20')).toEqual({ end: '2026-12-31', noticeBy: '2026-09-30', renewed: 0 });
+    expect(contractDates({ end: '2026-12-31', noticeMonths: 3, autoRenew: true, renewMonths: 12 }, '2026-11-20')).toEqual({ end: '2027-12-31', noticeBy: '2027-09-30', renewed: 1 });
+    expect(contractState({ end: '2027-01-31', noticeBy: '2026-12-31' }, '2026-11-20')).toBe('notice_soon');
+    expect(contractState({ end: '2027-12-31', noticeBy: '2027-09-30' }, '2026-11-20')).toBe('active');
+  });
+  it('prishöjning', () => {
+    expect(priceIncrease([100000, 100000, 100000], 110000)).toEqual({ pct: 10, from: 100000, to: 110000 });
+    expect(priceIncrease([100000, 100000], 103000)).toBeNull();
+    expect(priceIncrease([100000], 200000)).toBeNull();
+  });
+});

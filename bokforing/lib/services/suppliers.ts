@@ -18,7 +18,7 @@ import { arr, date, has, int, list, optInt, ore, str, type Page } from './input'
 import { insertAttachment, type AttachmentIn } from './vouchers';
 import { dimId } from './dimensions';
 import { BANK_FIELDS, bankChanges } from '@/lib/fraud';
-import { blockedInvoices, checkDuplicate, requestBankChange } from './fraud';
+import { blockedInvoices, checkDuplicate, checkPriceIncrease, requestBankChange } from './fraud';
 
 // ---------- Leverantörer ----------
 
@@ -159,7 +159,7 @@ export async function registerSupplierInvoice(actor: Actor, input: Record<string
         account: costs[0].account, vatRate: vatRateOf(total, vat), costCenterId: costs[0].costCenterId ?? null, projectId: costs[0].projectId ?? null,
       });
       await auditBy(tx, actor, 'register', 'supplier_invoice', id);
-      await checkDuplicate(tx, actor.companyId, id);
+      if (!(await checkDuplicate(tx, actor.companyId, id))) await checkPriceIncrease(tx, actor.companyId, id);
       const out = await fetchSI(tx, actor.companyId, id);
       await emit(tx, actor.companyId, 'supplier_invoice.registered', out);
       notify.attest(actor.companyId, actor.userId ?? null, sup.name, total, id);

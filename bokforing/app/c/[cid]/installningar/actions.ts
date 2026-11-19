@@ -175,7 +175,7 @@ export async function setAttestRules(cid: number, fd: FormData) {
     const threshold = raw ? parseAmount(raw) : null;
     if (raw && (threshold == null || threshold <= 0)) throw new Error('Ange beloppsgränsen i kronor');
     const notRegistrant = fd.get('attest_not_registrant') === 'on';
-    await sql`UPDATE companies SET attest_threshold = ${threshold}, attest_not_registrant = ${notRegistrant} WHERE id = ${company.id}`;
+    await sql`UPDATE companies SET attest_threshold = ${threshold}, attest_not_registrant = ${notRegistrant}, auto_attest_matched = ${fd.get('auto_attest_matched') === 'on'} WHERE id = ${company.id}`;
     await audit(sql, { companyId: company.id, userId: user.id, action: 'attest_rules', entity: 'company', entityId: company.id, details: { threshold, notRegistrant } });
   });
   done(back(cid), 'Attestreglerna är sparade');

@@ -17,7 +17,7 @@ export interface Company {
   address: string; postal_code: string; city: string; email: string; phone: string; vat_number: string;
   bankgiro: string; plusgiro: string; iban: string; f_skatt: boolean; invoice_terms: number; late_interest: string;
   locked_until: string | null; next_invoice_no: number; attest_threshold: number | null; attest_not_registrant: boolean;
-  accounting_method: 'invoice' | 'cash'; prelskatt_from: string | null; bic: string; swish_number: string; swish_commerce: boolean; part_payment_max: number; part_payment_min: number;
+  accounting_method: 'invoice' | 'cash'; prelskatt_from: string | null; bic: string; swish_number: string; swish_commerce: boolean; auto_attest_matched: boolean; part_payment_max: number; part_payment_min: number;
 }
 
 export const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');

@@ -213,6 +213,95 @@ const kvServer = http.createServer((req, res) => {
   assert((await owner.locator('.kivra-slip').count()) === 1, 'status per anställd');
   log('lönebesked skickas till de anställdas Kivra; de som saknar Kivra listas');
 
+  // ================= Del 4: inköp med matchning =================
+  await owner.goto(B + '/installningar');
+  await owner.check('input[name=auto_attest_matched]');
+  await owner.click('form:has(input[name=auto_attest_matched]) button:has-text("Spara")');
+  await owner.locator('.flash.ok').first().waitFor();
+  const M = `${B}/m/lager`;
+  const pick = async (sel, sku) => owner.selectOption(sel, await owner.locator(`${sel} option:has-text("${sku} ")`).first().getAttribute('value'));
+  const po = async (qty, price) => {
+    await owner.goto(M + '/inkop');
+    await owner.selectOption('select[name=supplier_id]', { label: 'Hyresvärden AB' });
+    await pick('select[name=product_0]', 'A-200');
+    await owner.fill('input[name=qty_0]', qty);
+    await owner.fill('input[name=price_0]', price);
+    await owner.click('button:has-text("Skapa inköpsorder")');
+    await owner.locator('text=Inköpsordern är skapad').waitFor();
+    await owner.click('button:has-text("Markera som skickad")');
+    await owner.locator('text=markerad som skickad').waitFor();
+    await owner.click('button:has-text("Registrera inleverans")');
+    await owner.locator('text=Inleveransen är registrerad').waitFor();
+    return owner.url().split('?')[0];
+  };
+  await po('7', '150');
+  await owner.fill('input[name=invoice_number]', 'LF-3V-1');
+  await owner.click('button:has-text("Registrera leverantörsfaktura")');
+  await owner.locator('text=registrerad från inköpsordern').waitFor();
+  await owner.goto(owner.url().split('?')[0]);
+  t = await text(owner);
+  assert(t.includes('Stämmer mot order och inleverans') && t.includes('Automatiskt (trevägsmatchning)') && !(await owner.locator('button:has-text("Attestera")').count()), 'automatisk attest: ' + t.slice(0, 1500));
+  log('fakturan som stämmer mot inköpsorder och inleverans attesteras automatiskt (trevägsmatchning)');
+
+  await po('5', '100');
+  await owner.goto(B + '/leverantorsfakturor/ny');
+  await owner.selectOption('select[name=supplier_id]', { label: 'Hyresvärden AB' });
+  await owner.fill('input[name=invoice_number]', 'LF-3V-2');
+  await owner.fill('input[name=invoice_date]', day(2));
+  await owner.fill('input[name=due_date]', day(-28));
+  await owner.fill('input[name=total]', '800');
+  await owner.click('button:has-text("25 % moms")');
+  await owner.click('button:has-text("Registrera och bokför")');
+  await owner.waitForURL(/leverantorsfakturor\/\d+\?ok/);
+  await owner.click('.match-po button:has-text("Matcha mot order och inleverans")');
+  await owner.locator('.match-status:has-text("Beloppet avviker från ordern")').waitFor();
+  assert((await owner.locator('button:has-text("Attestera")').count()) === 1, 'avvikande faktura attesteras manuellt');
+  log('en faktura som avviker från ordern kopplas manuellt och måste attesteras av en person');
+
+  await owner.goto(B + '/leverantorsavtal');
+  await owner.fill('input[name=name]', 'Hyra lokal ZQ');
+  await owner.selectOption('select[name=supplier_id]', { label: 'Hyresvärden AB' });
+  await owner.fill('input[name=end_date]', day(-50));
+  await owner.fill('input[name=notice_months]', '1');
+  await owner.uncheck('input[name=auto_renew]');
+  await owner.fill('input[name=monthly_cost]', '12500');
+  await owner.click('button:has-text("Spara avtal")');
+  await owner.locator('text=Avtalet är sparat').waitFor();
+  await owner.fill('input[name=name]', 'Leasing kopiator ZQ');
+  await owner.fill('input[name=end_date]', day(400));
+  await owner.fill('input[name=notice_months]', '3');
+  await owner.fill('input[name=renew_months]', '12');
+  await owner.fill('input[name=monthly_cost]', '800');
+  await owner.click('button:has-text("Spara avtal")');
+  await owner.locator('text=Avtalet är sparat').waitFor();
+  t = await text(owner);
+  assert(/Hyra lokal ZQ.*Säg upp snart/.test(t) && /Leasing kopiator ZQ.*förlängs 12 mån i taget.*Löper/.test(t) && t.includes('13 300,00'), 'avtalsregister: ' + t.slice(0, 1500));
+  const cron = async () => (await (await owner.request.get(`${BASE}/api/cron/daily`, { headers: { authorization: 'Bearer testcron' } })).json()).leverantorsavtal;
+  const c1 = await cron(), c2 = await cron();
+  assert(c1 === 1 && c2 === 0, 'påminnelse en gång: ' + JSON.stringify([c1, c2]));
+  log('avtalsregister: sista dag att säga upp räknas fram (även efter automatisk förlängning) och den ansvarige påminns');
+
+  await owner.goto(B + '/leverantorer');
+  await owner.fill('input[name=name]', 'Telebolaget ZQ');
+  await owner.fill('input[name=bankgiro]', '5050-1055');
+  await owner.click('button:has-text("Spara leverantör")');
+  await owner.waitForURL(/ok=/);
+  for (const [no, d, amt] of [['T-1', 90, '500'], ['T-2', 60, '500'], ['T-3', 30, '500'], ['T-4', 1, '560']]) {
+    await owner.goto(B + '/leverantorsfakturor/ny');
+    await owner.selectOption('select[name=supplier_id]', { label: 'Telebolaget ZQ' });
+    await owner.fill('input[name=invoice_number]', no);
+    await owner.fill('input[name=invoice_date]', day(d));
+    await owner.fill('input[name=due_date]', day(d - 30));
+    await owner.fill('input[name=total]', amt);
+    await owner.click('button:has-text("25 % moms")');
+    await owner.click('button:has-text("Registrera och bokför")');
+    await owner.waitForURL(/leverantorsfakturor\/\d+\?ok/);
+  }
+  await owner.goto(B + '/leverantorsavtal');
+  t = await text(owner);
+  assert(/Telebolaget ZQ har höjt priset med 12 %/.test(t) && t.includes('Faktura T-4: 448 kr exkl. moms mot normalt 400 kr'), 'prisbevakning: ' + t.slice(0, 1500));
+  log('prisbevakning: en återkommande faktura som plötsligt blir dyrare flaggas för granskning');
+
   //@@NEXT@@
   await browser.close(); bvServer.close(); mailServer.close(); kvServer.close();
   console.log('Omgång 11: alla steg gick igenom');

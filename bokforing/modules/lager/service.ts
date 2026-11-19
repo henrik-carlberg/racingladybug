@@ -1,4 +1,6 @@
 import 'server-only';
+import { threeWayMatch } from '@/lib/purchasing';
+import { blockedInvoices } from '@/lib/services/fraud';
 import { sql, type Tx } from '@/lib/db';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import { auditBy } from '@/lib/server/audit';
@@ -329,9 +331,43 @@ export async function invoicePO(actor: Actor, id: number, input: Record<string, 
     invoice_date: str(input, 'invoice_date') || today(), due_date: str(input, 'due_date'), total, vat,
     description: `Inköpsorder ${o.number}`, lines: [{ account: PURCHASES, amount: total - vat, description: `Varor enligt inköpsorder ${o.number}` }],
   });
-  await sql`UPDATE inv_purchase_orders SET supplier_invoice_id = ${si.id} WHERE id = ${id}`;
   await auditBy(sql, actor, 'invoice', 'inv.purchase_order', id, { supplier_invoice: si.id });
+  await matchInvoice(actor, id, si.id);
   return si;
+}
+
+/**
+ * Trevägsmatchning: leverantörsfakturan kopplas till inköpsordern och jämförs med det som har levererats.
+ * Stämmer den och bolaget har slagit på automatisk attest blir fakturan attesterad direkt.
+ */
+export async function matchInvoice(actor: Actor, poId: number, siId: number) {
+  return sql.begin(async (tx) => {
+    await tx`SELECT id FROM inv_purchase_orders WHERE id = ${poId} AND company_id = ${actor.companyId} FOR UPDATE`;
+    const o = await getPO(actor.companyId, poId, tx);
+    const [si] = await tx<{ supplier_id: number; status: string; net: number; po: number | null }[]>`SELECT supplier_id, status, (total - vat)::float8 AS net, purchase_order_id AS po
+      FROM supplier_invoices WHERE id = ${siId} AND company_id = ${actor.companyId} FOR UPDATE`;
+    if (!si) throw new NotFoundError('Leverantörsfakturan');
+    if (si.supplier_id !== o.supplier_id) throw new ValidationError('Fakturan är från en annan leverantör än ordern');
+    if (si.po && si.po !== poId) throw new ConflictError('Fakturan är redan kopplad till en annan inköpsorder');
+    if (o.supplier_invoice_id && o.supplier_invoice_id !== siId) throw new ConflictError('Ordern har redan en annan leverantörsfaktura');
+    const m = threeWayMatch({ lines: o.lines, invoiceNet: si.net });
+    await tx`UPDATE inv_purchase_orders SET supplier_invoice_id = ${siId} WHERE id = ${poId}`;
+    await tx`UPDATE supplier_invoices SET purchase_order_id = ${poId}, match_status = ${m.status} WHERE id = ${siId}`;
+    let approved = false;
+    const [co] = await tx<{ auto: boolean }[]>`SELECT auto_attest_matched AS auto FROM companies WHERE id = ${actor.companyId}`;
+    if (m.status === 'matched' && co.auto && si.status === 'booked' && !(await blockedInvoices(tx, actor.companyId, [siId], { forPayment: false })).size) {
+      await tx`UPDATE supplier_invoices SET status = 'approved', approved_at = now(), auto_approved = true WHERE id = ${siId}`;
+      approved = true;
+    }
+    await auditBy(tx, actor, approved ? 'auto_approve' : 'match', 'supplier_invoice', siId, { po: poId, match: m.status, diff: m.diff });
+    return { ...m, approved };
+  });
+}
+
+/** Öppna inköpsorder hos leverantören som en faktura kan kopplas till */
+export async function openPOsFor(companyId: number, supplierId: number) {
+  return [...await sql<{ id: number; number: number; order_date: string; status: string }[]>`SELECT id, number, to_char(order_date,'YYYY-MM-DD') AS order_date, status FROM inv_purchase_orders
+    WHERE company_id = ${companyId} AND supplier_id = ${supplierId} AND status IN ('sent','partial','received') AND supplier_invoice_id IS NULL ORDER BY number DESC LIMIT 20`];
 }
 
 /** Beställningsförslag och inköpsorder per leverantör */
