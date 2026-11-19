@@ -82,3 +82,34 @@ export async function deleteDraftNow(cid: number, invoiceId: number) {
   const actor = userActor(await requireCompany(cid, { perm: 'invoicing' }));
   return result(() => svc.deleteDraft(actor, invoiceId));
 }
+
+/** Skickar fakturan i den bästa kanal kunden kan ta emot: e-faktura, Kivra, e-post – annars utskrift */
+export async function sendBest(cid: number, invoiceId: number) {
+  const { channelFor, sendInvoiceKivra } = await import('@/lib/services/kivra');
+  const peppol = await import('@/lib/services/peppol');
+  const actor = userActor(await requireCompany(cid, { perm: 'invoicing' }));
+  const back = `/c/${cid}/fakturor/${invoiceId}`;
+  let msg = '';
+  await attempt(back, async () => {
+    const c = await channelFor(actor.companyId, invoiceId);
+    if (c.channel === 'peppol') { await peppol.sendInvoice(actor, invoiceId); msg = 'Fakturan är skickad som e-faktura (Peppol)'; }
+    else if (c.channel === 'kivra') { await sendInvoiceKivra(actor, invoiceId, await requestOrigin()); msg = 'Fakturan är skickad till kundens Kivra'; }
+    else if (c.channel === 'email') { const r = await sendSvc(actor, invoiceId, {}, await requestOrigin()); msg = r.emailed ? `Fakturan är skickad med e-post till ${r.to}` : `E-post kunde inte skickas – dela länken: ${r.link}`; }
+    else msg = 'Kunden kan inte ta emot fakturan digitalt – skriv ut den och skicka med post';
+  });
+  done(back, msg);
+}
+
+export async function sendKivra(cid: number, invoiceId: number) {
+  const { sendInvoiceKivra } = await import('@/lib/services/kivra');
+  const actor = userActor(await requireCompany(cid, { perm: 'invoicing' }));
+  await attempt(`/c/${cid}/fakturor/${invoiceId}`, async () => sendInvoiceKivra(actor, invoiceId, await requestOrigin()));
+  done(`/c/${cid}/fakturor/${invoiceId}`, 'Fakturan är skickad till kundens Kivra');
+}
+
+export async function refreshKivraStatus(cid: number, invoiceId: number) {
+  const { refreshKivra } = await import('@/lib/services/kivra');
+  const { company } = await requireCompany(cid, { perm: 'invoicing' });
+  await attempt(`/c/${cid}/fakturor/${invoiceId}`, () => refreshKivra(company.id));
+  done(`/c/${cid}/fakturor/${invoiceId}`, 'Status hämtad från Kivra');
+}

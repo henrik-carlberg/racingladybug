@@ -43,3 +43,27 @@ describe('Bedrägeri- och felskydd', () => {
     expect(isWeekend(new Date('2026-11-21T12:00:00Z'))).toBe(true);
   });
 });
+
+import { chooseChannel, invoicePdf, mapKivraStatus, recipientId } from '@/lib/kivra';
+import { pdfText } from '@/lib/doc-text';
+describe('Kivra och digital post', () => {
+  it('personnummer eller organisationsnummer', () => {
+    expect(recipientId('19800101-0019')).toEqual({ type: 'person', ssn: '198001010019' });
+    expect(recipientId('556026-9986')).toEqual({ type: 'company', vat: 'SE556026998601' });
+    expect(recipientId('123')).toBeNull();
+  });
+  it('kanalval', () => {
+    expect(chooseChannel({ preferred: 'auto', peppol: true, kivra: true, email: true })).toBe('peppol');
+    expect(chooseChannel({ preferred: 'auto', peppol: false, kivra: true, email: true })).toBe('kivra');
+    expect(chooseChannel({ preferred: 'email', peppol: true, kivra: true, email: true })).toBe('email');
+    expect(chooseChannel({ preferred: 'kivra', peppol: false, kivra: false, email: false })).toBe('paper');
+    expect(mapKivraStatus('READ')).toBe('read');
+  });
+  it('fakturans PDF är läsbar', () => {
+    const pdf = invoicePdf({ company: 'Testbolaget AB', orgnr: '556026-9986', address: '', number: 1009, date: '2026-11-01', due: '2026-12-01', customer: 'Kund (privat)', customerAddress: 'Storgatan 1',
+      lines: [{ description: 'Målning', quantity: 2, unit: 'h', price: 50000, amount: 100000 }], net: 100000, vat: 25000, total: 125000, bankgiro: '123-4567', ocr: '10094', link: 'https://x/f/t', credit: false });
+    expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
+    const t = pdfText(pdf);
+    expect(t).toContain('Faktura 1009'); expect(t).toContain('Kund (privat)'); expect(t).toContain('med OCR 10094');
+  });
+});

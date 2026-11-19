@@ -31,6 +31,23 @@ const bvServer = http.createServer((req, res) => {
 const mails = [];
 const mailServer = http.createServer((req, res) => { let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => { try { mails.push(JSON.parse(b)); } catch {} res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"id":"m1"}'); }); }).listen(3303);
 
+// Kivra
+const kv = { got: [], status: {} };
+const kvServer = http.createServer((req, res) => {
+  let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => {
+    const send = (c, j) => { res.writeHead(c, { 'content-type': 'application/json' }); res.end(JSON.stringify(j)); };
+    if (req.url === '/v1/auth') return req.headers.authorization === 'Basic ' + Buffer.from('kivra:kivrasecret').toString('base64') ? send(200, { access_token: 'kv-token', expires_in: 3600 }) : send(401, {});
+    if (req.headers.authorization !== 'Bearer kv-token') return send(401, {});
+    const j = b ? JSON.parse(b) : {};
+    if (req.url === '/v1/tenant/tenant1/usermatch/ssn') return send(200, { list: j.list.filter((x) => x === '198112189876') });
+    if (req.url === '/v1/tenant/tenant1/usermatch/vatnumber') return send(200, { list: j.list.filter((x) => x === 'SE556677889901') });
+    if (req.url === '/v1/tenant/tenant1/content') { const key = 'K' + (kv.got.length + 1); kv.got.push({ key, ...j }); kv.status[key] = 'delivered'; return send(201, { key }); }
+    const m = /^\/v1\/tenant\/tenant1\/content\/(K\d+)\/status$/.exec(req.url);
+    if (m) return send(200, { status: kv.status[m[1]] });
+    send(404, {});
+  });
+}).listen(3315);
+
 (async () => {
   const browser = await chromium.launch();
   const owner = await login(browser, 'agare@example.com', 'hemligtlosen1');
@@ -159,7 +176,44 @@ const mailServer = http.createServer((req, res) => { let b = ''; req.on('data', 
   assert(/Ovanligt stort belopp 9[\s ]000 kr till STADBOLAGET XK/.test(t) && t.includes('9 gånger det vanliga beloppet') && /Ny mottagare 15[\s ]000 kr till OKAND MOTTAGARE XK/.test(t), 'ovanliga utbetalningar: ' + t.slice(0, 2500));
   log('ovanliga utbetalningar flaggas: mycket större belopp än vanligt till samma mottagare och större belopp till en ny mottagare');
 
+  // ================= Del 3: Kivra och digital post =================
+  await owner.goto(B + '/kunder/6');
+  await owner.fill('input[name=orgnr]', '556677-8899');
+  await owner.click('form button:text-is("Spara")');
+  await owner.locator('text=Kunden är sparad').waitFor();
+  await owner.goto(B + '/fakturor/13');
+  assert(await owner.locator('.best-channel').innerText() === 'Kivra', 'Kivra föreslås: ' + await owner.locator('.send-best').innerText());
+  await owner.click('.send-best button:has-text("Skicka via Kivra")');
+  await owner.locator('text=Fakturan är skickad till kundens Kivra').waitFor();
+  const kc = kv.got[kv.got.length - 1];
+  const pdfTxt = Buffer.from(kc.files[0].data, 'base64').toString('latin1');
+  assert(kc.vat_number === 'SE556677889901' && kc.type === 'invoice' && kc.payment.total_owed === '5000.00' && kc.payment.method === 'BG' && kc.files[0].content_type === 'application/pdf'
+    && pdfTxt.startsWith('%PDF-') && pdfTxt.includes('(Faktura 1007)'), 'innehållet till Kivra: ' + JSON.stringify({ ...kc, files: undefined }));
+  assert((await owner.locator('.kivra-status').innerText()).includes('Skickad'), 'status skickad');
+  kv.status[kc.key] = 'read';
+  await owner.click('.kivra-status button:has-text("Hämta status")');
+  await owner.locator('.kivra-status:has-text("Öppnad av kunden")').waitFor();
+  log('fakturan går till kundens Kivra som PDF med betalinformation (bankgiro, OCR); status levererad och öppnad kommer tillbaka');
+
+  await owner.goto(B + '/kunder/6');
+  await owner.selectOption('select[name=delivery]', 'email');
+  await owner.click('form button:text-is("Spara")');
+  await owner.locator('text=Kunden är sparad').waitFor();
+  await owner.goto(B + '/fakturor/14');
+  assert(await owner.locator('.best-channel').innerText() === 'E-post med länk', 'kundens val gäller');
+  await owner.goto(B + '/fakturor/22');
+  assert(await owner.locator('.best-channel').innerText() === 'Utskrift (post)' && (await text(owner)).includes('ingen digital kanal'), 'utan komplett e-faktura, Kivra eller e-post blir det post');
+  log('kanalen väljs automatiskt (e-faktura, Kivra, e-post, post) – kundens eget val går före');
+
+  await owner.goto(B + '/lon/2');
+  await owner.click('button:has-text("Skicka lönebesked till Kivra")');
+  await owner.locator('text=/1 lönebesked skickade till Kivra\\. Utan Kivra/').waitFor();
+  const ps = kv.got[kv.got.length - 1];
+  assert(ps.ssn === '198112189876' && ps.type === 'salary' && Buffer.from(ps.files[0].data, 'base64').toString('latin1').includes('(Lönebesked 2026-12)'.replace('ö', '\xf6')), 'lönebeskedet: ' + JSON.stringify({ ...ps, files: undefined }));
+  assert((await owner.locator('.kivra-slip').count()) === 1, 'status per anställd');
+  log('lönebesked skickas till de anställdas Kivra; de som saknar Kivra listas');
+
   //@@NEXT@@
-  await browser.close(); bvServer.close(); mailServer.close();
+  await browser.close(); bvServer.close(); mailServer.close(); kvServer.close();
   console.log('Omgång 11: alla steg gick igenom');
 })().catch((e) => { console.error(e); process.exit(1); });

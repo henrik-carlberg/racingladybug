@@ -6,9 +6,11 @@ import { Flash, type SP } from '@/components/ui';
 import { kr } from '@/lib/format';
 import { PAY_ITEM_LABELS, type PayItem } from '@/lib/payroll';
 import { prepareAgi } from '../../inlamning/actions';
-import { paySalariesViaBank, refreshSalaryPayments } from '../actions';
+import { paySalariesViaBank, payslipsToKivra, refreshSalaryPayments } from '../actions';
 import { bankPayEnabled, listBankPayments, payAccounts } from '@/lib/services/bankpay';
 import { BankPaymentList } from '@/components/BankPaymentList';
+import { kivraConfigured } from '@/lib/server/kivra';
+import { deliveriesFor } from '@/lib/services/kivra';
 import { hours as saveHours } from '../avtal/actions';
 import { HOUR_FIELDS } from '@/lib/payroll-agreements';
 import { addEmployee, bookRun, deleteRun, removeSlip, saveSlip, applyAbsence } from '../actions';
@@ -41,6 +43,7 @@ export default async function Run({ params, searchParams }: { params: Promise<{ 
   const draft = run.status === 'draft';
   const b = `/c/${company.id}`;
   const payOn = !draft && bankPayEnabled();
+  const kivraRun = !draft && kivraConfigured() ? await deliveriesFor(company.id, { runId: run.id }) : [];
   const [payAccts, runPayments] = payOn ? await Promise.all([payAccounts(company.id), listBankPayments(company.id, { runId: run.id })]) : [[], []];
   const paidOrPending = runPayments.some((p) => ['authorization', 'accepted', 'executed'].includes(p.status));
   return (
@@ -76,6 +79,13 @@ export default async function Run({ params, searchParams }: { params: Promise<{ 
           <div style={{ flex: '0 0 auto' }}><button>Betala ut nettolönerna via banken (BankID)</button></div>
           <span className="small muted" style={{ flex: '1 1 100%' }}>{kr(sum('net_pay'))} till de anställdas konton på utbetalningsdagen. Lönen är redan bokförd – uttagen stäms av mot banken.</span>
         </form>
+      )}
+      {!draft && kivraConfigured() && (
+        <div className="card row kivra-payslips" style={{ alignItems: 'center' }}>
+          <span style={{ flex: '3 1 300px' }}>Lönebesked till de anställdas Kivra{kivraRun.length ? ` · ${kivraRun.filter((k) => k.status !== 'failed').length} skickade` : ''}</span>
+          <form action={payslipsToKivra.bind(null, company.id, run.id)} style={{ flex: '0 0 auto' }}><button className="secondary">Skicka lönebesked till Kivra</button></form>
+          {kivraRun.length > 0 && <div className="small" style={{ flex: '1 1 100%' }}>{kivraRun.map((k) => <span key={k.id} className="kivra-slip">{k.name}: <b>{k.status === 'read' ? 'öppnat' : k.status === 'delivered' ? 'levererat' : k.status === 'failed' ? 'misslyckades' : 'skickat'}</b> · </span>)}</div>}
+        </div>
       )}
       {runPayments.length > 0 && <BankPaymentList payments={runPayments} refresh={refreshSalaryPayments.bind(null, company.id, run.id)} />}
 

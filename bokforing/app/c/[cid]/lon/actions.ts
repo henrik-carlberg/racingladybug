@@ -74,3 +74,11 @@ export async function refreshSalaryPayments(cid: number, runId: number) {
   await attempt(`/c/${cid}/lon/${runId}`, () => refreshPayments(company.id, 'salary'));
   done(`/c/${cid}/lon/${runId}`, 'Status hämtad från banken');
 }
+
+export async function payslipsToKivra(cid: number, runId: number) {
+  const { sendPayslipsKivra } = await import('@/lib/services/kivra');
+  const actor = userActor(await requireCompany(cid, { perm: 'payroll' }));
+  let r = { sent: 0, skipped: [] as string[] };
+  await attempt(`/c/${cid}/lon/${runId}`, async () => { r = await sendPayslipsKivra(actor, runId); });
+  done(`/c/${cid}/lon/${runId}`, `${r.sent} lönebesked skickade till Kivra${r.skipped.length ? `. Utan Kivra (lämna på annat sätt): ${r.skipped.join(', ')}` : ''}`);
+}

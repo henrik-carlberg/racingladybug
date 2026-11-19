@@ -9,7 +9,10 @@ import { loadLines } from '@/lib/server/invoices';
 import { Flash, Status, type SP } from '@/components/ui';
 import { kr, today } from '@/lib/format';
 import type { ReductionType } from '@/lib/rotrut';
-import { bookInvoice, creditInvoice, deleteDraftNow, registerPayment, sendInvoice, settleAdvance } from '../actions';
+import { bookInvoice, creditInvoice, deleteDraftNow, refreshKivraStatus, registerPayment, sendBest, sendInvoice, sendKivra, settleAdvance } from '../actions';
+import { channelFor, deliveriesFor } from '@/lib/services/kivra';
+import { CHANNEL_LABEL } from '@/lib/kivra';
+const KST: Record<string, string> = { sent: 'Skickad', delivered: 'Levererad till brevlådan', read: 'Öppnad av kunden', failed: 'Misslyckades' };
 import { openAdvances } from '@/lib/services/invoices';
 import { PrintButton } from '@/components/PrintButton';
 import { InvoiceDoc } from '@/components/InvoiceDoc';
@@ -50,6 +53,8 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
   const isCredit = !!inv.credit_of_id;
   const time = await listTimeEntries(co.id, { invoice_id: inv.id });
   const peppol = inv.status !== 'draft' ? await peppolCheck(co.id, inv.id).catch(() => null) : null;
+  const route = inv.status !== 'draft' && !inv.credit_of_id ? await channelFor(co.id, inv.id).catch(() => null) : null;
+  const kivraSent = inv.status !== 'draft' ? await deliveriesFor(co.id, { invoiceId: inv.id }) : [];
   const pmsg = peppol ? await invoiceMessage(co.id, inv.id) : null;
   const apOn = apEnabled() && (await isVerified(co.id));
   const PST: Record<string, string> = { sent: 'skickad, väntar på leveranskvittens', delivered: 'levererad till mottagaren', failed: 'misslyckades' };
@@ -85,6 +90,18 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
                 <div style={{ flex: '0 0 auto' }}><button className="secondary">Dra av på denna faktura</button></div>
               </form>
             ))}
+          </div>
+        )}
+        {route && (
+          <div className="card stack send-best">
+            <div className="row" style={{ alignItems: 'center' }}>
+              <span style={{ flex: '3 1 300px' }}>Bästa sättet att nå kunden: <b className="best-channel">{CHANNEL_LABEL[route.channel]}</b>
+                <span className="small muted"> ({[route.peppol && 'e-faktura', route.kivra && 'Kivra', route.email && 'e-post'].filter(Boolean).join(', ') || 'ingen digital kanal'}{route.preferred !== 'auto' ? `; kunden föredrar ${CHANNEL_LABEL[route.preferred]}` : ''})</span></span>
+              <form action={sendBest.bind(null, co.id, inv.id)} style={{ flex: '0 0 auto' }}><button>Skicka via {CHANNEL_LABEL[route.channel]}</button></form>
+              {route.kivra && route.channel !== 'kivra' && <form action={sendKivra.bind(null, co.id, inv.id)} style={{ flex: '0 0 auto' }}><button className="secondary">Skicka till Kivra</button></form>}
+            </div>
+            {kivraSent.length > 0 && <div className="small kivra-status">Kivra: {kivraSent.map((k) => <span key={k.id}><b>{KST[k.status]}</b> ({k.updated}){k.message ? ` – ${k.message}` : ''} </span>)}
+              {kivraSent.some((k) => k.status === 'sent' || k.status === 'delivered') && <form action={refreshKivraStatus.bind(null, co.id, inv.id)} style={{ display: 'inline' }}><button className="link">Hämta status</button></form>}</div>}
           </div>
         )}
         {inv.status !== 'draft' && (
