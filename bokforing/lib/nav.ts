@@ -36,6 +36,8 @@ export function buildNav(o: {
       { path: '/leverantorsfakturor', label: 'Leverantörsfakturor', perm: 'purchasing' },
       { path: '/leverantorsfakturor/betalning', label: 'Betalningar', perm: 'payments', hint: 'Betala attesterade fakturor' },
       { path: '/leverantorer', label: 'Leverantörer' },
+      { path: '/leverantorsavtal', label: 'Leverantörsavtal', perm: 'purchasing', hint: 'Uppsägningstider, förlängningar och prishöjningar' },
+      { path: '/kontroll', label: 'Varningar och kontroll', perm: 'ledger', hint: 'Nya bankuppgifter, dubbletter och ovanliga utbetalningar' },
     ]) },
     { id: 'bank', label: t('Bank'), icon: 'bank', items: items([
       { path: '/bank/avstamning', label: 'Bankavstämning', perm: 'ledger', hint: 'Bokför transaktionerna från banken' },
@@ -49,6 +51,8 @@ export function buildNav(o: {
       { path: '/lon', label: 'Lönekörningar', perm: 'payroll', hint: 'Betala ut lön och skapa AGI' },
       { path: '/lon/anstallda', label: 'Anställda', perm: 'payroll' },
       { path: '/lon/franvaro', label: 'Frånvaro och semester', perm: 'payroll' },
+      { path: '/lon/formaner', label: 'Skattefria förmåner', perm: 'payroll', hint: 'Friskvårdsbidrag och gåvor med tak per anställd' },
+      { path: '/lon/flex', label: 'Flextid och tidbank', perm: 'payroll', hint: 'Schemat mot stämplad tid' },
       { path: '/schema', label: 'Schema' },
       { path: '/personalliggare', label: 'Personalliggare' },
       { path: '/lon/skattetabeller', label: 'Skattetabeller', perm: 'payroll' },

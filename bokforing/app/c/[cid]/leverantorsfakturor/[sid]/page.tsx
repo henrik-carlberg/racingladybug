@@ -6,7 +6,9 @@ import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
 import { Flash, Status, type SP } from '@/components/ui';
 import { kr, today } from '@/lib/format';
-import { approve, markPaid } from '../actions';
+import { approve, markPaid, matchPO } from '../actions';
+import { isModuleEnabled } from '@/lib/modules/enabled';
+import { MATCH_LABEL, type MatchStatus } from '@/lib/purchasing';
 import { requiredApprovals } from '@/lib/attest';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +18,7 @@ export default async function SupplierInvoice({ params, searchParams }: { params
   const { company } = await requireCompany(cid, { perm: 'purchasing' });
   const [i] = await sql<{ id: number; paid_amount: number; supplier: string; bankgiro: string; plusgiro: string; bank_account: string; invoice_number: string; invoice_date: string; due_date: string;
     payment_reference: string; description: string; total: number; vat: number; status: string; approved_by: string | null; approved_at: string | null;
-    voucher_id: number | null; payment_voucher_id: number | null; paid_date: string | null }[]>`
+    voucher_id: number | null; payment_voucher_id: number | null; paid_date: string | null; supplier_id: number; match_status: MatchStatus | null; auto_approved: boolean; purchase_order_id?: number | null }[]>`
     SELECT i.*, s.name AS supplier, s.bankgiro, s.plusgiro, s.bank_account, to_char(i.invoice_date,'YYYY-MM-DD') AS invoice_date,
       to_char(i.due_date,'YYYY-MM-DD') AS due_date, to_char(i.paid_date,'YYYY-MM-DD') AS paid_date, u.name AS approved_by,
       to_char(i.approved_at AT TIME ZONE 'Europe/Stockholm','YYYY-MM-DD HH24:MI') AS approved_at
@@ -29,6 +31,9 @@ export default async function SupplierInvoice({ params, searchParams }: { params
   const payments = await sql<{ id: number; date: string; amount: number; voucher_id: number | null }[]>`SELECT id, to_char(date,'YYYY-MM-DD') AS date, amount, voucher_id FROM supplier_invoice_payments WHERE supplier_invoice_id = ${i.id} ORDER BY date, id`;
   const files = await sql<{ id: number; filename: string }[]>`SELECT id, filename FROM attachments WHERE supplier_invoice_id = ${i.id}`;
   const b = `/c/${company.id}`;
+  const lager = await isModuleEnabled(company.id, 'lager');
+  const pos = lager && !i.purchase_order_id ? await (await import('@/modules/lager/service')).openPOsFor(company.id, i.supplier_id) : [];
+  const [po] = i.purchase_order_id ? await sql<{ number: number }[]>`SELECT number FROM inv_purchase_orders WHERE id = ${i.purchase_order_id}` : [];
   return (
     <>
       <h1>{i.supplier} – faktura {i.invoice_number} <Status s={i.status} overdue={i.due_date < today()} /></h1>
@@ -40,6 +45,7 @@ export default async function SupplierInvoice({ params, searchParams }: { params
         <div><div className="muted small">Betala till</div>{i.bankgiro ? `BG ${i.bankgiro}` : i.plusgiro ? `PG ${i.plusgiro}` : i.bank_account || '–'}</div>
         <div><div className="muted small">OCR / meddelande</div><span className="mono">{i.payment_reference || '–'}</span></div>
         {i.approved_by && <div><div className="muted small">Attesterad</div>{i.approved_by}, {i.approved_at}</div>}
+        {i.auto_approved && <div><div className="muted small">Attesterad</div><span className="auto-approved">Automatiskt (trevägsmatchning) {i.approved_at}</span></div>}
       </div>
       {i.description && <p>{i.description}</p>}
       <p className="small">
@@ -48,6 +54,14 @@ export default async function SupplierInvoice({ params, searchParams }: { params
         {!i.voucher_id && !i.payment_voucher_id && <span className="muted">Kontantmetoden: fakturan bokförs när den betalas (eller per bokslutsdagen om den är obetald vid årets slut).</span>}
       </p>
       {files.length > 0 && <p>Underlag: {files.map((f) => <a key={f.id} href={`${b}/underlag/${f.id}`} target="_blank">{f.filename} </a>)}</p>}
+      {i.match_status && <div className={`card small match ${i.match_status === 'matched' ? 'ok' : 'warn'}`}>{i.match_status === 'matched' ? '✅' : '⚠️'} <b className="match-status">{MATCH_LABEL[i.match_status]}</b>
+        {po && <> · <Link href={`${b}/m/lager/inkop/${i.purchase_order_id}`}>Inköpsorder {po.number}</Link></>}</div>}
+      {pos.length > 0 && (
+        <form action={matchPO.bind(null, company.id, i.id)} className="card row match-po" style={{ alignItems: 'end' }}>
+          <label>Koppla till inköpsorder<select name="po_id">{pos.map((p) => <option key={p.id} value={p.id}>Order {p.number} ({p.order_date})</option>)}</select></label>
+          <div style={{ flex: '0 0 auto' }}><button className="secondary">Matcha mot order och inleverans</button></div>
+        </form>
+      )}
       {i.status === 'booked' && (
         <form action={approve.bind(null, company.id, i.id)} className="card actions">
           <button>{needed > 1 ? `Attestera (${approvals.length + 1} av ${needed})` : 'Attestera för betalning'}</button>

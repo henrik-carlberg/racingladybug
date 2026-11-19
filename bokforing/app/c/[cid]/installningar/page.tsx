@@ -150,6 +150,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
       <form action={a.setAttestRules.bind(null, c.id)} className="card row" style={{ alignItems: 'end' }}>
         <label>Två attester från belopp (kr inkl. moms, tomt = alltid en)<input name="attest_threshold" inputMode="decimal" defaultValue={c.attest_threshold ? (Number(c.attest_threshold) / 100).toFixed(0) : ''} disabled={!isOwner} /></label>
         <label className="check"><input type="checkbox" name="attest_not_registrant" defaultChecked={c.attest_not_registrant} disabled={!isOwner} /> Den som registrerar en faktura får inte attestera den</label>
+        <label className="check"><input type="checkbox" name="auto_attest_matched" defaultChecked={c.auto_attest_matched} disabled={!isOwner} /> Attestera automatiskt när fakturan stämmer mot inköpsorder och inleverans</label>
         {isOwner && <div style={{ flex: '0 0 auto' }}><button className="secondary">Spara</button></div>}
       </form>
 

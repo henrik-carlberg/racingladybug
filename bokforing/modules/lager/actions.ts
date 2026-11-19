@@ -6,7 +6,7 @@ import { userActor } from '@/lib/services/actor';
 import * as svc from './service';
 
 async function ctx(cid: number) {
-  const c = await requireCompany(cid);
+  const c = await requireCompany(cid, { perm: 'purchasing' });
   if (!(await isModuleEnabled(c.company.id, 'lager'))) throw new Error('Lagermodulen är inte aktiverad');
   return userActor(c);
 }

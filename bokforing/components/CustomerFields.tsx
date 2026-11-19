@@ -1,5 +1,5 @@
 export type CustomerRow = {
-  id: number; name: string; orgnr: string; vat_number: string; email: string; phone?: string; address: string; postal_code: string;
+  id: number; name: string; orgnr: string; vat_number: string; email: string; phone?: string; delivery?: string; address: string; postal_code: string;
   city: string; country: string; payment_terms: number | null; reverse_charge: boolean; construction_rc: boolean; peppol_id: string; currency: string; language: string;
 };
 
@@ -27,6 +27,7 @@ export function CustomerFields({ c }: { c?: Partial<CustomerRow> }) {
       <div className="row">
         <label>Valuta på fakturor<select name="currency" defaultValue={c?.currency ?? 'SEK'}>{['SEK', 'EUR', 'USD', 'GBP', 'NOK', 'DKK'].map((v) => <option key={v}>{v}</option>)}</select></label>
         <label>Språk på fakturor<select name="language" defaultValue={c?.language ?? 'sv'}><option value="sv">Svenska</option><option value="en">Engelska</option></select></label>
+        <label>Skicka fakturor via<select name="delivery" defaultValue={c?.delivery ?? 'auto'}><option value="auto">Bästa kanalen automatiskt</option><option value="peppol">E-faktura (Peppol)</option><option value="kivra">Kivra</option><option value="email">E-post</option><option value="paper">Post</option></select></label>
       </div>
       <div className="row">
         <label>Peppol-ID för e-faktura<input name="peppol_id" defaultValue={c?.peppol_id} placeholder="0007:5560269986" /></label>

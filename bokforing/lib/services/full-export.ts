@@ -16,8 +16,9 @@ export async function exportCompany(companyId: number) {
     FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu ON kcu.constraint_name = tc.constraint_name
     JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name
     WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = 'public'`;
-  const direct = [...byTable.keys()].filter((t) => !SKIP_TABLES.has(t) && t !== 'companies' && byTable.get(t)!.some((c) => c.name === 'company_id'));
-  const children = fks.filter((f) => !SKIP_TABLES.has(f.child) && !byTable.get(f.child)!.some((c) => c.name === 'company_id') && direct.includes(f.parent));
+  // Byråns egna uppgifter om kunden (t.ex. kundkännedom enligt penningtvättslagen) lämnas aldrig ut till kunden
+  const direct = [...byTable.keys()].filter((t) => !SKIP_TABLES.has(t) && !t.startsWith('firm_') && t !== 'companies' && byTable.get(t)!.some((c) => c.name === 'company_id'));
+  const children = fks.filter((f) => !SKIP_TABLES.has(f.child) && !f.child.startsWith('firm_') && !byTable.get(f.child)!.some((c) => c.name === 'company_id') && direct.includes(f.parent));
   const select = (t: string) => {
     const list = byTable.get(t)!.filter((c) => !SECRET.test(c.name));
     return sql.unsafe(list.map((c) => (c.type === 'bytea' ? `octet_length("${c.name}") AS "${c.name}_bytes"` : `"${c.name}"`)).join(', '));

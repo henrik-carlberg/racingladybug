@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireUser } from '@/lib/server/auth';
 import { Flash, type SP } from '@/components/ui';
 import { firmClients, firmMembers, myFirms } from '@/lib/services/firms';
+import { firmKycOverview } from '@/lib/services/kyc';
 import { createFirm, invite, removeMember, rotateCode, setResponsible } from './actions';
 
 export const dynamic = 'force-dynamic';
@@ -26,7 +27,8 @@ export default async function FirmPage({ searchParams }: { searchParams: SP }) {
       </div>
     );
   }
-  const [clients, members] = await Promise.all([firmClients(firm.id, user.id), firmMembers(firm.id)]);
+  const [clients, members, kyc] = await Promise.all([firmClients(firm.id, user.id), firmMembers(firm.id), firmKycOverview(firm.id)]);
+  const kycMissing = clients.filter((c) => { const k = kyc.get(c.id); return !k || k.status === 'missing' || k.status === 'expired'; }).length;
   const mine = sp.mina === '1';
   const shown = mine ? clients.filter((c) => c.responsible === user.id) : clients;
   const owner = firm.role === 'owner';
@@ -45,10 +47,11 @@ export default async function FirmPage({ searchParams }: { searchParams: SP }) {
       <div className="card small">Byråns kod: <code className="firm-code" style={{ fontSize: '1.1em' }}>{firm.code}</code> – klienten anger koden under Inställningar → Redovisningsbyrå för att ge er åtkomst.
         {owner && <form action={rotateCode.bind(null, firm.id)} style={{ display: 'inline', marginLeft: '.5rem' }}><button className="link">Ny kod</button></form>}</div>
 
+      {kycMissing > 0 && <div className="flash error kyc-banner">{kycMissing} klienter saknar aktuell kundkännedom (penningtvättslagen). Uppdraget får inte utföras utan kundkännedom.</div>}
       <div className="header"><h2>Klienter ({clients.length})</h2>
         <div className="actions" style={{ margin: 0 }}><Link className={`btn ${mine ? 'secondary' : ''}`} href={`/byra?f=${firm.id}`}>Alla</Link><Link className={`btn ${mine ? '' : 'secondary'}`} href={`/byra?f=${firm.id}&mina=1`}>Mina</Link></div></div>
       <div className="table-wrap"><table>
-        <thead><tr><th>Klient</th><th className="num">Att göra</th><th className="num">Bank</th><th className="num">Inkorg</th><th>Frågor</th><th>Nästa deadline</th><th>Senast bokfört</th><th>Ansvarig</th></tr></thead>
+        <thead><tr><th>Klient</th><th className="num">Att göra</th><th className="num">Bank</th><th className="num">Inkorg</th><th>Frågor</th><th>Nästa deadline</th><th>Senast bokfört</th><th>Kundkännedom</th><th>Ansvarig</th></tr></thead>
         <tbody>
           {shown.map((c) => (
             <tr key={c.id}>
@@ -59,6 +62,9 @@ export default async function FirmPage({ searchParams }: { searchParams: SP }) {
               <td className="small">{c.openQuestions || c.answered ? <Link href={`/c/${c.id}/fragor`}>{c.openQuestions} obesvarade{c.answered ? `, ${c.answered} nya svar` : ''}</Link> : '–'}</td>
               <td className="small">{c.overdue > 0 && <span className="badge danger">{c.overdue} försenad</span>} {c.nextDeadline && <>{c.nextDeadline.due} {c.nextDeadline.title}</>}</td>
               <td className="small">{c.lastVoucher ?? '–'}</td>
+              <td className="small kyc-cell">{(() => { const k = kyc.get(c.id); const st = k?.status ?? 'missing';
+                const [l, cl] = st === 'ok' ? ['Aktuell', 'ok'] : st === 'due' ? [`Görs om ${k!.next_review}`, 'warn'] : st === 'expired' ? ['Ska göras om', 'danger'] : ['Saknas', 'danger'];
+                return <Link href={`/byra/kyc?f=${firm.id}&c=${c.id}`}><span className={`badge ${cl}`}>{l}</span></Link>; })()}</td>
               <td>
                 <form action={setResponsible.bind(null, firm.id, c.id)} className="row" style={{ flexWrap: 'nowrap', gap: '.3rem' }}>
                   <select name="responsible" defaultValue={c.responsible ?? ''} aria-label="Ansvarig"><option value="">–</option>{members.map((m) => <option key={m.user_id} value={m.user_id}>{m.name}</option>)}</select>
@@ -67,7 +73,7 @@ export default async function FirmPage({ searchParams }: { searchParams: SP }) {
               </td>
             </tr>
           ))}
-          {shown.length === 0 && <tr><td colSpan={8} className="muted">Inga klienter ännu. Ge klienten byråns kod.</td></tr>}
+          {shown.length === 0 && <tr><td colSpan={9} className="muted">Inga klienter ännu. Ge klienten byråns kod.</td></tr>}
         </tbody>
       </table></div>
 
