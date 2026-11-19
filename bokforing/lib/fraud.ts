@@ -4,13 +4,18 @@ export const BANK_FIELDS = ['bankgiro', 'plusgiro', 'bank_account'] as const;
 export type BankField = typeof BANK_FIELDS[number];
 const norm = (s: string) => s.replace(/[\s-]/g, '');
 
-/** Ändrade bankuppgifter jämfört med tidigare (tomt → värde räknas inte som byte) */
+/**
+ * Ändrade bankuppgifter jämfört med tidigare. Har leverantören redan någon betalningsuppgift räknas varje ändring
+ * – även ett nytt bankgiro i ett tomt fält, eftersom bankgiro går före plusgiro och konto vid betalning.
+ * En leverantör utan några bankuppgifter alls får dem utan godkännande (första registreringen).
+ */
 export function bankChanges(old: Record<BankField, string>, next: Partial<Record<BankField, unknown>>) {
   const out: Partial<Record<BankField, string>> = {};
+  if (!BANK_FIELDS.some((f) => norm(old[f] ?? '') !== '')) return out;
   for (const f of BANK_FIELDS) {
     if (next[f] === undefined) continue;
     const v = String(next[f] ?? '').trim();
-    if (norm(v) !== norm(old[f] ?? '') && norm(old[f] ?? '') !== '') out[f] = v;
+    if (norm(v) !== norm(old[f] ?? '')) out[f] = v;
   }
   return out;
 }

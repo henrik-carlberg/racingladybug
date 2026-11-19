@@ -52,7 +52,7 @@ export async function fetchOwners(userId: number, firmId: number, companyId: num
   const owners = parseOwners(await r.json());
   await sql`INSERT INTO firm_kyc (firm_id, company_id, owners, owners_fetched_at) VALUES (${firmId}, ${companyId}, ${sql.json(owners as never)}, now())
     ON CONFLICT (firm_id, company_id) DO UPDATE SET owners = EXCLUDED.owners, owners_fetched_at = now()`;
-  await audit(sql, { companyId, userId, action: 'kyc_owners', entity: 'firm', entityId: firmId, details: { owners: owners.length } });
+  await audit(sql, { companyId: null, userId, action: 'kyc_owners', entity: 'firm', entityId: firmId, details: { client: companyId } });
   return owners;
 }
 
@@ -75,7 +75,8 @@ export async function saveAssessment(userId: number, firmId: number, companyId: 
     await tx`UPDATE firm_kyc SET ${tx(row)} WHERE firm_id = ${firmId} AND company_id = ${companyId}`;
     const [snap] = await tx<{ s: unknown }[]>`SELECT to_jsonb(k) - 'firm_id' - 'company_id' AS s FROM firm_kyc k WHERE firm_id = ${firmId} AND company_id = ${companyId}`;
     await tx`INSERT INTO firm_kyc_history (firm_id, company_id, snapshot, created_by) VALUES (${firmId}, ${companyId}, ${tx.json(snap.s as never)}, ${userId})`;
-    await audit(tx, { companyId, userId, action: 'kyc_assess', entity: 'firm', entityId: firmId, details: { risk: a.risk, score: a.score } });
+    // Loggas på byrån, inte i kundens historik (kunden ska inte se byråns riskbedömning)
+    await audit(tx, { companyId: null, userId, action: 'kyc_assess', entity: 'firm', entityId: firmId, details: { client: companyId } });
   });
   return a;
 }

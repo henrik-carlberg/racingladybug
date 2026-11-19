@@ -219,31 +219,38 @@ const kvServer = http.createServer((req, res) => {
   await owner.click('form:has(input[name=auto_attest_matched]) button:has-text("Spara")');
   await owner.locator('.flash.ok').first().waitFor();
   const M = `${B}/m/lager`;
-  const pick = async (sel, sku) => owner.selectOption(sel, await owner.locator(`${sel} option:has-text("${sku} ")`).first().getAttribute('value'));
-  const po = async (qty, price) => {
-    await owner.goto(M + '/inkop');
-    await owner.selectOption('select[name=supplier_id]', { label: 'Hyresvärden AB' });
+  const po = async (pg, qty, price) => {
+    const pick = async (sel, sku) => pg.selectOption(sel, await pg.locator(`${sel} option:has-text("${sku} ")`).first().getAttribute('value'));
+    await pg.goto(M + '/inkop');
+    await pg.selectOption('select[name=supplier_id]', { label: 'Hyresvärden AB' });
     await pick('select[name=product_0]', 'A-200');
-    await owner.fill('input[name=qty_0]', qty);
-    await owner.fill('input[name=price_0]', price);
-    await owner.click('button:has-text("Skapa inköpsorder")');
-    await owner.locator('text=Inköpsordern är skapad').waitFor();
-    await owner.click('button:has-text("Markera som skickad")');
-    await owner.locator('text=markerad som skickad').waitFor();
-    await owner.click('button:has-text("Registrera inleverans")');
-    await owner.locator('text=Inleveransen är registrerad').waitFor();
-    return owner.url().split('?')[0];
+    await pg.fill('input[name=qty_0]', qty);
+    await pg.fill('input[name=price_0]', price);
+    await pg.click('button:has-text("Skapa inköpsorder")');
+    await pg.locator('text=Inköpsordern är skapad').waitFor();
+    await pg.click('button:has-text("Markera som skickad")');
+    await pg.locator('text=markerad som skickad').waitFor();
+    await pg.click('button:has-text("Registrera inleverans")');
+    await pg.locator('text=Inleveransen är registrerad').waitFor();
+    return pg.url().split('?')[0];
   };
-  await po('7', '150');
+  // Ordern läggs av en person med attesträtt, fakturan registreras av en annan – då räknas ordern som attesten
+  await owner.goto(await po(att, '7', '150'));
   await owner.fill('input[name=invoice_number]', 'LF-3V-1');
   await owner.click('button:has-text("Registrera leverantörsfaktura")');
   await owner.locator('text=registrerad från inköpsordern').waitFor();
   await owner.goto(owner.url().split('?')[0]);
   t = await text(owner);
   assert(t.includes('Stämmer mot order och inleverans') && t.includes('Automatiskt (trevägsmatchning)') && !(await owner.locator('button:has-text("Attestera")').count()), 'automatisk attest: ' + t.slice(0, 1500));
-  log('fakturan som stämmer mot inköpsorder och inleverans attesteras automatiskt (trevägsmatchning)');
+  await po(owner, '2', '150');
+  await owner.fill('input[name=invoice_number]', 'LF-3V-0');
+  await owner.click('button:has-text("Registrera leverantörsfaktura")');
+  await owner.locator('text=registrerad från inköpsordern').waitFor();
+  await owner.goto(owner.url().split('?')[0]);
+  assert((await text(owner)).includes('Stämmer mot order och inleverans') && (await owner.locator('button:has-text("Attestera")').count()) === 1, 'samma person som lagt ordern och registrerat fakturan får ingen automatisk attest');
+  log('fakturan som stämmer mot inköpsorder och inleverans attesteras automatiskt (trevägsmatchning) – men bara när ordern är lagd av någon annan med attesträtt');
 
-  await po('5', '100');
+  await po(owner, '5', '100');
   await owner.goto(B + '/leverantorsfakturor/ny');
   await owner.selectOption('select[name=supplier_id]', { label: 'Hyresvärden AB' });
   await owner.fill('input[name=invoice_number]', 'LF-3V-2');

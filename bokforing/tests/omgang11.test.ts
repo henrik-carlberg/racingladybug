@@ -25,7 +25,9 @@ describe('Kundkännedom', () => {
 import { bankChanges, duplicateOf, isWeekend, normInvoiceNo, unusualPayments } from '@/lib/fraud';
 describe('Bedrägeri- och felskydd', () => {
   it('ändrade bankuppgifter', () => {
-    expect(bankChanges({ bankgiro: '555-1234', plusgiro: '', bank_account: '' }, { bankgiro: '5551234', plusgiro: '12345-6' })).toEqual({});
+    expect(bankChanges({ bankgiro: '555-1234', plusgiro: '', bank_account: '' }, { bankgiro: '5551234', plusgiro: '12345-6' })).toEqual({ plusgiro: '12345-6' });
+    expect(bankChanges({ bankgiro: '', plusgiro: '', bank_account: '' }, { bankgiro: '555-1234' })).toEqual({});
+    expect(bankChanges({ bankgiro: '', plusgiro: '', bank_account: '1234 5678' }, { bankgiro: '999-8888' })).toEqual({ bankgiro: '999-8888' });
     expect(bankChanges({ bankgiro: '555-1234', plusgiro: '', bank_account: '' }, { bankgiro: '999-8888' })).toEqual({ bankgiro: '999-8888' });
   });
   it('dubbletter', () => {
