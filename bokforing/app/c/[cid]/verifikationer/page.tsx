@@ -31,7 +31,7 @@ export default async function Vouchers({ params, searchParams }: { params: Promi
   const b = `/c/${company.id}`;
   return (
     <>
-      <Header title={L('Verifikationer')}><Link className="btn" href={`${b}/verifikationer/ny`}>{L("Ny verifikation")}</Link></Header>
+      <Header title={L('Verifikationer')}><a className="btn secondary" href={`${b}/rapporter/xlsx?r=verifikationer`} download>Excel</a><Link className="btn" href={`${b}/verifikationer/ny`}>{L("Ny verifikation")}</Link></Header>
       <form className="row card">
         <label>Räkenskapsår
           <select name="fy" defaultValue={fy?.id}>{years.map((y) => <option key={y.id} value={y.id}>{y.start_date} – {y.end_date}</option>)}</select>

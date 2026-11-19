@@ -5,6 +5,7 @@ import { formatAmount, parseAmount } from '@/lib/money';
 import { receiptKey, type ReceiptCoding } from '@/lib/coding-memory';
 import { dateChecks, type Period } from '@/lib/checks';
 import { Checks } from './Checks';
+import { queueReceipt } from '@/lib/client/outbox';
 
 type State = { error?: string } | undefined;
 
@@ -27,6 +28,7 @@ export function ReceiptForm({ action, read, today, companyType, accountNames, le
   const [description, setDescription] = useState('');
   const [reading, setReading] = useState<'' | 'busy' | 'done' | string>('');
   const [picked, setPicked] = useState(false);
+  const [offline, setOffline] = useState(false);
   const [applied, setApplied] = useState<(ReceiptCoding & { streak: number }) | null>(null);
   /** Samma butik som de senaste gångerna → samma kategori, moms och betalsätt (om användaren inte själv har valt) */
   const learn = (desc: string, force = false) => {
@@ -59,7 +61,20 @@ export function ReceiptForm({ action, read, today, companyType, accountNames, le
   const blocked = checks.some((c) => c.level === 'error');
   const groups = [...new Set(RECEIPT_CATEGORIES.map((c) => c.group))];
   return (
-    <form action={formAction} className="stack">
+    <form action={formAction} className="stack" onSubmit={async (e) => {
+      // Utan uppkoppling: spara i telefonen i stället för att skicka
+      if (navigator.onLine) return;
+      e.preventDefault();
+      const fd = new FormData(e.currentTarget);
+      const file = fd.get('file');
+      const cid = Number(/\/c\/(\d+)\//.exec(location.pathname)?.[1]);
+      const fields: Record<string, string> = {};
+      for (const k of ['date', 'total', 'category', 'vat_rate', 'persons', 'paid_with', 'description']) fields[k] = String(fd.get(k) ?? '');
+      await queueReceipt({ cid, fields, file: file instanceof File && file.size ? file : undefined, fileName: file instanceof File ? file.name : undefined, created: new Date().toISOString() });
+      window.dispatchEvent(new Event('receipt-queued'));
+      setOffline(true);
+    }}>
+      {offline && <div className="flash ok" role="status">Du är utan uppkoppling – kvittot är sparat i telefonen och bokförs automatiskt när du är uppkopplad igen.</div>}
       {state?.error && <div className="flash error">{state.error}</div>}
       <label className="card" style={{ cursor: 'pointer', textAlign: 'center', borderStyle: 'dashed' }}>
         <span style={{ fontSize: '1.1rem' }}>📷 Fota eller välj kvitto</span>

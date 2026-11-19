@@ -6,6 +6,8 @@ import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
 import { Flash, Header, Status, type SP, EmptyState } from '@/components/ui';
 import { kr, today } from '@/lib/format';
+import { customerBehaviors } from '@/lib/services/forecast';
+import { predict } from '@/lib/payment-forecast';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,8 +18,8 @@ export default async function Invoices({ params, searchParams }: { params: Promi
   const sp = await searchParams;
   const status = String(sp.status ?? '');
   const page = pageOf(sp);
-  const all = await sql<{ id: number; invoice_number: number | null; invoice_date: string; due_date: string; customer: string; total: number; status: string }[]>`
-    SELECT i.id, i.invoice_number, to_char(i.invoice_date,'YYYY-MM-DD') AS invoice_date, to_char(i.due_date,'YYYY-MM-DD') AS due_date,
+  const all = await sql<{ id: number; invoice_number: number | null; invoice_date: string; due_date: string; customer: string; customer_id: number; total: number; status: string }[]>`
+    SELECT i.id, i.customer_id, i.invoice_number, to_char(i.invoice_date,'YYYY-MM-DD') AS invoice_date, to_char(i.due_date,'YYYY-MM-DD') AS due_date,
       c.name AS customer, i.total, i.status
     FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.company_id = ${company.id}
     ${status ? sql`AND i.status = ${status}` : sql``}
@@ -26,10 +28,11 @@ export default async function Invoices({ params, searchParams }: { params: Promi
   const rows = all.slice(0, PAGE_SIZE);
   const t = today();
   const b = `/c/${company.id}`;
+  const behaviors = await customerBehaviors(company.id);
   const [{ none }] = await sql<{ none: boolean }[]>`SELECT NOT EXISTS (SELECT 1 FROM invoices WHERE company_id = ${company.id}) AS none`;
   return (
     <>
-      <Header title={L('Kundfakturor')}><Link className="btn" href={`${b}/fakturor/ny`}>{L("Ny faktura")}</Link></Header>
+      <Header title={L('Kundfakturor')}><a className="btn secondary" href={`${b}/rapporter/xlsx?r=kundfakturor`} download>Excel</a><Link className="btn" href={`${b}/fakturor/ny`}>{L("Ny faktura")}</Link></Header>
       <Flash searchParams={searchParams} />
       <div className="actions">
         {[['', 'Alla'], ['draft', 'Utkast'], ['booked', 'Obetalda'], ['paid', 'Betalda'], ['credited', 'Krediterade']].map(([s, l]) => (
@@ -48,7 +51,7 @@ export default async function Invoices({ params, searchParams }: { params: Promi
               <tr key={i.id}>
                 <td><Link href={`${b}/fakturor/${i.id}`}>{i.invoice_number ?? 'Utkast'}</Link></td>
                 <td>{i.customer}</td><td>{i.invoice_date}</td><td>{i.due_date}</td>
-                <td className="num">{kr(i.total)}</td><td><Status s={i.status} overdue={i.due_date < t} /></td>
+                <td className="num">{kr(i.total)}</td><td><Status s={i.status} overdue={i.due_date < t} />{(() => { const p = i.status === 'booked' && i.due_date >= t ? predict(i.due_date, behaviors.get(i.customer_id) ?? null) : null; return p?.late ? <span className="badge warn" title={`Kunden brukar betala ${p.delay} dagar efter förfallodagen`} style={{ marginLeft: 4 }}>Troligen sen</span> : null; })()}</td>
               </tr>
             ))}
             {rows.length === 0 && <tr><td colSpan={6} className="muted">{L("Inga fakturor.")}</td></tr>}

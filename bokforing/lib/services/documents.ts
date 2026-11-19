@@ -287,3 +287,20 @@ export async function signerDocumentHash(userId: number, signerId: number): Prom
   if (!s) throw new NotFoundError('Signeringen');
   return s.sha256;
 }
+
+/** Signering med BankID (verifierad hos leverantören): intern undertecknare eller via länk */
+export async function signWithBankId(where: { signerId: number; userId: number } | { token: string }, v: { pnrMasked: string; name: string; idTokenHash: string; issuer: string }, c: SignCtx) {
+  await sql.begin(async (tx) => {
+    const s = await pendingSigner(tx, 'token' in where ? { token: where.token } : { signerId: where.signerId, userId: where.userId });
+    await markSigned(tx, s.id, s.document_id, s.company_id, {
+      method: 'bankid', signedName: v.name || s.name,
+      evidence: { method: 'bankid', document_sha256: s.sha256, personal_number: v.pnrMasked, bankid_name: v.name, id_token_sha256: v.idTokenHash, issuer: v.issuer, ip: c.ip, user_agent: c.ua, at: new Date().toISOString() },
+    }, c);
+  });
+}
+
+export async function signingTitle(where: { signerId: number; userId: number } | { token: string }): Promise<{ title: string; sha256: string } | null> {
+  const [r] = await sql<{ title: string; sha256: string }[]>`SELECT d.title, d.sha256 FROM document_signers s JOIN documents d ON d.id = s.document_id
+    WHERE ${'token' in where ? sql`s.token_hash = ${sha256hex(where.token)}` : sql`s.id = ${where.signerId} AND s.user_id = ${where.userId}`} AND s.status = 'pending' AND d.status = 'pending'`;
+  return r ?? null;
+}

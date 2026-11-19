@@ -5,6 +5,8 @@ import { cleanupRateLimits } from '@/lib/server/ratelimit';
 import { runCron } from '@/lib/server/monitor';
 import { sendDigests, sendMonthlyReports } from '@/lib/services/digest';
 import { pushDaily } from '@/lib/services/push';
+import { runDueSchedules } from '@/lib/services/report-schedules';
+import { runJobs } from '@/lib/server/jobs';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -15,7 +17,7 @@ export async function GET(req: Request) {
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) return new Response('Unauthorized', { status: 401 });
   return Response.json(await runCron('daily', async () => {
     const out: Record<string, unknown> = {};
-    const jobs = [['avtal', generateAll], ['paminnelser', remindAll], ['inkorg', () => processPending(100)], ['inkorg_gallring', cleanupInbox], ['ratelimit_gallring', cleanupRateLimits], ['sammandrag', () => sendDigests()], ['manadsrapport', () => sendMonthlyReports()], ['notiser', pushDaily]] as const;
+    const jobs = [['avtal', generateAll], ['paminnelser', remindAll], ['inkorg', () => processPending(100)], ['inkorg_gallring', cleanupInbox], ['ratelimit_gallring', cleanupRateLimits], ['sammandrag', () => sendDigests()], ['manadsrapport', () => sendMonthlyReports()], ['notiser', pushDaily], ['rapportutskick', () => runDueSchedules()], ['jobbko', () => runJobs(500)]] as const;
     for (const [k, job] of jobs) {
       try { out[k] = await job(); } catch (e) { out[k] = { error: (e as Error).message }; }
     }

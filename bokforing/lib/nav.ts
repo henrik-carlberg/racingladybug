@@ -23,6 +23,7 @@ export function buildNav(o: {
       { path: '/kunder', label: 'Kunder', perm: 'invoicing' },
       { path: '/kassa', label: 'Kassa och e-handel', hint: 'Dagskassa och webbutik' },
       { path: '/fakturor/rotrut', label: 'ROT och RUT', perm: 'invoicing' },
+      { path: '/autogiro', label: 'Autogiro', perm: 'invoicing', hint: 'Dra betalningen från kundens konto' },
       { path: '/tid', label: '⏱ Tidrapportering' },
       { path: '/uppdrag', label: 'Uppdrag & timbanker' },
       { path: '/tid/belaggning', label: 'Beläggning' },
@@ -47,6 +48,7 @@ export function buildNav(o: {
       { path: '/personalliggare', label: 'Personalliggare' },
       { path: '/lon/skattetabeller', label: 'Skattetabeller', perm: 'payroll' },
       { path: '/lon/bilforman', label: 'Bilförmån', perm: 'payroll' },
+      { path: '/agare', label: 'Ägare och utdelning', perm: 'ledger', hint: 'K10, gränsbelopp och lön eller utdelning' },
     ]) },
     { id: 'rapp', label: t('Rapporter'), icon: 'chart', items: items([
       { path: '/rapporter/panel', label: 'Instrumentpanel', hint: 'Diagram och nyckeltal' },
@@ -58,6 +60,7 @@ export function buildNav(o: {
       { path: '/rapporter/huvudbok', label: 'Huvudbok' },
       { path: '/rapporter/dimensioner', label: 'Resultat per dimension' },
       { path: '/rapporter/export', label: 'Export (SIE)' },
+      { path: '/rapporter/utskick', label: 'Schemalagda rapporter', perm: 'ledger', hint: 'Resultat och balans som Excel varje månad' },
     ]) },
     { id: 'bok', label: t('Bokföring'), icon: 'ledger', items: items([
       { path: '/verifikationer', label: 'Verifikationer', perm: 'ledger' },
@@ -83,6 +86,7 @@ export function buildNav(o: {
       { path: '/abonnemang', label: 'Abonnemang' },
       { path: '/installningar/betalningar', label: 'Kortbetalning' },
       { path: '/installningar/kostnadsstallen', label: 'Kostnadsställen' },
+      { path: '/installningar/mallar', label: 'E-postmallar', perm: 'invoicing', hint: 'Texter för faktura, påminnelse och tack' },
       { path: '/installningar/byra', label: 'Redovisningsbyrå' },
       { path: '/dokument', label: 'Dokument & e-signering' },
       { path: '/integrationer', label: 'Integrationer (API)' },

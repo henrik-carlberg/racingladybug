@@ -6,6 +6,7 @@ import { auditBy } from '@/lib/server/audit';
 import { sendMail } from '@/lib/server/mail';
 import { formatAmount } from '@/lib/money';
 import type { Actor } from './actor';
+import { customTemplate, renderTemplate } from './templates';
 
 /** Skapar (vid behov) en hemlig länk till fakturan och skickar den med e-post till kunden */
 export async function sendInvoice(actor: Actor, invoiceId: number, input: { to?: string; message?: string }, origin: string) {
@@ -40,8 +41,15 @@ export async function sendInvoice(actor: Actor, invoiceId: number, input: { to?:
     '', `Visa, skriv ut eller spara fakturan som PDF: ${link}`, '',
     `Med vänliga hälsningar\n${co.name}${co.email ? `\n${co.email}` : ''}`,
   ];
-  const text = lines.filter((x, n, a) => x !== '' || a[n - 1] !== '').join('\n');
-  const emailed = to ? await sendMail(to, `${kind} ${i.number} ${en ? 'from' : 'från'} ${co.name}`, text) : false;
+  let text = lines.filter((x, n, a) => x !== '' || a[n - 1] !== '').join('\n');
+  let subject = `${kind} ${i.number} ${en ? 'from' : 'från'} ${co.name}`;
+  // Egen mall för svenska fakturor (inte kreditfakturor)
+  const tpl = !en && !i.credit ? await customTemplate(actor.companyId, 'invoice') : null;
+  if (tpl?.enabled) {
+    const r = renderTemplate(tpl, { kund: i.customer, företag: co.name, fakturanummer: String(i.number), belopp: amount, förfallodatum: i.due, ocr: i.ocr ?? '', bankgiro: co.bankgiro, länk: link, meddelande: input.message?.trim() ?? '', att_betala: amount });
+    subject = r.subject; text = r.body;
+  }
+  const emailed = to ? await sendMail(to, subject, text) : false;
   await sql`UPDATE invoices SET public_token = ${token}, sent_at = ${emailed ? new Date() : sql`sent_at`}, sent_to = ${emailed ? to : sql`sent_to`} WHERE id = ${invoiceId}`;
   await auditBy(sql, actor, emailed ? 'send' : 'share_link', 'invoice', invoiceId, { to: emailed ? to : null });
   return { link, emailed, to };

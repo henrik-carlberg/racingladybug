@@ -27,4 +27,5 @@ export const GLOSSARY: Record<string, { title: string; text: string }> = {
   sie: { title: 'SIE-fil', text: 'Svensk standard för att flytta bokföring mellan program och till revisorn. Typ 4 innehåller alla verifikationer.' },
   forfallodatum: { title: 'Förfallodatum', text: 'Sista dagen fakturan ska vara betald. Efter det får säljaren ta ut dröjsmålsränta och skicka påminnelse.' },
   utkast: { title: 'Utkast', text: 'En faktura som inte är bokförd än. Den kan ändras och tas bort. När den bokförs får den nummer och kan bara rättas med en kreditfaktura.' },
+  k10: { title: '3:12-reglerna och K10', text: 'Ägare i fåmansaktiebolag får utdelning beskattad med 20 % upp till ett gränsbelopp per år. Utdelning över gränsbeloppet beskattas som lön. Gränsbeloppet räknas ut på blankett K10 som lämnas med deklarationen. Outnyttjat belopp sparas till nästa år.' },
 };

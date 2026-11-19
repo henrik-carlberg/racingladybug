@@ -7,7 +7,7 @@ import { DocumentBody } from '@/components/DocumentBody';
 import { PrintButton } from '@/components/PrintButton';
 
 export const dynamic = 'force-dynamic';
-const METHOD: Record<string, string> = { passkey: 'Passkey (biometri/PIN, WebAuthn)', password: 'Inloggad användare, lösenord', link: 'Personlig länk och namnbekräftelse' };
+const METHOD: Record<string, string> = { passkey: 'Passkey (biometri/PIN, WebAuthn)', password: 'Inloggad användare, lösenord', link: 'Personlig länk och namnbekräftelse', bankid: 'BankID (personnummer verifierat)' };
 
 /** Signerat dokument med verifieringsbilaga – skriv ut eller spara som PDF */
 export default async function Print({ params }: { params: Promise<{ cid: string; did: string }> }) {

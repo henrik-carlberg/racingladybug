@@ -167,6 +167,17 @@ details.help .help-pop b { display: block; margin-bottom: .2rem; }
 .move-num { flex: 0 0 auto; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 650; }
 .move-step.done .move-num { background: var(--ok-soft); color: var(--ok); }
 tr.diff td { background: var(--danger-soft); }
+/* Lön eller utdelning */
+table.payout tr.best td { background: var(--ok-soft); }
+/* BankID */
+.bankid-btn { background: #193e4f; color: #fff; }
+.bankid-btn:hover { background: #235a72; }
+/* E-postmallar */
+.email-preview { background: var(--panel-2); border-radius: 10px; padding: .75rem .9rem; }
+.email-preview pre { white-space: pre-wrap; font-family: inherit; margin: .4rem 0 0; }
+td.neg { color: var(--danger); }
+/* Kvitton utan uppkoppling */
+.outbox { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; padding: .55rem .8rem; margin-bottom: 1rem; border-radius: var(--radius-sm); background: var(--accent-soft); font-size: .9rem; }
 /* Ångra */
 .toasts { position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%); z-index: 60; display: grid; gap: .5rem; width: min(440px, calc(100vw - 32px)); }
 .toast { position: relative; overflow: hidden; display: flex; align-items: center; gap: .75rem; padding: .75rem 1rem; border-radius: 12px; background: #111827; color: #f9fafb; box-shadow: var(--shadow-lg); }

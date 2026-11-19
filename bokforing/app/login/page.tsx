@@ -4,6 +4,8 @@ import { Flash, type SP } from '@/components/ui';
 import { sql } from '@/lib/db';
 import { PasskeyLogin } from '@/components/Passkeys';
 import { signupOpen } from '@/lib/billing';
+import { bankidEnabled } from '@/lib/services/bankid';
+import { bankidLogin } from '../bankid-actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +15,7 @@ export default async function Login({ searchParams }: { searchParams: SP }) {
     <div className="center">
       <h1>Logga in</h1>
       <Flash searchParams={searchParams} />
+      {bankidEnabled() && <form action={bankidLogin}><button className="bankid-btn">Fortsätt med BankID</button></form>}
       <PasskeyLogin />
       <form action={login} className="card stack">
         <label>E-post<input name="email" type="email" required autoComplete="username webauthn" /></label>

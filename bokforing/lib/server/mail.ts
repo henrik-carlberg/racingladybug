@@ -6,13 +6,13 @@ import 'server-only';
  */
 export const mailConfigured = () => !!(process.env.RESEND_API_KEY && process.env.MAIL_FROM);
 
-export async function sendMail(to: string, subject: string, text: string): Promise<boolean> {
+export async function sendMail(to: string, subject: string, text: string, attachments?: { filename: string; content: Buffer }[]): Promise<boolean> {
   if (!mailConfigured() || !to) return false;
   try {
     const res = await fetch(`${(process.env.RESEND_API_URL || 'https://api.resend.com').replace(/\/$/, '')}/emails`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: process.env.MAIL_FROM, to: [to], subject, text }),
+      body: JSON.stringify({ from: process.env.MAIL_FROM, to: [to], subject, text, ...(attachments?.length ? { attachments: attachments.map((a) => ({ filename: a.filename, content: a.content.toString('base64') })) } : {}) }),
       signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) console.error('mail', res.status, await res.text());

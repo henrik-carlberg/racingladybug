@@ -15,6 +15,8 @@ import { forgetLearning, saveDigest, saveLanguage, saveLearning, savePushPrefs, 
 import { PushSettings } from '@/components/PushSettings';
 import { pushEnabled, vapidPublicKey } from '@/lib/services/push';
 import { PUSH_KINDS } from '@/lib/push';
+import { bankidEnabled } from '@/lib/services/bankid';
+import { bankidLink, bankidUnlink } from '../bankid-actions';
 import { uiLang } from '@/lib/server/lang';
 import { translator } from '@/lib/ui-i18n';
 
@@ -27,6 +29,7 @@ export default async function Account({ searchParams }: { searchParams: SP }) {
   const t = translator(lang);
   const [{ digest, monthly_report, learn_usage }] = await sql<{ digest: string; monthly_report: boolean; learn_usage: boolean }[]>`SELECT digest, monthly_report, learn_usage FROM users WHERE id = ${user.id}`;
   const [{ n: learned }] = await sql<{ n: number }[]>`SELECT count(*)::int AS n FROM user_usage WHERE user_id = ${user.id}`;
+  const [{ linked }] = await sql<{ linked: string | null }[]>`SELECT to_char(bankid_linked_at,'YYYY-MM-DD') AS linked FROM users WHERE id = ${user.id}`;
   const [{ prefs, devices }] = await sql<{ prefs: string[]; devices: number }[]>`SELECT push_prefs AS prefs, (SELECT count(*)::int FROM push_subscriptions WHERE user_id = ${user.id}) AS devices FROM users WHERE id = ${user.id}`;
   const [mfa] = await sql<{ secret: string | null; on: string | null; codes: number }[]>`
     SELECT totp_secret AS secret, to_char(totp_enabled_at,'YYYY-MM-DD') AS on, cardinality(backup_codes)::int AS codes FROM users WHERE id = ${user.id}`;
@@ -108,6 +111,16 @@ export default async function Account({ searchParams }: { searchParams: SP }) {
         <div style={{ flex: '0 0 auto' }}><button className="secondary">{t('Spara')}</button></div>
         <span className="small muted">{lang === 'en' ? 'Menus and common pages are shown in English. Bookkeeping terms, reports and forms for Swedish authorities stay in Swedish.' : 'Menyer och vanliga sidor visas på engelska. Bokföringstermer, rapporter och blanketter till svenska myndigheter är kvar på svenska.'}</span>
       </form>
+
+      {bankidEnabled() && (
+        <>
+          <h2 id="bankid">BankID</h2>
+          <div className="card row" style={{ alignItems: 'center' }}>
+            {linked ? <><span className="badge ok">Kopplat {linked}</span><span className="small muted">Du kan logga in och signera med BankID.</span><form action={bankidUnlink}><button className="link small">Koppla bort</button></form></>
+              : <><form action={bankidLink}><button className="bankid-btn">Koppla BankID</button></form><span className="small muted">Logga in och signera dokument med BankID i stället för lösenord.</span></>}
+          </div>
+        </>
+      )}
 
       <h2 id="notiser">{t('Notiser i mobilen')}</h2>
       <div className="card stack">

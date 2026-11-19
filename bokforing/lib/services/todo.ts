@@ -2,6 +2,7 @@ import 'server-only';
 import { sql } from '@/lib/db';
 import { addDays, today } from '@/lib/format';
 import { companyDeadlines } from './deadlines';
+import { likelyLate } from './forecast';
 
 export interface Todo { key: string; title: string; count: number; href: string; level: 'danger' | 'warn' | 'info' }
 
@@ -30,6 +31,7 @@ export async function companyTodos(companyId: number, opts: { modules: string[];
       (SELECT dpa_accepted_at IS NULL FROM companies WHERE id = ${companyId}) AS no_dpa,
       (SELECT totp_enabled_at IS NULL FROM users WHERE id = ${opts.userId})
         AND NOT EXISTS (SELECT 1 FROM passkeys WHERE user_id = ${opts.userId}) AS no_mfa`;
+  const late = (await likelyLate(companyId).catch(() => [])).length;
   const deadlines = (await companyDeadlines(companyId)).filter((d) => d.status === 'overdue' || d.status === 'soon');
   const n = (k: string) => Number(c[k] ?? 0);
   const list: (Todo | false)[] = [
@@ -48,6 +50,7 @@ export async function companyTodos(companyId: number, opts: { modules: string[];
     n('absence') > 0 && { key: 'absence', title: 'Ledighetsansökningar', count: n('absence'), href: `${b}/lon/franvaro`, level: 'warn' },
     has('resurser') && n('bookings') > 0 && { key: 'bookings', title: 'Bokningar att godkänna', count: n('bookings'), href: `${b}/m/resurser`, level: 'warn' },
     n('bank') > 0 && { key: 'bank', title: 'Banktransaktioner att stämma av', count: n('bank'), href: `${b}/bank/avstamning`, level: 'info' },
+    late > 0 && { key: 'likely_late', title: 'Fakturor som troligen blir sena (kunden brukar betala sent)', count: late, href: has('reskontra') ? `${b}/m/reskontra` : `${b}/fakturor?status=booked`, level: 'info' },
     n('drafts') > 0 && { key: 'drafts', title: 'Fakturautkast', count: n('drafts'), href: `${b}/fakturor`, level: 'info' },
     deadlines.some((d) => d.status === 'soon') && { key: 'soon', title: 'Deadlines inom två veckor', count: deadlines.filter((d) => d.status === 'soon').length, href: `${b}/deadlines`, level: 'info' },
     opts.owner && c.no_dpa === true && { key: 'dpa', title: 'Godkänn personuppgiftsbiträdesavtalet', count: 1, href: `${b}/installningar/gdpr`, level: 'info' },

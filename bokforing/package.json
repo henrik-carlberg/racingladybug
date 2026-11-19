@@ -15,7 +15,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "vercel-build": "node scripts/migrate.mjs && next build",
-    "test:e2e": "tests/e2e/run-all.sh"
+    "test:e2e": "tests/e2e/run-all.sh",
+    "loadtest": "node scripts/loadtest.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.10.0",

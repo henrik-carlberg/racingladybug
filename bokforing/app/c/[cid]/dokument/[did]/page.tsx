@@ -1,3 +1,5 @@
+import { bankidEnabled } from '@/lib/services/bankid';
+import { bankidSign } from '@/app/bankid-actions';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { sql } from '@/lib/db';
@@ -13,7 +15,7 @@ import { cancelDoc, sendDoc } from '../actions';
 export const dynamic = 'force-dynamic';
 
 const EVENT: Record<string, string> = { created: 'Skapat', sent: 'Skickat för signering', viewed: 'Öppnat', signed: 'Signerat', declined: 'Avböjt', completed: 'Klart och förseglat', cancelled: 'Återkallat' };
-const METHOD: Record<string, string> = { passkey: 'Passkey (biometri/PIN)', password: 'Inloggad med lösenord', link: 'Personlig länk + namnbekräftelse' };
+const METHOD: Record<string, string> = { passkey: 'Passkey (biometri/PIN)', password: 'Inloggad med lösenord', link: 'Personlig länk + namnbekräftelse', bankid: 'BankID' };
 
 export default async function DocumentPage({ params, searchParams }: { params: Promise<{ cid: string; did: string }>; searchParams: SP }) {
   const { cid, did } = await params;
@@ -35,6 +37,7 @@ export default async function DocumentPage({ params, searchParams }: { params: P
         </div>
       </div>
       <Flash searchParams={searchParams} />
+      {d.status === 'pending' && mine && bankidEnabled() && <form action={bankidSign.bind(null, mine.id, `${b}/dokument/${d.id}`)} className="card row" style={{ alignItems: 'center' }}><button className="bankid-btn">Signera med BankID</button><span className="small muted">Säkrast – signaturen kopplas till ditt personnummer.</span></form>}
       {d.status === 'pending' && mine && <SignPanel signerId={mine.id} path={`${b}/dokument/${d.id}`} hasPasskey={passkeys > 0} name={mine.name} />}
 
       <h2>Undertecknare</h2>

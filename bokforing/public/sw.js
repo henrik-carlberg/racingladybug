@@ -1,8 +1,21 @@
 // Service worker: gör appen installerbar och visar en offlinesida. Inloggade sidor cachas aldrig.
-const CACHE = 'bok-v2';
+const CACHE = 'bok-v3';
+const OFFLINE_RECEIPT = '/kvitto-offline';
 const OFFLINE = '/offline.html';
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll([OFFLINE, '/icon.svg'])).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then(async (c) => {
+    await c.addAll([OFFLINE, '/icon.svg']);
+    // Kvittosidan för läge utan uppkoppling, med sina skript och stilar
+    try {
+      const r = await fetch(OFFLINE_RECEIPT, { credentials: 'omit' });
+      if (r.ok) {
+        const html = await r.clone().text();
+        await c.put(OFFLINE_RECEIPT, r);
+        const assets = [...new Set([...html.matchAll(/(?:src|href)="(\/_next\/static\/[^"]+)"/g)].map((m) => m[1]))];
+        await Promise.all(assets.map((a) => c.add(a).catch(() => {})));
+      }
+    } catch { /* hämtas nästa gång */ }
+  }).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
@@ -17,7 +30,10 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(caches.open(CACHE).then(async (c) => (await c.match(req)) || fetch(req).then((r) => { if (r.ok) c.put(req, r.clone()); return r; })));
     return;
   }
-  if (req.mode === 'navigate') e.respondWith(fetch(req).catch(() => caches.match(OFFLINE)));
+  if (req.mode === 'navigate') {
+    const receipt = /^\/c\/\d+\/kvitto\/?$/.test(url.pathname);
+    e.respondWith(fetch(req).catch(async () => (receipt && (await caches.match(OFFLINE_RECEIPT))) || caches.match(OFFLINE)));
+  }
 });
 
 // Pushnotiser: visa notisen och öppna rätt sida när man trycker på den
