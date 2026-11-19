@@ -51,6 +51,8 @@ export function buildNav(o: {
       { path: '/lon', label: 'Lönekörningar', perm: 'payroll', hint: 'Betala ut lön och skapa AGI' },
       { path: '/lon/anstallda', label: 'Anställda', perm: 'payroll' },
       { path: '/lon/franvaro', label: 'Frånvaro och semester', perm: 'payroll' },
+      { path: '/lon/formaner', label: 'Skattefria förmåner', perm: 'payroll', hint: 'Friskvårdsbidrag och gåvor med tak per anställd' },
+      { path: '/lon/flex', label: 'Flextid och tidbank', perm: 'payroll', hint: 'Schemat mot stämplad tid' },
       { path: '/schema', label: 'Schema' },
       { path: '/personalliggare', label: 'Personalliggare' },
       { path: '/lon/skattetabeller', label: 'Skattetabeller', perm: 'payroll' },

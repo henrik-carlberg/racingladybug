@@ -302,6 +302,74 @@ const kvServer = http.createServer((req, res) => {
   assert(/Telebolaget ZQ har höjt priset med 12 %/.test(t) && t.includes('Faktura T-4: 448 kr exkl. moms mot normalt 400 kr'), 'prisbevakning: ' + t.slice(0, 1500));
   log('prisbevakning: en återkommande faktura som plötsligt blir dyrare flaggas för granskning');
 
+  // ================= Del 5: lön del 2 =================
+  await owner.goto(B + '/lon');
+  await owner.fill('input[name=period]', '2026-11');
+  await owner.fill('input[name=payment_date]', '2026-11-25');
+  await owner.click('button:has-text("Ny lönekörning")');
+  await owner.waitForURL(/lon\/\d+\?ok/);
+  const runUrl = owner.url().split('?')[0];
+
+  await owner.goto(B + '/lon/formaner');
+  await owner.selectOption('select[name=employee_id]', { label: 'Anna Andersson' });
+  await owner.selectOption('select[name=kind]', 'wellness');
+  await owner.fill('input[name=amount]', '3000');
+  await owner.fill('input[name=description]', 'Gymkort');
+  await owner.selectOption('select[name=run_id]', { label: '2026-11' });
+  await owner.click('button:has-text("Lägg på lönen")');
+  await owner.locator('text=/2[\\s ]000 kr kvar av taket i år/').waitFor();
+  await owner.selectOption('select[name=employee_id]', { label: 'Anna Andersson' });
+  await owner.selectOption('select[name=kind]', 'wellness');
+  await owner.fill('input[name=amount]', '2500');
+  await owner.selectOption('select[name=run_id]', { label: '2026-11' });
+  await owner.click('button:has-text("Lägg på lönen")');
+  await owner.locator('text=/Friskvårdsbidrag ryms inte inom det skattefria taket: 2[\\s ]000 kr kvar/').waitFor();
+  t = await text(owner);
+  assert(/Anna Andersson 3[\s ]000,00 kvar 2[\s ]000,00/.test(t), 'användning per anställd: ' + t.slice(0, 1200));
+  log('friskvårdsbidrag betalas skattefritt med lönen och stoppas när taket (5 000 kr/år) skulle överskridas');
+
+  await owner.goto(`${B}/schema`);
+  await owner.selectOption('select[name=employee_id]', { label: 'Anna Andersson' });
+  await owner.fill('input[name=date]', day(2));
+  await owner.fill('input[name=start]', '08:00');
+  await owner.fill('input[name=end]', '16:00');
+  await owner.click('button:has-text("Lägg till pass")');
+  await owner.locator('text=Passet är tillagt').waitFor();
+  await owner.goto(B + '/lon/flex');
+  await owner.selectOption('select[name=employee_id]', { label: 'Anna Andersson' });
+  await owner.fill('input[name=start]', day(3));
+  await owner.click('button:has-text("Slå på flextid")');
+  await owner.locator('text=Flextiden räknas från startdatumet').waitFor();
+  const bal = async () => (await owner.locator('.flex-detail-balance').innerText()).trim();
+  const mins = (x) => { const m = /^([+−]?)(\d+):(\d\d)$/.exec(x); return (m[1] === '−' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3])); };
+  const b0 = mins(await bal());
+  assert((await owner.locator(`.flex-days tr:has-text("${day(2)}")`).innerText()).replace(/\s+/g, ' ').includes('8:00 0:00 −8:00'), 'pass utan stämpling ger minus: ' + (await text(owner)).slice(0, 1000));
+  await owner.selectOption('select[name=kind]', 'adjust');
+  await owner.fill('form:has(select[name=kind]) input[name=hours]', '10');
+  await owner.fill('input[name=note]', 'Glömde stämpla – arbetade enligt schema plus övertid');
+  await owner.click('form:has(select[name=kind]) button:has-text("Spara")');
+  await owner.locator('text=Tidbanken är uppdaterad').waitFor();
+  assert(mins(await bal()) === b0 + 600, 'efter rättning: ' + await bal());
+  await owner.selectOption('form:has-text("Betala ut sparad tid") select[name=run_id]', { label: '2026-11' });
+  await owner.fill('form:has-text("Betala ut sparad tid") input[name=hours]', '2');
+  await owner.click('button:has-text("Lägg på lönen")');
+  await owner.locator('text=/Utbetalningen \\(.* kr\\) är lagd på lönen/').waitFor();
+  assert(mins(await bal()) === b0 + 480, 'utbetald: ' + await bal());
+  log('flextid: schemat mot stämplad tid, rättning och utbetalning av sparad tid med lönen');
+
+  await owner.goto(runUrl);
+  await owner.waitForLoadState('networkidle');
+  assert(await owner.locator('input[value^="Friskvårdsbidrag"]').count() === 1 && await owner.locator('input[value="Utbetalning flextid 2 h"]').count() === 1 && (await text(owner)).includes('/ 3 000,00'), 'raderna på lönen');
+  await owner.goto(B + '/periodiseringar');
+  await owner.check('.vacation-auto input[name=auto]');
+  await owner.click('.vacation-auto button:has-text("Spara")');
+  await owner.locator('text=Semesterlöneskulden bokförs nu automatiskt').waitFor();
+  await owner.goto(runUrl);
+  await owner.click('button:text-is("Bokför lönekörning")');
+  await owner.locator('text=Lönekörningen är bokförd').waitFor();
+  assert(/Semesterlöneskulden är justerad med -?[\d\s ]+,\d\d kr/.test(await text(owner)), 'semesterlöneskulden justeras: ' + (await text(owner)).slice(0, 800));
+  log('semesterlöneskulden bokförs automatiskt per månadens sista dag när lönen bokförs');
+
   //@@NEXT@@
   await browser.close(); bvServer.close(); mailServer.close(); kvServer.close();
   console.log('Omgång 11: alla steg gick igenom');

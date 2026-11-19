@@ -90,3 +90,21 @@ describe('Inköp med matchning', () => {
     expect(priceIncrease([100000], 200000)).toBeNull();
   });
 });
+
+import { checkBenefit } from '@/lib/benefits';
+import { dailyFlex, fmtMinutes, payoutAmount } from '@/lib/flex';
+describe('Lön del 2', () => {
+  it('friskvårdsbidrag inom taket', () => {
+    expect(checkBenefit('wellness', 300000, 200000)).toMatchObject({ ok: true, left: 0 });
+    expect(checkBenefit('wellness', 300000, 250000)).toMatchObject({ ok: false, left: 200000 });
+    expect(checkBenefit('christmas', 0, 60000).message).toContain('hela värdet skattepliktigt');
+  });
+  it('flex: planerat mot stämplat', () => {
+    const shifts = [{ start: '2026-11-16T07:00:00Z', end: '2026-11-16T15:00:00Z' }, { start: '2026-11-17T07:00:00Z', end: '2026-11-17T15:00:00Z' }];
+    const logs = [{ start: '2026-11-16T07:00:00Z', end: '2026-11-16T16:30:00Z' }, { start: '2026-11-17T07:30:00Z', end: '2026-11-17T15:00:00Z' }];
+    const d = dailyFlex(shifts, logs, '2026-11-17');
+    expect(d.map((x) => x.diff)).toEqual([90, -30]);
+    expect(fmtMinutes(60)).toBe('+1:00'); expect(fmtMinutes(-90)).toBe('−1:30');
+    expect(payoutAmount(165 * 60, 3300000)).toBe(3300000);
+  });
+});

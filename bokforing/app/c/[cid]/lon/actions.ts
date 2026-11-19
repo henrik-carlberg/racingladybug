@@ -45,9 +45,22 @@ export async function deleteRun(cid: number, runId: number) {
 }
 
 export async function bookRun(cid: number, runId: number) {
-  const actor = userActor(await requireCompany(cid, { perm: 'payroll' }));
-  await attempt(`/c/${cid}/lon/${runId}`, () => svc.bookPayrollRun(actor, runId));
-  done(`/c/${cid}/lon/${runId}`, 'Lönekörningen är bokförd. Ladda ner AGI-filen och lämna den till Skatteverket (normalt senast den 12:e månaden efter utbetalning, 17:e i januari och augusti).');
+  const ctx = await requireCompany(cid, { perm: 'payroll' });
+  const actor = userActor(ctx);
+  let vac = '';
+  await attempt(`/c/${cid}/lon/${runId}`, async () => {
+    await svc.bookPayrollRun(actor, runId);
+    // Semesterlöneskulden justeras per månadens sista dag om bolaget har valt det
+    if (ctx.company.vacation_liability_auto) {
+      const { sql } = await import('@/lib/db');
+      const { monthEnd } = await import('@/lib/format');
+      const { bookVacationLiability } = await import('@/lib/services/accruals');
+      const [r] = await sql<{ period: string }[]>`SELECT period FROM payroll_runs WHERE id = ${runId}`;
+      const v = await bookVacationLiability(actor, monthEnd(r.period)).catch(() => null);
+      if (v) vac = ` Semesterlöneskulden är justerad med ${(v.liability / 100).toLocaleString('sv-SE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr.`;
+    }
+  });
+  done(`/c/${cid}/lon/${runId}`, `Lönekörningen är bokförd.${vac} Ladda ner AGI-filen och lämna den till Skatteverket (normalt senast den 12:e månaden efter utbetalning, 17:e i januari och augusti).`);
 }
 
 export async function applyAbsence(cid: number, runId: number) {

@@ -8,7 +8,7 @@ import { ACCRUAL_KINDS } from '@/lib/accruals';
 import { listAccruals, vacationLiabilitySuggestion } from '@/lib/services/accruals';
 import { listCostCenters } from '@/lib/services/dimensions';
 import { fiscalYears } from '@/lib/server/ledger';
-import { bookVacation, create, remove, run } from './actions';
+import { bookVacation, create, remove, run, vacationAuto } from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -81,6 +81,10 @@ export default async function Accruals({ params, searchParams }: { params: Promi
       </form>
 
       <h2>Semesterlöneskuld</h2>
+      <form action={vacationAuto.bind(null, company.id)} className="card row vacation-auto" style={{ alignItems: 'center' }}>
+        <label className="check" style={{ flex: '3 1 300px' }}><input type="checkbox" name="auto" defaultChecked={company.vacation_liability_auto} /> Bokför semesterlöneskulden automatiskt per månadens sista dag när en lönekörning bokförs</label>
+        <div style={{ flex: '0 0 auto' }}><button className="secondary">Spara</button></div>
+      </form>
       <form className="row card" style={{ alignItems: 'end' }}>
         <label style={{ flex: '0 0 180px' }}>Per datum<input type="date" name="asof" defaultValue={asOf} /></label>
         <div style={{ flex: '0 0 auto' }}><button className="secondary">Beräkna</button></div>

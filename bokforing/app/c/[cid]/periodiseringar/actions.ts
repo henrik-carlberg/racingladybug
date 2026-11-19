@@ -38,3 +38,10 @@ export async function bookVacation(cid: number, fd: FormData) {
   await attempt(base(cid), () => svc.bookVacationLiability(actor, str(fd, 'date')));
   done(base(cid), 'Semesterlöneskulden är bokförd');
 }
+
+export async function vacationAuto(cid: number, fd: FormData) {
+  const { sql } = await import('@/lib/db');
+  const { company } = await requireCompany(cid, { owner: true });
+  await attempt(base(cid), async () => { await sql`UPDATE companies SET vacation_liability_auto = ${fd.get('auto') === 'on'} WHERE id = ${company.id}`; });
+  done(base(cid), fd.get('auto') === 'on' ? 'Semesterlöneskulden bokförs nu automatiskt när en lönekörning bokförs' : 'Automatisk bokning av semesterlöneskulden är avstängd');
+}
