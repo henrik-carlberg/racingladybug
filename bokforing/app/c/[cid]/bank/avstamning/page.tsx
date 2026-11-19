@@ -1,10 +1,14 @@
+import { Help } from '@/components/Help';
+import { commentCounts } from '@/lib/services/comments';
+import { ask } from '../../fragor/actions';
 import Link from 'next/link';
+import { UndoButton } from '@/components/Undo';
 import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
 import { listBankAccounts, listTransactions } from '@/lib/services/bank';
-import { Flash, type SP } from '@/components/ui';
+import { Flash, type SP, EmptyState } from '@/components/ui';
 import { kr } from '@/lib/format';
-import { autoMatch, bookAllSuggestions, reconcileTx, reopenTx } from '../actions';
+import { autoMatch, bookAllSuggestions, ignoreTxNow, reconcileTx, reopenTx } from '../actions';
 import { learnKey } from '@/lib/bank/rules';
 import { listCostCenters, listProjectRefs } from '@/lib/services/dimensions';
 
@@ -24,6 +28,12 @@ export default async function Reconcile({ params, searchParams }: { params: Prom
   const accNames = new Map(accounts.map((a) => [a.id, a.name]));
   const chart = await sql<{ number: number; name: string }[]>`SELECT number, name FROM accounts WHERE company_id = ${company.id} AND active ORDER BY number`;
   const b = `/c/${company.id}`;
+  const ids = rows.map((r) => r.id);
+  const comments = await commentCounts(company.id, 'bank_transaction', ids);
+  const docs = new Map((ids.length ? await sql<{ id: number; requested: boolean; attachment: number | null }[]>`
+    SELECT q.entity_id AS id, bool_or(q.status = 'open' AND q.needs_document) AS requested, max(a.id) AS attachment
+    FROM client_questions q LEFT JOIN attachments a ON a.question_id = q.id
+    WHERE q.company_id = ${company.id} AND q.entity = 'bank_transaction' AND q.entity_id IN ${sql(ids)} GROUP BY q.entity_id` : []).map((r) => [r.id, r]));
   const withAccount = rows.filter((r) => r.accountSuggestion && !(r.suggestions ?? []).some((x) => x.score >= 80)).length;
   const ruleLink = (t: (typeof rows)[number], account?: number | null) => `${b}/bank/regler?${new URLSearchParams({ pattern: learnKey(t), direction: t.amount < 0 ? 'out' : 'in',
     ...(account ? { account: String(account) } : {}), description: t.counterparty || t.description, back: `${b}/bank/avstamning` }).toString()}`;
@@ -31,7 +41,7 @@ export default async function Reconcile({ params, searchParams }: { params: Prom
   return (
     <>
       <div className="header">
-        <h1>Bankavstämning</h1>
+        <h1>Bankavstämning <Help term="avstamning" /></h1>
         <div className="actions" style={{ margin: 0 }}>
           {status === 'unmatched' && <form action={autoMatch.bind(null, company.id)}><button>Stäm av säkra matchningar automatiskt</button></form>}
           {withAccount > 0 && <form action={bookAllSuggestions.bind(null, company.id)}><button className="secondary">Bokför alla kontoförslag ({withAccount})</button></form>}
@@ -46,12 +56,16 @@ export default async function Reconcile({ params, searchParams }: { params: Prom
         ))}
       </div>
       <datalist id="chart">{chart.map((a) => <option key={a.number} value={a.number}>{a.name}</option>)}</datalist>
-      {rows.length === 0 && <p className="muted">Inga transaktioner.</p>}
+      {rows.length === 0 && (status === 'unmatched'
+        ? <EmptyState icon="check" title="Allt är avstämt" actions={[{ href: `${b}/bank`, label: 'Hämta nya transaktioner', secondary: true }]}>Det finns inga banktransaktioner som väntar. Nya transaktioner hämtas från banken automatiskt varje natt om banken är kopplad.</EmptyState>
+        : <p className="muted">Inga transaktioner.</p>)}
       {rows.map((t) => (
-        <div key={t.id} className="card" id={`t${t.id}`}>
+        <div key={t.id} className="card" id={`t${t.id}`} data-undo-row>
           <div className="header" style={{ marginBottom: '.5rem' }}>
             <div>
               <b>{t.booking_date}</b> · {t.counterparty || t.description || 'Transaktion'}
+              {docs.get(t.id)?.requested && <> <span className="badge warn">Underlag begärt</span></>}
+              {docs.get(t.id)?.attachment && <> <a className="badge ok" href={`${b}/underlag/${docs.get(t.id)!.attachment}`}>📎 Underlag inskickat</a></>}
               <div className="small muted">{[t.description !== t.counterparty ? t.description : '', t.reference && `Ref: ${t.reference}`, accNames.get(t.bank_account_id)].filter(Boolean).join(' · ')}</div>
             </div>
             <div style={{ fontSize: '1.2rem', fontWeight: 600, color: t.amount < 0 ? 'var(--danger)' : 'var(--ok)' }}>{kr(t.amount)}</div>
@@ -87,11 +101,19 @@ export default async function Reconcile({ params, searchParams }: { params: Prom
                   <div style={{ flex: '0 0 auto' }}><button className="secondary">Bokför</button></div>
                 </form>
               </details>
-              <Link className="small" href={`${b}/fragor?entity=bank_transaction&id=${t.id}`}>Fråga {role === 'accountant' ? 'kunden' : 'byrån'} om transaktionen</Link>
-              <form action={reconcileTx.bind(null, company.id, t.id)}>
-                <input type="hidden" name="type" value="ignore" /><input type="hidden" name="qs" value={qs} />
-                <button className="link small">Ignorera (bokförs inte, t.ex. överföring mellan egna konton som redan är bokförd)</button>
-              </form>
+              <div className="row small" style={{ gap: '1rem', alignItems: 'center' }}>
+                <Link href={`${b}/fragor?entity=bank_transaction&id=${t.id}`}>Fråga {role === 'accountant' ? 'kunden' : 'byrån'} om transaktionen</Link>
+                {!docs.get(t.id)?.requested && !docs.get(t.id)?.attachment && (
+                  <form action={ask.bind(null, company.id)} style={{ display: 'inline' }}>
+                    <input type="hidden" name="entity" value="bank_transaction" /><input type="hidden" name="entity_id" value={t.id} /><input type="hidden" name="needs_document" value="1" />
+                    <input type="hidden" name="question" value={`Underlag saknas: ${t.booking_date} ${t.counterparty || t.description} ${(t.amount / 100).toLocaleString('sv-SE', { minimumFractionDigits: 2 })} kr. Fota kvittot eller ladda upp fakturan.`} />
+                    <input type="hidden" name="back" value={`${b}/bank/avstamning${qs ? `?${qs}` : ''}#t${t.id}`} />
+                    <button className="link small">Begär underlag</button>
+                  </form>
+                )}
+                <Link href={`${b}/kommentarer?entity=bank_transaction&id=${t.id}`}>Kommentarer{comments[t.id] ? ` (${comments[t.id]})` : ''}</Link>
+              </div>
+              <div><UndoButton action={ignoreTxNow.bind(null, company.id, t.id)} message="Transaktionen ignoreras" className="link small">Ignorera (bokförs inte, t.ex. överföring mellan egna konton som redan är bokförd)</UndoButton></div>
             </div>
           ) : (
             <div className="small">

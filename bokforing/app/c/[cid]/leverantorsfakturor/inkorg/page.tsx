@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { requireCompany } from '@/lib/server/auth';
-import { Flash, type SP } from '@/components/ui';
+import { Flash, type SP, EmptyState } from '@/components/ui';
 import { kr } from '@/lib/format';
 import { companyInboxAddress, listInbox } from '@/lib/services/inbox';
 import { invoiceAiEnabled } from '@/lib/services/invoice-ai';
@@ -50,7 +50,7 @@ export default async function Inbox({ params, searchParams }: { params: Promise<
               <td><span className={`badge ${STATUS[d.status][1]}`}>{STATUS[d.status][0]}</span>{d.error && <div className="small muted">{d.error}</div>}</td>
             </tr>
           ))}
-          {open.length === 0 && <tr><td colSpan={6} className="muted">Inkorgen är tom.</td></tr>}
+          {open.length === 0 && <tr><td colSpan={6}><EmptyState icon="inbox" title="Inkorgen är tom">{address ? <>Nya fakturor som mejlas till <b>{address}</b> dyker upp här, lästa och klara att granska.</> : 'Ladda upp fakturor ovan så läses de av och kan granskas här.'}</EmptyState></td></tr>}
         </tbody>
       </table></div>
 

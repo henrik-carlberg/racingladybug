@@ -1,4 +1,5 @@
 import 'server-only';
+import { notify } from './push';
 import { sql, type Tx } from '@/lib/db';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import { createVoucher } from '@/lib/server/ledger';
@@ -269,6 +270,8 @@ export async function deleteDraft(actor: Actor, invoiceId: number) {
   await sql.begin(async (tx) => {
     const out = await fetchInvoice(tx, actor.companyId, invoiceId);
     if (out.status !== 'draft') throw new ConflictError('Endast utkast kan tas bort');
+    // Utkastet kan vara restfaktura för ROT/RUT på en annan faktura: kopplingen tas bort, inte den andra fakturan
+    await tx`UPDATE invoices SET reduction_rest_invoice_id = NULL WHERE reduction_rest_invoice_id = ${invoiceId} AND company_id = ${actor.companyId}`;
     await tx`DELETE FROM invoices WHERE id = ${invoiceId}`;
     await auditBy(tx, actor, 'delete_draft', 'invoice', invoiceId);
     await emit(tx, actor.companyId, 'invoice.deleted', { id: invoiceId, object: 'invoice', deleted: true });
@@ -316,6 +319,7 @@ export async function registerPaymentTx(tx: Tx, actor: Actor, invoiceId: number,
   await auditBy(tx, actor, full ? 'paid' : 'partly_paid', 'invoice', invoiceId, { amount });
   const out = await fetchInvoice(tx, actor.companyId, invoiceId);
   await emit(tx, actor.companyId, full ? 'invoice.paid' : 'invoice.partly_paid', out);
+  notify.paid(actor.companyId, inv.customer, inv.invoice_number, amount, invoiceId);
   return out;
 }
 
@@ -335,6 +339,7 @@ async function registerFxPayment(tx: Tx, actor: Actor, invoiceId: number, inv: {
   await auditBy(tx, actor, 'paid', 'invoice', invoiceId, { received, fx: received - remaining });
   const out = await fetchInvoice(tx, actor.companyId, invoiceId);
   await emit(tx, actor.companyId, 'invoice.paid', out);
+  notify.paid(actor.companyId, inv.customer, inv.invoice_number, received, invoiceId);
   return out;
 }
 

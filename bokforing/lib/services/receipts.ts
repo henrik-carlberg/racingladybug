@@ -1,4 +1,6 @@
 import 'server-only';
+import { rememberCoding } from './coding-memory';
+import { receiptKey } from '@/lib/coding-memory';
 import { sql } from '@/lib/db';
 import { ValidationError } from '@/lib/errors';
 import { createVoucher } from '@/lib/server/ledger';
@@ -25,6 +27,8 @@ export async function createReceipt(actor: Actor, input: Record<string, unknown>
       description: `${what}${paidWith === 'private' ? ' (privat utlägg)' : ''}`,
     });
     if (attachment) await insertAttachment(tx, actor, v.id, attachment);
+    const key = receiptKey(str(input, 'description', { max: 200 }));
+    if (key) await rememberCoding(tx, actor.companyId, 'receipt', key, { category: cat.key, vatRate, paidWith });
     return v.id;
   });
   return getVoucher(actor.companyId, id);

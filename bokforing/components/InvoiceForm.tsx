@@ -1,4 +1,5 @@
 'use client';
+import { Help } from './Help';
 import { useActionState, useState } from 'react';
 import { parseAmount, formatAmount } from '@/lib/money';
 import { computeInvoice, defaultSalesAccount } from '@/lib/invoice';
@@ -81,7 +82,7 @@ export function InvoiceForm({ action, customers, accounts, initial }: {
           <label>Er referens<input name="your_reference" defaultValue={initial.your_reference} /></label>
           <label>Leveransdatum/-period (tomt = fakturadatum)<input name="delivery_date" defaultValue={initial.delivery_date} placeholder="T.ex. 2026-05-01 – 2026-05-31" /></label>
         </div>
-        {rc && <p className="small muted" style={{ margin: 0 }}>Kunden har omvänd skattskyldighet – ingen moms debiteras och texten "Omvänd betalningsskyldighet" skrivs på fakturan.</p>}
+        {rc && <p className="small muted" style={{ margin: 0 }}>Kunden har omvänd skattskyldighet – ingen moms debiteras och texten "Omvänd betalningsskyldighet" skrivs på fakturan. <Help term="omvand_moms" /></p>}
       </div>
       <datalist id="sales-accounts">{accounts.filter((a) => a.number >= 3000 && a.number < 4000).map((a) => <option key={a.number} value={a.number}>{a.name}</option>)}</datalist>
       <div className="table-wrap">

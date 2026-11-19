@@ -1,4 +1,6 @@
+import { CommentThread } from '@/components/CommentThread';
 import { History } from '@/components/History';
+import { UndoButton } from '@/components/Undo';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { sql } from '@/lib/db';
@@ -7,7 +9,7 @@ import { loadLines } from '@/lib/server/invoices';
 import { Flash, Status, type SP } from '@/components/ui';
 import { kr, today } from '@/lib/format';
 import type { ReductionType } from '@/lib/rotrut';
-import { bookInvoice, creditInvoice, deleteDraft, registerPayment, sendInvoice, settleAdvance } from '../actions';
+import { bookInvoice, creditInvoice, deleteDraftNow, registerPayment, sendInvoice, settleAdvance } from '../actions';
 import { openAdvances } from '@/lib/services/invoices';
 import { PrintButton } from '@/components/PrintButton';
 import { InvoiceDoc } from '@/components/InvoiceDoc';
@@ -62,7 +64,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
           <div className="card actions">
             <Link className="btn secondary" href={`${b}/fakturor/${inv.id}/redigera`}>Redigera</Link>
             <form action={bookInvoice.bind(null, co.id, inv.id)}><button>Bokför faktura</button></form>
-            <form action={deleteDraft.bind(null, co.id, inv.id)}><button className="link">Ta bort utkast</button></form>
+            <UndoButton action={deleteDraftNow.bind(null, co.id, inv.id)} message="Utkastet tas bort" after={`${b}/fakturor`}>Ta bort utkast</UndoButton>
             <span className="muted small">När fakturan bokförs får den fakturanummer och OCR och kan inte längre ändras.</span>
           </div>
         )}
@@ -137,6 +139,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
       </div>
 
       <InvoiceDoc inv={inv} lines={lines} co={co} orig={orig} isCredit={isCredit} time={time} />
+      <div className="no-print"><CommentThread cid={co.id} entity="invoice" id={inv.id} back={`/c/${co.id}/fakturor/${inv.id}`} /></div>
       <History companyId={co.id} entity="invoice" id={inv.id} />
     </>
   );

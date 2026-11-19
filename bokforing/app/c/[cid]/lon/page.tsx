@@ -1,7 +1,8 @@
+import { Help } from '@/components/Help';
 import Link from 'next/link';
 import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
-import { Flash, type SP } from '@/components/ui';
+import { Flash, type SP, EmptyState } from '@/components/ui';
 import { kr, today } from '@/lib/format';
 import { createRun } from './actions';
 
@@ -20,7 +21,7 @@ export default async function Payroll({ params, searchParams }: { params: Promis
   const b = `/c/${company.id}`;
   return (
     <>
-      <h1>Lönekörningar</h1>
+      <h1>Lönekörningar <Help term="agi" /></h1>
       <Flash searchParams={searchParams} />
       <form action={createRun.bind(null, company.id)} className="card row">
         <label>Period (utbetalningsmånad)<input name="period" defaultValue={t.slice(0, 7)} pattern="\d{4}-\d{2}" required /></label>
@@ -39,7 +40,7 @@ export default async function Payroll({ params, searchParams }: { params: Promis
                 <td>{r.status === 'booked' ? <span className="badge ok">Bokförd</span> : <span className="badge">Utkast</span>}</td>
               </tr>
             ))}
-            {runs.length === 0 && <tr><td colSpan={8} className="muted">Inga lönekörningar ännu.</td></tr>}
+            {runs.length === 0 && <tr><td colSpan={8}><EmptyState icon="wallet" title="Inga lönekörningar ännu" actions={[{ href: `${b}/lon/anstallda`, label: 'Lägg upp anställda', secondary: true }]}>Lägg först upp de anställda med lön och skattetabell. Sedan skapar du en lönekörning här – appen räknar skatt och arbetsgivaravgifter, gör lönespecar och arbetsgivardeklarationen.</EmptyState></td></tr>}
           </tbody>
         </table>
       </div>

@@ -18,4 +18,13 @@ export const GLOSSARY: Record<string, { title: string; text: string }> = {
   egna_uttag: { title: 'Egna uttag (enskild firma)', text: 'Pengar du tar ut från firman till dig själv. Det är inte en kostnad – du beskattas för firmans vinst i din egen deklaration (NE-bilagan).' },
   arets_resultat: { title: 'Årets resultat', text: 'Intäkter minus kostnader för räkenskapsåret. I ett aktiebolag beskattas det med bolagsskatt; i en enskild firma i ägarens inkomstdeklaration.' },
   bokslut: { title: 'Bokslut', text: 'Avslutning av räkenskapsåret: kontrollera saldon, gör avskrivningar och periodiseringar, beräkna skatt och bokför årets resultat. Aktiebolag upprättar även årsredovisning.' },
+  periodisering: { title: 'Periodisering', text: 'En kostnad eller intäkt fördelas på de månader den gäller, i stället för att allt bokförs när fakturan kommer. Exempel: en försäkring för helår betalas i januari men blir en tolftedel kostnad per månad.' },
+  omvand_moms: { title: 'Omvänd moms', text: 'Köparen redovisar momsen i stället för säljaren. Gäller bl.a. byggtjänster mellan byggföretag och försäljning av tjänster till företag i andra EU-länder. Fakturan skickas utan moms med en hänvisning till lagen.' },
+  avstamning: { title: 'Bankavstämning', text: 'Varje transaktion på bankkontot kopplas till något i bokföringen – en kundbetalning, en leverantörsbetalning eller en kostnad. När allt är avstämt stämmer bokföringens saldo med banken.' },
+  leverantorsskuld: { title: 'Leverantörsskuld (2440)', text: 'Det du är skyldig leverantörer för fakturor som inte är betalda. Minskar när du betalar.' },
+  kundfordran: { title: 'Kundfordran (1510)', text: 'Det kunder är skyldiga dig för fakturor som inte är betalda. Minskar när kunden betalar.' },
+  kostnadsstalle: { title: 'Kostnadsställe', text: 'En del av verksamheten, t.ex. en butik eller avdelning. Märk kostnader och intäkter med kostnadsstället för att se resultatet per del.' },
+  sie: { title: 'SIE-fil', text: 'Svensk standard för att flytta bokföring mellan program och till revisorn. Typ 4 innehåller alla verifikationer.' },
+  forfallodatum: { title: 'Förfallodatum', text: 'Sista dagen fakturan ska vara betald. Efter det får säljaren ta ut dröjsmålsränta och skicka påminnelse.' },
+  utkast: { title: 'Utkast', text: 'En faktura som inte är bokförd än. Den kan ändras och tas bort. När den bokförs får den nummer och kan bara rättas med en kreditfaktura.' },
 };

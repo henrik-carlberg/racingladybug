@@ -1,5 +1,5 @@
 'use server';
-import { amount, attempt, done, str } from '@/lib/server/action';
+import { amount, attempt, done, result, str } from '@/lib/server/action';
 import { requireCompany } from '@/lib/server/auth';
 import { userActor } from '@/lib/services/actor';
 import * as svc from '@/lib/services/bank-rules';
@@ -34,4 +34,9 @@ export async function starters(cid: number) {
   let n = 0;
   await attempt(base(cid), async () => { n = await svc.addStarterRules(actor); });
   done(base(cid), `${n} vanliga regler är tillagda`);
+}
+
+export async function removeNow(cid: number, id: number) {
+  const actor = userActor(await requireCompany(cid, { perm: 'ledger' }));
+  return result(() => svc.deleteRule(actor, id));
 }

@@ -1,4 +1,5 @@
 import 'server-only';
+import { learnedSupplierCoding } from './coding-memory';
 import { sql } from '@/lib/db';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import { auditBy } from '@/lib/server/audit';
@@ -160,7 +161,9 @@ export async function suggest(companyId: number, x: Extracted | null): Promise<S
     GROUP BY 1 ORDER BY count(*) DESC, 1 LIMIT 1`;
   const [dup] = x.invoiceNumber ? await sql<{ id: number }[]>`
     SELECT id FROM supplier_invoices WHERE company_id = ${companyId} AND supplier_id = ${m.id} AND invoice_number = ${x.invoiceNumber}` : [];
-  return { supplierId: m.id, account: (m.default_account !== 4010 ? m.default_account : null) ?? common?.account ?? x.account ?? m.default_account, duplicateOf: dup?.id ?? null };
+  // Inlärd kontering (samma de senaste gångerna) går först
+  const learned = await learnedSupplierCoding(companyId, m.id);
+  return { supplierId: m.id, account: learned?.account ?? (m.default_account !== 4010 ? m.default_account : null) ?? common?.account ?? x.account ?? m.default_account, duplicateOf: dup?.id ?? null };
 }
 
 export async function getInboxDoc(companyId: number, id: number) {

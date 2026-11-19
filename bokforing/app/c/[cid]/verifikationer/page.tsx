@@ -5,7 +5,7 @@ import { Pager, pageOf, pageSql, PAGE_SIZE } from '@/components/Pager';
 import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
 import { fiscalYears } from '@/lib/server/ledger';
-import { Header, type SP } from '@/components/ui';
+import { Header, type SP, EmptyState } from '@/components/ui';
 import { kr } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -52,7 +52,7 @@ export default async function Vouchers({ params, searchParams }: { params: Promi
                 <td className="small muted">{v.files > 0 ? `📎 ${v.files}` : ''}</td>
               </tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={5} className="muted">{L("Inga verifikationer.")}</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={5}><EmptyState icon="ledger" title={L('Inga verifikationer')} actions={[{ href: `${b}/kvitto`, label: 'Bokför ett kvitto' }, { href: `${b}/verifikationer/ny`, label: 'Ny verifikation', secondary: true }]}>Det mesta bokförs automatiskt när du fakturerar, registrerar leverantörsfakturor och stämmer av banken. Här ser du allt som har bokförts.</EmptyState></td></tr>}
           </tbody>
         </table>
       </div>

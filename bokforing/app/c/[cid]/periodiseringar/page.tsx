@@ -1,3 +1,4 @@
+import { Help } from '@/components/Help';
 import Link from 'next/link';
 import { requireCompany } from '@/lib/server/auth';
 import { Flash, type SP } from '@/components/ui';
@@ -28,7 +29,7 @@ export default async function Accruals({ params, searchParams }: { params: Promi
   const b = `/c/${company.id}`;
   return (
     <div>
-      <h1>Periodiseringar och bokslutsposter</h1>
+      <h1>Periodiseringar och bokslutsposter <Help term="periodisering" /></h1>
       <Flash searchParams={searchParams} />
       <p className="muted">Fördela kostnader och intäkter över de månader de gäller, t.ex. en årsförsäkring eller en hyra som betalats i förskott (förutbetald kostnad, 1790)
         eller ett supportavtal som fakturerats för ett år (förutbetald intäkt, 2990). Varje månad bokförs sin andel mot resultatkontot.</p>

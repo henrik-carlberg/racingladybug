@@ -1,6 +1,6 @@
 'use server';
 import { sql } from '@/lib/db';
-import { attempt, done, str } from '@/lib/server/action';
+import { attempt, done, result, str } from '@/lib/server/action';
 import { requireCompany } from '@/lib/server/auth';
 import { userActor } from '@/lib/services/actor';
 import { createTimeEntry, deleteTimeEntry } from '@/lib/services/time';
@@ -27,4 +27,16 @@ export async function removeTime(cid: number, week: string, id: number) {
     await deleteTimeEntry(actor, id);
   });
   done(back(cid, week), 'Tidraden är borttagen');
+}
+
+export async function removeTimeNow(cid: number, id: number) {
+  const ctx = await requireCompany(cid, { employee: true });
+  const actor = userActor(ctx);
+  return result(async () => {
+    if (ctx.role === 'employee') {
+      const [e] = await sql<{ user_id: number }[]>`SELECT user_id FROM time_entries WHERE id = ${id} AND company_id = ${ctx.company.id}`;
+      if (!e || e.user_id !== ctx.user.id) throw new Error('Du kan bara ta bort din egen tid');
+    }
+    await deleteTimeEntry(actor, id);
+  });
 }

@@ -16,6 +16,7 @@ export default async function GettingStarted({ params, searchParams }: { params:
       <h1>Kom igång med {ctx.company.name}</h1>
       <Flash searchParams={searchParams} />
       <p className="muted">Gå igenom stegen i din egen takt. Det mesta bockas av automatiskt när det är gjort.</p>
+      <div className="learned small">Byter du från Fortnox, Visma, Bokio eller ett annat program? <Link href={`/c/${ctx.company.id}/kom-igang/flytt`}>Flytta bokföringen, kunderna och de obetalda fakturorna →</Link></div>
       <div style={{ background: 'var(--border)', borderRadius: 6, height: 10, margin: '1rem 0' }}>
         <div style={{ width: `${pct}%`, background: 'var(--ok)', height: 10, borderRadius: 6 }} />
       </div>

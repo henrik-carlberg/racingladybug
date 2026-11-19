@@ -9,14 +9,17 @@ openssl genrsa -out "$OUT/eb.key" 2048 2>/dev/null
 openssl rsa -in "$OUT/eb.key" -pubout -out "$OUT/eb.pub" 2>/dev/null
 export RESEND_WEBHOOK_SECRET=whsec_$(openssl rand -base64 24)
 export EB_PUBLIC_KEY=$(base64 -w0 "$OUT/eb.pub")
+# Pushnotiser: egna VAPID-nycklar och en pushtjänst på localhost i testet
+VAPID=$(node -e "const w=require('web-push');const k=w.generateVAPIDKeys();console.log(k.publicKey+' '+k.privateKey)")
+export VAPID_PUBLIC_KEY=${VAPID% *} VAPID_PRIVATE_KEY=${VAPID#* }
 # Egen processgrupp så att hela servern (även next-server) stoppas efteråt
-setsid env WEBHOOK_ALLOW_INSECURE=1 CRON_SECRET=testcron BILLING_ENFORCED=true STRIPE_SECRET_KEY=sk_test_x STRIPE_API_URL=http://localhost:3302 STRIPE_WEBHOOK_SECRET=whsec_test STRIPE_CONNECT_WEBHOOK_SECRET=whsec_connect OPS_ADMIN_USER_IDS=1 INBOX_DOMAIN=inbox.test RESEND_WEBHOOK_SECRET=$RESEND_WEBHOOK_SECRET RESEND_API_KEY=re_test RESEND_API_URL=http://localhost:3303 ANTHROPIC_API_KEY=sk-ant-test ANTHROPIC_BASE_URL=http://localhost:3304 ENABLEBANKING_APP_ID=test-app ENABLEBANKING_API_URL=http://localhost:3301 \
+setsid env WEBHOOK_ALLOW_INSECURE=1 PUSH_ALLOW_INSECURE=1 VAPID_SUBJECT=mailto:test@example.com CRON_SECRET=testcron BILLING_ENFORCED=true STRIPE_SECRET_KEY=sk_test_x STRIPE_API_URL=http://localhost:3302 STRIPE_WEBHOOK_SECRET=whsec_test STRIPE_CONNECT_WEBHOOK_SECRET=whsec_connect OPS_ADMIN_USER_IDS=1 INBOX_DOMAIN=inbox.test RESEND_WEBHOOK_SECRET=$RESEND_WEBHOOK_SECRET RESEND_API_KEY=re_test RESEND_API_URL=http://localhost:3303 ANTHROPIC_API_KEY=sk-ant-test ANTHROPIC_BASE_URL=http://localhost:3304 ENABLEBANKING_APP_ID=test-app ENABLEBANKING_API_URL=http://localhost:3301 \
   ENABLEBANKING_PRIVATE_KEY=$(base64 -w0 "$OUT/eb.key") PORT=$PORT npx next start -p $PORT > "$OUT/server.log" 2>&1 &
 SERVER=$!
 trap 'kill -- -$SERVER 2>/dev/null' EXIT
 sleep 4
 export BASE_URL=http://localhost:$PORT
-for t in flow api passkey bank-hr simple cash time lonerevision lager marknad projekt crm resurser processer saas betalning trygghet inkorg rotbank byra drift lansering omgang2 omgang3 omgang4; do
+for t in flow api passkey bank-hr simple cash time lonerevision lager marknad projekt crm resurser processer saas betalning trygghet inkorg rotbank byra drift lansering omgang2 omgang3 omgang4 omgang5; do
   echo "== $t"
   node tests/e2e/$t.cjs "$OUT"
 done

@@ -139,7 +139,7 @@ const pnr = (base9) => `19${base9.slice(0, 6)}-${base9.slice(6)}${luhn(base9)}`;
   await fee.waitFor({ state: 'detached' });
   const transfer = page.locator('.card:has-text("Överföring från sparkonto")');
   await transfer.locator('button:has-text("Ignorera")').click();
-  await transfer.waitFor({ state: 'detached' });
+  await transfer.waitFor({ state: 'detached', timeout: 20000 });
   const left = await page.locator('.card:has(button:has-text("Ignorera"))').allTextContents();
   assert(left.length === 0, 'allt avstämt, kvar: ' + left.map((x) => x.slice(0, 150)).join(' | '));
   await page.goto(B + '/bank/avstamning?status=ignored');
@@ -147,7 +147,9 @@ const pnr = (base9) => `19${base9.slice(0, 6)}-${base9.slice(6)}${luhn(base9)}`;
   await waitMsg(page, 'öppnad igen');
   assert(await page.locator('.card:has-text("Överföring från sparkonto")').count(), 'ignorerad kan öppnas igen');
   await page.locator('.card:has-text("Överföring från sparkonto") button:has-text("Ignorera")').click();
-  await waitMsg(page, 'Transaktionen är avstämd');
+  // Kan ångras i några sekunder, sedan genomförs det och kortet försvinner
+  await page.locator('.toast:has-text("ignoreras")').waitFor();
+  await page.locator('.card:has-text("Överföring från sparkonto")').waitFor({ state: 'detached', timeout: 20000 });
   log('bokföring mot konto (6570), ignorera och ångra');
 
   // Ny hämtning ger inga dubbletter

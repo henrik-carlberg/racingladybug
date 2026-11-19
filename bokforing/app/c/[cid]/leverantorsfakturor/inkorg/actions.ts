@@ -1,6 +1,6 @@
 'use server';
 import { after } from 'next/server';
-import { amount, attempt, done, str } from '@/lib/server/action';
+import { amount, attempt, done, result, str } from '@/lib/server/action';
 import { requireCompany } from '@/lib/server/auth';
 import { userActor } from '@/lib/services/actor';
 import * as svc from '@/lib/services/inbox';
@@ -59,4 +59,9 @@ export async function rotateAddress(cid: number) {
   const actor = userActor(await requireCompany(cid, { owner: true, perm: 'purchasing' }));
   await attempt(base(cid), () => svc.newInboxAddress(actor));
   done(base(cid), 'Inkorgen har fått en ny adress. Den gamla tar inte längre emot fakturor.');
+}
+
+export async function rejectNow(cid: number, id: number) {
+  const actor = userActor(await requireCompany(cid, { perm: 'purchasing' }));
+  return result(() => svc.rejectDocument(actor, id));
 }

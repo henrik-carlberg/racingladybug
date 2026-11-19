@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Pager, pageOf, pageSql, PAGE_SIZE } from '@/components/Pager';
 import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
-import { Flash, type SP } from '@/components/ui';
+import { Flash, type SP, EmptyState } from '@/components/ui';
 import { CustomerFields, type CustomerRow } from '@/components/CustomerFields';
 import { kr } from '@/lib/format';
 import { saveCustomer } from './actions';
@@ -36,7 +36,7 @@ export default async function Customers({ params, searchParams }: { params: Prom
             {rows.map((c) => (
               <tr key={c.id}><td><Link href={`/c/${company.id}/kunder/${c.id}`}>{c.name}</Link></td><td>{c.orgnr}</td><td>{c.email}</td><td className="num">{c.open ? kr(c.open) : ''}</td></tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={4} className="muted">{L("Inga kunder ännu.")}</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={4}><EmptyState icon="users" title={L('Inga kunder ännu')}>Lägg upp kunden i formuläret ovan, eller importera en lista från ditt gamla program under Inställningar → Import. Sedan kan du fakturera med några klick.</EmptyState></td></tr>}
           </tbody>
         </table>
         <Pager base={`/c/${company.id}/kunder`} sp={sp} page={page} hasMore={hasMore} count={rows.length} />

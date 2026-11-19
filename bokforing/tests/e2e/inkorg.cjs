@@ -159,7 +159,9 @@ async function webhook(payload, opts = {}) {
   t = await text(page);
   assert(t.includes('Fakturanumret finns redan för leverantören'), 'dubblettvarning: ' + t.slice(0, 1000));
   await page.click('button:has-text("Ta bort ur inkorgen")');
-  await page.waitForURL(/ok=/);
+  await page.waitForURL(/inkorg$/);
+  await page.locator('.toast').waitFor({ state: 'detached', timeout: 20000 });
+  await page.waitForLoadState('networkidle');
   log('samma faktura igen: varning för dubblett, tas bort ur inkorgen');
 
   r = await webhook({ ...mail, data: { ...mail.data, email_id: 'em-2', subject: 'Se länk', attachments: [] } });

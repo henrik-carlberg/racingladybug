@@ -41,3 +41,16 @@ export function done(path: string, msg?: string): never {
   const [p, hash] = path.split('#');
   redirect((msg ? p + (p.includes('?') ? '&' : '?') + 'ok=' + encodeURIComponent(msg) : p) + (hash ? `#${hash}` : ''));
 }
+
+export type Result = { error?: string };
+/** Kör en åtgärd och returnera felet i stället för att skicka vidare (för åtgärder som kan ångras på klienten) */
+export async function result(fn: () => Promise<unknown>): Promise<Result> {
+  try {
+    await fn();
+    return {};
+  } catch (e) {
+    unstable_rethrow(e);
+    console.error(e);
+    return { error: e instanceof Error ? e.message : 'Något gick fel' };
+  }
+}

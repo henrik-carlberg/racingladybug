@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { UndoButton } from '@/components/Undo';
 import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
 import { Flash, type SP } from '@/components/ui';
@@ -6,7 +7,7 @@ import { kr } from '@/lib/format';
 import { BankRuleFields } from '@/components/BankRuleFields';
 import { listRules, openMatches } from '@/lib/services/bank-rules';
 import { listCostCenters } from '@/lib/services/dimensions';
-import { create, remove, starters, update } from './actions';
+import { create, removeNow, starters, update } from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,7 +52,7 @@ export default async function Rules({ params, searchParams }: { params: Promise<
               <td className="num">
                 <details><summary className="small">Ändra</summary>
                   <form action={update.bind(null, company.id, r.id)} className="stack" style={{ minWidth: 520, textAlign: 'left' }}><BankRuleFields costCenters={ccs} r={r} /><div><button className="secondary">Spara</button></div></form>
-                  <form action={remove.bind(null, company.id, r.id)}><button className="link small">Ta bort regeln</button></form>
+                  <UndoButton action={removeNow.bind(null, company.id, r.id)} message={`Regeln ”${r.name}” tas bort`} className="link small">Ta bort regeln</UndoButton>
                 </details>
               </td>
             </tr>

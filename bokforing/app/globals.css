@@ -134,7 +134,58 @@ p.muted, .muted.small { max-width: 72ch; }
 .tile:hover { border-color: var(--accent); text-decoration: none; transform: translateY(-1px); }
 .tile .tile-icon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); flex: 0 0 auto; }
 .tile b { display: block; }
+/* Ordförklaringar */
+details.help { display: inline-block; position: relative; vertical-align: middle; margin-left: 4px; font-size: 1rem; }
+details.help summary { list-style: none; cursor: pointer; display: inline-flex; width: 18px; height: 18px; border-radius: 9px; border: 1px solid var(--border); align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--muted); background: var(--panel); }
+details.help summary::-webkit-details-marker { display: none; }
+details.help summary:hover, details.help[open] summary { color: var(--accent); border-color: var(--accent); }
+details.help .help-pop { position: absolute; z-index: 40; left: 0; top: 24px; width: min(320px, 80vw); padding: .7rem .85rem; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-lg); font-size: .85rem; font-weight: normal; line-height: 1.45; color: var(--text); text-transform: none; letter-spacing: 0; }
+details.help .help-pop b { display: block; margin-bottom: .2rem; }
+/* Tomma sidor */
+.empty-state { text-align: center; padding: 2.25rem 1.25rem; border: 1px dashed var(--border); border-radius: var(--radius); background: var(--panel); margin: 1rem 0; }
+.empty-state .empty-icon { display: inline-grid; place-items: center; width: 52px; height: 52px; border-radius: 14px; background: var(--accent-soft); color: var(--accent); margin-bottom: .6rem; }
+.empty-state h3 { margin: .2rem 0 .35rem; }
+.empty-state p { color: var(--muted); max-width: 520px; margin: 0 auto .9rem; }
+.empty-state .actions { justify-content: center; margin: 0; }
+/* Kontroller innan bokföring */
+.checks { display: grid; gap: .4rem; margin: .25rem 0; }
+.check-item { display: flex; gap: .5rem; align-items: flex-start; padding: .55rem .8rem; border-radius: var(--radius-sm); background: var(--warn-soft, #fef3c7); color: var(--text); font-size: .9rem; }
+.check-item.info { background: var(--accent-soft); }
+.check-item.error { background: var(--danger-soft, #fee2e2); }
+/* Kommentarer */
+.comment { padding: .55rem .75rem; border-radius: 10px; background: var(--panel-2); margin-bottom: .5rem; max-width: 640px; }
+.comment.mine { background: var(--accent-soft); margin-left: auto; }
+.comment-body { white-space: pre-wrap; margin-top: .15rem; }
+.comment .mention { color: var(--accent); }
+.comment-form { display: grid; gap: .5rem; margin-top: .75rem; }
+.mention-list { position: absolute; left: 0; top: 100%; z-index: 30; list-style: none; margin: 4px 0 0; padding: .3rem; min-width: 220px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-lg); }
+.mention-list li { padding: .4rem .6rem; border-radius: 6px; cursor: pointer; }
+.mention-list li.sel, .mention-list li:hover { background: var(--accent-soft); }
+.comment-row.unseen { border-left: 3px solid var(--accent); }
+/* Flyttguide */
+.move-step { display: flex; gap: 1rem; align-items: flex-start; }
+.move-num { flex: 0 0 auto; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 650; }
+.move-step.done .move-num { background: var(--ok-soft); color: var(--ok); }
+tr.diff td { background: var(--danger-soft); }
+/* Ångra */
+.toasts { position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%); z-index: 60; display: grid; gap: .5rem; width: min(440px, calc(100vw - 32px)); }
+.toast { position: relative; overflow: hidden; display: flex; align-items: center; gap: .75rem; padding: .75rem 1rem; border-radius: 12px; background: #111827; color: #f9fafb; box-shadow: var(--shadow-lg); }
+.toast.error { background: var(--danger); }
+.toast span:first-child { flex: 1; }
+.toast-undo { background: transparent; color: #93c5fd; border: 0; font-weight: 650; padding: .25rem .5rem; cursor: pointer; box-shadow: none; }
+.toast.error .toast-undo { color: #fff; }
+.toast-bar { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: #60a5fa; transform-origin: left; animation: toast-shrink linear forwards; }
+@keyframes toast-shrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .toast-bar { animation: none; } }
+/* Förslag utifrån mönster */
+.suggestion { display: flex; gap: .85rem; align-items: center; padding: .7rem 0; border-top: 1px solid var(--border); }
+.suggestion:first-of-type { border-top: 0; padding-top: 0; }
+.suggestion .tile-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); flex: 0 0 auto; }
+.suggestion > div:nth-child(2) { flex: 1; }
+.suggestion-actions { display: flex; gap: .5rem; align-items: center; flex: 0 0 auto; }
+@media (max-width: 640px) { .suggestion { flex-wrap: wrap; } .suggestion-actions { width: 100%; } }
 /* Inlärda genvägar */
+.learned { background: var(--accent-soft); color: var(--text); border-radius: var(--radius-sm); padding: .55rem .8rem; }
 .top-action { display: flex; gap: .85rem; align-items: center; padding: .9rem 1.1rem; margin: 0 0 1rem; background: var(--panel); border: 1px solid var(--accent); border-radius: var(--radius); box-shadow: var(--shadow); color: var(--text); }
 .top-action:hover { text-decoration: none; background: var(--accent-soft); }
 .top-action .tile-icon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); flex: 0 0 auto; }

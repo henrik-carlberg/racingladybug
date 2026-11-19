@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Pager, pageOf, pageSql, PAGE_SIZE } from '@/components/Pager';
 import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
-import { Flash, Header, Status, type SP } from '@/components/ui';
+import { Flash, Header, Status, type SP, EmptyState } from '@/components/ui';
 import { kr, today } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -26,6 +26,7 @@ export default async function Invoices({ params, searchParams }: { params: Promi
   const rows = all.slice(0, PAGE_SIZE);
   const t = today();
   const b = `/c/${company.id}`;
+  const [{ none }] = await sql<{ none: boolean }[]>`SELECT NOT EXISTS (SELECT 1 FROM invoices WHERE company_id = ${company.id}) AS none`;
   return (
     <>
       <Header title={L('Kundfakturor')}><Link className="btn" href={`${b}/fakturor/ny`}>{L("Ny faktura")}</Link></Header>
@@ -35,7 +36,11 @@ export default async function Invoices({ params, searchParams }: { params: Promi
           <Link key={s} href={`${b}/fakturor${s ? `?status=${s}` : ''}`} className={`btn ${status === s ? '' : 'secondary'}`}>{l}</Link>
         ))}
       </div>
-      <div className="table-wrap">
+      {none ? (
+        <EmptyState icon="invoice" title="Här hamnar dina kundfakturor" actions={[{ href: `${b}/fakturor/ny`, label: 'Skapa första fakturan' }, { href: `${b}/kunder`, label: 'Lägg upp kunder', secondary: true }]}>
+          Välj kund, lägg till vad du har sålt och skicka fakturan med e-post eller som PDF. Appen bokför den och håller koll på när kunden betalar.
+        </EmptyState>
+      ) : <div className="table-wrap">
         <table>
           <thead><tr><th>{L("Nr")}</th><th>{L("Kund")}</th><th>{L("Datum")}</th><th>{L("Förfaller")}</th><th className="num">{L("Belopp")}</th><th>{L("Status")}</th></tr></thead>
           <tbody>
@@ -50,7 +55,7 @@ export default async function Invoices({ params, searchParams }: { params: Promi
           </tbody>
         </table>
         <Pager base={`${b}/fakturor`} sp={sp} page={page} hasMore={hasMore} count={rows.length} />
-      </div>
+      </div>}
     </>
   );
 }
