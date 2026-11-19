@@ -32,7 +32,7 @@ export default async function Deadlines({ params, searchParams }: { params: Prom
   };
   return (
     <div style={{ maxWidth: 900 }}>
-      <h1>Deadlines</h1>
+      <div className="header"><h1>Deadlines</h1><Link className="btn secondary" href={`/c/${company.id}/arshjul?m=skatt&m=bokslut`}>Visa i årshjulet</Link></div>
       <Flash searchParams={searchParams} />
       <p className="muted">Anpassat efter {company.company_type === 'AB' ? 'aktiebolag' : 'enskild firma'}, momsredovisning per {company.vat_period === 'month' ? 'månad' : company.vat_period === 'quarter' ? 'kvartal' : 'år'}
         {company.f_skatt ? ', F-skatt' : ''}. Datum som infaller på helg flyttas till nästa vardag. Gäller företag med omsättning under 40 Mkr utan EU-handel.

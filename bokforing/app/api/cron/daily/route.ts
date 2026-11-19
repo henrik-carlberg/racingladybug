@@ -10,6 +10,7 @@ import { runJobs } from '@/lib/server/jobs';
 import { runAllIntegrity } from '@/lib/services/integrity';
 import { refreshStatuses } from '@/lib/services/peppol';
 import { syncAllProviders } from '@/lib/services/payproviders';
+import { sendWheelReminders } from '@/lib/services/wheel';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -20,7 +21,7 @@ export async function GET(req: Request) {
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) return new Response('Unauthorized', { status: 401 });
   return Response.json(await runCron('daily', async () => {
     const out: Record<string, unknown> = {};
-    const jobs = [['avtal', generateAll], ['paminnelser', remindAll], ['inkorg', () => processPending(100)], ['inkorg_gallring', cleanupInbox], ['ratelimit_gallring', cleanupRateLimits], ['sammandrag', () => sendDigests()], ['manadsrapport', () => sendMonthlyReports()], ['notiser', pushDaily], ['rapportutskick', () => runDueSchedules()], ['jobbko', () => runJobs(500)], ['integritet', runAllIntegrity], ['peppol_status', () => refreshStatuses()], ['betalleverantorer', () => syncAllProviders()]] as const;
+    const jobs = [['avtal', generateAll], ['paminnelser', remindAll], ['inkorg', () => processPending(100)], ['inkorg_gallring', cleanupInbox], ['ratelimit_gallring', cleanupRateLimits], ['sammandrag', () => sendDigests()], ['manadsrapport', () => sendMonthlyReports()], ['notiser', pushDaily], ['rapportutskick', () => runDueSchedules()], ['jobbko', () => runJobs(500)], ['integritet', runAllIntegrity], ['peppol_status', () => refreshStatuses()], ['betalleverantorer', () => syncAllProviders()], ['arshjul', () => sendWheelReminders()]] as const;
     for (const [k, job] of jobs) {
       try { out[k] = await job(); } catch (e) { out[k] = { error: (e as Error).message }; }
     }

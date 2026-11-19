@@ -72,6 +72,7 @@ export function buildNav(o: {
       { path: '/anlaggningar', label: 'Anläggningsregister' },
       { path: '/periodiseringar', label: 'Periodiseringar' },
       { path: '/konton', label: 'Kontoplan' },
+      { path: '/arshjul', label: 'Årshjul', hint: 'Allt som återkommer under året, per modul' },
       { path: '/deadlines', label: 'Deadlines', hint: 'Moms, AGI och deklarationer' },
       { path: '/inlamning', label: 'Inlämning', hint: 'Skatteverket och Bolagsverket' },
       { path: '/fragor', label: 'Frågor och svar', hint: 'Frågor och underlag mellan dig och byrån' },

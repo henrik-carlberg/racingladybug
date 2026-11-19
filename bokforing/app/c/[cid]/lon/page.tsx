@@ -21,7 +21,7 @@ export default async function Payroll({ params, searchParams }: { params: Promis
   const b = `/c/${company.id}`;
   return (
     <>
-      <h1>Lönekörningar <Help term="agi" /></h1>
+      <div className="header"><h1>Lönekörningar <Help term="agi" /></h1><Link className="btn secondary" href={`/c/${company.id}/arshjul?m=lon`}>Lönens årshjul</Link></div>
       <Flash searchParams={searchParams} />
       <form action={createRun.bind(null, company.id)} className="card row">
         <label>Period (utbetalningsmånad)<input name="period" defaultValue={t.slice(0, 7)} pattern="\d{4}-\d{2}" required /></label>
