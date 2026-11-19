@@ -3,7 +3,9 @@ import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
 import { Flash, type SP } from '@/components/ui';
 import { kr, today } from '@/lib/format';
-import { importPaymentNotification, markManyPaid } from '../actions';
+import { importPaymentNotification, markManyPaid, payViaBank, refreshBankPayments } from '../actions';
+import { bankPayEnabled, listBankPayments, payAccounts } from '@/lib/services/bankpay';
+import { BankPaymentList } from '@/components/BankPaymentList';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +19,8 @@ export default async function Payments({ params, searchParams }: { params: Promi
     WHERE i.company_id = ${company.id} AND i.status = 'approved' ORDER BY i.due_date`;
   const [{ n: waiting }] = await sql<{ n: number }[]>`SELECT count(*)::int AS n FROM supplier_invoices WHERE company_id = ${company.id} AND status = 'booked'`;
   const b = `/c/${company.id}`;
+  const payOn = bankPayEnabled();
+  const [accounts, payments] = payOn ? await Promise.all([payAccounts(company.id), listBankPayments(company.id, { kind: 'supplier' })]) : [[], []];
   const sum = rows.reduce((s, r) => s + Number(r.total), 0);
   return (
     <>
@@ -50,7 +54,19 @@ export default async function Payments({ params, searchParams }: { params: Promi
             <div style={{ flex: '0 0 auto' }}><a className="btn secondary" href={`${b}/leverantorsfakturor/betalning/fil`}>Lista (CSV)</a></div>
           </div>
         )}
+        {rows.length > 0 && payOn && (
+          <div className="card row pay-bank" style={{ alignItems: 'end' }}>
+            <b style={{ flex: '1 1 100%' }}>Betala direkt via banken</b>
+            {accounts.length ? <>
+              <label>Betala från<select name="pay_account">{accounts.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.ledger_account})</option>)}</select></label>
+              <div style={{ flex: '0 0 auto' }}><button formAction={payViaBank.bind(null, company.id)}>Betala valda via banken (BankID)</button></div>
+              <span className="small muted" style={{ flex: '1 1 100%' }}>Du godkänner betalningen i banken med BankID och kommer sedan tillbaka hit. Fakturorna bokförs som betalda när banken har genomfört betalningen och uttaget stäms av mot banken automatiskt.</span>
+            </> : <span className="small muted">Koppla ett bankkonto via Open Banking under <Link href={`${b}/bank`}>Bank</Link> för att kunna betala direkt.</span>}
+          </div>
+        )}
       </form>
+
+      {payments.length > 0 && <BankPaymentList payments={payments} refresh={refreshBankPayments.bind(null, company.id)} />}
 
       <h2>Bankens kvitto på betalningarna</h2>
       <form action={importPaymentNotification.bind(null, company.id)} className="card row" style={{ alignItems: 'end' }}>

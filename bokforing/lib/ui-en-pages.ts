@@ -2106,6 +2106,19 @@ export const PAGES_EN: Record<string, string> = {
   "med BankID av firmatecknare": "with BankID by an authorised signatory",
   "av supporten": "by support",
   "E-faktura via Peppol och direktinlämning till Skatteverket och Bolagsverket sker i bolagets namn. Därför behöver vi veta att den som använder kontot företräder bolaget. Logga in med BankID – är du firmatecknare enligt Bolagsverket blir bolaget verifierat direkt.": "E-invoicing via Peppol and direct filing with the Swedish Tax Agency and the Companies Registration Office happen in the company's name. So we need to know that the person using the account represents the company. Log in with BankID – if you are an authorised signatory according to the Companies Registration Office, the company is verified immediately.",
+  "Betala direkt via banken": "Pay directly via the bank",
+  "Betala från": "Pay from",
+  "Betala valda via banken (BankID)": "Pay selected via the bank (BankID)",
+  "Du godkänner betalningen i banken med BankID och kommer sedan tillbaka hit. Fakturorna bokförs som betalda när banken har genomfört betalningen och uttaget stäms av mot banken automatiskt.": "You approve the payment in the bank with BankID and then come back here. The invoices are booked as paid when the bank has executed the payment, and the withdrawal is reconciled with the bank automatically.",
+  "Betalningar via banken": "Payments via the bank",
+  "Hämta status från banken": "Fetch status from the bank",
+  "Väntar på godkännande i banken": "Awaiting approval in the bank",
+  "Godkänd – genomförs": "Approved – being executed",
+  "Genomförd och bokförd": "Executed and booked",
+  "Avbruten/avvisad": "Cancelled/rejected",
+  "Kunde inte skickas": "Could not be sent",
+  "Betala ut nettolönerna via banken (BankID)": "Pay out net salaries via the bank (BankID)",
+  "Betaldag": "Payment date",
 };
 
 const MONTHS: Record<string, string> = { januari: 'January', februari: 'February', mars: 'March', april: 'April', maj: 'May', juni: 'June', juli: 'July', augusti: 'August', september: 'September', oktober: 'October', november: 'November', december: 'December' };

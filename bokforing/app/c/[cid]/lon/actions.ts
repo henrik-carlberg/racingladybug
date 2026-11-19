@@ -56,3 +56,21 @@ export async function applyAbsence(cid: number, runId: number) {
   await attempt(`/c/${cid}/lon/${runId}`, async () => { n = await applyToRun(actor, runId); });
   done(`/c/${cid}/lon/${runId}`, n ? `${n} frånvaroperioder är inräknade i lönen` : 'Ingen ny frånvaro att räkna in');
 }
+
+export async function paySalariesViaBank(cid: number, runId: number, fd: FormData) {
+  const { paySalaries } = await import('@/lib/services/bankpay');
+  const { requestOrigin } = await import('@/lib/server/origin');
+  const { redirect } = await import('next/navigation');
+  const actor = userActor(await requireCompany(cid, { perm: 'payments' }));
+  const back = `/c/${cid}/lon/${runId}`;
+  let url = '';
+  await attempt(back, async () => { url = (await paySalaries(actor, runId, Number(fd.get('pay_account')), await requestOrigin())).url; });
+  if (!/^https?:\/\//.test(url)) done(back, 'Betalningen kunde inte startas');
+  redirect(url);
+}
+export async function refreshSalaryPayments(cid: number, runId: number) {
+  const { refreshPayments } = await import('@/lib/services/bankpay');
+  const { company } = await requireCompany(cid, { perm: 'payroll' });
+  await attempt(`/c/${cid}/lon/${runId}`, () => refreshPayments(company.id));
+  done(`/c/${cid}/lon/${runId}`, 'Status hämtad från banken');
+}

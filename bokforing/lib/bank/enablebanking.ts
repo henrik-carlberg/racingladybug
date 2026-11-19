@@ -112,3 +112,14 @@ export async function fetchBalance(accountUid: string): Promise<{ amount: string
   const pick = ['CLBD', 'ITBD', 'CLAV', 'ITAV', 'XPCD'].map((t) => r.balances.find((b) => b.balance_type === t)).find(Boolean) ?? r.balances[0];
   return pick ? { ...pick.balance_amount, date: pick.reference_date ?? null } : null;
 }
+
+// ---------- Betalinitiering ----------
+// Användaren skickas till banken och godkänner med BankID; banken skickar tillbaka till redirect_url med state.
+export async function createPayment(o: { aspspName: string; country: string; state: string; redirectUrl: string; psuType: 'business' | 'personal'; request: Record<string, unknown> }) {
+  return call<{ payment_id: string; url: string; status?: string }>('POST', '/payments', {
+    ...o.request, aspsp: { name: o.aspspName, country: o.country }, state: o.state, redirect_url: o.redirectUrl, psu_type: o.psuType,
+  });
+}
+export async function getPayment(paymentId: string) {
+  return call<{ payment_id: string; status: string; status_reason?: string; final_amount?: unknown }>('GET', `/payments/${encodeURIComponent(paymentId)}`);
+}

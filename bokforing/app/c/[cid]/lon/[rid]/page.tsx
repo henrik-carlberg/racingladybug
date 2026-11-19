@@ -6,6 +6,9 @@ import { Flash, type SP } from '@/components/ui';
 import { kr } from '@/lib/format';
 import { PAY_ITEM_LABELS, type PayItem } from '@/lib/payroll';
 import { prepareAgi } from '../../inlamning/actions';
+import { paySalariesViaBank, refreshSalaryPayments } from '../actions';
+import { bankPayEnabled, listBankPayments, payAccounts } from '@/lib/services/bankpay';
+import { BankPaymentList } from '@/components/BankPaymentList';
 import { hours as saveHours } from '../avtal/actions';
 import { HOUR_FIELDS } from '@/lib/payroll-agreements';
 import { addEmployee, bookRun, deleteRun, removeSlip, saveSlip, applyAbsence } from '../actions';
@@ -37,6 +40,9 @@ export default async function Run({ params, searchParams }: { params: Promise<{ 
   const sum = (k: keyof Slip) => slips.reduce((s, p) => s + (p[k] as number), 0);
   const draft = run.status === 'draft';
   const b = `/c/${company.id}`;
+  const payOn = !draft && bankPayEnabled();
+  const [payAccts, runPayments] = payOn ? await Promise.all([payAccounts(company.id), listBankPayments(company.id, { runId: run.id })]) : [[], []];
+  const paidOrPending = runPayments.some((p) => ['authorization', 'accepted', 'executed'].includes(p.status));
   return (
     <>
       <div className="header">
@@ -64,6 +70,14 @@ export default async function Run({ params, searchParams }: { params: Promise<{ 
           Ladda upp AGI-filen i Skatteverkets e-tjänst Arbetsgivardeklaration → "Lämna via fil".
         </div>
       )}
+      {payOn && !paidOrPending && payAccts.length > 0 && (
+        <form action={paySalariesViaBank.bind(null, company.id, run.id)} className="card row pay-salaries" style={{ alignItems: 'end' }}>
+          <label>Betala från<select name="pay_account">{payAccts.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.ledger_account})</option>)}</select></label>
+          <div style={{ flex: '0 0 auto' }}><button>Betala ut nettolönerna via banken (BankID)</button></div>
+          <span className="small muted" style={{ flex: '1 1 100%' }}>{kr(sum('net_pay'))} till de anställdas konton på utbetalningsdagen. Lönen är redan bokförd – uttagen stäms av mot banken.</span>
+        </form>
+      )}
+      {runPayments.length > 0 && <BankPaymentList payments={runPayments} refresh={refreshSalaryPayments.bind(null, company.id, run.id)} />}
 
       {slips.map((p) => (
         <div className="card" key={p.id} id={`p${p.id}`}>

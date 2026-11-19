@@ -65,3 +65,26 @@ describe('Firmateckning', () => {
     expect(soleTraderPnrs('811218-9876')).toEqual(['19811218987' + '6', '20811218' + '9876']);
   });
 });
+
+import { creditorAccount, mapPaymentStatus, paymentRequest } from '@/lib/bankpay';
+describe('Betalning via banken', () => {
+  it('mottagarkonto', () => {
+    expect(creditorAccount({ bankgiro: '5050-1055' })).toEqual({ kind: 'bankgiro', id: '50501055' });
+    expect(creditorAccount({ plusgiro: '4789-1' })).toEqual({ kind: 'plusgiro', id: '47891' });
+    expect(creditorAccount({ iban: 'se45 5000 0000 0583 9825 7466' })).toEqual({ kind: 'iban', id: 'SE4550000000058398257466' });
+    expect(creditorAccount({ clearing: '8327-9', account: '123 456 789-0' })).toEqual({ kind: 'bban', id: '83279' + '1234567890' });
+    expect(creditorAccount({})).toBeNull();
+  });
+  it('betalningsbegäran', () => {
+    const r = paymentRequest({ debtorIban: 'SE45 5000 0000 0583 9825 7466', date: '2026-11-20', items: [
+      { name: 'Hyresvärden AB', account: { kind: 'bankgiro', id: '50501055' }, amount: 1250050, reference: '123456789', endToEnd: 'si-7' },
+      { name: 'Lärbolaget AB', account: { kind: 'iban', id: 'SE4550000000058398257466' }, amount: 99, reference: 'F 12', endToEnd: 'si-8' }] });
+    expect(r.payment_type).toBe('BULK_DOMESTIC');
+    expect(r.payment_request.debtor_account.iban).toBe('SE4550000000058398257466');
+    expect(r.payment_request.credit_transfer_transaction[0]).toMatchObject({ instructed_amount: { amount: '12500.50', currency: 'SEK' }, beneficiary: { creditor_account: { scheme_name: 'BGNR', identification: '50501055' } }, remittance_information: ['123456789'] });
+    expect(r.payment_request.credit_transfer_transaction[1].instructed_amount.amount).toBe('0.99');
+  });
+  it('status', () => {
+    expect(mapPaymentStatus('ACSC')).toBe('executed'); expect(mapPaymentStatus('ACTC')).toBe('accepted'); expect(mapPaymentStatus('RJCT')).toBe('rejected'); expect(mapPaymentStatus('RCVD')).toBe('authorization');
+  });
+});

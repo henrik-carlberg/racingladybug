@@ -37,6 +37,19 @@ const bvServer = http.createServer((req, res) => {
   send(404, {});
 }).listen(3311);
 
+// Fejkad Enable Banking: betalinitiering (banken skickar tillbaka användaren direkt, som efter godkännande med BankID)
+const ebp = { got: [], status: {} };
+const ebServer = http.createServer((req, res) => {
+  let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => {
+    const send = (code, j) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(j)); };
+    if (!/^Bearer .+\..+\..+$/.test(req.headers.authorization || '')) return send(401, {});
+    if (req.method === 'POST' && req.url === '/payments') { const j = JSON.parse(b); const id = 'PAY-' + (ebp.got.length + 1); ebp.got.push({ id, ...j }); ebp.status[id] = ebp.next || 'ACTC'; return send(201, { payment_id: id, url: `${j.redirect_url}?state=${encodeURIComponent(j.state)}` }); }
+    const m = /^\/payments\/(.+)$/.exec(req.url);
+    if (m && ebp.status[m[1]]) return send(200, { payment_id: m[1], status: ebp.status[m[1]] });
+    send(404, {});
+  });
+}).listen(3301);
+
 (async () => {
   const browser = await chromium.launch();
   const owner = await login(browser, 'agare@example.com', 'hemligtlosen1');
@@ -122,14 +135,14 @@ const bvServer = http.createServer((req, res) => {
   assert((await text(owner)).includes('Verifiera bolaget med BankID'), 'länk till verifieringen när bolaget inte är verifierat');
   await owner.goto(B + '/installningar/verifiering');
   await owner.click('button:has-text("Bekräfta att jag är firmatecknare")');
-  await owner.waitForURL((u) => decodeURIComponent(u.href).includes('Din bekräftelse är sparad'));
+  await owner.waitForURL((u) => decodeURIComponent(u.href.replace(/\+/g, ' ')).includes('Din bekräftelse är sparad'));
   t = await text(owner);
   assert(t.includes('kräver 1 till') && t.includes('Ägare Testsson (du)') && t.includes('Bo Delägare') && t.includes('Revi Sor') && t.includes('Två ledamöter i förening') && t.includes('Inte verifierat'), 'två i förening – en bekräftelse räcker inte: ' + t.slice(0, 1200));
   log('firmatecknare hämtas från Bolagsverket; när två ledamöter tecknar i förening räcker inte en bekräftelse');
 
   bv.alone = true;
   await owner.click('button:has-text("Bekräfta att jag är firmatecknare")');
-  await owner.waitForURL((u) => decodeURIComponent(u.href).includes('Bolaget är verifierat'));
+  await owner.waitForURL((u) => decodeURIComponent(u.href.replace(/\+/g, ' ')).includes('Bolaget är verifierat'));
   t = await text(owner);
   assert(t.includes('Verifierat') && t.includes('med BankID av firmatecknare'), 'verifierat med BankID: ' + t.slice(0, 600));
   await owner.goto(BASE + '/drift?bolag=556026-9986');
@@ -141,11 +154,68 @@ const bvServer = http.createServer((req, res) => {
   await owner.goto(`${BASE}/c/2/installningar/verifiering`);
   await owner.click('button:has-text("Bekräfta att jag är innehavare")');
   await owner.waitForURL(/error=/);
-  assert(decodeURIComponent(owner.url()).includes('hör inte till innehavaren'), 'enskild firma: fel person nekas: ' + owner.url());
+  assert(decodeURIComponent(owner.url().replace(/\+/g, ' ')).includes('hör inte till innehavaren'), 'enskild firma: fel person nekas: ' + owner.url());
   log('enskild firma: bara innehavarens BankID (organisationsnumret) godtas');
+
+  // ================= Del 3: betala direkt från appen =================
+  await owner.goto(B + '/leverantorsfakturor/betalning');
+  await owner.selectOption('select[name=pay_account]', { label: 'Företagskonto (1930)' });
+  await owner.click('button:has-text("Betala valda via banken")');
+  await owner.locator('text=Betalningen är godkänd i banken').first().waitFor();
+  const req1 = ebp.got[0];
+  const trs = req1.payment_request.credit_transfer_transaction;
+  assert(req1.payment_type === 'BULK_DOMESTIC' && req1.aspsp.name === 'Testbanken' && req1.payment_request.debtor_account.iban === 'SE4550000000058398257466' && trs.length === 2
+    && trs.some((x) => x.beneficiary.creditor_account.scheme_name === 'BGNR' && x.beneficiary.creditor_account.identification === '5551234' && x.instructed_amount.amount === '12500.00'), 'betalningen till banken: ' + JSON.stringify(req1).slice(0, 800));
+  t = await text(owner);
+  assert(t.includes('Betalningar via banken') && t.includes('Godkänd – genomförs') && t.includes('13 750,00'), 'betalningen listas: ' + t.slice(0, 1500));
+  log('attesterade leverantörsfakturor skickas som en betalning till banken och godkänns med BankID');
+
+  await owner.click('button:has-text("Betala valda via banken")');
+  await owner.waitForURL(/error=/);
+  assert(decodeURIComponent(owner.url().replace(/\+/g, ' ')).includes('ligger redan i en betalning'), 'samma faktura kan inte betalas två gånger: ' + owner.url());
+
+  const camtOut = `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02"><BkToCstmrStmt><Stmt>
+<Ntry><Amt Ccy="SEK">12500.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><Sts>BOOK</Sts><BookgDt><Dt>${today}</Dt></BookgDt><AcctSvcrRef>OUT-1</AcctSvcrRef><NtryDtls><TxDtls><RmtInf><Ustrd>BG 5551234 HYRA ZQ</Ustrd></RmtInf></TxDtls></NtryDtls></Ntry>
+<Ntry><Amt Ccy="SEK">1250.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><Sts>BOOK</Sts><BookgDt><Dt>${today}</Dt></BookgDt><AcctSvcrRef>OUT-2</AcctSvcrRef><NtryDtls><TxDtls><RmtInf><Ustrd>BG 50501055 GIRO ZQ</Ustrd></RmtInf></TxDtls></NtryDtls></Ntry>
+</Stmt></BkToCstmrStmt></Document>`;
+  await owner.goto(B + '/bank');
+  const brow = owner.locator('tr:has-text("Företagskonto")').first();
+  await brow.locator('input[type=file]').setInputFiles({ name: 'ut.xml', mimeType: 'application/xml', buffer: Buffer.from(camtOut) });
+  await brow.locator('button:has-text("Importera")').click();
+  await owner.waitForURL(/ok=/);
+  ebp.status['PAY-1'] = 'ACSC';
+  await owner.goto(B + '/leverantorsfakturor/betalning');
+  await owner.click('button:has-text("Hämta status från banken")');
+  await owner.locator('.bank-payments .badge:has-text("Genomförd och bokförd")').waitFor();
+  t = await text(owner);
+  assert(t.includes('Inga attesterade fakturor att betala'), 'fakturorna är betalda: ' + t.slice(0, 800));
+  await owner.goto(B + '/bank/avstamning');
+  t = await text(owner);
+  assert(!t.includes('HYRA ZQ') && !t.includes('GIRO ZQ'), 'uttagen är avstämda mot betalningarna: ' + t.slice(0, 1500));
+  log('när banken har genomfört betalningen bokförs fakturorna som betalda och uttagen stäms av automatiskt');
+
+  await owner.goto(B + '/lon/2');
+  await owner.click('button:has-text("Betala ut nettolönerna via banken")');
+  await owner.waitForURL(/error=/);
+  assert(decodeURIComponent(owner.url().replace(/\+/g, ' ')).includes('saknar clearing- och kontonummer'), 'anställd utan konto: ' + owner.url());
+  for (const [eid, cl, acc] of [[1, '8327-9', '1234567890'], [2, '6000', '123456789'], [5, '5000', '12345678901'], [6, '3300', '1907011234']]) {
+    await owner.goto(`${B}/lon/anstallda/${eid}`);
+    await owner.fill('input[name=bank_clearing]', cl); await owner.fill('input[name=bank_account]', acc);
+    await owner.click('form:has(input[name=first_name]) button:has-text("Spara")');
+    await owner.waitForURL(/ok=/);
+  }
+  ebp.next = 'ACSC';
+  await owner.goto(B + '/lon/2');
+  await owner.click('button:has-text("Betala ut nettolönerna via banken")');
+  await owner.locator('text=Betalningen är genomförd och bokförd').first().waitFor();
+  const req2 = ebp.got[ebp.got.length - 1].payment_request.credit_transfer_transaction;
+  assert(req2.length === 4 && req2.every((x) => x.beneficiary.creditor_account.scheme_name === 'BBAN') && req2.some((x) => x.beneficiary.creditor_account.identification === '832791234567890' && x.instructed_amount.amount === '30825.16'), 'lönerna till banken: ' + JSON.stringify(req2).slice(0, 600));
+  await owner.goto(B + '/lon/2');
+  assert(!(await owner.locator('button:has-text("Betala ut nettolönerna via banken")').count()) && (await text(owner)).includes('Genomförd och bokförd'), 'lönerna kan inte betalas två gånger');
+  log('nettolönerna i en bokförd lönekörning betalas ut till de anställdas konton via banken');
 
   //@@NEXT@@
   await browser.close();
-  bvServer.close();
+  bvServer.close(); ebServer.close();
   console.log('Omgång 9: alla steg gick igenom');
 })().catch((e) => { console.error(e); process.exit(1); });
