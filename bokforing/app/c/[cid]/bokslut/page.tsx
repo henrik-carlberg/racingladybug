@@ -21,6 +21,7 @@ export default async function Yearend({ params }: { params: Promise<{ cid: strin
             <td className="num"><Link className="btn secondary" href={`/c/${company.id}/bokslut/${y.id}`}>Öppna</Link></td></tr>
         ))}</tbody>
       </table>
+      <div className="actions"><Link className="btn secondary" href={`/c/${company.id}/bokslut/valuta`}>Omvärdering av valuta</Link></div>
     </div>
   );
 }

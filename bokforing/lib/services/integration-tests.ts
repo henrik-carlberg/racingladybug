@@ -36,6 +36,16 @@ export async function testIntegration(key: string, user: { id: number; email: st
       const r = await fetch(`${(process.env.STRIPE_API_URL || 'https://api.stripe.com').replace(/\/$/, '')}/v1/balance`, { headers: { authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}` }, signal: AbortSignal.timeout(8000) });
       return r.ok ? { ok: true, message: `Stripe svarar (${ms()})${process.env.STRIPE_SECRET_KEY?.startsWith('sk_test') ? ' – testnyckel' : ''}` } : { ok: false, message: `Stripe svarade ${r.status} – kontrollera STRIPE_SECRET_KEY` };
     }
+    if (key === 'peppol') {
+      const { apLookup } = await import('@/lib/server/peppol-ap');
+      const r = await apLookup('0007:2021005489'); // Skatteverket finns alltid i Peppol
+      return { ok: true, message: `Åtkomstpunkten svarar (${ms()})${r.registered ? '' : ' – uppslaget gav inget svar för testmottagaren'}` };
+    }
+    if (key === 'skv' || key === 'bv') {
+      const { testAuthority } = await import('@/lib/server/authorities');
+      await testAuthority(key);
+      return { ok: true, message: `Inloggningen hos ${key === 'skv' ? 'Skatteverket' : 'Bolagsverket'} fungerar (${ms()})` };
+    }
     return { ok: false, message: 'Den här integrationen kan inte testas härifrån' };
   } catch (e) {
     const m = e instanceof Error ? e.message : String(e);

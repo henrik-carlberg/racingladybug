@@ -19,7 +19,7 @@ export async function saveSlip(cid: number, runId: number, slipId: number, fd: F
     for (let i = 0; i < 20; i++) {
       const desc = str(fd, `desc_${i}`), amt = str(fd, `amount_${i}`);
       if (!desc && !amt) continue;
-      items.push({ type: str(fd, `type_${i}`), description: desc, amount: amount(amt, undefined, `Raden "${desc}"`), account: str(fd, `account_${i}`) });
+      items.push({ type: str(fd, `type_${i}`), description: desc, amount: amount(amt, undefined, `Raden "${desc}"`), account: str(fd, `account_${i}`), code: str(fd, `code_${i}`) });
     }
     await svc.updatePayslip(actor, runId, slipId, { items });
   });

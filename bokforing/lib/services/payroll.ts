@@ -21,12 +21,13 @@ export interface EmployeeOut {
   tax_mode: 'table' | 'percent'; tax_table: number | null; tax_column: number; tax_percent: number | null;
   fee_override: number | null; active: boolean; vacation_days: number; hours_per_week: number; created_at: string;
   car_benefit: number; pension_percent: number; vacation_rule: 'same' | 'percent'; employment_form: string; title: string; id06: string;
+  pension_plan: 'custom' | 'itp1' | 'itp2' | 'saf_lo'; agreement_id: number | null; salary_sacrifice: number;
 }
 
 const ECOLS = () => sql`id, 'employee' AS object, first_name, last_name, personal_number, email, address, postal_code, city,
   bank_clearing, bank_account, to_char(employment_start,'YYYY-MM-DD') AS employment_start, to_char(employment_end,'YYYY-MM-DD') AS employment_end,
   monthly_salary, tax_mode, tax_table, tax_column, tax_percent::float8 AS tax_percent, fee_override::float8 AS fee_override, active, vacation_days, hours_per_week::float8 AS hours_per_week, created_at,
-  car_benefit, pension_percent::float8 AS pension_percent, vacation_rule, employment_form, title, id06`;
+  car_benefit, pension_percent::float8 AS pension_percent, vacation_rule, employment_form, title, id06, pension_plan, agreement_id, salary_sacrifice`;
 
 export async function getEmployee(companyId: number, id: number): Promise<EmployeeOut> {
   const [e] = await sql<EmployeeOut[]>`SELECT ${ECOLS()} FROM employees WHERE id = ${id} AND company_id = ${companyId}`;
@@ -76,6 +77,9 @@ function readEmployee(input: Record<string, unknown>, cur?: EmployeeOut) {
   if (has(input, 'hours_per_week') && input.hours_per_week !== '') { const h = num(input, 'hours_per_week', 'Arbetstid'); if (h == null || h <= 0 || h > 60) throw new ValidationError('Ogiltig arbetstid'); f.hours_per_week = h; }
   if (has(input, 'car_benefit') && input.car_benefit !== '') { const v = optInt(input, 'car_benefit', 'Bilförmån (öre/mån)'); if (v == null || v < 0) throw new ValidationError('Ogiltig bilförmån'); f.car_benefit = v; }
   if (has(input, 'pension_percent') && input.pension_percent !== '') { const v = num(input, 'pension_percent', 'Tjänstepension'); if (v == null || v < 0 || v > 50) throw new ValidationError('Tjänstepension 0–50 %'); f.pension_percent = v; }
+  if (has(input, 'pension_plan')) { const v = str(input, 'pension_plan') || 'custom'; if (!['custom', 'itp1', 'itp2', 'saf_lo'].includes(v)) throw new ValidationError('Ogiltig pensionsplan'); f.pension_plan = v; }
+  if (has(input, 'agreement_id')) f.agreement_id = optInt(input, 'agreement_id', 'Kollektivavtal') || null;
+  if (has(input, 'salary_sacrifice') && input.salary_sacrifice !== '') { const v = optInt(input, 'salary_sacrifice', 'Löneväxling (öre/mån)'); if (v == null || v < 0) throw new ValidationError('Ogiltig löneväxling'); f.salary_sacrifice = v; }
   if (has(input, 'vacation_rule')) f.vacation_rule = str(input, 'vacation_rule') === 'percent' ? 'percent' : 'same';
   if (has(input, 'employment_form')) { const v = str(input, 'employment_form') || 'tillsvidare'; if (!['tillsvidare', 'visstid', 'provanstallning', 'timanstalld'].includes(v)) throw new ValidationError('Ogiltig anställningsform'); f.employment_form = v; }
   if (has(input, 'title')) f.title = str(input, 'title');
@@ -87,9 +91,16 @@ function readEmployee(input: Record<string, unknown>, cur?: EmployeeOut) {
   return f;
 }
 
+async function ownAgreement(tx: Tx, companyId: number, id: unknown) {
+  if (id == null) return;
+  const [a] = await tx`SELECT 1 FROM collective_agreements WHERE id = ${Number(id)} AND company_id = ${companyId}`;
+  if (!a) throw new ValidationError('Kollektivavtalet finns inte');
+}
+
 export async function createEmployee(actor: Actor, input: Record<string, unknown>, db?: Tx): Promise<EmployeeOut> {
   const f = readEmployee(input);
   const run = async (tx: Tx) => {
+    await ownAgreement(tx, actor.companyId, f.agreement_id);
     const [{ id }] = await tx<{ id: number }[]>`INSERT INTO employees ${tx({ ...f, company_id: actor.companyId })} RETURNING id`;
     const [e] = await tx<EmployeeOut[]>`SELECT ${ECOLS()} FROM employees WHERE id = ${id}`;
     await auditBy(tx, actor, 'create', 'employee', id);
@@ -104,6 +115,7 @@ export async function updateEmployee(actor: Actor, id: number, input: Record<str
   if (!cur) throw new NotFoundError('Den anställda');
   const f = readEmployee(input, cur);
   const run = async (tx: Tx) => {
+    await ownAgreement(tx, actor.companyId, f.agreement_id);
     if (Object.keys(f).length) await tx`UPDATE employees SET ${tx(f)} WHERE id = ${id} AND company_id = ${actor.companyId}`;
     const [e] = await tx<EmployeeOut[]>`SELECT ${ECOLS()} FROM employees WHERE id = ${id}`;
     await auditBy(tx, actor, 'update', 'employee', id, { changes: changes(cur as unknown as Record<string, unknown>, f) });
@@ -151,9 +163,10 @@ export async function listPayrollRuns(companyId: number, p: Page) {
   return { ...res, data: await Promise.all(res.data.map((r) => getPayrollRun(companyId, r.id))) };
 }
 
-const defaultItems = (salary: number, car = 0): PayItem[] => [
+const defaultItems = (salary: number, car = 0, sacrifice = 0): PayItem[] => [
   ...(salary ? [{ type: 'salary' as const, description: 'Månadslön', amount: salary }] : []),
   ...(car ? [{ type: 'benefit' as const, description: 'Bilförmån', amount: Number(car) }] : []),
+  ...(Number(sacrifice) && salary ? [{ type: 'salary' as const, description: 'Löneväxling till tjänstepension', amount: -Math.min(Number(sacrifice), salary), code: 'sacrifice' as const }] : []),
 ];
 
 export async function createPayrollRun(actor: Actor, input: Record<string, unknown>) {
@@ -165,12 +178,12 @@ export async function createPayrollRun(actor: Actor, input: Record<string, unkno
     const exists = await tx`SELECT 1 FROM payroll_runs WHERE company_id = ${actor.companyId} AND period = ${period}`;
     if (exists.length) throw new ConflictError(`Det finns redan en lönekörning för ${period}`);
     const [{ id }] = await tx<{ id: number }[]>`INSERT INTO payroll_runs (company_id, period, payment_date) VALUES (${actor.companyId}, ${period}, ${paymentDate}) RETURNING id`;
-    const emps = await tx<{ id: number; monthly_salary: number; car_benefit: number }[]>`
-      SELECT id, monthly_salary, car_benefit FROM employees WHERE company_id = ${actor.companyId} AND active
+    const emps = await tx<{ id: number; monthly_salary: number; car_benefit: number; salary_sacrifice: number }[]>`
+      SELECT id, monthly_salary, car_benefit, salary_sacrifice FROM employees WHERE company_id = ${actor.companyId} AND active
         AND (employment_end IS NULL OR employment_end >= ${period + '-01'}) ORDER BY last_name`;
     for (const e of emps) {
       const [p] = await tx<{ id: number }[]>`INSERT INTO payslips (run_id, employee_id, items, employer_fee_rate)
-        VALUES (${id}, ${e.id}, ${tx.json(defaultItems(e.monthly_salary, e.car_benefit) as never)}, 0) RETURNING id`;
+        VALUES (${id}, ${e.id}, ${tx.json(defaultItems(e.monthly_salary, e.car_benefit, e.salary_sacrifice) as never)}, 0) RETURNING id`;
       await recomputeSlip(tx, p.id);
     }
     await auditBy(tx, actor, 'create', 'payroll_run', id, { period });
@@ -196,6 +209,8 @@ export function parseItems(input: Record<string, unknown>): PayItem[] {
     const amount = int(r, 'amount', `Belopp (öre) på raden "${description}"`);
     if (type !== 'salary' && amount < 0) throw new ValidationError(`Negativt belopp är bara tillåtet för lönerader ("${description}")`);
     const item: PayItem = { type, description, amount };
+    const code = str(r, 'code');
+    if (code === 'agreement' || code === 'sacrifice' || code === 'vacation') item.code = code;
     if (type === 'reimbursement') item.account = optInt(r, 'account', 'Konto') ?? 5800;
     return item;
   });
@@ -216,10 +231,10 @@ export async function updatePayslip(actor: Actor, runId: number, slipId: number,
 export async function addEmployeeToRun(actor: Actor, runId: number, employeeId: number) {
   return sql.begin(async (tx) => {
     await assertDraft(tx, actor.companyId, runId);
-    const [e] = await tx<{ id: number; monthly_salary: number; car_benefit: number }[]>`SELECT id, monthly_salary, car_benefit FROM employees WHERE id = ${employeeId} AND company_id = ${actor.companyId}`;
+    const [e] = await tx<{ id: number; monthly_salary: number; car_benefit: number; salary_sacrifice: number }[]>`SELECT id, monthly_salary, car_benefit, salary_sacrifice FROM employees WHERE id = ${employeeId} AND company_id = ${actor.companyId}`;
     if (!e) throw new ValidationError('Den anställda finns inte');
     const [p] = await tx<{ id: number }[]>`INSERT INTO payslips (run_id, employee_id, items, employer_fee_rate)
-      VALUES (${runId}, ${e.id}, ${tx.json(defaultItems(e.monthly_salary, e.car_benefit) as never)}, 0) ON CONFLICT DO NOTHING RETURNING id`;
+      VALUES (${runId}, ${e.id}, ${tx.json(defaultItems(e.monthly_salary, e.car_benefit, e.salary_sacrifice) as never)}, 0) ON CONFLICT DO NOTHING RETURNING id`;
     if (p) await recomputeSlip(tx, p.id);
     await auditBy(tx, actor, 'add', 'payslip', p?.id);
     return fetchRun(tx, actor.companyId, runId);
@@ -254,12 +269,14 @@ export async function bookPayrollRun(actor: Actor, runId: number) {
     const calcs = [];
     for (const s of slips) calcs.push({ calc: await recomputeSlip(tx, s.id), items: s.items });
     // Tjänstepension (premien betalas mot försäkringsbolagets faktura, 2990) och särskild löneskatt (2514)
-    const [pen] = await tx<{ premium: number; slp: number }[]>`SELECT COALESCE(SUM(pension), 0)::bigint AS premium, COALESCE(SUM(pension_tax), 0)::bigint AS slp FROM payslips WHERE run_id = ${runId}`;
-    const pensionLines = Number(pen.premium) ? fromSigned([
-      { account: 7411, amount: Number(pen.premium) }, { account: 2990, amount: -Number(pen.premium), description: 'Upplupen pensionspremie' },
-      { account: 7533, amount: Number(pen.slp) }, { account: 2514, amount: -Number(pen.slp) },
+    const [pen] = await tx<{ premium: number; slp: number; ins: number }[]>`SELECT COALESCE(SUM(pension), 0)::bigint AS premium, COALESCE(SUM(pension_tax), 0)::bigint AS slp, COALESCE(SUM(insurance), 0)::bigint AS ins FROM payslips WHERE run_id = ${runId}`;
+    const pensionLines = Number(pen.premium) || Number(pen.ins) ? fromSigned([
+      ...(Number(pen.premium) ? [{ account: 7411, amount: Number(pen.premium) }, { account: 2990, amount: -Number(pen.premium), description: 'Upplupen pensionspremie' },
+        { account: 7533, amount: Number(pen.slp) }, { account: 2514, amount: -Number(pen.slp) }] : []),
+      // Avtalsförsäkringar via Fora (AGS, TFA, TGL m.fl.)
+      ...(Number(pen.ins) ? [{ account: 7570, amount: Number(pen.ins) }, { account: 2990, amount: -Number(pen.ins), description: 'Upplupna avtalsförsäkringar (Fora)' }] : []),
     ]) : [];
-    if (pensionLines.length) for (const [n, name] of [[7411, 'Premier för kollektiva pensionsförsäkringar'], [7533, 'Särskild löneskatt för pensionskostnader'], [2514, 'Beräknad särskild löneskatt på pensionskostnader'], [2990, 'Övriga upplupna kostnader och förutbetalda intäkter']] as const)
+    if (pensionLines.length) for (const [n, name] of [[7411, 'Premier för kollektiva pensionsförsäkringar'], [7533, 'Särskild löneskatt för pensionskostnader'], [2514, 'Beräknad särskild löneskatt på pensionskostnader'], [2990, 'Övriga upplupna kostnader och förutbetalda intäkter'], [7570, 'Premier för arbetsmarknadsförsäkringar']] as const)
       await tx`INSERT INTO accounts (company_id, number, name) VALUES (${actor.companyId}, ${n}, ${name}) ON CONFLICT DO NOTHING`;
     const v = await createVoucher(tx, {
       actor, date: r.payment_date, description: `Lön ${r.period}`, lines: [...payrollBookingLines(calcs), ...pensionLines], sourceType: 'payroll', sourceId: runId, series: 'L',

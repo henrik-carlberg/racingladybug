@@ -5,6 +5,7 @@ import { vatReport } from '@/lib/vat';
 import { Flash, type SP } from '@/components/ui';
 import { kr, monthEnd, today } from '@/lib/format';
 import { settleVat } from './actions';
+import { prepareVat } from '../../inlamning/actions';
 import { Help } from '@/components/Help';
 
 export const dynamic = 'force-dynamic';
@@ -53,6 +54,11 @@ export default async function Vat({ params, searchParams }: { params: Promise<{ 
         </tbody>
       </table>
       <p>{toPay >= 0 ? `Moms att betala: ${kr(toPay)}` : `Moms att få tillbaka: ${kr(-toPay)}`}</p>
+      <form action={prepareVat.bind(null, company.id)} className="card actions">
+        <input type="hidden" name="from" value={from} /><input type="hidden" name="to" value={to} />
+        <button className="secondary">Förbered momsdeklaration för inlämning</button>
+        <span className="muted small">Skapar en eSKD-fil för Skatteverket som du kan lämna in direkt eller via e-tjänsten.</span>
+      </form>
       {settled ? <p className="muted">Momsen för perioden är avräknad i <a href={`/c/${company.id}/verifikationer/${settled.id}`}>{settled.label}</a>.</p> : (
         <form action={settleVat.bind(null, company.id)} className="card actions">
           <input type="hidden" name="from" value={from} /><input type="hidden" name="to" value={to} />

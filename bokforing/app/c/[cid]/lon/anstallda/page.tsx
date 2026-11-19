@@ -3,6 +3,7 @@ import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
 import { Flash, type SP, EmptyState } from '@/components/ui';
 import { EmployeeFields, type EmployeeRow } from '@/components/EmployeeFields';
+import { listAgreements } from '@/lib/services/agreements';
 import { kr } from '@/lib/format';
 import { saveEmployee } from './actions';
 
@@ -11,6 +12,7 @@ export const dynamic = 'force-dynamic';
 export default async function Employees({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
   const { company } = await requireCompany(cid, { perm: 'payroll' });
+  const agreements = await listAgreements(company.id);
   const rows = await sql<EmployeeRow[]>`SELECT * FROM employees WHERE company_id = ${company.id} ORDER BY active DESC, last_name, first_name`;
   return (
     <>
@@ -35,7 +37,7 @@ export default async function Employees({ params, searchParams }: { params: Prom
       </div>
       <h2>Ny anställd</h2>
       <form action={saveEmployee.bind(null, company.id, null)} className="card stack">
-        <EmployeeFields />
+        <EmployeeFields agreements={agreements} />
         <div><button>Spara</button></div>
       </form>
     </>

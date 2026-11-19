@@ -25,7 +25,7 @@ export async function newInboxAddress(actor: Actor) {
   await auditBy(sql, actor, 'rotate_inbox_address', 'company', actor.companyId);
 }
 
-interface NewDoc { source: 'email' | 'upload'; messageId?: string | null; from?: string; subject?: string; filename: string; mimeType: string; data: Buffer | null; uploadedBy?: number | null; error?: string }
+interface NewDoc { source: 'email' | 'upload' | 'peppol'; messageId?: string | null; from?: string; subject?: string; filename: string; mimeType: string; data: Buffer | null; uploadedBy?: number | null; error?: string }
 
 export async function addDocument(companyId: number, d: NewDoc): Promise<number | null> {
   const mime = mimeFor(d.filename, d.mimeType);

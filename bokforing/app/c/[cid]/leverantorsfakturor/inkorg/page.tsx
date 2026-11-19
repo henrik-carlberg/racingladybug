@@ -45,7 +45,7 @@ export default async function Inbox({ params, searchParams }: { params: Promise<
           {open.map((d) => (
             <tr key={d.id}>
               <td className="small">{d.created_at}</td>
-              <td><Link href={`${b}/inkorg/${d.id}`}>{d.filename || d.subject || 'Mejl utan bilaga'}</Link><div className="small muted">{d.source === 'email' ? d.from_address : 'Uppladdad'}</div></td>
+              <td><Link href={`${b}/inkorg/${d.id}`}>{d.filename || d.subject || 'Mejl utan bilaga'}</Link><div className="small muted">{d.source === 'email' ? d.from_address : d.source === 'peppol' ? `Peppol ${d.from_address}` : 'Uppladdad'}</div></td>
               <td>{d.extracted?.supplier.name}</td>
               <td className="num">{d.extracted?.total != null ? `${kr(d.extracted.total)} ${d.extracted.currency !== 'SEK' ? d.extracted.currency : ''}` : ''}</td>
               <td className="small">{d.extracted?.dueDate}</td>

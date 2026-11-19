@@ -53,8 +53,10 @@ async function ownAccount(db: Tx | typeof sql, companyId: number, id: number) {
 export async function createManualAccount(actor: Actor, input: Record<string, unknown>) {
   const ledger = optInt(input, 'ledger_account', 'Bokföringskonto') ?? 1930;
   if (ledger < 1900 || ledger > 1999) throw new ValidationError('Bokföringskontot måste vara ett 19xx-konto');
-  const [a] = await sql<{ id: number }[]>`INSERT INTO bank_accounts (company_id, name, iban, ledger_account)
-    VALUES (${actor.companyId}, ${str(input, 'name', { required: true, label: 'Namn' })}, ${str(input, 'iban').replace(/\s/g, '')}, ${ledger}) RETURNING id`;
+  const currency = (str(input, 'currency') || 'SEK').toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currency)) throw new ValidationError('Ange valuta med tre bokstäver, t.ex. EUR');
+  const [a] = await sql<{ id: number }[]>`INSERT INTO bank_accounts (company_id, name, iban, ledger_account, currency)
+    VALUES (${actor.companyId}, ${str(input, 'name', { required: true, label: 'Namn' })}, ${str(input, 'iban').replace(/\s/g, '')}, ${ledger}, ${currency}) RETURNING id`;
   await auditBy(sql, actor, 'create', 'bank_account', a.id);
   return a.id;
 }

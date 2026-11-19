@@ -319,3 +319,7 @@ main { min-width: 0; }
   main table { display: block; overflow-x: auto; max-width: 100%; }
   .doc { overflow-x: auto; }
 }
+
+/* Engelska: sidans innehåll visas när översättningen är klar (högst en kort stund; utan JavaScript visas svenska) */
+html.i18n-pending main { animation: i18n-reveal 0s linear 1.2s forwards; visibility: hidden; }
+@keyframes i18n-reveal { to { visibility: visible; } }

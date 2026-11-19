@@ -5,6 +5,9 @@ import { requireCompany } from '@/lib/server/auth';
 import { Flash, type SP } from '@/components/ui';
 import { kr } from '@/lib/format';
 import { PAY_ITEM_LABELS, type PayItem } from '@/lib/payroll';
+import { prepareAgi } from '../../inlamning/actions';
+import { hours as saveHours } from '../avtal/actions';
+import { HOUR_FIELDS } from '@/lib/payroll-agreements';
 import { addEmployee, bookRun, deleteRun, removeSlip, saveSlip, applyAbsence } from '../actions';
 
 export const dynamic = 'force-dynamic';
@@ -12,7 +15,7 @@ export const dynamic = 'force-dynamic';
 interface Slip {
   id: number; employee_id: number; name: string; items: PayItem[]; gross_cash: number; benefits: number; tax: number;
   net_deductions: number; reimbursements: number; net_pay: number; employer_fee: number; employer_fee_rate: string; pension: number; pension_tax: number;
-  tax_info: string;
+  tax_info: string; agreement: string | null; hours: Record<string, number>; insurance: number;
 }
 
 const fmt = (o: number) => (o / 100).toFixed(2).replace('.', ',');
@@ -25,7 +28,7 @@ export default async function Run({ params, searchParams }: { params: Promise<{ 
     FROM payroll_runs r LEFT JOIN users u ON u.id = r.booked_by WHERE r.id = ${Number(rid)} AND r.company_id = ${company.id}`;
   if (!run) notFound();
   const slips = await sql<Slip[]>`
-    SELECT p.*, e.first_name || ' ' || e.last_name AS name,
+    SELECT p.*, e.first_name || ' ' || e.last_name AS name, (SELECT name FROM collective_agreements a WHERE a.id = e.agreement_id) AS agreement,
       CASE WHEN e.tax_mode = 'table' THEN 'Tabell ' || e.tax_table || ', kolumn ' || e.tax_column ELSE e.tax_percent || ' %' END AS tax_info
     FROM payslips p JOIN employees e ON e.id = p.employee_id WHERE p.run_id = ${run.id} ORDER BY e.last_name`;
   const others = await sql<{ id: number; name: string }[]>`
@@ -40,6 +43,8 @@ export default async function Run({ params, searchParams }: { params: Promise<{ 
         <h1>Lön {run.period} <span className={`badge ${draft ? '' : 'ok'}`}>{draft ? 'Utkast' : 'Bokförd'}</span></h1>
         <div className="actions" style={{ margin: 0 }}>
           {!draft && <a className="btn" href={`${b}/lon/${run.id}/agi`}>Ladda ner AGI-fil</a>}
+          {!draft && <form action={prepareAgi.bind(null, company.id, run.id)}><button className="secondary">Förbered AGI för inlämning</button></form>}
+          <Link className="btn secondary" href={`${b}/lon/${run.id}/pension`}>Pension och försäkringar</Link>
           <Link className="btn secondary" href={`${b}/lon`}>Tillbaka</Link>
         </div>
       </div>
@@ -81,14 +86,22 @@ export default async function Run({ params, searchParams }: { params: Promise<{ 
                       </select></td>
                       <td><input name={`desc_${i}`} defaultValue={it?.description ?? ''} placeholder={it ? '' : 'T.ex. Övertid, Sjukavdrag, Friskvård'} /></td>
                       <td><input name={`amount_${i}`} defaultValue={it ? fmt(it.amount) : ''} inputMode="decimal" style={{ textAlign: 'right' }} /></td>
-                      <td><input name={`account_${i}`} defaultValue={it?.account ?? ''} placeholder="5800" /></td>
+                      <td><input name={`account_${i}`} defaultValue={it?.account ?? ''} placeholder="5800" />{it?.code && <input type="hidden" name={`code_${i}`} value={it.code} />}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               <div><button className="secondary">Spara och räkna om</button></div>
             </form>
-          ) : (
+          ) : null}
+          {draft && p.agreement ? (
+            <form action={saveHours.bind(null, company.id, run.id, p.id)} className="stack hours" style={{ marginTop: '.5rem' }}>
+              <b className="small">Timmar enligt {p.agreement}</b>
+              <div className="row">{HOUR_FIELDS.map(([k, l]) => <label key={k} style={{ flex: '1 1 120px' }}>{l}<input name={k} inputMode="decimal" defaultValue={p.hours?.[k] ? String(p.hours[k]).replace('.', ',') : ''} /></label>)}</div>
+              <div><button className="secondary">Beräkna tillägg</button></div>
+            </form>
+          ) : null}
+          {draft ? null : (
             <table>
               <tbody>{p.items.map((it, i) => <tr key={i}><td>{PAY_ITEM_LABELS[it.type]}</td><td>{it.description}</td><td className="num">{kr(it.amount)}</td></tr>)}</tbody>
             </table>

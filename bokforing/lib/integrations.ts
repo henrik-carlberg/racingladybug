@@ -19,6 +19,12 @@ export const INTEGRATIONS: Integration[] = [
     steps: ['Registrera en applikation hos Enable Banking och ladda upp den publika nyckeln.', 'Lägg in app-id och den privata nyckeln (base64) i Vercel.'] },
   { key: 'stripe', name: 'Abonnemang och kortbetalning (Stripe)', enables: 'Abonnemang för kunderna och betalning av fakturor med kort', vars: ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'], optional: ['STRIPE_CONNECT_WEBHOOK_SECRET'], testable: true,
     steps: ['Skapa produkter och priser i Stripe.', 'Lägg till webhooks till /api/stripe/webhook (och /api/stripe/connect för kortbetalning).', 'Lägg in nycklarna i Vercel.'] },
+  { key: 'peppol', name: 'Peppol-åtkomstpunkt', enables: 'E-fakturor skickas och tas emot direkt, med uppslag av mottagare och leveransstatus', vars: ['PEPPOL_AP_URL', 'PEPPOL_AP_KEY'], optional: ['PEPPOL_AP_WEBHOOK_SECRET'], testable: true,
+    steps: ['Teckna avtal med en Peppol-åtkomstpunkt (operatör) och registrera bolagen som mottagare.', 'Lägg in API-adress och nyckel i Vercel.', 'Peka operatörens webhook till /api/peppol/inbound och lägg in signeringshemligheten som PEPPOL_AP_WEBHOOK_SECRET.'] },
+  { key: 'skv', name: 'Skatteverket (moms och AGI)', enables: 'Momsdeklaration och arbetsgivardeklaration lämnas in direkt med kvittens', vars: ['SKV_API_URL', 'SKV_CLIENT_ID', 'SKV_CLIENT_SECRET'], testable: true,
+    steps: ['Teckna avtal om API-anslutning hos Skatteverket (ombudsbehörighet för byrån).', 'Lägg in API-adress, klient-id och hemlighet i Vercel.', 'Utan anslutning laddar användaren ner filen och lämnar den i e-tjänsten.'] },
+  { key: 'bv', name: 'Bolagsverket (årsredovisning)', enables: 'Årsredovisningen lämnas in digitalt med kvittens', vars: ['BV_API_URL', 'BV_CLIENT_ID', 'BV_CLIENT_SECRET'], testable: true,
+    steps: ['Ansök om anslutning till Bolagsverkets tjänst för digital inlämning.', 'Lägg in API-adress, klient-id och hemlighet i Vercel.'] },
   { key: 'cron', name: 'Schemalagda körningar', enables: 'Banksynk, påminnelser, avtalsfakturor, notiser, integritetskontroll', vars: ['CRON_SECRET'],
     steps: ['Lägg in CRON_SECRET (en lång slumpmässig sträng) i Vercel. Körningarna i vercel.json använder den automatiskt.'] },
 ];

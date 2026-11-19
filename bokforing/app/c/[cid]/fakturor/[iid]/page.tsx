@@ -14,6 +14,10 @@ import { openAdvances } from '@/lib/services/invoices';
 import { PrintButton } from '@/components/PrintButton';
 import { InvoiceDoc } from '@/components/InvoiceDoc';
 import { peppolCheck } from '@/lib/services/einvoice';
+import { apEnabled } from '@/lib/server/peppol-ap';
+import { invoiceMessage } from '@/lib/services/peppol';
+import { isVerified } from '@/lib/services/identity';
+import { refreshPeppol, sendViaPeppol } from '../../peppol/actions';
 import { listTimeEntries } from '@/lib/services/time';
 
 export const dynamic = 'force-dynamic';
@@ -46,6 +50,9 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
   const isCredit = !!inv.credit_of_id;
   const time = await listTimeEntries(co.id, { invoice_id: inv.id });
   const peppol = inv.status !== 'draft' ? await peppolCheck(co.id, inv.id).catch(() => null) : null;
+  const pmsg = peppol ? await invoiceMessage(co.id, inv.id) : null;
+  const apOn = apEnabled() && (await isVerified(co.id));
+  const PST: Record<string, string> = { sent: 'skickad, väntar på leveranskvittens', delivered: 'levererad till mottagaren', failed: 'misslyckades' };
   const b = `/c/${co.id}`;
   const t0 = today();
 
@@ -103,7 +110,10 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
           <div className="card small">
             <b>E-faktura (Peppol BIS 3)</b>{' '}
             {peppol.errors.length ? <span style={{ color: 'var(--danger)' }}>saknar uppgifter: {peppol.errors.join('; ')}.</span>
-              : <><a href={`${b}/fakturor/${inv.id}/peppol`}>Ladda ner e-faktura (XML)</a> <span className="muted">– skicka via din Peppol-operatör till {peppol.data.buyer.endpoint}.</span></>}
+              : <><a href={`${b}/fakturor/${inv.id}/peppol`}>Ladda ner e-faktura (XML)</a> <span className="muted">– {apOn ? 'mottagare' : 'skicka via din Peppol-operatör till'} {peppol.data.buyer.endpoint ?? peppol.data.buyer.orgnr}.</span></>}
+            {pmsg && <div className="peppol-status">Peppol: <b>{PST[pmsg.status]}</b> ({pmsg.receiver}, {pmsg.updated_at}){pmsg.message ? ` – ${pmsg.message}` : ''}</div>}
+            {apOn && !peppol.errors.length && (!pmsg || pmsg.status === 'failed') && <form action={sendViaPeppol.bind(null, co.id, inv.id)} className="actions" style={{ margin: '.4rem 0 0' }}><button>Skicka via Peppol</button></form>}
+            {pmsg?.status === 'sent' && <form action={refreshPeppol.bind(null, co.id, `${b}/fakturor/${inv.id}`)} className="actions" style={{ margin: '.4rem 0 0' }}><button className="secondary">Hämta leveransstatus</button></form>}
           </div>
         )}
         {payments.length > 0 && (
