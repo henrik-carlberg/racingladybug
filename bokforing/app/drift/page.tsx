@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { jobStats } from '@/lib/server/jobs';
 import { notFound } from 'next/navigation';
 import { sql } from '@/lib/db';
@@ -31,7 +32,7 @@ export default async function Ops({ searchParams }: { searchParams: SP }) {
   const jobs = await jobStats();
   return (
     <div className="center" style={{ maxWidth: 1100 }}>
-      <h1>Drift</h1>
+      <div className="header"><h1>Drift</h1><Link className="btn secondary" href="/drift/installningar">Integrationer</Link></div>
       <Flash searchParams={searchParams} />
       <div className="grid">
         {[['Bolag', stats.companies], ['Användare', stats.users], ['Betalande abonnemang', stats.active], ['Verifikationer senaste 7 dagarna', stats.vouchers]].map(([l, v]) => (

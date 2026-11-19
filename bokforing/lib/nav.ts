@@ -82,6 +82,7 @@ export function buildNav(o: {
     }) },
     { id: 'inst', label: t('Inställningar'), icon: 'settings', items: items([
       { path: '/installningar', label: 'Inställningar', hint: 'Företagsuppgifter, räkenskapsår och användare' },
+      { path: '/installningar/status', label: 'Kopplingar och status', hint: 'Bank, e-post, BankID och notiser – vad som saknas' },
       { path: '/moduler', label: 'Moduler', hint: 'Slå på CRM, lager, projekt m.m.' },
       { path: '/abonnemang', label: 'Abonnemang' },
       { path: '/installningar/betalningar', label: 'Kortbetalning' },
