@@ -1,5 +1,5 @@
 // Service worker: gör appen installerbar och visar en offlinesida. Inloggade sidor cachas aldrig.
-const CACHE = 'bok-v3';
+const CACHE = 'bok-v4';
 const OFFLINE_RECEIPT = '/kvitto-offline';
 const OFFLINE = '/offline.html';
 self.addEventListener('install', (e) => {
@@ -20,8 +20,28 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
+// Delning från andra appar (share target): filen sparas i telefonen och användaren väljer sedan vad den är
+function saveShared(file) {
+  return new Promise((resolve) => {
+    const r = indexedDB.open('bokforing-outbox', 2);
+    r.onupgradeneeded = () => {
+      if (!r.result.objectStoreNames.contains('receipts')) r.result.createObjectStore('receipts', { keyPath: 'id', autoIncrement: true });
+      if (!r.result.objectStoreNames.contains('shared')) r.result.createObjectStore('shared');
+    };
+    r.onsuccess = () => { const t = r.result.transaction('shared', 'readwrite'); t.objectStore('shared').put({ file, name: file.name || 'delad-fil', at: Date.now() }, 'latest'); t.oncomplete = resolve; t.onerror = resolve; };
+    r.onerror = resolve;
+  });
+}
 self.addEventListener('fetch', (e) => {
   const req = e.request;
+  const u0 = new URL(req.url);
+  if (req.method === 'POST' && u0.origin === self.location.origin && u0.pathname === '/dela') {
+    e.respondWith((async () => {
+      try { const fd = await req.formData(); const f = fd.get('file'); if (f && typeof f !== 'string') await saveShared(f); } catch { /* visa sidan ändå */ }
+      return Response.redirect('/dela', 303);
+    })());
+    return;
+  }
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;

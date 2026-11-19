@@ -122,6 +122,35 @@ async function accept(browser, link, name, password) {
   log('okänd banktransaktion: AI föreslår konto med förklaring och den bokförs med ett klick');
   claude.close();
 
+  // ================= Del 3: mobilen – genvägar och dela till appen =================
+  const man = await (await owner.request.get(BASE + '/manifest.webmanifest')).json();
+  assert(man.shortcuts?.length === 3 && man.shortcuts[0].url === '/genvag/kvitto' && man.share_target?.action === '/dela' && man.share_target.params.files[0].name === 'file', 'manifest med genvägar och delning: ' + JSON.stringify(man).slice(0, 400));
+  await owner.goto(BASE + '/genvag/kvitto');
+  assert(/\/c\/\d+\/kvitto$/.test(owner.url()), 'genvägen öppnar Nytt kvitto i rätt bolag: ' + owner.url());
+  const ctxM = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await ctxM.addCookies(await owner.context().cookies());
+  const m = await ctxM.newPage();
+  m.setDefaultTimeout(20000);
+  await m.goto(B + '/kvitto');
+  await m.evaluate(() => navigator.serviceWorker.ready);
+  if (!(await m.evaluate(() => !!navigator.serviceWorker.controller))) await m.reload();
+  // Som när en bild delas från bildgalleriet: webbläsaren skickar den till /dela och service workern tar emot den
+  const shared = await m.evaluate(async () => {
+    const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='), (c) => c.charCodeAt(0));
+    const fd = new FormData(); fd.set('file', new File([png], 'kvitto-galleri.png', { type: 'image/png' }));
+    const r = await fetch('/dela', { method: 'POST', body: fd });
+    return { url: r.url, redirected: r.redirected };
+  });
+  assert(shared.url.endsWith('/dela'), 'delningen tas emot: ' + JSON.stringify(shared));
+  await m.goto(BASE + '/dela');
+  await m.locator('.shared-preview:has-text("kvitto-galleri.png")').waitFor();
+  await m.click('a:has-text("Ett kvitto")');
+  await m.waitForURL(/kvitto\?delad=1/);
+  await m.waitForFunction(() => document.querySelector('input[type=file][name=file]')?.files?.length === 1);
+  await m.locator('text=/Läser av kvittot|Avläst|kunde inte läsas av|Kvittot kunde inte/').first().waitFor();
+  assert(await m.evaluate(() => document.querySelector('input[type=file][name=file]').files[0].name) === 'kvitto-galleri.png', 'den delade bilden ligger i kvittot');
+  log('genvägar på appikonen och dela en bild från bildgalleriet direkt till ett kvitto');
+
   await browser.close();
   console.log('Omgång 7: alla steg gick igenom');
 })().catch((e) => { console.error('✘', e.message, (e.stack || '').split('\n').find((l) => l.includes('omgang7.cjs'))); process.exit(1); });

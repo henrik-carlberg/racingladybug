@@ -2,12 +2,16 @@
 // Kvitton som fotas utan uppkoppling sparas i telefonen (IndexedDB) och skickas när det finns täckning.
 
 export interface QueuedReceipt { id?: number; cid: number; fields: Record<string, string>; file?: Blob; fileName?: string; created: string }
-const DB = 'bokforing-outbox', STORE = 'receipts';
+const DB = 'bokforing-outbox', STORE = 'receipts', SHARED = 'shared';
 
 function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const r = indexedDB.open(DB, 1);
-    r.onupgradeneeded = () => r.result.createObjectStore(STORE, { keyPath: 'id', autoIncrement: true });
+    // Version 2: även filer som delats till appen från andra appar (service workern lägger dem där)
+    const r = indexedDB.open(DB, 2);
+    r.onupgradeneeded = () => {
+      if (!r.result.objectStoreNames.contains(STORE)) r.result.createObjectStore(STORE, { keyPath: 'id', autoIncrement: true });
+      if (!r.result.objectStoreNames.contains(SHARED)) r.result.createObjectStore(SHARED);
+    };
     r.onsuccess = () => resolve(r.result);
     r.onerror = () => reject(r.error);
   });
@@ -42,4 +46,18 @@ export async function flushReceipts(cid: number): Promise<{ sent: number; failed
     } catch { break; }
   }
   return { sent, failed };
+}
+
+/** Filen som senast delades till appen (från bildgalleriet eller en annan app) */
+export async function sharedFile(): Promise<{ file: Blob; name: string; at: number } | null> {
+  const db = await open();
+  return new Promise((resolve) => {
+    const req = db.transaction(SHARED, 'readonly').objectStore(SHARED).get('latest');
+    req.onsuccess = () => { const v = req.result; resolve(v && Date.now() - v.at < 3600_000 ? v : null); };
+    req.onerror = () => resolve(null);
+  });
+}
+export async function clearShared() {
+  const db = await open();
+  return new Promise<void>((resolve) => { const t = db.transaction(SHARED, 'readwrite'); t.objectStore(SHARED).delete('latest'); t.oncomplete = () => resolve(); t.onerror = () => resolve(); });
 }
