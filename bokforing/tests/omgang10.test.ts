@@ -101,3 +101,30 @@ describe('Betalt snabbare', () => {
     expect(smsReminder({ company: 'AB', number: 7, amount: '100,00', due: '2026-01-01', link: 'https://x/f/t', level: 1 })).toContain('Betala här: https://x/f/t');
   });
 });
+
+import { deflateSync } from 'node:zlib';
+import { documentText, normalizeTag, parseQuery, pdfText, retentionUntil } from '@/lib/doc-text';
+describe('Sök och arkiv', () => {
+  const pdf = (content: string, flate: boolean) => {
+    const body = flate ? deflateSync(Buffer.from(content, 'latin1')) : Buffer.from(content, 'latin1');
+    return Buffer.concat([Buffer.from(`%PDF-1.4\n1 0 obj\n<< /Length ${body.length}${flate ? ' /Filter /FlateDecode' : ''} >>\nstream\n`, 'latin1'), body, Buffer.from('\nendstream\nendobj\n%%EOF', 'latin1')]);
+  };
+  it('text ur PDF (komprimerad och okomprimerad, hex och TJ)', () => {
+    const c = 'BT /F1 12 Tf 72 700 Td (Faktura 4711 fr\\345n Kontorsbolaget) Tj 0 -14 Td [(Att ) -20 (betala)] TJ <FEFF0020003100320033> Tj ET';
+    expect(pdfText(pdf(c, true))).toBe('Faktura 4711 från Kontorsbolaget\nAtt betala 123');
+    expect(pdfText(pdf('BT (Hyra mars) Tj ET', false))).toBe('Hyra mars');
+  });
+  it('text- och XML-filer, bilder ger null', () => {
+    expect(documentText('application/xml', 'f.xml', Buffer.from('<a><b>Leverantör AB</b></a>'))).toBe('Leverantör AB');
+    expect(documentText('image/png', 'k.png', Buffer.from([1, 2]))).toBeNull();
+  });
+  it('sökfråga, gallring och taggar', () => {
+    expect(parseQuery('1 250,50')).toMatchObject({ amount: 125050 });
+    expect(parseQuery('1009')).toMatchObject({ number: '1009', amount: 100900 });
+    expect(parseQuery('hyra')).toMatchObject({ amount: null, number: null });
+    expect(retentionUntil('2026-12-31')).toBe('2033-12-31');
+    expect(retentionUntil('2027-06-30')).toBe('2034-12-31');
+    expect(normalizeTag(' Avtal 2026! ')).toBe('avtal-2026');
+    expect(normalizeTag('x')).toBeNull();
+  });
+});

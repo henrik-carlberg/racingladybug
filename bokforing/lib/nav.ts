@@ -15,6 +15,7 @@ export function buildNav(o: {
   const top = items([
     { path: '', label: 'Översikt', hint: 'Vad som väntar och de vanligaste uppgifterna' },
     { path: '/kvitto', label: 'Nytt kvitto', hint: 'Fota ett kvitto så bokförs det' },
+    { path: '/sok', label: 'Sök i allt', hint: 'Verifikationer, fakturor, kunder och texten i underlagen' },
     { path: '/assistent', label: 'Fråga assistenten', hint: 'Fråga om bolagets siffror' },
   ]);
   const sections: NavSection[] = [
@@ -103,6 +104,7 @@ export function buildNav(o: {
       { path: '/integrationer', label: 'Integrationer (API)' },
       { path: '/installningar/gdpr', label: 'Dataskydd (GDPR)' },
       { path: '/historik', label: 'Behandlingshistorik' },
+      { path: '/underlagsarkiv', label: 'Dokumentarkiv', perm: 'ledger', hint: 'Underlag per år med taggar, gallringstid och arkivering' },
       { path: '/installningar/systemdokumentation', label: 'Systemdokumentation och arkiv', perm: 'ledger', hint: 'Bokföringslagen: dokumentation och arkivpaket per år' },
       { path: '/installningar/integritet', label: 'Integritetskontroll', perm: 'ledger', hint: 'Nattlig kontroll av balans, nummerserier och låsta perioder' },
     ]) },

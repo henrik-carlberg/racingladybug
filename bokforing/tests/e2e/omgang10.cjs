@@ -390,6 +390,68 @@ const inkServer = http.createServer((req, res) => {
   assert(/Betald/.test(await text(owner)), 'fakturan är betald');
   log('inkasso lämnas via API; status kommer tillbaka (signerad webhook) och betalt hos inkassobolaget bokförs på fakturan');
 
+  // ================= Del 5: sök i allt och dokumentarkiv =================
+  const zlib = require('node:zlib');
+  const pdfDoc = (txt) => { const body = zlib.deflateSync(Buffer.from(`BT /F1 12 Tf 72 700 Td (${txt}) Tj ET`, 'latin1'));
+    return Buffer.concat([Buffer.from(`%PDF-1.4\n1 0 obj\n<< /Length ${body.length} /Filter /FlateDecode >>\nstream\n`, 'latin1'), body, Buffer.from('\nendstream\nendobj\n%%EOF', 'latin1')]); };
+  await owner.goto(B + '/kvitto');
+  await owner.fill('input[name=total]', '450');
+  await owner.fill('input[name=date]', day(1));
+  await owner.click('button:has-text("Kontorsmaterial")');
+  await owner.fill('input[name=description]', 'Pärmar');
+  await owner.setInputFiles('input[type=file][name=file]', { name: 'kvitto-parmar.pdf', mimeType: 'application/pdf', buffer: pdfDoc('Kvitto 77 Parmhuset Lund kassa 3') });
+  await owner.click('button:has-text("Bokför kvitto")');
+  await owner.locator('text=Kvittot är bokfört').first().waitFor();
+  let found = false;
+  for (let i = 0; i < 20 && !found; i++) {
+    await owner.goto(B + '/sok?q=parmhuset');
+    found = (await owner.locator('.search-group[data-kind=document] .search-hit:has-text("kvitto-parmar.pdf")').count()) > 0;
+    if (!found) await owner.waitForTimeout(500);
+  }
+  assert(found, 'texten i PDF:en är sökbar');
+  assert((await owner.locator('.search-group[data-kind=document] mark').first().innerText()).toLowerCase() === 'parmhuset', 'träffen markeras');
+  log('texten i underlagen (PDF) läses in i bakgrunden och blir sökbar, med träffen markerad');
+
+  await owner.goto(B + '/sok?q=' + encodeURIComponent('450,00'));
+  assert((await owner.locator('.search-group[data-kind=voucher] .search-hit:has-text("Pärmar")').count()) === 1, 'belopp hittar verifikationen');
+  await owner.goto(B + '/sok?q=1009');
+  t = await text(owner);
+  assert(t.includes('Faktura 1009 · Sen Betalare AB') && t.includes('Kundfakturor'), 'fakturanummer: ' + t.slice(0, 1500));
+  await owner.goto(B + '/sok?q=portalkund');
+  assert((await owner.locator('.search-group[data-kind=customer] .search-hit:has-text("Portalkund AB")').count()) === 1, 'kund');
+  log('sök i allt: verifikationer, fakturor, kunder och banken – på ord, belopp och fakturanummer');
+
+  await owner.goto(B + '/underlagsarkiv');
+  t = await text(owner);
+  assert(t.includes('kvitto-parmar.pdf') && t.includes('Text ur PDF') && t.includes('Sparas till och med 2033-12-31'), 'arkivet för året: ' + t.slice(0, 1500));
+  const drow = owner.locator('tr.doc-row:has-text("kvitto-parmar.pdf")');
+  await drow.locator('input[name=tag]').fill('Kontor 2026');
+  await drow.locator('button:has-text("Lägg till")').click();
+  await owner.locator('tr.doc-row:has-text("kvitto-parmar.pdf") .badge.tag:has-text("kontor-2026")').waitFor();
+  await owner.click('a:has-text("kontor-2026")');
+  await owner.waitForURL(/tagg=kontor-2026/);
+  assert((await owner.locator('tr.doc-row').count()) === 1, 'filtrerat på tagg');
+  await owner.goto(B + '/sok?q=kontor-2026');
+  assert((await owner.locator('.search-group[data-kind=document] .search-hit:has-text("kvitto-parmar.pdf")').count()) === 1, 'tagg sökbar');
+  log('dokumentarkiv per år med taggar och gallringstid enligt bokföringslagen');
+
+  await owner.goto(B + '/sok?q=grejer');
+  assert((await owner.locator('.search-hit:has-text("grejer")').count()) >= 1, 'gamla året hittas innan arkivering');
+  await owner.goto(B + '/bokslut/7');
+  await owner.click('button:has-text("Bokför resultat och stäng året")');
+  await owner.locator('.flash.ok').first().waitFor();
+  await owner.goto(B + '/underlagsarkiv?ar=7');
+  await owner.click('button:has-text("Arkivera året")');
+  await owner.locator('text=/Året är arkiverat och förseglat \\(\\d+ verifikationer/').waitFor();
+  assert((await owner.locator('.badge.archived').count()) === 1, 'arkiverat');
+  await owner.click('button:has-text("Kontrollera att inget har ändrats")');
+  await owner.locator('text=Kontrollsumman stämmer').waitFor();
+  await owner.goto(B + '/sok?q=grejer');
+  assert((await owner.locator('.search-hit:has-text("grejer")').count()) === 0, 'arkiverat år ingår inte i standardsökningen');
+  await owner.goto(B + '/sok?q=grejer&arkiverade=1');
+  assert((await owner.locator('.search-hit:has-text("grejer") .badge:has-text("Arkiverat år")').count()) >= 1, 'men kan sökas fram');
+  log('gamla år arkiveras: förseglas med kontrollsumma, lämnar standardsökningen men kan sökas fram och kontrolleras');
+
   //@@NEXT@@
   await browser.close();
   appServer.close(); ebServer.close(); swServer.close(); smsServer.close(); inkServer.close();
