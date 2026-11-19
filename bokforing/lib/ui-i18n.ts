@@ -79,7 +79,10 @@ const EN: Record<string, string> = {
   'Appen räknar vilka sidor och åtgärder du öppnar i varje bolag och visar de vanligaste först: på översikten, i Skapa-menyn och när du söker. Gamla vanor väger mindre med tiden. Bara du ser det.': 'The app counts which pages and actions you open in each company and shows the most common ones first: on the overview, in the Create menu and when you search. Old habits count for less over time. Only you can see it.',
 };
 
+import { PAGES_EN } from './ui-en-pages';
 export function tr(lang: UiLang, s: string): string {
-  return lang === 'en' ? EN[s] ?? s : s;
+  return lang === 'en' ? EN[s] ?? PAGES_EN[s] ?? s : s;
 }
+/** Ordlistan för menyn och kärnsidorna – PageTranslator slår ihop den med sidornas texter */
+export const UI_EN = EN;
 export const translator = (lang: UiLang) => (s: string) => tr(lang, s);

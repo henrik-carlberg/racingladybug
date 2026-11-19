@@ -25,7 +25,7 @@ export async function disconnectBank(cid: number, connectionId: number) {
 
 export async function addManualAccount(cid: number, fd: FormData) {
   const actor = userActor(await requireCompany(cid, { perm: 'ledger' }));
-  await attempt(back(cid), () => bank.createManualAccount(actor, { name: str(fd, 'name'), iban: str(fd, 'iban'), ledger_account: str(fd, 'ledger_account') }));
+  await attempt(back(cid), () => bank.createManualAccount(actor, { name: str(fd, 'name'), iban: str(fd, 'iban'), ledger_account: str(fd, 'ledger_account'), currency: str(fd, 'currency') }));
   done(back(cid), 'Bankkontot är tillagt');
 }
 

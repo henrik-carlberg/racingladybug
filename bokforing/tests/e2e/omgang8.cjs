@@ -352,6 +352,71 @@ const ppServer = http.createServer((req, res) => {
   assert(t.includes('Kontrollera') && t.includes('går inte ihop'), 'Klarna-utbetalning som inte går ihop flaggas: ' + t.slice(0, 1500));
   log('Klarna: utbetalning som inte går ihop bokförs inte utan flaggas för kontroll');
 
+  // ================= Del 5: valuta, koncern, engelska =================
+  await owner.goto(B + '/bank');
+  await owner.fill('form:has(button:has-text("Lägg till")) input[name=name]', 'EUR-konto');
+  await owner.fill('form:has(button:has-text("Lägg till")) input[name=ledger_account]', '1932');
+  await owner.fill('form:has(button:has-text("Lägg till")) input[name=currency]', 'EUR');
+  await owner.click('form:has(button:has-text("Lägg till")) button');
+  await owner.waitForURL(/ok=/);
+  const camtEur = `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02"><BkToCstmrStmt><Stmt><Ntry><Amt Ccy="EUR">1000.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Sts>BOOK</Sts><BookgDt><Dt>2026-11-02</Dt></BookgDt><AcctSvcrRef>EUR-1</AcctSvcrRef><NtryDtls><TxDtls><RmtInf><Ustrd>Insättning</Ustrd></RmtInf></TxDtls></NtryDtls></Ntry></Stmt></BkToCstmrStmt></Document>`;
+  const erow = owner.locator('tr:has-text("EUR-konto")').first();
+  await erow.locator('input[type=file]').setInputFiles({ name: 'eur.xml', mimeType: 'application/xml', buffer: Buffer.from(camtEur) });
+  await erow.locator('button:has-text("Importera")').click();
+  await owner.waitForURL(/ok=/);
+  const eurInv = await api('POST', '/invoices', { customer_id: reg.json.id, invoice_date: '2026-11-10', currency: 'EUR', exchange_rate: '11', your_reference: 'EU 1', book: true, lines: [{ description: 'Licens', quantity: 1, unit: 'st', unit_price: 100000, vat_rate: 25 }] });
+  assert(eurInv.json.status === 'booked' && eurInv.json.total === 1375000, 'faktura i euro: ' + JSON.stringify(eurInv.json).slice(0, 300));
+  await owner.goto(B + '/bokslut/valuta?datum=2026-12-31');
+  t = await text(owner);
+  assert(t.includes('EUR-konto') && t.includes('Bankkonto') && t.includes('Kundfordran') && t.includes('1250,00 EUR') && t.includes('13 750,00'), 'underlag för omvärdering: ' + t.slice(0, 1200));
+  assert(await owner.locator('input[name^=amount_bank_]').inputValue() === '1000,00', 'valutasaldo från kontoutdraget');
+  await owner.fill('input[name=rate_EUR]', '11,25');
+  await owner.click('button:has-text("Bokför omvärdering")');
+  await owner.waitForURL(/ok=/);
+  await owner.click('a:has-text("visa verifikation")');
+  await owner.waitForURL(/verifikationer\/\d+/);
+  t = await text(owner);
+  assert(t.includes('Omvärdering av valuta per 2026-12-31') && t.includes('1932') && t.includes('8330') && t.includes('11 250,00') && t.includes('1510') && t.includes('3960') && t.includes('312,50'), 'omvärderingens kontering: ' + t.slice(0, 1500));
+  await owner.goto(B + '/bokslut/valuta?datum=2026-12-31');
+  assert((await text(owner)).includes('Omvärderingen per 2026-12-31 är bokförd'), 'kan inte bokas två gånger');
+  log('valutakonto och kundfordran i euro omvärderas till balansdagens kurs (8330 och 3960)');
+
+  await owner.goto(`${BASE}/koncern?from=2026-01-01&to=2026-12-31&c=1&c=2&moder=1`);
+  const link = owner.locator('form.group-link:has-text("Firma Test")');
+  await link.locator('input[name=ownership]').fill('80');
+  await link.locator('input[name=acquisition_cost]').fill('20000');
+  await link.locator('button:has-text("Koppla som dotterbolag")').click();
+  await owner.waitForURL(/ok=/);
+  t = await text(owner);
+  assert(t.includes('Aktier i Firma Test mot eget kapital vid förvärvet: 20 000,00') && t.includes('Koncernmässig goodwill Firma Test') && t.includes('Minoritetens andel i Firma Test (20 %)') && t.includes('Minoritetsintresse') && t.includes('varav minoritetens andel'), 'koncernelimineringar: ' + t.slice(0, 2500));
+  log('koncern: aktier i dotterbolag elimineras mot eget kapital med goodwill och 20 % minoritet');
+
+  const en = await login(browser, 'agare@example.com', 'hemligtlosen1');
+  await en.goto(BASE + '/konto');
+  await en.selectOption('select[name=locale]', 'en');
+  await en.click('form:has(select[name=locale]) button');
+  await en.waitForURL(/ok=/);
+  await en.goto(B + '/kassa/betalningar');
+  await en.waitForFunction(() => !document.documentElement.classList.contains('i18n-pending'));
+  t = await text(en);
+  assert(t.includes('Card terminals and payouts') && t.includes('Fetch now') && t.includes('Reports and payouts') && !t.includes('Hämta nu'), 'engelska på kortterminalsidan: ' + t.slice(0, 800));
+  await en.goto(B + '/lon/avtal');
+  await en.waitForFunction(() => !document.documentElement.classList.contains('i18n-pending'));
+  t = await text(en);
+  assert(t.includes('Collective agreements') && t.includes('Add agreement') && t.includes('Holiday supplement % of monthly salary per day'), 'engelska på avtalssidan: ' + t.slice(0, 800));
+  assert(await en.getAttribute('form:has(button:has-text("Add agreement")) input[name=name]', 'placeholder') === 'E.g. Retail agreement', 'platshållare översatt');
+  await en.goto(B + '/bokslut/valuta');
+  await en.waitForFunction(() => !document.documentElement.classList.contains('i18n-pending'));
+  assert((await text(en)).includes('Currency revaluation'), 'engelska på omvärderingssidan');
+  await en.click('a:has-text("Year-end")');
+  await en.waitForURL(/bokslut$/);
+  await en.waitForFunction(() => document.body.innerText.includes('Year-end and tax return'));
+  await en.goto(BASE + '/konto');
+  await en.selectOption('select[name=locale]', 'sv');
+  await en.click('form:has(select[name=locale]) button');
+  await en.waitForURL(/ok=/);
+  log('engelska i hela appen: sidornas rubriker, knappar, etiketter och platshållare översätts, även efter navigering');
+
   //@@NEXT@@
   await browser.close();
   skvServer.close(); apServer.close(); ppServer.close();

@@ -100,3 +100,58 @@ describe('Kortterminaler och utbetalningar', () => {
     expect(s).toMatchObject({ gross: 100000, refunds: 1000, net: 96000 });
   });
 });
+
+import { consolidate } from '@/lib/consolidation';
+import { revaluationLines, revalue, reverseLines } from '@/lib/fx';
+describe('Koncernelimineringar', () => {
+  const m = (o: Record<number, number>) => new Map(Object.entries(o).map(([k, v]) => [Number(k), v]));
+  it('aktier mot eget kapital med goodwill och minoritet, lån och utdelning', () => {
+    const P = { id: 1, name: 'Moder', result: m({ 8012: -10_000 }), balance: m({ 1310: 100_000, 1320: 20_000, 1930: 10_000, 2081: -100_000, 2099: -30_000 }), intraSales: 0, intraOpen: 0 };
+    const S = { id: 2, name: 'Dotter', result: m({ 3001: -40_000, 5010: 10_000 }), balance: m({ 1930: 100_000, 2081: -50_000, 2091: -30_000, 2360: -20_000 }), intraSales: 0, intraOpen: 0 };
+    const r = consolidate([P, S], { parentId: 1, links: [{ subsidiaryId: 2, ownership: 80, acquisitionCost: null, acquiredEquity: null }] });
+    expect(r.goodwill).toBe(60_000);
+    expect(r.minority).toBe(16_000);
+    expect(r.minorityResult).toBe(6_000);
+    expect(r.elimR.financial).toBe(-10_000);
+    expect(r.consolidatedResult).toBe(10_000 + 30_000 - 10_000);
+    // Balansräkningen går ihop: tillgångar = eget kapital + minoritet + skulder
+    const assets = r.balance.fixed + r.balance.current + r.balance.cash;
+    const claims = r.balance.equity + r.balance.untaxed + r.balance.longterm + r.balance.shortterm + r.minority;
+    expect(assets).toBe(claims);
+    expect(r.balance.longterm).toBe(0);
+    expect(r.warnings).toEqual([]);
+  });
+});
+describe('Valutaomvärdering', () => {
+  it('bank mot 8330, kundfordran och leverantörsskuld mot 3960/7960', () => {
+    const rows = revalue([
+      { kind: 'bank', label: 'EUR-konto', account: 1932, currency: 'EUR', amountCurrency: 1_000_00, bookedSek: 11_000_00 },
+      { kind: 'receivable', label: 'F 1', account: 1510, currency: 'EUR', amountCurrency: 500_00, bookedSek: 5_700_00 },
+      { kind: 'payable', label: 'LF 1', account: 2440, currency: 'USD', amountCurrency: 200_00, bookedSek: 2_000_00 },
+    ], { EUR: 11.5, USD: 10.5 });
+    expect(rows.map((r) => r.diff)).toEqual([500_00, 50_00, 100_00]);
+    const l = revaluationLines(rows);
+    const on = (a: number) => l.filter((x) => x.account === a).reduce((s, x) => s + x.debit - x.credit, 0);
+    expect(on(1932)).toBe(500_00); expect(on(8330)).toBe(-500_00);
+    expect(on(1510)).toBe(50_00); expect(on(3960)).toBe(-50_00);
+    expect(on(2440)).toBe(-100_00); expect(on(7960)).toBe(100_00);
+    expect(reverseLines(l).find((x) => x.account === 1932)?.credit).toBe(500_00);
+    expect(() => revalue(rows, {})).toThrow(/kurs/);
+  });
+});
+
+import { PAGES_EN, PATTERNS_EN } from '@/lib/ui-en-pages';
+describe('Engelska', () => {
+  const tr = (t: string) => { if (PAGES_EN[t]) return PAGES_EN[t]; for (const [re, to] of PATTERNS_EN) if (re.test(t)) return typeof to === 'string' ? t.replace(re, to) : t.replace(re, to as never); return t; };
+  it('ordlistan och mönstren', () => {
+    expect(Object.keys(PAGES_EN).length).toBeGreaterThan(1900);
+    expect(tr('Hämta nu')).toBe('Fetch now');
+    expect(tr('Arbetsgivardeklaration för löner i november 2026')).toBe('Employer declaration for salaries in November 2026');
+    expect(tr('Senast mån 14 december 2026')).toBe('By Mon 14 December 2026');
+    expect(tr('2026-05 Intäkter 9 500 kr Kostnader 54 128 kr Resultat −44 628 kr')).toBe('2026-05 Revenue SEK 9 500 Expenses SEK 54 128 Profit SEK −44 628');
+    expect(tr('Ingrid Ingenjör')).toBe('Ingrid Ingenjör');
+  });
+  it('inga tomma eller dubbla översättningar', () => {
+    for (const [k, v] of Object.entries(PAGES_EN)) { expect(v.trim()).not.toBe(''); expect(k).toBe(k.trim()); }
+  });
+});

@@ -96,6 +96,7 @@ export default async function Bank({ params, searchParams }: { params: Promise<{
         <label>Namn<input name="name" required placeholder="Företagskonto" /></label>
         <label>Kontonummer/IBAN<input name="iban" /></label>
         <label style={{ flex: '0 0 140px' }}>Bokföringskonto<input name="ledger_account" defaultValue="1930" /></label>
+        <label style={{ flex: '0 0 110px' }}>Valuta<input name="currency" defaultValue="SEK" maxLength={3} /></label>
         <div style={{ flex: '0 0 auto' }}><button className="secondary">Lägg till</button></div>
       </form>
       <p className="small muted">Importera kontoutdrag från internetbanken som <b>camt.053 (ISO 20022 XML)</b> eller <b>CSV</b> (SEB, Swedbank, Handelsbanken, Nordea m.fl.). Transaktioner som redan finns hoppas över.</p>
