@@ -58,3 +58,28 @@ describe('Lån och finansiering', () => {
     expect(creditUse(10000000, -2500000)).toEqual({ used: 2500000, left: 7500000, pct: 25 });
   });
 });
+
+import { ossCountry, ossDeclaration, ossDue, psSkvFile } from '@/lib/oss';
+import { computeInvoice, invoiceBookingLines } from '@/lib/invoice';
+describe('Moms för e-handel inom EU', () => {
+  it('OSS gäller privatpersoner i andra EU-länder för registrerade bolag', () => {
+    expect(ossCountry({ registered: true, country: 'de', vatNumber: '', reverseCharge: false })).toBe('DE');
+    expect(ossCountry({ registered: true, country: 'DE', vatNumber: 'DE123', reverseCharge: false })).toBeNull();
+    expect(ossCountry({ registered: false, country: 'DE', vatNumber: '', reverseCharge: false })).toBeNull();
+    expect(ossCountry({ registered: true, country: 'NO', vatNumber: '', reverseCharge: false })).toBeNull();
+  });
+  it('faktura med köparlandets moms bokas på OSS-kontot', () => {
+    const lines = [{ description: 'Vara', quantity: 2, unit: 'st', unitPrice: 10000, vatRate: 25 as const, account: 3109, ossRate: 25.5 }];
+    const t = computeInvoice(lines, { roundToKrona: false });
+    expect(t.vat).toBe(5100);
+    expect(invoiceBookingLines(lines, t).find((l) => l.account === 2670)).toMatchObject({ credit: 5100 });
+    expect(invoiceBookingLines(lines, t).some((l) => l.account === 2611)).toBe(false);
+  });
+  it('deklaration, förfallodag och Skatteverkets fil', () => {
+    expect(ossDeclaration([{ country: 'DE', rate: 19, base: 100, vat: 19 }, { country: 'DE', rate: 19, base: 200, vat: 38 }, { country: 'FI', rate: 25.5, base: 100, vat: 26 }]))
+      .toEqual({ rows: [{ country: 'DE', rate: 19, base: 300, vat: 57 }, { country: 'FI', rate: 25.5, base: 100, vat: 26 }], base: 400, vat: 83 });
+    expect(ossDue(2026, 4)).toBe('2027-01-31'); expect(ossDue(2026, 1)).toBe('2026-04-30');
+    expect(psSkvFile({ vatNumber: 'SE556026998601', period: '2026-Q4', contact: 'Ägare;T', phone: '070', email: 'a@b.se', rows: [{ vatNumber: 'DE123456789', goods: 1000, services: 0 }] }))
+      .toBe('SKV574008;\r\nSE556026998601;26-4;Ägare T;070;a@b.se\r\nDE123456789;1000;;\r\n');
+  });
+});

@@ -1,4 +1,5 @@
 import 'server-only';
+import { OSS_RATES, OSS_SALES_ACCOUNT, OSS_VAT_ACCOUNT, ossCountry } from '@/lib/oss';
 import { notify } from './push';
 import { enqueue } from '@/lib/server/jobs';
 import { sql, type Tx } from '@/lib/db';
@@ -86,16 +87,26 @@ export async function saveDraft(actor: Actor, invoiceId: number | null, input: R
 
 /** Som saveDraft men i en befintlig transaktion (används av tidrapporteringen) */
 export async function saveDraftTx(tx: Tx, actor: Actor, invoiceId: number | null, input: Record<string, unknown>): Promise<InvoiceOut> {
-  const [company] = await tx<{ invoice_terms: number }[]>`SELECT invoice_terms FROM companies WHERE id = ${actor.companyId}`;
+  const [company] = await tx<{ invoice_terms: number; oss: boolean }[]>`SELECT invoice_terms, oss_registered AS oss FROM companies WHERE id = ${actor.companyId}`;
   const customerId = int(input, 'customer_id', 'Kund');
-  const [cust] = await tx<{ reverse_charge: boolean; construction_rc: boolean; vat_number: string; orgnr: string; payment_terms: number | null; currency: string; language: string }[]>`
-    SELECT reverse_charge, construction_rc, vat_number, orgnr, payment_terms, currency, language FROM customers WHERE id = ${customerId} AND company_id = ${actor.companyId}`;
+  const [cust] = await tx<{ reverse_charge: boolean; construction_rc: boolean; vat_number: string; orgnr: string; payment_terms: number | null; currency: string; language: string; country: string }[]>`
+    SELECT reverse_charge, construction_rc, vat_number, orgnr, payment_terms, currency, language, country FROM customers WHERE id = ${customerId} AND company_id = ${actor.companyId}`;
   if (!cust) throw new ValidationError('Kunden finns inte');
   // Omvänd skattskyldighet: tjänster till EU-företag, eller byggtjänster till byggföretag i Sverige
   const rcKind = cust.reverse_charge ? 'eu' : cust.construction_rc ? 'construction' : '';
   const rcOn = !!rcKind;
   if (rcKind === 'construction' && !cust.vat_number && !cust.orgnr) throw new ValidationError('Omvänd byggmoms kräver köparens momsregistreringsnummer eller organisationsnummer');
   const lines = parseLines(input, rcOn, rcKind === 'construction');
+  // OSS: privatperson i annat EU-land och bolaget registrerat för OSS – köparlandets moms på momspliktiga rader
+  const oss = ossCountry({ registered: company.oss, country: cust.country, vatNumber: cust.vat_number, reverseCharge: rcOn });
+  if (oss) {
+    await tx`INSERT INTO accounts (company_id, number, name) VALUES (${actor.companyId}, ${OSS_SALES_ACCOUNT}, 'Försäljning till privatpersoner i andra EU-länder (OSS)'),
+      (${actor.companyId}, ${OSS_VAT_ACCOUNT}, 'Utgående moms OSS') ON CONFLICT DO NOTHING`;
+    for (const l of lines) if (l.vatRate !== 0) {
+      l.ossRate = OSS_RATES[oss];
+      if (l.account === defaultSalesAccount(l.vatRate, false)) l.account = OSS_SALES_ACCOUNT;
+    }
+  }
   const advance = input.advance === true || input.advance === 'true' || input.advance === 'on';
   if (advance) {
     if (str(input, 'reduction_type')) throw new ValidationError('En förskottsfaktura kan inte ha ROT/RUT – lägg avdraget på slutfakturan');
@@ -122,7 +133,7 @@ export async function saveDraftTx(tx: Tx, actor: Actor, invoiceId: number | null
   const head = {
     customer_id: customerId, invoice_date: invoiceDate, due_date: dueDate, delivery_date: str(input, 'delivery_date'),
     our_reference: str(input, 'our_reference'), your_reference: str(input, 'your_reference'), notes: str(input, 'notes'),
-    reverse_charge: rcOn, rc_kind: rcKind, advance, currency, exchange_rate: rate, language, total_currency: tt.foreign ? tt.doc.total : null, total_net: t.net, total_vat: t.vat, rounding: t.rounding, total: t.total - rr.tax_reduction, ...rr,
+    reverse_charge: rcOn, rc_kind: rcKind, oss_country: oss, advance, currency, exchange_rate: rate, language, total_currency: tt.foreign ? tt.doc.total : null, total_net: t.net, total_vat: t.vat, rounding: t.rounding, total: t.total - rr.tax_reduction, ...rr,
   };
   {
     let id = invoiceId ?? 0;
@@ -135,7 +146,7 @@ export async function saveDraftTx(tx: Tx, actor: Actor, invoiceId: number | null
     }
     await tx`INSERT INTO invoice_lines ${tx(lines.map((l, i) => ({
       invoice_id: id, position: i + 1, description: l.description, quantity: l.quantity, unit: l.unit,
-      unit_price: l.unitPrice, vat_rate: l.vatRate, account_number: l.account, labor: !!l.labor,
+      unit_price: l.unitPrice, vat_rate: l.vatRate, account_number: l.account, labor: !!l.labor, oss_rate: l.ossRate ?? null,
     })))}`;
     await auditBy(tx, actor, invoiceId ? 'update_draft' : 'create_draft', 'invoice', id);
     const out = await fetchInvoice(tx, actor.companyId, id);

@@ -186,6 +186,49 @@ const finServer = http.createServer((req, res) => {
   assert(/Betald/.test(await text(owner)), 'kundfakturan är betald via finansiären');
   log('factoring: erbjudande från finansiären, försäljning och utbetalning bokförd (1689, 6064) när finansiären bekräftar');
 
+  // ================= Del 4: moms för e-handel inom EU =================
+  await owner.goto(B + '/kunder');
+  await owner.fill('input[name=name]', 'Privatkund i Tyskland ZQ');
+  await owner.fill('input[name=country]', 'DE');
+  await owner.fill('input[name=email]', 'kunde@example.de');
+  await owner.click('form button:has-text("Spara")');
+  await owner.locator('text=Kunden är sparad').waitFor();
+  await owner.goto(B + '/rapporter/eu');
+  await owner.check('.oss-setting input[name=oss]');
+  await owner.click('.oss-setting button:has-text("Spara")');
+  await owner.locator('text=Bolaget är registrerat för OSS').waitFor();
+  await owner.goto(B + '/fakturor/ny');
+  await owner.selectOption('select[name=customer_id]', { label: 'Privatkund i Tyskland ZQ' });
+  await owner.fill('input[name=invoice_date]', day(1));
+  const row = owner.locator('tbody tr').first();
+  await row.locator('td:nth-child(1) input').fill('Webbshop: vara');
+  await row.locator('td:nth-child(2) input').fill('2');
+  await row.locator('td:nth-child(3) input').fill('st');
+  await row.locator('td:nth-child(4) input').fill('500');
+  await owner.click('button:has-text("Spara utkast")');
+  await owner.waitForURL(/fakturor\/\d+\?ok/);
+  await owner.click('button:has-text("Bokför faktura")');
+  await owner.locator('text=klar att skicka').first().waitFor();
+  const doc = (await owner.locator('.doc').innerText()).replace(/\s+/g, ' ');
+  assert(doc.includes('19 %') && doc.includes('190,00') && doc.includes('1 190,00'), 'fakturan har tysk moms: ' + doc.slice(0, 1200));
+  await owner.goto(BASE + await owner.locator('main a[href*="/verifikationer/"]').first().getAttribute('href'));
+  await owner.waitForURL(/verifikationer\/\d+/);
+  t = await text(owner);
+  assert(t.includes('2670') && t.includes('3109') && !t.includes('2611'), 'bokförd på OSS-konton: ' + t.slice(0, 1200));
+  log('faktura till privatperson i annat EU-land får köparlandets moms (19 % i Tyskland) och bokförs på OSS-konton, inte i den svenska momsen');
+
+  const yq = `${day(1).slice(0, 4)}-Q${Math.floor((Number(day(1).slice(5, 7)) - 1) / 3) + 1}`;
+  await owner.goto(`${B}/rapporter/eu?period=${yq}`);
+  t = await text(owner);
+  assert(/DE 19 % 1[\s ]000,00 190,00/.test(t) && /Lämna och betala senast \d{4}-\d{2}-\d{2}/.test(t), 'OSS-deklarationen: ' + t.slice(0, 2500));
+  const oc = await (await owner.request.get(`${B}/rapporter/eu/oss?period=${yq}`)).text();
+  assert(oc.includes('DE;19;1000,00;190,00'), 'OSS-underlag: ' + oc);
+  const ps = await (await owner.request.get(`${B}/rapporter/eu/skv?period=${yq}`)).text();
+  assert(ps.startsWith('SKV574008;\r\nSE556026998601;') , 'PS-fil: ' + ps.slice(0, 200));
+  await owner.goto(`${B}/rapporter/moms?from=${day(1)}&to=${day(1)}`);
+  assert(!(await text(owner)).includes('190'), 'OSS-momsen ingår inte i den svenska momsdeklarationen');
+  log('OSS-deklaration per land och skattesats med förfallodag och underlag; periodisk sammanställning som fil till Skatteverket');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); finServer.close();
   console.log('Omgång 12: alla steg gick igenom');

@@ -3,7 +3,9 @@ import { requireCompany } from '@/lib/server/auth';
 import { type SP } from '@/components/ui';
 import { kr, today } from '@/lib/format';
 import { OSS_THRESHOLD, ossSummary, periodicSummary, periodRange } from '@/lib/eu';
-import { euLines } from '@/lib/services/eu';
+import { euLines, ossLines } from '@/lib/services/eu';
+import { OSS_RATES, ossDeclaration, ossDue } from '@/lib/oss';
+import { setOss } from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +21,8 @@ export default async function Eu({ params, searchParams }: { params: Promise<{ c
   const [lines, yearLines] = await Promise.all([euLines(company.id, r.from, r.to), euLines(company.id, `${year}-01-01`, `${year}-12-31`)]);
   const ps = periodicSummary(lines);
   const oss = ossSummary(yearLines);
+  const quarter = /Q([1-4])$/.exec(period);
+  const decl = quarter ? ossDeclaration(await ossLines(company.id, r.from, r.to)) : null;
   const b = `/c/${company.id}`;
   return (
     <div>
@@ -43,7 +47,7 @@ export default async function Eu({ params, searchParams }: { params: Promise<{ c
           </tbody>
         </table>
       </div>
-      {ps.rows.length > 0 && <p className="small"><a href={`${b}/rapporter/eu/csv?period=${encodeURIComponent(period)}`}>Ladda ner som CSV</a> <span className="muted">– underlag att föra in i Skatteverkets e-tjänst för periodisk sammanställning. Stäm av mot momsdeklarationens ruta 35 och 39.</span></p>}
+      {ps.rows.length > 0 && <p className="small"><a href={`${b}/rapporter/eu/skv?period=${encodeURIComponent(period)}`}>Fil till Skatteverket</a> · <a href={`${b}/rapporter/eu/csv?period=${encodeURIComponent(period)}`}>Ladda ner som CSV</a> <span className="muted">– underlag att föra in i Skatteverkets e-tjänst för periodisk sammanställning. Stäm av mot momsdeklarationens ruta 35 och 39.</span></p>}
 
       <h2>Försäljning till privatpersoner i EU (OSS) – {year}</h2>
       <p className="small muted">Distansförsäljning av varor och e-tjänster till konsumenter i andra EU-länder. Under {kr(OSS_THRESHOLD)} kr per år totalt får svensk moms tas ut. Över tröskeln ska köparlandets moms tas ut, och den redovisas i Skatteverkets e-tjänst för OSS (unionsordningen) per kvartal.</p>
@@ -60,6 +64,20 @@ export default async function Eu({ params, searchParams }: { params: Promise<{ c
       {oss.overThreshold
         ? <div className="card" style={{ borderColor: 'var(--danger)' }}><b>Tröskeln är passerad.</b> Fakturera med köparlandets moms från och med den försäljning som passerade tröskeln och registrera bolaget för OSS hos Skatteverket.</div>
         : oss.total > 0 && <p className="small">{kr(OSS_THRESHOLD - oss.total)} kr kvar till tröskeln.</p>}
+      <h2>OSS-deklaration{quarter ? ` – ${r.label}` : ''}</h2>
+      <form action={setOss.bind(null, company.id)} className="card row oss-setting" style={{ alignItems: 'center' }}>
+        <label className="check" style={{ flex: '3 1 320px' }}><input type="checkbox" name="oss" defaultChecked={company.oss_registered} /> Bolaget är registrerat för OSS (unionsordningen) hos Skatteverket – fakturor till privatpersoner i andra EU-länder får köparlandets moms</label>
+        <div style={{ flex: '0 0 auto' }}><button className="secondary">Spara</button></div>
+      </form>
+      {!quarter ? <p className="small muted">Välj ett kvartal (t.ex. {year}-Q{q}) för att se OSS-deklarationen.</p> : decl && (
+        decl.rows.length === 0 ? <p className="small muted">Ingen OSS-försäljning under kvartalet.</p> : (<>
+          <table className="oss-decl"><thead><tr><th>Land</th><th className="num">Momssats</th><th className="num">Underlag (kr)</th><th className="num">Moms (kr)</th></tr></thead>
+            <tbody>{decl.rows.map((x) => <tr key={`${x.country}${x.rate}`}><td>{x.country}</td><td className="num">{String(x.rate).replace('.', ',')} %</td><td className="num">{kr(x.base)}</td><td className="num">{kr(x.vat)}</td></tr>)}
+              <tr className="sum"><td colSpan={2}>Totalt</td><td className="num">{kr(decl.base)}</td><td className="num">{kr(decl.vat)}</td></tr></tbody></table>
+          <p className="small">Lämna och betala senast <b className="oss-due">{ossDue(Number(year), Number(quarter[1]))}</b> i Skatteverkets e-tjänst för OSS (beloppen anges där i euro). <a href={`${b}/rapporter/eu/oss?period=${encodeURIComponent(period)}`}>Ladda ner underlag (CSV)</a></p>
+        </>)
+      )}
+      <p className="small muted">Normalskattesatser som används: {Object.entries(OSS_RATES).map(([c, v]) => `${c} ${String(v).replace('.', ',')} %`).join(', ')}. Kontrollera dem inför varje kvartal.</p>
       <p className="small"><Link href={`${b}/rapporter/moms`}>Till momsrapporten</Link></p>
     </div>
   );

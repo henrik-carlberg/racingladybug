@@ -10,6 +10,7 @@ export interface InvoiceLineInput {
   vatRate: 0 | 6 | 12 | 25;
   account: number;
   labor?: boolean; // arbetskostnad (grund för ROT/RUT-avdrag)
+  ossRate?: number; // köparlandets moms vid försäljning till privatperson i annat EU-land (OSS)
 }
 
 export interface InvoiceTotals {
@@ -29,7 +30,7 @@ export function computeInvoice(lines: InvoiceLineInput[], opts: { reverseCharge?
   const lineNets = lines.map(lineNet);
   const vatByRate: Record<number, { base: number; vat: number }> = {};
   lines.forEach((l, i) => {
-    const rate = opts.reverseCharge ? 0 : l.vatRate;
+    const rate = opts.reverseCharge ? 0 : (l.ossRate ?? l.vatRate);
     vatByRate[rate] ??= { base: 0, vat: 0 };
     vatByRate[rate].base += lineNets[i];
   });
@@ -47,9 +48,11 @@ export function invoiceBookingLines(lines: InvoiceLineInput[], t: InvoiceTotals,
   e.push({ account: ACC.customerReceivables, amount: sign * (t.total - reduction) });
   if (reduction) e.push({ account: ACC.taxReductionReceivable, amount: sign * reduction });
   lines.forEach((l, i) => e.push({ account: l.account, amount: -sign * t.lineNets[i] }));
+  // OSS: köparlandets moms redovisas i OSS-deklarationen och bokas därför på ett eget konto (2670)
+  const oss = lines.some((l) => l.ossRate != null);
   for (const [rate, v] of Object.entries(t.vatByRate)) {
     if (v.vat === 0) continue;
-    e.push({ account: ACC.vatOut[Number(rate)], amount: -sign * v.vat });
+    e.push({ account: oss ? 2670 : ACC.vatOut[Number(rate)], amount: -sign * v.vat });
   }
   if (t.rounding) e.push({ account: ACC.rounding, amount: -sign * t.rounding });
   return fromSigned(e);
