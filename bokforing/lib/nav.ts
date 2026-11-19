@@ -60,6 +60,7 @@ export function buildNav(o: {
       { path: '/rapporter/huvudbok', label: 'Huvudbok' },
       { path: '/rapporter/dimensioner', label: 'Resultat per dimension' },
       { path: '/rapporter/export', label: 'Export (SIE)' },
+      { path: '/rapporter/utskick', label: 'Schemalagda rapporter', perm: 'ledger', hint: 'Resultat och balans som Excel varje månad' },
     ]) },
     { id: 'bok', label: t('Bokföring'), icon: 'ledger', items: items([
       { path: '/verifikationer', label: 'Verifikationer', perm: 'ledger' },

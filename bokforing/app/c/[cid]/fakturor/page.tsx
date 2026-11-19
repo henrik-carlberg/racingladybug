@@ -32,7 +32,7 @@ export default async function Invoices({ params, searchParams }: { params: Promi
   const [{ none }] = await sql<{ none: boolean }[]>`SELECT NOT EXISTS (SELECT 1 FROM invoices WHERE company_id = ${company.id}) AS none`;
   return (
     <>
-      <Header title={L('Kundfakturor')}><Link className="btn" href={`${b}/fakturor/ny`}>{L("Ny faktura")}</Link></Header>
+      <Header title={L('Kundfakturor')}><a className="btn secondary" href={`${b}/rapporter/xlsx?r=kundfakturor`} download>Excel</a><Link className="btn" href={`${b}/fakturor/ny`}>{L("Ny faktura")}</Link></Header>
       <Flash searchParams={searchParams} />
       <div className="actions">
         {[['', 'Alla'], ['draft', 'Utkast'], ['booked', 'Obetalda'], ['paid', 'Betalda'], ['credited', 'Krediterade']].map(([s, l]) => (

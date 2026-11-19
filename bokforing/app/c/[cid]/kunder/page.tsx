@@ -28,7 +28,7 @@ export default async function Customers({ params, searchParams }: { params: Prom
   const behaviors = await customerBehaviors(company.id);
   return (
     <>
-      <h1>{L("Kunder")}</h1>
+      <div className="header"><h1>{L("Kunder")}</h1><a className="btn secondary" href={`/c/${company.id}/rapporter/xlsx?r=kunder`} download>Excel</a></div>
       <form className="row" style={{ alignItems: 'end', maxWidth: 520 }}><label>{L("Sök kund")}<input name="q" defaultValue={q} placeholder="Namn, org.nr eller e-post" /></label><div style={{ flex: '0 0 auto' }}><button className="secondary">{L("Sök")}</button></div></form>
       <Flash searchParams={searchParams} />
       <div className="table-wrap">

@@ -258,6 +258,38 @@ async function accept(browser, link, name, password) {
   assert((await text(owner)).includes(firstInv), 'fakturan är betald');
   log('autogiro: medgivande, medgivandefil, dragningsfil i Bankgirots format och återrapport som bokför betalningen');
 
+  // ================= Del 4: jämförelser, Excel och schemalagda rapporter =================
+  await owner.goto(B + '/rapporter?jmf=fjol');
+  t = await text(owner);
+  assert(t.includes('Förra året') && t.includes('Skillnad') && t.includes('Beräknat resultat'), 'jämförelse mot förra året: ' + t.slice(0, 600));
+  await owner.goto(B + '/rapporter?jmf=budget');
+  assert((await text(owner)).includes('Budget'), 'jämförelse mot budget');
+  for (const [r, name] of [['rrbr&jmf=fjol', 'resultat-balans'], ['kundfakturor', 'kundfakturor'], ['verifikationer', 'verifikationer'], ['leverantorsfakturor', 'leverantorsfakturor'], ['kunder', 'kunder']]) {
+    const x = await owner.request.get(`${B}/rapporter/xlsx?r=${r}`);
+    const body = await x.body();
+    assert(x.status() === 200 && x.headers()['content-type'].includes('spreadsheetml') && body.slice(0, 2).toString() === 'PK' && x.headers()['content-disposition'].includes(name), `Excel ${r}: ${x.status()}`);
+  }
+  assert((await owner.request.get(`${B}/rapporter/xlsx?r=hemligt`)).status() === 400, 'okänd rapport nekas');
+  log('resultaträkning jämförs med förra året och budget, Excel-export av rapporter och listor');
+
+  await owner.goto(B + '/rapporter/utskick');
+  await owner.fill('input[name=recipients]', 'styrelsen@example.com, inte-en-adress');
+  await owner.click('button:has-text("Spara utskick")');
+  await owner.waitForURL(/error=/);
+  assert(decodeURIComponent(owner.url()).includes('Ogiltig e-postadress'), 'ogiltig mottagare nekas');
+  const day = Math.min(new Date().getUTCDate(), 28);
+  await owner.goto(B + '/rapporter/utskick');
+  await owner.fill('input[name=recipients]', 'styrelsen@example.com, banken@example.com');
+  await owner.fill('input[name=day]', String(day));
+  await owner.click('button:has-text("Spara utskick")');
+  await owner.locator('td:has-text("styrelsen@example.com, banken@example.com")').waitFor();
+  const cron = await owner.request.get(`${BASE}/api/cron/daily`, { headers: { authorization: 'Bearer testcron' } });
+  const cj = await cron.json();
+  const out = cj.rapportutskick ?? cj.result?.rapportutskick ?? cj.out?.rapportutskick ?? JSON.stringify(cj).match(/"rapportutskick":\{[^}]*\}/)?.[0];
+  assert(cron.status() === 200 && JSON.stringify(out).includes('"due"'), 'daglig körning hittar utskick: ' + JSON.stringify(cj).slice(0, 400));
+  if (day === new Date().getUTCDate()) assert(/"due":\s*[1-9]/.test(JSON.stringify(out)), 'utskicket är aktuellt i dag: ' + JSON.stringify(out));
+  log('schemalagd månadsrapport: mottagare kontrolleras, utskicket hittas av den dagliga körningen');
+
   await browser.close();
   console.log('Omgång 6: alla steg gick igenom');
 })().catch((e) => { console.error('✘', e.message, (e.stack || '').split('\n').find((l) => l.includes('omgang6.cjs'))); process.exit(1); });

@@ -128,3 +128,50 @@ describe('e-postmallar och betalningsprognos', () => {
     expect(behavior([{ due: '2026-01-31', paid: '2026-02-14' }])).toBeNull();
   });
 });
+
+import { inflateRawSync } from 'node:zlib';
+import { crc32, zip } from '@/lib/zip';
+import { workbook } from '@/lib/xlsx';
+import { budgetAsLedger, incomeStatement, minusYear, pctChange } from '@/lib/statements';
+/** Läser tillbaka en zip (lokala poster) */
+function unzip(b: Buffer) {
+  const out: Record<string, string> = {};
+  let p = 0;
+  while (b.readUInt32LE(p) === 0x04034b50) {
+    const csize = b.readUInt32LE(p + 18), nlen = b.readUInt16LE(p + 26), elen = b.readUInt16LE(p + 28), crc = b.readUInt32LE(p + 14);
+    const name = b.subarray(p + 30, p + 30 + nlen).toString();
+    const data = inflateRawSync(b.subarray(p + 30 + nlen + elen, p + 30 + nlen + elen + csize));
+    expect(crc32(data)).toBe(crc);
+    out[name] = data.toString();
+    p += 30 + nlen + elen + csize;
+  }
+  expect(b.readUInt32LE(p)).toBe(0x02014b50);
+  return out;
+}
+describe('Excel och jämförelser', () => {
+  it('zip med rätt CRC och innehåll', () => {
+    expect(crc32(Buffer.from('123456789'))).toBe(0xcbf43926);
+    expect(unzip(zip([{ name: 'a.txt', data: 'hej' }, { name: 'b/c.xml', data: '<x/>' }]))).toEqual({ 'a.txt': 'hej', 'b/c.xml': '<x/>' });
+  });
+  it('arbetsbok med tal, text och fet rubrik', () => {
+    const f = unzip(workbook([{ name: 'Resultat: år/2026', header: true, rows: [['Konto', 'Belopp'], [{ v: 3001, fmt: 'int' }, { v: 1234.5, fmt: 'kr' }], ['A & B <c>', -7]] }]));
+    expect(Object.keys(f)).toContain('xl/worksheets/sheet1.xml');
+    expect(f['xl/workbook.xml']).toContain('name="Resultat  år 2026"');
+    const sh = f['xl/worksheets/sheet1.xml'];
+    expect(sh).toContain('<c r="A1" t="inlineStr" s="1">');
+    expect(sh).toContain('<c r="B2" s="2"><v>1234.5</v></c>');
+    expect(sh).toContain('A &amp; B &lt;c&gt;');
+    expect(sh).toContain('<c r="B3" s="2"><v>-7</v></c>');
+  });
+  it('resultaträkning mot förra året och budget', () => {
+    const names = new Map([[3001, 'Försäljning'], [5010, 'Hyra']]);
+    const r = incomeStatement(new Map([[3001, -1000000], [5010, 300000]]), new Map([[3001, -800000], [5010, 300000]]), names);
+    expect(r.result).toBe(700000);
+    expect(r.compareResult).toBe(500000);
+    expect(r.groups[0]).toMatchObject({ label: 'Nettoomsättning', total: 1000000, compareTotal: 800000 });
+    expect([...budgetAsLedger(new Map([[3001, 900000], [5010, 250000]]))]).toEqual([[3001, -900000], [5010, 250000]]);
+    expect(minusYear('2028-02-29')).toBe('2027-02-28');
+    expect(pctChange(1000000, 800000)).toBe(25);
+    expect(pctChange(5, null)).toBeNull();
+  });
+});
