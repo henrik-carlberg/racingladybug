@@ -6,6 +6,7 @@ import { apEnabled, apLookup, apMapStatus, apSend, apStatus, isParticipant } fro
 import type { Actor } from './actor';
 import { peppolCheck, peppolFile } from './einvoice';
 import { addDocument } from './inbox';
+import { requireVerified } from './identity';
 
 /** Svenska organisationer adresseras med schema 0007 och organisationsnumret */
 export const participantFor = (orgnr: string) => `0007:${orgnr.replace(/\D/g, '')}`;
@@ -28,6 +29,8 @@ export async function lookupCustomer(actor: Actor, customerId: number) {
 
 export async function sendInvoice(actor: Actor, invoiceId: number) {
   if (!apEnabled()) throw notEnabled();
+  // Avsändar-ID:t är bolagets organisationsnummer – bara ett verifierat bolag får skicka i dess namn
+  await requireVerified(actor.companyId, 'E-faktura via Peppol');
   const [prev] = await sql<{ status: string }[]>`SELECT status FROM peppol_messages WHERE invoice_id = ${invoiceId} AND company_id = ${actor.companyId} AND direction = 'out' AND status <> 'failed' LIMIT 1`;
   if (prev) throw new ConflictError('Fakturan är redan skickad via Peppol');
   const f = await peppolFile(actor.companyId, invoiceId);
@@ -69,7 +72,9 @@ export async function handleApEvent(e: ApEvent): Promise<number[]> {
   if (e.type !== 'document.received' || !e.receiver || !e.document) return [];
   const m = /^0007:(\d{10})$/.exec(e.receiver);
   if (!m) return [];
-  const companies = await sql<{ id: number }[]>`SELECT id FROM companies WHERE regexp_replace(orgnr, '\\D', '', 'g') = ${m[1]}`;
+  // Endast det verifierade bolaget med organisationsnumret tar emot (högst ett, unikt index) – aldrig alla med samma nummer
+  const companies = await sql<{ id: number }[]>`SELECT id FROM companies WHERE identity_verified_at IS NOT NULL AND NOT is_demo AND regexp_replace(orgnr, '\\D', '', 'g') = ${m[1]} LIMIT 1`;
+  if (!companies.length) console.warn('peppol: ingen verifierad mottagare för', e.receiver);
   const xml = Buffer.from(e.document, 'base64');
   const ids: number[] = [];
   for (const c of companies) {

@@ -4,6 +4,7 @@ import { EmptyState, Flash, type SP } from '@/components/ui';
 import { apEnabled } from '@/lib/server/peppol-ap';
 import { listMessages, participantFor } from '@/lib/services/peppol';
 import { refreshPeppol } from './actions';
+import { isVerified } from '@/lib/services/identity';
 
 export const dynamic = 'force-dynamic';
 const ST: Record<string, [string, string]> = { sent: ['Skickad', 'warn'], delivered: ['Levererad', 'ok'], failed: ['Misslyckad', 'danger'], received: ['Mottagen', 'ok'] };
@@ -13,12 +14,14 @@ export default async function Peppol({ params, searchParams }: { params: Promise
   const { company } = await requireCompany(cid, { perm: 'invoicing' });
   const b = `/c/${company.id}`;
   const list = await listMessages(company.id);
-  const on = apEnabled();
+  const verified = await isVerified(company.id);
+  const on = apEnabled() && verified;
   return (
     <div style={{ maxWidth: 980 }}>
       <h1>E-faktura via Peppol</h1>
       <Flash searchParams={searchParams} />
       <p className="muted">{on ? <>Bolaget tar emot e-fakturor på Peppol-ID <code>{participantFor(company.orgnr)}</code>. Mottagna fakturor hamnar i <Link href={`${b}/leverantorsfakturor/inkorg`}>inkorgen</Link> färdiga att registrera. Skicka från en bokförd faktura.</>
+        : apEnabled() ? 'E-faktura via Peppol kräver att bolagets organisationsnummer är verifierat (att du företräder bolaget). Kontakta supporten. Till dess kan du ladda ner e-fakturan som XML och skicka den via din operatör.'
         : 'Ingen Peppol-åtkomstpunkt är uppsatt. Ladda ner e-fakturan som XML från fakturan och skicka den via din operatör.'}</p>
       {on && <form action={refreshPeppol.bind(null, company.id, `${b}/peppol`)} className="actions"><button className="secondary">Hämta leveransstatus</button></form>}
       {list.length === 0 ? <EmptyState icon="invoice" title="Inga e-fakturor än">Skickade och mottagna e-fakturor visas här med leveransstatus.</EmptyState> : (

@@ -1,12 +1,15 @@
 'use server';
 import { redirect } from 'next/navigation';
-import { requireUser } from '@/lib/server/auth';
+import { requireCompany, requireUser } from '@/lib/server/auth';
 import { parseAmount } from '@/lib/money';
 import { saveGroupLink } from '@/lib/services/consolidation';
 import { AppError } from '@/lib/errors';
 
 export async function saveLink(back: string, parentId: number, subId: number, fd: FormData) {
   const user = await requireUser();
+  // Bokföringsbehörighet i båda bolagen (begränsade användare och revisorer stoppas)
+  await requireCompany(parentId, { perm: 'ledger' });
+  await requireCompany(subId, { perm: 'ledger' });
   const safe = back.startsWith('/koncern') ? back : '/koncern';
   const money = (k: string) => { const v = String(fd.get(k) ?? '').trim(); return v ? parseAmount(v) : null; };
   let msg = 'ok=' + encodeURIComponent('Koncernuppgifterna är sparade');

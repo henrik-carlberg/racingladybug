@@ -6,7 +6,8 @@ import { requireUser } from '@/lib/server/auth';
 import { isOpsAdmin, CRON_EXPECTED_HOURS } from '@/lib/server/monitor';
 import { Flash, type SP } from '@/components/ui';
 import { kr } from '@/lib/format';
-import { resolveError } from './actions';
+import { resolveError, verifyCompany } from './actions';
+import { findCompanies } from '@/lib/services/identity';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,11 +31,22 @@ export default async function Ops({ searchParams }: { searchParams: SP }) {
     sql<{ key: string; count: number }[]>`SELECT split_part(key, ':', 1) AS key, SUM(count)::int AS count FROM rate_limits WHERE window_start > now() - interval '1 hour' GROUP BY 1 ORDER BY 2 DESC LIMIT 10`,
   ]);
   const jobs = await jobStats();
+  const q = String((await searchParams).bolag ?? '').slice(0, 40);
+  const found = q ? await findCompanies(q) : [];
   const [integ] = await sql<{ n: number }[]>`SELECT count(*)::int AS n FROM (SELECT DISTINCT ON (company_id) errors FROM integrity_runs ORDER BY company_id, run_at DESC) x WHERE errors > 0`;
   return (
     <div className="center" style={{ maxWidth: 1100 }}>
       <div className="header"><h1>Drift</h1><Link className="btn secondary" href="/drift/installningar">Integrationer</Link></div>
       <Flash searchParams={searchParams} />
+      <section id="bolag" className="card stack">
+        <b>Verifiera bolag (Peppol och direktinlämning)</b>
+        <p className="small muted" style={{ margin: 0 }}>Kontrollera att ägaren företräder bolaget (firmatecknare hos Bolagsverket, BankID eller fullmakt) innan du verifierar. Endast ett bolag per organisationsnummer kan vara verifierat.</p>
+        <form className="row" style={{ alignItems: 'end' }}><label style={{ flex: '0 0 260px' }}>Organisationsnummer eller namn<input name="bolag" defaultValue={q} /></label><div style={{ flex: '0 0 auto' }}><button className="secondary">Sök</button></div></form>
+        {found.length > 0 && <table><tbody>{found.map((c) => (
+          <tr key={c.id}><td>{c.name}</td><td>{c.orgnr}</td><td className="small">{c.owner} · skapat {c.created}</td><td>{c.verified ? <span className="badge ok">Verifierat {c.verified}</span> : <span className="badge">Ej verifierat</span>}</td>
+            <td><form action={verifyCompany.bind(null, c.id, !c.verified, q)}><button className={c.verified ? 'link' : 'secondary'}>{c.verified ? 'Ta bort verifiering' : 'Verifiera'}</button></form></td></tr>
+        ))}</tbody></table>}
+      </section>
       <div className="grid">
         {[['Bolag', stats.companies], ['Användare', stats.users], ['Betalande abonnemang', stats.active], ['Verifikationer senaste 7 dagarna', stats.vouchers]].map(([l, v]) => (
           <div key={String(l)} className="card stat"><div className="label">{l}</div><div className="value">{v}</div></div>

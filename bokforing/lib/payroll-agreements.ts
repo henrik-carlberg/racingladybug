@@ -97,6 +97,7 @@ ${o.rows.map((r) => `  <Handelse typ="${r.event}" plan="${r.plan.toUpperCase()}"
 
 /** Månadsrapport till Fora (avtalspension SAF-LO): lönesumma per anställd i hela kronor */
 export function foraCsv(o: { orgnr: string; period: string; rows: { pnr: string; name: string; salary: number }[] }) {
-  const q = (s: string) => `"${s.replace(/"/g, '""')}"`;
+  // Text som börjar med = + - @ (eller tab/CR) tolkas som formel i Excel – inleds med apostrof
+  const q = (s: string) => `"${(/^[=+\-@\t\r]/.test(s) ? `'${s}` : s).replace(/"/g, '""')}"`;
   return ['Organisationsnummer;Period;Personnummer;Namn;Lönesumma', ...o.rows.map((r) => [o.orgnr.replace(/\D/g, ''), o.period.replace('-', ''), r.pnr, q(r.name), Math.round(r.salary / 100)].join(';'))].join('\r\n') + '\r\n';
 }

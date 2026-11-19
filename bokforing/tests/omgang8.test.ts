@@ -155,3 +155,9 @@ describe('Engelska', () => {
     for (const [k, v] of Object.entries(PAGES_EN)) { expect(v.trim()).not.toBe(''); expect(k).toBe(k.trim()); }
   });
 });
+
+describe('Fora-rapport', () => {
+  it('neutraliserar formler i namn', () => {
+    expect(foraCsv({ orgnr: '556026-9986', period: '2026-11', rows: [{ pnr: '199001011234', name: '=HYPERLINK("x")', salary: 100 }] })).toContain(`"'=HYPERLINK(""x"")"`);
+  });
+});

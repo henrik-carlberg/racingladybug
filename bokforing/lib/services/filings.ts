@@ -7,6 +7,7 @@ import { buildEskd } from '@/lib/eskd';
 import { authorityEnabled, authorityFor, authorityStatus, submitToAuthority, type FilingKind } from '@/lib/server/authorities';
 import type { Actor } from './actor';
 import { markDeadline } from './deadlines';
+import { requireVerified } from './identity';
 import { getVatReport } from './reports';
 
 export const KIND_LABEL: Record<FilingKind, string> = { moms: 'Momsdeklaration', agi: 'Arbetsgivardeklaration', arsredovisning: 'Årsredovisning' };
@@ -66,6 +67,8 @@ export async function submitFiling(actor: Actor, id: number) {
   const f = await get(actor.companyId, id);
   if (!['prepared', 'rejected'].includes(f.status)) throw new ConflictError('Den är redan inlämnad');
   if (!authorityEnabled(authorityFor(f.kind))) throw new ValidationError('Direktinlämning är inte uppsatt – ladda ner filen och lämna den i myndighetens e-tjänst');
+  // Tjänstens avtal med myndigheten används – bara för bolag där vi har kontrollerat att användaren företräder bolaget
+  await requireVerified(actor.companyId, 'Direktinlämning');
   const [c] = await sql<{ orgnr: string }[]>`SELECT orgnr FROM companies WHERE id = ${actor.companyId}`;
   const s = await submitToAuthority(f.kind, { orgnr: c.orgnr, period: f.period, filename: f.filename, content: f.payload, contentType: f.kind === 'arsredovisning' ? 'application/xhtml+xml' : f.kind === 'moms' ? 'application/xml; charset=iso-8859-1' : 'application/xml' });
   await sql`UPDATE filings SET method = 'api', submitted_at = now() WHERE id = ${id}`;

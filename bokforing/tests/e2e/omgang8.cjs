@@ -116,6 +116,16 @@ const ppServer = http.createServer((req, res) => {
   assert(eskdText.includes(`<Period>${qTo.slice(0, 4)}${qTo.slice(5, 7)}</Period>`) && eskdText.includes('<OrgNr>16556026-9986</OrgNr>') && eskdText.includes('<MomsBetala>'), 'eSKD-innehåll: ' + eskdText.slice(0, 400));
   log('momsdeklaration förbereds som eSKD-fil från momsrapporten');
 
+  // Direktinlämning och Peppol kräver verifierat organisationsnummer (vem som helst kan annars skapa ett bolag med någon annans)
+  t = await text(owner);
+  assert(t.includes('kräver att bolagets organisationsnummer är verifierat') && !(await owner.locator('button:has-text("Lämna in direkt")').count()), 'overifierat bolag kan inte lämna in direkt: ' + t.slice(0, 600));
+  await owner.goto(BASE + '/drift?bolag=556026-9986');
+  await owner.click('#bolag tr:has-text("Testbolaget AB") button:has-text("Verifiera")');
+  await owner.waitForURL(/ok=/);
+  assert((await text(owner)).includes('Verifierat'), 'bolaget verifierat på driftsidan');
+  await owner.goto(B + '/inlamning');
+  log('direktinlämning och Peppol kräver att driften har verifierat bolagets organisationsnummer');
+
   await owner.click('section.filing:has-text("Momsdeklaration") button:has-text("Lämna in direkt")');
   await owner.locator('section.filing:has-text("Momsdeklaration") .badge:has-text("väntar på besked")').waitFor();
   t = await flash(owner);
