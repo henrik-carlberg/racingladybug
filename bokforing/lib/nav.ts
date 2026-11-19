@@ -71,6 +71,7 @@ export function buildNav(o: {
       { path: '/verifikationer', label: 'Verifikationer', perm: 'ledger' },
       { path: '/verifikationer/ny', label: 'Ny verifikation', perm: 'ledger' },
       { path: '/bokslut', label: 'Bokslut & deklaration', perm: 'ledger' },
+      { path: '/revision', label: 'Revision', perm: 'ledger', hint: 'Revisorns stickprov och anmärkningar' },
       { path: '/anlaggningar', label: 'Anläggningsregister' },
       { path: '/periodiseringar', label: 'Periodiseringar' },
       { path: '/konton', label: 'Kontoplan' },

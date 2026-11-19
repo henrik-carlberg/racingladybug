@@ -126,3 +126,26 @@ describe('Rapportbyggare', () => {
     expect(k.equityRatio).toBe(55); expect(k.quickRatio).toBe(111.1); expect(k.dso).toBe(37);
   });
 });
+
+import { drawSample, seeded, summary } from '@/lib/audit-work';
+describe('Revisorns stickprov', () => {
+  const vs = Array.from({ length: 50 }, (_, i) => ({ id: i + 1, date: `2026-03-${String((i % 28) + 1).padStart(2, '0')}`, amount: (i + 1) * 10000 + (i === 9 ? 0 : 1), user_id: i % 3 === 0 ? 7 : 8, source_type: i % 5 === 0 ? 'manual' : 'invoice', accounts: [1930, i % 2 ? 3001 : 5010] }));
+  it('över väsentlighet, konton, användare, manuella', () => {
+    expect(drawSample(vs, { method: 'amount', threshold: 450000 }).map((x) => x.id)).toEqual([50, 49, 48, 47, 46, 45]);
+    expect(drawSample(vs, { method: 'account', from: 5010, to: 5010, count: 3 }).map((x) => x.id)).toEqual([1, 3, 5]);
+    expect(drawSample(vs, { method: 'user', userId: 7 }).length).toBe(17);
+    expect(drawSample(vs, { method: 'manual' }).length).toBe(10);
+    expect(drawSample(vs, { method: 'round' }).map((x) => x.id)).toEqual([10]);
+    expect(drawSample(vs, { method: 'weekend' }).every((x) => [0, 6].includes(new Date(vs[x.id - 1].date).getUTCDay()))).toBe(true);
+  });
+  it('slumpmässigt urval är reproducerbart', () => {
+    const a = drawSample(vs, { method: 'random', count: 5, seed: 42 }).map((x) => x.id), b = drawSample(vs, { method: 'random', count: 5, seed: 42 }).map((x) => x.id);
+    expect(a).toEqual(b); expect(new Set(a).size).toBe(5);
+    expect(drawSample(vs, { method: 'random', count: 5, seed: 43 }).map((x) => x.id)).not.toEqual(a);
+    const r = seeded(1); expect(r()).toBeGreaterThanOrEqual(0); expect(r()).toBeLessThan(1);
+  });
+  it('sammanställning', () => {
+    expect(summary([{ status: 'ok' }, { status: 'remark' }], [{ status: 'ok' }])).toMatchObject({ samples: { total: 2, ok: 1, remark: 1, pending: 0 }, done: true });
+    expect(summary([{ status: 'pending' }], []).done).toBe(false);
+  });
+});

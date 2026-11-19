@@ -274,6 +274,83 @@ const ebServer = http.createServer((req, res) => {
   assert(t.includes('Testbolaget AB') && t.includes('Firma Test') && t.includes('Soliditet'), 'jämförelse mellan bolag: ' + t.slice(0, 600));
   log('nyckeltal per roll (vd, ekonomi, styrelse) med jämförelse mot i fjol, delning och jämförelse mellan bolag');
 
+  // ================= Del 5: revisorns arbetsyta =================
+  await owner.goto(B + '/revision');
+  t = await text(owner);
+  assert(t.includes('Ingen granskning än') && !(await owner.locator('button:has-text("Starta granskning")').count()), 'ägaren kan inte starta granskningen: ' + t.slice(0, 400));
+  const rev = await login(browser, 'revisor.omg4@example.com', 'granskarlosen1');
+  await rev.goto(B + '/revision');
+  await rev.selectOption('select[name=fy]', { label: '2026-01-01 – 2026-12-31' });
+  await rev.click('button:has-text("Starta granskning")');
+  await rev.waitForURL(/revision\/\d+/);
+  const revUrl = rev.url().split('?')[0];
+  t = await text(rev);
+  assert(t.includes('Kassa och bank') && t.includes('Kundfordringar') && t.includes('Löner och personalkostnader') && t.includes('Saldo på balansdagen'), 'kontrollpunkter per balanspost: ' + t.slice(0, 800));
+  await rev.fill('input[name=materiality]', '10000');
+  await rev.click('form:has(input[name=materiality]) button');
+  await rev.waitForURL(/ok=/);
+  const addSample = async (method, count) => {
+    await rev.goto(revUrl);
+    await rev.selectOption('form.new-sample select[name=method]', method);
+    await rev.fill('form.new-sample input[name=count]', String(count));
+    await rev.click('button:has-text("Lägg till i stickprovet")');
+    await rev.waitForURL((u) => decodeURIComponent(u.href.replace(/\+/g, ' ')).includes('lades till'));
+    return Number(/(\d+) verifikationer lades till/.exec(decodeURIComponent(rev.url().replace(/\+/g, ' ')))[1]);
+  };
+  const nAmount = await addSample('amount', 5);
+  const nRandom = await addSample('random', 3);
+  assert(nAmount >= 1 && nRandom >= 1, `stickprov: ${nAmount} över väsentlighet, ${nRandom} slumpmässigt`);
+  assert(await addSample('random', 3) === 0, 'samma slumpmässiga urval igen ger inga dubbletter');
+  t = await text(rev);
+  assert(/Belopp [\d\s]+ kr ≥ 10\s000 kr/.test(t.replace(/\s/g, ' ')) && t.includes('Slumpmässigt urval'), 'urvalens orsaker: ' + t.slice(0, 1500));
+  log('revisorn startar granskningen, sätter väsentlighet och tar stickprov över väsentlighet och slumpmässigt (reproducerbart)');
+
+  const rows = rev.locator('table.samples tbody tr');
+  const firstId = await rows.first().getAttribute('id');
+  const firstLink = await rows.first().locator('a').first().getAttribute('href');
+  await rows.first().locator('input[value=remark]').check();
+  await rows.first().locator('input[name=comment]').fill('Underlag saknas för kostnaden');
+  await rows.first().locator('button:has-text("Spara")').click();
+  await rev.locator(`#${firstId} .badge:has-text("Anmärkning")`).waitFor();
+  await rev.locator('table.samples tbody tr').nth(1).locator('input[value=ok]').check();
+  await rev.locator('table.samples tbody tr').nth(1).locator('button:has-text("Spara")').click();
+  await rev.locator('table.samples tbody tr').nth(1).locator('.badge:has-text("Utan anmärkning")').waitFor();
+  const cp = (k) => rev.locator(`#k-${k}`);
+  await cp('bank').locator('input[value=ok]').check(); await cp('bank').locator('button:has-text("Spara")').click();
+  await rev.locator('#k-bank .badge:has-text("Utan anmärkning")').waitFor();
+  await cp('kundfordringar').locator('input[value=remark]').check(); await cp('kundfordringar').locator('input[name=comment]').fill('Fordran på Kunden AB är äldre än ett år – bedöm som osäker');
+  await cp('kundfordringar').locator('button:has-text("Spara")').click();
+  await rev.locator('#k-kundfordringar .badge:has-text("Anmärkning")').waitFor();
+  log('stickprov och kontrollpunkter granskas med status och kommentar');
+
+  await rev.click('button:has-text("Skicka anmärkningar till bolaget")');
+  await rev.waitForURL((u) => decodeURIComponent(u.href.replace(/\+/g, ' ')).includes('2 anmärkningar är skickade'));
+  await rev.fill('textarea[name=conclusion]', 'Inga väsentliga fel.');
+  await rev.click('button:has-text("Avsluta granskningen")');
+  await rev.waitForURL(/error=/);
+  assert(decodeURIComponent(rev.url().replace(/\+/g, ' ')).includes('Granska alla stickprov'), 'kan inte avslutas med ogranskade punkter');
+  const ex = await rev.request.get(revUrl + '/export');
+  assert(ex.status() === 200 && ex.headers()['content-type'].includes('spreadsheetml'), 'export till Excel');
+  // Revisorn kan fortfarande inte ändra bokföringen
+  await rev.goto(B + '/kunder');
+  await rev.fill('input[name=name]', 'Revisorns kund');
+  await rev.click('button:has-text("Spara kund")');
+  await rev.waitForURL(/error=/);
+  assert(decodeURIComponent(rev.url().replace(/\+/g, ' ')).includes('läsbehörighet'), 'revisorn kan inte ändra bokföringen');
+  log('anmärkningar skickas till bolaget; granskningen kan inte avslutas förrän allt är granskat; export till Excel; revisorn ändrar inte bokföringen');
+
+  await owner.goto(revUrl);
+  t = await text(owner);
+  assert(t.includes('Anmärkningar från revisorn') && t.includes('Underlag saknas för kostnaden') && t.includes('äldre än ett år') && !(await owner.locator('form.review').count()), 'bolaget ser anmärkningarna men kan inte granska: ' + t.slice(0, 1000));
+  await owner.goto(BASE + firstLink);
+  assert((await text(owner)).includes('Revisionsanmärkning: Underlag saknas för kostnaden'), 'anmärkningen syns som kommentar på verifikationen');
+  const eid = revUrl.split('/').pop();
+  const own = await owner.request.post(`${B}/revision/granska`, { form: { op: 'send', eid }, headers: { origin: BASE }, maxRedirects: 0 });
+  assert(own.status() === 303 && decodeURIComponent(own.headers().location).includes('Bara revisorn'), 'ägaren kan inte granska: ' + own.status() + ' ' + own.headers().location);
+  const forged = await rev.request.post(`${B}/revision/granska`, { form: { op: 'send', eid }, headers: { origin: 'https://evil.example' }, maxRedirects: 0 });
+  assert(forged.status() === 403, 'formulär från annan webbplats avvisas: ' + forged.status());
+  log('bolaget ser anmärkningarna på granskningen och som kommentar på verifikationen; bara revisorn granskar; förfalskade formulär avvisas');
+
   //@@NEXT@@
   await browser.close();
   bvServer.close(); ebServer.close();

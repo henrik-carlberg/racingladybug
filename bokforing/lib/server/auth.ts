@@ -104,7 +104,7 @@ async function denyAction(companyId: number, msg: string): Promise<never> {
  * - employee: sidan är öppen även för anställda (självservice); annars skickas de till Min sida
  * - allowLocked: sidan fungerar även när abonnemanget har gått ut (abonnemang, export)
  */
-export async function requireCompany(companyId: number | string, opts: { owner?: boolean; employee?: boolean; allowLocked?: boolean; perm?: Permission } = {}): Promise<Ctx> {
+export async function requireCompany(companyId: number | string, opts: { owner?: boolean; employee?: boolean; allowLocked?: boolean; perm?: Permission; auditWork?: boolean } = {}): Promise<Ctx> {
   const user = await requireUser();
   const id = Number(companyId);
   if (!Number.isInteger(id)) notFound();
@@ -131,7 +131,8 @@ export async function requireCompany(companyId: number | string, opts: { owner?:
     }
   }
   // Revisorn får läsa allt men inte ändra något: alla serveråtgärder (formulär, knappar) nekas
-  if (role === 'auditor' && (await isMutation())) await denyAction(id, 'Revisorn har läsbehörighet och kan inte ändra i bokföringen');
+  // Undantag: revisorns egen granskning (stickprov, kontrollpunkter) som inte ändrar bokföringen
+  if (role === 'auditor' && !opts.auditWork && (await isMutation())) await denyAction(id, 'Revisorn har läsbehörighet och kan inte ändra i bokföringen');
 
   const billing = await companyAccess(id);
   if (billing.state === 'locked' && !opts.allowLocked) redirect(`/c/${id}/abonnemang`);
