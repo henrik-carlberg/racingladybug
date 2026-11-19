@@ -4,6 +4,16 @@ import { usePathname, useRouter } from 'next/navigation';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from './Icon';
 import type { NavItem, NavSection } from '@/lib/nav';
+import { FREQUENT, rankByUsage } from '@/lib/usage';
+
+/** Berättar för servern vilken sida som öppnades, så att appen lär sig vad användaren gör oftast */
+export function UsageTracker() {
+  const path = usePathname();
+  useEffect(() => {
+    try { navigator.sendBeacon?.('/api/usage', JSON.stringify({ path })); } catch { /* ingen beacon */ }
+  }, [path]);
+  return null;
+}
 
 /** Knapp som inte är ett <button> (så att sidornas knappar inte förväxlas med menyns) men fungerar med tangentbord */
 const press = (fn: () => void) => ({ role: 'button', tabIndex: 0, onClick: fn, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } } });
@@ -54,7 +64,7 @@ export function SideNav({ top, sections, badge, extra }: { top: NavItem[]; secti
 }
 
 /** Sök och gå till (Ctrl+K eller /): alla sidor och snabbval, sök på namn eller beskrivning */
-export function CommandPalette({ items, create, placeholder, createLabel }: { items: NavItem[]; create: NavItem[]; placeholder: string; createLabel: string }) {
+export function CommandPalette({ items, create, placeholder, createLabel, scores = {}, frequentLabel = 'Ofta' }: { items: NavItem[]; create: NavItem[]; placeholder: string; createLabel: string; scores?: Record<string, number>; frequentLabel?: string }) {
   const [show, setShow] = useState(false);
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(0);
@@ -75,13 +85,15 @@ export function CommandPalette({ items, create, placeholder, createLabel }: { it
     const all = [...create.map((x) => ({ ...x, kind: 'create' as const })), ...items.map((x) => ({ ...x, kind: 'page' as const }))];
     const words = norm(q).split(/\s+/).filter(Boolean);
     const seen = new Set<string>();
-    return all.filter((x) => {
+    const hits = all.filter((x) => {
       if (seen.has(x.href + x.label)) return false;
       seen.add(x.href + x.label);
       const hay = norm(`${x.label} ${x.hint ?? ''}`);
       return words.every((w) => hay.includes(w));
-    }).slice(0, 12);
-  }, [q, items, create]);
+    });
+    // Det användaren gör oftast kommer först
+    return rankByUsage(hits, (x) => scores[x.href] ?? 0).slice(0, 12);
+  }, [q, items, create, scores]);
   const go = (x: NavItem | undefined) => { if (!x) return; setShow(false); router.push(x.href); };
   return (
     <>
@@ -104,6 +116,7 @@ export function CommandPalette({ items, create, placeholder, createLabel }: { it
                 <li key={x.href + x.label} role="option" aria-selected={i === sel} className={i === sel ? 'sel' : ''} onMouseEnter={() => setSel(i)} onClick={() => go(x)}>
                   <Icon name={x.kind === 'create' ? 'plus' : 'arrow'} />
                   <span><b>{x.label}</b>{x.hint && <span className="muted"> – {x.hint}</span>}</span>
+                  {(scores[x.href] ?? 0) >= FREQUENT && <span className="tag freq">{frequentLabel}</span>}
                   {x.kind === 'create' && <span className="tag">{createLabel}</span>}
                 </li>
               ))}
@@ -117,7 +130,10 @@ export function CommandPalette({ items, create, placeholder, createLabel }: { it
 }
 
 /** Knappen "Skapa" med de vanligaste sakerna man lägger upp */
-export function CreateMenu({ items, label }: { items: NavItem[]; label: string }) {
+export function CreateMenu({ items: raw, label, scores = {}, quickTitle }: { items: NavItem[]; label: string; scores?: Record<string, number>; quickTitle?: string }) {
+  // Mest använda först; den vanligaste får en egen knapp när appen har lärt sig den
+  const items = rankByUsage(raw, (x) => scores[x.href] ?? 0);
+  const quick = quickTitle && (scores[items[0]?.href] ?? 0) >= FREQUENT ? items[0] : null;
   const [show, setShow] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -127,6 +143,7 @@ export function CreateMenu({ items, label }: { items: NavItem[]; label: string }
   }, []);
   return (
     <div className="create-menu" ref={ref}>
+      {quick && <Link href={quick.href} className="create-quick" title={quickTitle}><Icon name="plus" /><span>{quick.label}</span></Link>}
       <div className="create-btn" aria-expanded={show} aria-haspopup="menu" {...press(() => setShow((s) => !s))}><Icon name="plus" /><span>{label}</span></div>
       {show && (
         <div className="menu" role="menu">

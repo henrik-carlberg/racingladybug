@@ -338,6 +338,43 @@ async function accept(browser, link, name, password) {
   assert(await owner.locator('.nav-section.open .nav-head:has-text("Köpa och betala")').count(), 'sektionen för aktiv sida är öppen');
   log('sök och gå till (Ctrl+K), Skapa-menyn och markerad aktiv sida');
 
+  // ================= Appen lär sig vad användaren gör oftast =================
+  const visit = async (path) => { await owner.goto(B + path); await owner.waitForLoadState('networkidle'); await owner.waitForTimeout(250); };
+  await owner.goto(`${BASE}/konto`);
+  if (await owner.locator('button:has-text("Glöm det som appen har lärt sig")').count()) {
+    await owner.click('button:has-text("Glöm det som appen har lärt sig")');
+    await owner.waitForURL(/ok=/);
+  }
+  for (let i = 0; i < 4; i++) { await visit('/bank/avstamning'); await visit(''); if (i < 3) { await visit('/leverantorsfakturor/ny'); await visit(''); } }
+  await visit('/bank/avstamning'); // samma sida två gånger i rad räknas en gång
+  await visit('');
+  t = await text(owner);
+  assert(t.includes('Det du gör oftast') && /Det du gör oftast\s*Bankavstämning/.test(t), 'vanligaste åtgärden: ' + t.slice(0, 600));
+  assert(t.includes('Ofta använda'), 'ofta använda visas');
+  const tilesOrder = await owner.locator('.tiles .tile b').allTextContents();
+  assert(tilesOrder[0] === 'Stäm av banken' && tilesOrder[1] === 'Leverantörsfaktura', 'rutorna sorteras efter användning: ' + tilesOrder.join(', '));
+  assert((await owner.locator('.create-quick').textContent()).includes('Leverantörsfaktura'), 'Skapa-knappen föreslår det man skapar oftast');
+  for (let i = 0; i < 10 && !(await owner.locator('.palette input').count()); i++) { await owner.keyboard.press('Control+k'); await owner.waitForTimeout(300); }
+  const first = await owner.locator('.palette li').first().textContent();
+  assert(first.includes('Bankavstämning') && first.includes('Ofta'), 'sökningen visar det vanligaste först: ' + first);
+  await owner.keyboard.press('Escape');
+  // Bara från appen själv
+  const evil = await owner.request.post(`${BASE}/api/usage`, { headers: { origin: 'https://evil.example', 'content-type': 'text/plain' }, data: JSON.stringify({ path: '/c/1/lon' }) });
+  assert(evil.status() === 403, 'anrop från annan webbplats nekas: ' + evil.status());
+  // Avstängt: inget lärs in och det inlärda tas bort
+  await owner.goto(`${BASE}/konto`);
+  await owner.uncheck('input[name=learn]');
+  await owner.click('form:has(input[name=learn]) button:has-text("Spara")');
+  await owner.waitForURL(/ok=/);
+  await visit('/lon'); await visit('');
+  t = await text(owner);
+  assert(!t.includes('Det du gör oftast') && !t.includes('Ofta använda') && !(await owner.locator('.create-quick').count()), 'avstängd inlärning: ' + t.slice(0, 400));
+  await owner.goto(`${BASE}/konto`);
+  await owner.check('input[name=learn]');
+  await owner.click('form:has(input[name=learn]) button:has-text("Spara")');
+  await owner.waitForURL(/ok=/);
+  log('appen lär sig vanligaste åtgärden: översikten, rutorna, Skapa och sökningen; går att stänga av');
+
   await browser.close();
   console.log('Omgång 4: alla steg gick igenom');
 })().catch((e) => { console.error('✘', e.message); process.exit(1); });

@@ -11,7 +11,7 @@ import { AddPasskey } from '@/components/Passkeys';
 import { changePassword, removePasskey } from '../passkey-actions';
 import { logout } from '../auth-actions';
 import { removeAccount } from '../gdpr-actions';
-import { saveDigest, saveLanguage } from '../digest-actions';
+import { forgetLearning, saveDigest, saveLanguage, saveLearning } from '../digest-actions';
 import { uiLang } from '@/lib/server/lang';
 import { translator } from '@/lib/ui-i18n';
 
@@ -22,7 +22,8 @@ export default async function Account({ searchParams }: { searchParams: SP }) {
   const passkeys = await listPasskeys(user.id);
   const lang = await uiLang();
   const t = translator(lang);
-  const [{ digest, monthly_report }] = await sql<{ digest: string; monthly_report: boolean }[]>`SELECT digest, monthly_report FROM users WHERE id = ${user.id}`;
+  const [{ digest, monthly_report, learn_usage }] = await sql<{ digest: string; monthly_report: boolean; learn_usage: boolean }[]>`SELECT digest, monthly_report, learn_usage FROM users WHERE id = ${user.id}`;
+  const [{ n: learned }] = await sql<{ n: number }[]>`SELECT count(*)::int AS n FROM user_usage WHERE user_id = ${user.id}`;
   const [mfa] = await sql<{ secret: string | null; on: string | null; codes: number }[]>`
     SELECT totp_secret AS secret, to_char(totp_enabled_at,'YYYY-MM-DD') AS on, cardinality(backup_codes)::int AS codes FROM users WHERE id = ${user.id}`;
   const setupQr = mfa.secret && !mfa.on ? await QRCode.toString(otpauthUri(mfa.secret, user.email), { type: 'svg', margin: 1, width: 180 }) : null;
@@ -103,6 +104,16 @@ export default async function Account({ searchParams }: { searchParams: SP }) {
         <div style={{ flex: '0 0 auto' }}><button className="secondary">{t('Spara')}</button></div>
         <span className="small muted">{lang === 'en' ? 'Menus and common pages are shown in English. Bookkeeping terms, reports and forms for Swedish authorities stay in Swedish.' : 'Menyer och vanliga sidor visas på engelska. Bokföringstermer, rapporter och blanketter till svenska myndigheter är kvar på svenska.'}</span>
       </form>
+
+      <h2 id="anpassning">{t('Anpassning')}</h2>
+      <div className="card">
+        <form action={saveLearning} className="row" style={{ alignItems: 'center' }}>
+          <label className="check"><input type="checkbox" name="learn" defaultChecked={learn_usage} /> {t('Lär dig vad jag gör oftast')}</label>
+          <div style={{ flex: '0 0 auto' }}><button className="secondary">{t('Spara')}</button></div>
+        </form>
+        <p className="small muted" style={{ marginBottom: 0 }}>{t('Appen räknar vilka sidor och åtgärder du öppnar i varje bolag och visar de vanligaste först: på översikten, i Skapa-menyn och när du söker. Gamla vanor väger mindre med tiden. Bara du ser det.')}</p>
+        {learned > 0 && <form action={forgetLearning} style={{ marginTop: '.75rem' }}><button className="link">{t('Glöm det som appen har lärt sig')}</button></form>}
+      </div>
 
       <h2 id="sammandrag">{t('Sammandrag via e-post')}</h2>
       <form action={saveDigest} className="card row" style={{ alignItems: 'end' }}>

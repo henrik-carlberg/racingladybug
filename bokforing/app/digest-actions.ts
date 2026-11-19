@@ -3,6 +3,7 @@ import { attempt, done, str } from '@/lib/server/action';
 import { requireUser, setLangCookie } from '@/lib/server/auth';
 import { sql } from '@/lib/db';
 import { setDigest, setMonthlyReport } from '@/lib/services/digest';
+import { forgetUsage, setLearnUsage } from '@/lib/services/usage';
 
 export async function saveDigest(fd: FormData) {
   const user = await requireUser();
@@ -17,4 +18,16 @@ export async function saveLanguage(fd: FormData) {
   await sql`UPDATE users SET locale = ${lang} WHERE id = ${user.id}`;
   await setLangCookie(lang);
   done('/konto', lang === 'en' ? 'The setting has been saved' : 'Inställningen är sparad');
+}
+
+export async function saveLearning(fd: FormData) {
+  const user = await requireUser();
+  await setLearnUsage(user.id, fd.get('learn') === 'on');
+  done('/konto#anpassning', 'Inställningen är sparad');
+}
+
+export async function forgetLearning() {
+  const user = await requireUser();
+  await forgetUsage(user.id);
+  done('/konto#anpassning', 'Det som appen har lärt sig är borttaget');
 }
