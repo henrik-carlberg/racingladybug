@@ -11,6 +11,7 @@ import { runAllIntegrity } from '@/lib/services/integrity';
 import { refreshStatuses } from '@/lib/services/peppol';
 import { syncAllProviders } from '@/lib/services/payproviders';
 import { sendWheelReminders } from '@/lib/services/wheel';
+import { sql } from '@/lib/db';
 import { refreshPayments } from '@/lib/services/bankpay';
 
 export const dynamic = 'force-dynamic';
@@ -22,7 +23,7 @@ export async function GET(req: Request) {
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) return new Response('Unauthorized', { status: 401 });
   return Response.json(await runCron('daily', async () => {
     const out: Record<string, unknown> = {};
-    const jobs = [['avtal', generateAll], ['paminnelser', remindAll], ['inkorg', () => processPending(100)], ['inkorg_gallring', cleanupInbox], ['ratelimit_gallring', cleanupRateLimits], ['sammandrag', () => sendDigests()], ['manadsrapport', () => sendMonthlyReports()], ['notiser', pushDaily], ['rapportutskick', () => runDueSchedules()], ['jobbko', () => runJobs(500)], ['integritet', runAllIntegrity], ['peppol_status', () => refreshStatuses()], ['betalleverantorer', () => syncAllProviders()], ['arshjul', () => sendWheelReminders()], ['bankbetalningar', () => refreshPayments()]] as const;
+    const jobs = [['avtal', generateAll], ['paminnelser', remindAll], ['inkorg', () => processPending(100)], ['inkorg_gallring', cleanupInbox], ['ratelimit_gallring', cleanupRateLimits], ['sammandrag', () => sendDigests()], ['manadsrapport', () => sendMonthlyReports()], ['notiser', pushDaily], ['rapportutskick', () => runDueSchedules()], ['jobbko', () => runJobs(500)], ['integritet', runAllIntegrity], ['peppol_status', () => refreshStatuses()], ['betalleverantorer', () => syncAllProviders()], ['arshjul', () => sendWheelReminders()], ['bankbetalningar', () => refreshPayments()], ['api_logg_gallring', async () => (await sql`DELETE FROM api_requests WHERE created_at < now() - interval '90 days'`).count + (await sql`DELETE FROM oauth_codes WHERE expires_at < now() - interval '1 day'`).count + (await sql`DELETE FROM oauth_tokens WHERE expires_at < now() - interval '7 days'`).count]] as const;
     for (const [k, job] of jobs) {
       try { out[k] = await job(); } catch (e) { out[k] = { error: (e as Error).message }; }
     }

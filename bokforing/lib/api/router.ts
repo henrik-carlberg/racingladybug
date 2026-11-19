@@ -8,6 +8,7 @@ export interface ApiContext {
   query: URLSearchParams;
   body: Record<string, unknown>;
   origin: string; // appens bas-URL, t.ex. för signeringslänkar
+  auth?: { scopes: string[]; grantId: number | null }; // vem som anropar (API-nyckel eller app via OAuth)
 }
 
 /** JSON Schema (förenklat) för dokumentation i OpenAPI */
