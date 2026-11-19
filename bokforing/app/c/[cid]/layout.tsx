@@ -9,7 +9,8 @@ import { enabledModules } from '@/lib/modules/enabled';
 import { companyTodos, urgentCount } from '@/lib/services/todo';
 import { deleteDemo } from '@/app/company-actions';
 import { buildNav, createActions } from '@/lib/nav';
-import { CommandPalette, CreateMenu, SideNav } from '@/components/AppNav';
+import { CommandPalette, CreateMenu, SideNav, UsageTracker } from '@/components/AppNav';
+import { usageScores } from '@/lib/services/usage';
 
 export default async function CompanyLayout({ children, params }: { children: ReactNode; params: Promise<{ cid: string }> }) {
   const { cid } = await params;
@@ -51,6 +52,8 @@ export default async function CompanyLayout({ children, params }: { children: Re
     { href: '/', label: t('Byt bolag') }, { href: '/konto', label: t('Mitt konto') },
   ];
   const create = createActions(b, see, t);
+  // Vad användaren gör oftast (adresser relativt bolaget → hela adresser)
+  const scores = Object.fromEntries(Object.entries(await usageScores(user.id, company.id).catch(() => ({}))).filter(([p]) => p !== '').map(([p, s]) => [b + p, s]));
   const allPages = [...nav.top, ...nav.sections.flatMap((x) => x.items.map((i) => ({ ...i, hint: i.hint ? `${x.label} · ${i.hint}` : x.label }))), ...extra];
   return (
     <div className="shell">
@@ -60,11 +63,12 @@ export default async function CompanyLayout({ children, params }: { children: Re
         <input type="checkbox" id="navtoggle" className="navtoggle" aria-label={t('☰ Meny')} />
         <label htmlFor="navtoggle" className="navbtn btn secondary">{t('☰ Meny')}</label>
         <SideNav top={nav.top} sections={nav.sections} badge={urgent} extra={extra} />
+        <UsageTracker />
       </aside>
       <div className="workspace">
         <header className="topbar no-print">
-          <CommandPalette items={allPages} create={create} placeholder={t('Sök eller gå till…')} createLabel={t('Skapa')} />
-          {create.length > 0 && <CreateMenu items={create} label={t('Skapa')} />}
+          <CommandPalette items={allPages} create={create} placeholder={t('Sök eller gå till…')} createLabel={t('Skapa')} scores={scores} frequentLabel={t('Ofta')} />
+          {create.length > 0 && <CreateMenu items={create} label={t('Skapa')} scores={scores} quickTitle={t('Det du skapar oftast')} />}
         </header>
         <main id="main">
           {role === 'auditor' && <div className="card small auditor-banner" style={{ borderColor: 'var(--warn)' }}>Du är inloggad som revisor och har läsbehörighet. Du kan inte ändra något i bokföringen.</div>}

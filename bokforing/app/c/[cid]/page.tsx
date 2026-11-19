@@ -10,6 +10,10 @@ import { companyDeadlines } from '@/lib/services/deadlines';
 import { companyTodos } from '@/lib/services/todo';
 import { enabledModules } from '@/lib/modules/enabled';
 import { Icon } from '@/components/Icon';
+import { buildNav, createActions, type NavItem } from '@/lib/nav';
+import { canView, type Permission } from '@/lib/permissions';
+import { usageScores } from '@/lib/services/usage';
+import { FREQUENT, TOP, rankByUsage } from '@/lib/usage';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +25,8 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
   const id = company.id;
   const setup = await getSetup(id, ctx.user.id);
   const upcoming = (await companyDeadlines(id)).filter((d) => d.status !== 'done').slice(0, 3);
-  const todos = await companyTodos(id, { modules: (await enabledModules(id)).map((m) => m.id), owner: ctx.role === 'owner', userId: ctx.user.id });
+  const modules = await enabledModules(id);
+  const todos = await companyTodos(id, { modules: modules.map((m) => m.id), owner: ctx.role === 'owner', userId: ctx.user.id });
   const t = today();
   const [bank] = await sql<{ v: number }[]>`
     SELECT COALESCE(SUM(l.debit - l.credit), 0)::bigint AS v FROM voucher_lines l JOIN vouchers v ON v.id = l.voucher_id
@@ -55,12 +60,29 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
     ['calendar', L('Deadlines'), L('Moms, AGI och bokslut'), `${b}/deadlines`],
     ['sparkles', L('Fråga assistenten'), L('”Hur gick förra månaden?”'), `${b}/assistent`],
   ];
+  // Det användaren gör oftast: åtgärder (Skapa) går före sidor med samma adress
+  const see = (p: Permission) => canView(ctx.role, ctx.permissions, p);
+  const nav = buildNav({ base: b, see, t: L, modules });
+  const known = new Map<string, NavItem>();
+  for (const x of [...createActions(b, see, L), ...nav.top, ...nav.sections.flatMap((s) => s.items)]) if (!known.has(x.href) && x.href !== b) known.set(x.href, x);
+  const usage = await usageScores(ctx.user.id, id).catch(() => ({} as Record<string, number>));
+  const score = (href: string) => usage[href.slice(b.length)] ?? 0;
+  const frequent = rankByUsage([...known.values()], (x) => score(x.href)).filter((x) => score(x.href) >= FREQUENT).slice(0, 6);
+  const topAction = frequent[0] && score(frequent[0].href) >= TOP ? frequent[0] : null;
+  const rankedTiles = rankByUsage(tiles, ([, , , href]) => score(href));
   return (
     <>
       <div className="hello">
         <h1>{hi}, {first}!</h1>
         <div className="muted">{company.name} · {urgentTodos.length ? `${urgentTodos.reduce((n, x) => n + x.count, 0)} ${L('saker väntar på dig')}` : L('Inget brådskande just nu')}</div>
       </div>
+      {topAction && (
+        <Link href={topAction.href} className="top-action">
+          <span className="tile-icon"><Icon name="sparkles" size={20} /></span>
+          <span><span className="small muted">{L('Det du gör oftast')}</span><b>{topAction.label}</b></span>
+          <span className="go">{L('Öppna')} <Icon name="arrow" size={14} /></span>
+        </Link>
+      )}
       <Flash searchParams={searchParams} />
       {!setup.complete && (
         <div className="card" style={{ borderColor: 'var(--accent)', background: 'var(--accent-soft)' }}>
@@ -101,9 +123,18 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
         </section>
       </div>
 
+      {frequent.length > 1 && (
+        <>
+          <h2>{L('Ofta använda')}</h2>
+          <div className="chips">
+            {frequent.map((x) => <Link key={x.href} href={x.href} className="chip" title={x.hint}>{x.label}</Link>)}
+          </div>
+        </>
+      )}
+
       <h2>{L("Vad vill du göra?")}</h2>
       <div className="tiles">
-        {tiles.map(([icon, title, sub, href]) => (
+        {rankedTiles.map(([icon, title, sub, href]) => (
           <Link key={href} href={href} className="tile">
             <span className="tile-icon"><Icon name={icon} size={20} /></span>
             <span><b>{title}</b><span>{sub}</span></span>

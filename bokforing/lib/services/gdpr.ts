@@ -21,8 +21,9 @@ export async function exportUserData(userId: number) {
   const absences = await sql`SELECT a.kind, to_char(a.from_date,'YYYY-MM-DD') AS "from", to_char(a.to_date,'YYYY-MM-DD') AS "to", a.extent, a.status, a.note
     FROM absences a JOIN employees e ON e.id = a.employee_id WHERE e.user_id = ${userId}`;
   const time = await sql`SELECT to_char(date,'YYYY-MM-DD') AS date, minutes, description FROM time_entries WHERE user_id = ${userId} ORDER BY date`;
+  const usage = await sql`SELECT company_id, path, uses, to_char(last_at,'YYYY-MM-DD') AS last_used FROM user_usage WHERE user_id = ${userId} ORDER BY company_id, uses DESC`;
   const activity = await sql`SELECT created_at, company_id, action, entity, entity_id FROM audit_log WHERE user_id = ${userId} ORDER BY created_at DESC LIMIT 1000`;
-  return { exported_at: new Date().toISOString(), user, memberships, firms, passkeys, active_sessions: sessions.length, employee, payslips, absences, time_entries: time, activity_log: activity };
+  return { exported_at: new Date().toISOString(), user, memberships, firms, passkeys, active_sessions: sessions.length, employee, payslips, absences, time_entries: time, learned_usage: usage, activity_log: activity };
 }
 
 /** Radering av konto (art. 17). Uppgifter som ingår i bokföringen (vem som bokförde) måste sparas – användaren anonymiseras. */
@@ -36,6 +37,7 @@ export async function deleteAccount(userId: number, password: string, confirm: s
   if (sole.length) throw new ConflictError(`Du är ensam ägare av ${sole.map((s) => s.name).join(', ')}. Bjud in en ny ägare först, eller exportera bokföringen (SIE) och avsluta bolaget. Bokföringen måste sparas i ${RETENTION_YEARS} år.`);
   await sql.begin(async (tx) => {
     await tx`DELETE FROM sessions WHERE user_id = ${userId}`;
+    await tx`DELETE FROM user_usage WHERE user_id = ${userId}`;
     await tx`DELETE FROM passkeys WHERE user_id = ${userId}`;
     await tx`DELETE FROM mfa_challenges WHERE user_id = ${userId}`;
     await tx`DELETE FROM memberships WHERE user_id = ${userId}`;
