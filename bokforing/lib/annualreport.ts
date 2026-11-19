@@ -4,9 +4,9 @@
 import { formatAmount } from './money';
 import type { Sums } from './taxforms';
 
-type Range = [number, number];
+export type Range = [number, number];
 const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const sum = (m: Sums, ranges: Range[]) => { let t = 0; for (const [n, v] of m) if (ranges.some(([a, b]) => n >= a && n <= b)) t += v; return t; };
+export const sum = (m: Sums, ranges: Range[]) => { let t = 0; for (const [n, v] of m) if (ranges.some(([a, b]) => n >= a && n <= b)) t += v; return t; };
 const kr = (ore: number) => formatAmount(Math.round(ore / 100) * 100, { decimals: false });
 
 export interface YearFigures { label: string; start: string; end: string; result: Sums; closing: Sums; opening: Sums }

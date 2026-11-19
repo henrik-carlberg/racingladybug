@@ -70,6 +70,7 @@ export function buildNav(o: {
       { path: '/fragor', label: 'Frågor och svar', hint: 'Frågor och underlag mellan dig och byrån' },
       { path: '/kommentarer', label: 'Kommentarer', hint: 'Kommentarer och @nämn' },
       { path: '/kom-igang', label: 'Kom igång' },
+      { path: '/kom-igang/flytt', label: 'Flytta från annat program', perm: 'ledger', hint: 'Fortnox, Visma, Bokio – SIE och CSV' },
     ]) },
     // Tilläggsmoduler samlas i en sektion; modulens namn står först när den har flera sidor
     { id: 'moduler', label: t('Tillägg'), icon: 'puzzle', items: o.modules.flatMap((m) => {

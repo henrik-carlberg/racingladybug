@@ -5,7 +5,7 @@ import { accountSums, fiscalYears, openingBalances, type FiscalYear } from '@/li
 import { auditBy } from '@/lib/server/audit';
 import { ink2Form, neForm, sruBlankets, sruFields, sruInfo, type Sums } from '@/lib/taxforms';
 import { taxPeriod } from '@/lib/deadlines';
-import { agmMinutesHtml, annualReportHtml, keyFigures, simplifiedClosingHtml, type YearFigures } from '@/lib/annualreport';
+import { agmMinutesHtml, annualReportHtml, keyFigures, simplifiedClosingHtml, type AnnualReportInput, type YearFigures } from '@/lib/annualreport';
 import { agiId } from '@/lib/validate';
 import type { Actor } from './actor';
 import { createDocument, sendDocument } from './documents';
@@ -98,7 +98,7 @@ async function averageEmployees(companyId: number, fy: FiscalYear): Promise<numb
   return Math.round(r.total / Math.max(months, 1));
 }
 
-export async function annualReport(companyId: number, fyId: number): Promise<{ html: string; data: YearendData; figures: ReturnType<typeof keyFigures> }> {
+export async function annualReport(companyId: number, fyId: number): Promise<{ html: string; data: YearendData; figures: ReturnType<typeof keyFigures>; input?: AnnualReportInput }> {
   const c = await company(companyId);
   const { fy, all } = await getFy(companyId, fyId);
   const data = await getYearendData(companyId, fyId);
@@ -119,11 +119,11 @@ export async function annualReport(companyId: number, fyId: number): Promise<{ h
       data, figures: keyFigures(years[0]),
     };
   }
-  const html = annualReportHtml({
+  const input = {
     company: c, years, activity: data.activity ?? '', events: data.events ?? '', dividend: data.dividend ?? 0,
     board, employees: await averageEmployees(companyId, fy), place: data.place ?? c.city,
-  });
-  return { html, data: { ...data, board }, figures: keyFigures(years[0]) };
+  };
+  return { html: annualReportHtml(input), data: { ...data, board }, figures: keyFigures(years[0]), input };
 }
 
 /** Skapar årsstämmoprotokoll och skickar det för e-signering (ordförande signerar inloggad, övriga via länk) */

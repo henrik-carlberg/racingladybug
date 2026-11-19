@@ -90,3 +90,31 @@ describe('@nämn', () => {
     expect(findMentions('@Klarabella', people)).toEqual([]);
   });
 });
+
+import { compareBalances } from '@/lib/migration-check';
+import { annualReportIxbrl } from '@/lib/ixbrl';
+describe('flytt och iXBRL', () => {
+  it('jämför saldon, avvikelser först', () => {
+    const r = compareBalances({ 1930: 5000000, 2081: -5000000, 1510: 100 }, { 1930: 5000000, 2081: -5000000, 1510: 0, 2440: 0 });
+    expect(r.diffs).toBe(1);
+    expect(r.ok).toBe(2);
+    expect(r.rows[0]).toMatchObject({ account: 1510, diff: -100 });
+  });
+  it('iXBRL med kontexter, enheter och balanserad balansräkning', () => {
+    const m = (o: Record<number, number>) => new Map(Object.entries(o).map(([k, v]) => [Number(k), v]));
+    const y = { label: '2026', start: '2026-01-01', end: '2026-12-31', result: m({ 3001: -100000000, 5010: 40000000, 8910: 12360000 }), opening: m({}),
+      closing: m({ 1930: 60000000, 2081: -5000000, 2099: -47640000, 2440: -7360000 }) };
+    const x = annualReportIxbrl({ company: { name: 'Test & Co AB', orgnr: '556026-9986', city: 'Stockholm' }, years: [y], activity: '', events: '', dividend: 0, board: [], employees: 1.4, place: '' });
+    expect(x.startsWith('<?xml')).toBe(true);
+    expect(x).toContain('Test &amp; Co AB');
+    const val = (c: string, ctx: string) => new RegExp(`name="se-gen-base:${c}" contextRef="${ctx}"[^>]*>([\\d ]+)<`).exec(x)?.[1].replace(/ /g, '');
+    expect(val('Nettoomsattning', 'period0')).toBe('1000000');
+    expect(val('OvrigaExternaKostnader', 'period0')).toBe('400000');
+    expect(val('AretsResultat', 'period0')).toBe('476400');
+    expect(val('Tillgangar', 'balans0')).toBe('600000');
+    expect(val('EgetKapitalSkulder', 'balans0')).toBe(val('Tillgangar', 'balans0'));
+    const refs = [...x.matchAll(/contextRef="([^"]+)"/g)].map((r) => r[1]);
+    for (const r of new Set(refs)) expect(x).toContain(`<xbrli:context id="${r}">`);
+    expect((x.match(/<ix:nonFraction/g) ?? []).length).toBe((x.match(/<\/ix:nonFraction>/g) ?? []).length);
+  });
+});

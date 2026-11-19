@@ -21,7 +21,7 @@ export default async function AnnualReport({ params, searchParams }: { params: P
     <div style={{ maxWidth: 900 }}>
       <div className="header no-print">
         <h1>{ab ? 'Årsredovisning' : 'Förenklat årsbokslut'}</h1>
-        <div className="actions" style={{ margin: 0 }}><PrintButton /><Link className="btn secondary" href={b}>Tillbaka</Link></div>
+        <div className="actions" style={{ margin: 0 }}><PrintButton />{ab && <a className="btn secondary" href={`${b}/arsredovisning/ixbrl`} download title="För digital inlämning till Bolagsverket">Ladda ner iXBRL</a>}<Link className="btn secondary" href={b}>Tillbaka</Link></div>
       </div>
       <Flash searchParams={searchParams} />
       {ab && (
@@ -58,6 +58,7 @@ export default async function AnnualReport({ params, searchParams }: { params: P
           </form>
         </div>
       )}
+      {ab && <p className="small muted no-print">iXBRL-filen innehåller årsredovisningen med siffrorna märkta enligt Bolagsverkets taxonomi, för digital inlämning. Kontrollera filen i Bolagsverkets testtjänst första gången innan du lämnar in den.</p>}
       {!ab && <p className="small muted no-print">Det förenklade årsbokslutet innehåller resultat- och balansräkning (BFL 6:6). Skriv ut, signera och spara det med räkenskapsinformationen i sju år.</p>}
       <DocumentBody kind="html" html={r.html} pdfUrl="" filename={null} />
     </div>

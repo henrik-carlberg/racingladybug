@@ -162,6 +162,11 @@ details.help .help-pop b { display: block; margin-bottom: .2rem; }
 .mention-list li { padding: .4rem .6rem; border-radius: 6px; cursor: pointer; }
 .mention-list li.sel, .mention-list li:hover { background: var(--accent-soft); }
 .comment-row.unseen { border-left: 3px solid var(--accent); }
+/* Flyttguide */
+.move-step { display: flex; gap: 1rem; align-items: flex-start; }
+.move-num { flex: 0 0 auto; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 650; }
+.move-step.done .move-num { background: var(--ok-soft); color: var(--ok); }
+tr.diff td { background: var(--danger-soft); }
 /* Ångra */
 .toasts { position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%); z-index: 60; display: grid; gap: .5rem; width: min(440px, calc(100vw - 32px)); }
 .toast { position: relative; overflow: hidden; display: flex; align-items: center; gap: .75rem; padding: .75rem 1rem; border-radius: 12px; background: #111827; color: #f9fafb; box-shadow: var(--shadow-lg); }

@@ -305,6 +305,46 @@ async function accept(browser, link, name, password) {
   assert(await klara.locator(`#${cardId} .badge:has-text("Underlag inskickat")`).count(), 'byrån ser att underlaget kommit');
   log('byrån begär underlag för en banktransaktion, kunden svarar med en bild som sparas som underlag');
 
+  // ================= Del 5: flytt från annat program och iXBRL =================
+  await owner.goto(B + '/kom-igang');
+  await owner.click('a:has-text("Flytta bokföringen, kunderna och de obetalda fakturorna")');
+  await owner.waitForURL(/kom-igang\/flytt/);
+  await owner.click('a.btn:has-text("Fortnox")');
+  await owner.waitForURL(/program=fortnox/);
+  t = await text(owner);
+  assert(t.includes('I Fortnox:') && t.includes('Bokföringen (SIE-fil)') && t.includes('Importerat: import.se'), 'guiden visar Fortnox-instruktioner och att SIE-filen är importerad: ' + t.slice(0, 900));
+  await owner.click('a:has-text("Visa kontrollen")');
+  await owner.waitForURL(/flytt\/kontroll/);
+  t = await text(owner);
+  assert(t.includes('Ingående balanser') && /Alla \d+ konton stämmer/.test(t), 'ingående balanser stämmer mot SIE-filen: ' + t.slice(0, 900));
+  assert(t.includes('Obetalda fakturor mot bokföringen') && t.includes('kundfordringar 1510') && t.includes('leverantörsskulder 2440'), 'reskontrorna jämförs');
+  log('flyttguide för Fortnox med status per steg, kontroll av saldon mot SIE-filen och av reskontrorna');
+
+  await owner.goto(B + '/bokslut');
+  const fyHref = await owner.locator('a[href*="/bokslut/"]').first().getAttribute('href');
+  const fyid = fyHref.match(/bokslut\/(\d+)/)[1];
+  await owner.goto(B + `/bokslut/${fyid}/arsredovisning`);
+  assert(await owner.locator('a:has-text("Ladda ner iXBRL")').count(), 'knapp för iXBRL');
+  const xr = await owner.request.get(B + `/bokslut/${fyid}/arsredovisning/ixbrl`);
+  assert(xr.status() === 200 && xr.headers()['content-type'].includes('application/xhtml+xml'), 'iXBRL-filen laddas ner: ' + xr.status());
+  assert(/arsredovisning-\d{10}-\d{4}\.xhtml/.test(xr.headers()['content-disposition']), 'filnamn med organisationsnummer och år');
+  const xml = await xr.text();
+  const check = await owner.evaluate((src) => {
+    const doc = new DOMParser().parseFromString(src, 'application/xhtml+xml');
+    if (doc.getElementsByTagName('parsererror').length) return { error: doc.getElementsByTagName('parsererror')[0].textContent };
+    const IX = 'http://www.xbrl.org/2013/inlineXBRL', XBRLI = 'http://www.xbrl.org/2003/instance';
+    const facts = [...doc.getElementsByTagNameNS(IX, 'nonFraction')];
+    const ctx = new Set([...doc.getElementsByTagNameNS(XBRLI, 'context')].map((c) => c.getAttribute('id')));
+    const missing = facts.filter((f) => !ctx.has(f.getAttribute('contextRef'))).length;
+    const v = (name, c) => facts.find((f) => f.getAttribute('name') === name && f.getAttribute('contextRef') === c)?.textContent.replace(/\s/g, '');
+    return { facts: facts.length, missing, assets: v('se-gen-base:Tillgangar', 'balans0'), eqLiab: v('se-gen-base:EgetKapitalSkulder', 'balans0'), name: doc.getElementsByTagNameNS(IX, 'nonNumeric')[0]?.textContent };
+  }, xml);
+  assert(!check.error, 'giltig XML: ' + check.error);
+  assert(check.facts > 10 && check.missing === 0, 'alla siffror märkta med befintliga kontexter: ' + JSON.stringify(check));
+  assert(check.assets && check.assets === check.eqLiab, 'balansräkningen balanserar i iXBRL: ' + JSON.stringify(check));
+  assert(check.name === 'Testbolaget AB', 'företagsnamnet märkt');
+  log('årsredovisning som iXBRL: giltig XHTML, siffror märkta med kontexter och balanserad balansräkning');
+
   pushServer.close();
   await browser.close();
   console.log('Omgång 5: alla steg gick igenom');
