@@ -1,5 +1,5 @@
 'use server';
-import { after } from 'next/server';
+import { enqueue } from '@/lib/server/jobs';
 import { amount, attempt, done, result, str } from '@/lib/server/action';
 import { requireCompany } from '@/lib/server/auth';
 import { userActor } from '@/lib/services/actor';
@@ -18,7 +18,7 @@ export async function upload(cid: number, fd: FormData) {
       if (id) ids.push(id);
     }
   });
-  after(async () => { for (const id of ids) await svc.processDocument(id); });
+  for (const id of ids) await enqueue('inbox.process', { id });
   done(base(cid), ids.length === 1 ? 'Fakturan är uppladdad' : `${ids.length} fakturor är uppladdade`);
 }
 

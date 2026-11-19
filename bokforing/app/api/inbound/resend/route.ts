@@ -1,4 +1,4 @@
-import { after } from 'next/server';
+import { enqueue } from '@/lib/server/jobs';
 import { verifySvix } from '@/lib/inbox';
 import { processDocument, receiveResendEmail } from '@/lib/services/inbox';
 
@@ -16,6 +16,6 @@ export async function POST(req: Request) {
   if (event.type !== 'email.received') return Response.json({ ignored: event.type });
   // Fel här ger 500 så att Resend försöker igen; samma mejl sparas bara en gång
   const ids = await receiveResendEmail(event.data);
-  after(async () => { for (const id of ids) await processDocument(id); });
+  for (const id of ids) await enqueue('inbox.process', { id });
   return Response.json({ received: ids.length });
 }

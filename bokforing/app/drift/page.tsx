@@ -1,3 +1,4 @@
+import { jobStats } from '@/lib/server/jobs';
 import { notFound } from 'next/navigation';
 import { sql } from '@/lib/db';
 import { requireUser } from '@/lib/server/auth';
@@ -27,6 +28,7 @@ export default async function Ops({ searchParams }: { searchParams: SP }) {
     sql<{ day: string; n: number }[]>`SELECT to_char(created_at,'YYYY-MM-DD') AS day, count(*)::int AS n FROM users WHERE created_at > now() - interval '14 days' GROUP BY 1 ORDER BY 1 DESC`,
     sql<{ key: string; count: number }[]>`SELECT split_part(key, ':', 1) AS key, SUM(count)::int AS count FROM rate_limits WHERE window_start > now() - interval '1 hour' GROUP BY 1 ORDER BY 2 DESC LIMIT 10`,
   ]);
+  const jobs = await jobStats();
   return (
     <div className="center" style={{ maxWidth: 1100 }}>
       <h1>Drift</h1>
@@ -45,6 +47,8 @@ export default async function Ops({ searchParams }: { searchParams: SP }) {
           <form action={resolveError.bind(null, e.id)}><button className="secondary">Markera som åtgärdat</button></form>
         </details>
       ))}
+      <h2>Jobbkö</h2>
+      <p className="small">{jobs.queued} i kö{jobs.oldest ? ` (äldst ${jobs.oldest})` : ''} · <span style={jobs.failed ? { color: 'var(--danger)' } : undefined}>{jobs.failed} misslyckade</span></p>
       <h2>Schemalagda jobb</h2>
       <table className="small"><thead><tr><th>Jobb</th><th>Senast lyckat</th><th>Senast startat</th><th>Fel</th></tr></thead><tbody>
         {crons.map((c) => {

@@ -1,7 +1,7 @@
 import 'server-only';
 import { sql } from '@/lib/db';
 import { kr, today as todayFn } from '@/lib/format';
-import { daysBetween, monthlyPattern, normText, ordinal, plusDays } from '@/lib/patterns';
+import { daysBetween, monthlyPattern, ordinal, plusDays } from '@/lib/patterns';
 
 export interface Suggestion { key: string; title: string; text: string; href: string; action: string; icon: string }
 
@@ -45,12 +45,18 @@ export async function patternSuggestions(companyId: number, opts: { can: (p: 'pa
 
   // Verifikationer man bokför själv varje månad (t.ex. hyra som dras via autogiro)
   if (opts.can('ledger')) {
-    const vs = await sql<{ id: number; d: string; description: string; amount: number }[]>`
-      SELECT v.id, to_char(v.date,'YYYY-MM-DD') AS d, v.description, (SELECT SUM(debit) FROM voucher_lines WHERE voucher_id = v.id)::bigint AS amount
-      FROM vouchers v WHERE v.company_id = ${companyId} AND v.date >= ${since} AND v.source_type = 'manual'
-        AND NOT EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = v.id) ORDER BY v.date`;
+    // Gruppera i databasen på normaliserad text (utan siffror och månadsnamn) och hämta bara grupper som ser månadsvisa ut
+    const vs = await sql<{ id: number; d: string; description: string; amount: number; k: string }[]>`
+      WITH m AS (
+        SELECT v.id, v.date, v.description,
+          btrim(regexp_replace(regexp_replace(lower(v.description), '[0-9]+|\m(jan|feb|mar|apr|maj|jun|jul|aug|sep|okt|nov|dec)[a-zå]*', '', 'g'), '[^a-zåäöé ]+', ' ', 'g')) AS k
+        FROM vouchers v WHERE v.company_id = ${companyId} AND v.date >= ${since} AND v.source_type = 'manual'
+          AND NOT EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = v.id)
+      ), g AS (SELECT k FROM m WHERE length(k) >= 3 GROUP BY k HAVING count(DISTINCT date_trunc('month', date)) >= 3 AND count(*) <= 10)
+      SELECT m.id, to_char(m.date,'YYYY-MM-DD') AS d, m.description, m.k, (SELECT SUM(debit) FROM voucher_lines WHERE voucher_id = m.id)::bigint AS amount
+      FROM m JOIN g USING (k) ORDER BY m.date`;
     const by = new Map<string, (typeof vs)[number][]>();
-    for (const v of vs) { const k = normText(v.description); if (k.length < 3) continue; by.set(k, [...(by.get(k) ?? []), v]); }
+    for (const v of vs) { const list = by.get(v.k); if (list) list.push(v); else by.set(v.k, [v]); }
     for (const list of by.values()) {
       const p = monthlyPattern(list.map((v) => v.d));
       if (!p) continue;

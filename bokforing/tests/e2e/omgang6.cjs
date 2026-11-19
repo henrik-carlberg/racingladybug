@@ -290,6 +290,44 @@ async function accept(browser, link, name, password) {
   if (day === new Date().getUTCDate()) assert(/"due":\s*[1-9]/.test(JSON.stringify(out)), 'utskicket är aktuellt i dag: ' + JSON.stringify(out));
   log('schemalagd månadsrapport: mottagare kontrolleras, utskicket hittas av den dagliga körningen');
 
+  // ================= Del 5: kvitton utan uppkoppling och jobbkö =================
+  const phoneCtx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await phoneCtx.addCookies(await owner.context().cookies());
+  const phone = await phoneCtx.newPage();
+  phone.setDefaultTimeout(20000);
+  await phone.goto(B + '/kvitto');
+  await phone.evaluate(() => navigator.serviceWorker.ready.then(() => true));
+  await phone.waitForTimeout(1000);
+  // 1) Formuläret på sidan när uppkopplingen försvinner
+  await phoneCtx.setOffline(true);
+  await phone.fill('input[name=total]', '120');
+  await phone.click('button:has-text("Kontorsmaterial")');
+  await phone.fill('input[name=description]', 'Pennor utan täckning');
+  await phone.click('button:has-text("Bokför kvitto")');
+  await phone.locator('text=kvittot är sparat i telefonen').waitFor();
+  await phone.locator('.outbox:has-text("1 kvitto väntar")').waitFor();
+  // 2) Sidan öppnas utan uppkoppling: service workern visar offlineformuläret
+  await phone.goto(B + '/kvitto');
+  await phone.locator('text=Du är utan uppkoppling').waitFor();
+  await phone.fill('input[name=total]', '89');
+  await phone.selectOption('select[name=category]', 'kontor');
+  await phone.fill('input[name=description]', 'Block i källaren');
+  await phone.click('button:has-text("Spara kvittot")');
+  await phone.locator('text=2 kvitton väntar').waitFor();
+  log('utan uppkoppling sparas kvitton i telefonen, även när sidan öppnas utan täckning');
+  await phoneCtx.setOffline(false);
+  await phone.goto(B + '/kvitto');
+  await phone.locator('.outbox:has-text("2 kvitton från telefonen är bokförda")').waitFor({ timeout: 30000 });
+  await phone.reload();
+  t = await text(phone);
+  assert(t.includes('Pennor utan täckning') && t.includes('Block i källaren'), 'kvittona är bokförda: ' + t.slice(-800));
+  log('när uppkopplingen är tillbaka bokförs kvittona automatiskt');
+
+  await owner.goto(BASE + '/drift');
+  t = await text(owner);
+  assert(t.includes('Jobbkö') && /0 misslyckade/.test(t), 'jobbkön utan fel: ' + t.slice(0, 500));
+  log('jobbkö för bakgrundsarbete syns på driftsidan');
+
   await browser.close();
   console.log('Omgång 6: alla steg gick igenom');
 })().catch((e) => { console.error('✘', e.message, (e.stack || '').split('\n').find((l) => l.includes('omgang6.cjs'))); process.exit(1); });

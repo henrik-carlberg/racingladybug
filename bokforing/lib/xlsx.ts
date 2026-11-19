@@ -4,7 +4,8 @@ import { zip } from './zip';
 export type Cell = string | number | null | { v: number; fmt?: 'kr' | 'int' | 'pct' } | { s: string; bold?: boolean };
 export interface Sheet { name: string; rows: Cell[][]; widths?: number[]; header?: boolean }
 
-const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '');
+const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+const esc = (s: string) => (/[&<>"\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(s) ? s.replace(/[&<>"\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, (c) => ESC[c] ?? '') : s);
 const col = (i: number) => { let s = ''; for (let n = i + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s; return s; };
 // Stilar: 0 normal, 1 fet, 2 kronor (#,##0.00), 3 heltal, 4 procent, 5 fet kronor
 const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
