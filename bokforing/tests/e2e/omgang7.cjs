@@ -210,6 +210,38 @@ async function accept(browser, link, name, password) {
   assert(t.includes('Redovisningstjänster') && t.includes('Testbolaget AB') && t.includes('1 800,00'), 'fakturautkast för byråns tid: ' + t.slice(0, 900));
   log('byråns tid per klient blir ett fakturautkast i byråns eget bolag (1,5 h à 1 200 kr)');
 
+  // ================= Del 5: bokföringslagen – systemdokumentation, integritetskontroll, arkivpaket =================
+  await owner.goto(B + '/installningar/systemdokumentation');
+  t = await text(owner);
+  assert(t.includes('Systemdokumentation och behandlingshistorik') && t.includes('Verifikationsserier') && t.includes('Användare och behörigheter') && t.includes('Behandlingshistorik') && t.includes('Kontoplan') && t.includes('Ägare Testsson'), 'systemdokumentation: ' + t.slice(0, 800));
+  const archLink = await owner.locator('a[href*="/arkiv/"]').first().getAttribute('href');
+  const ar = await owner.request.get(BASE + archLink);
+  assert(ar.status() === 200 && ar.headers()['content-type'] === 'application/zip' && /arkiv_.*\.zip/.test(ar.headers()['content-disposition']), 'arkivpaket: ' + ar.status());
+  // Packa upp och kontrollera kontrollsummorna
+  const zlib = require('node:zlib'), cryptoN = require('node:crypto');
+  const buf = await ar.body();
+  const files = {};
+  for (let p = 0; buf.readUInt32LE(p) === 0x04034b50;) {
+    const cs = buf.readUInt32LE(p + 18), nl = buf.readUInt16LE(p + 26), el = buf.readUInt16LE(p + 28);
+    files[buf.subarray(p + 30, p + 30 + nl).toString()] = zlib.inflateRawSync(buf.subarray(p + 30 + nl + el, p + 30 + nl + el + cs));
+    p += 30 + nl + el + cs;
+  }
+  const names = Object.keys(files);
+  assert(['manifest.json', 'register.html', 'verifikationer.csv', 'systemdokumentation.html', 'LASMIG.txt'].every((n) => names.includes(n)) && names.some((n) => n.startsWith('sie/')), 'filer i paketet: ' + names.slice(0, 12).join(', '));
+  const amf = JSON.parse(files['manifest.json'].toString());
+  assert(amf.vouchers > 0 && amf.files.every((f) => cryptoN.createHash('sha256').update(files[f.path]).digest('hex') === f.sha256), 'kontrollsummorna stämmer');
+  assert(files['register.html'].toString().includes('Verifikationsregister') && files[names.find((n) => n.startsWith('sie/'))].toString('latin1').includes('#VER'), 'register och SIE');
+  log(`arkivpaket med ${amf.vouchers} verifikationer, ${amf.attachments} underlag, SIE och systemdokumentation – kontrollsummorna stämmer`);
+
+  await owner.goto(B + '/installningar/integritet');
+  await owner.click('button:has-text("Kontrollera nu")');
+  await owner.waitForURL(/ok=/);
+  t = await text(owner);
+  assert(t.includes('Senast kontrollerad') && /Inga fel|avvikelser/.test(t), 'integritetskontroll: ' + t.slice(0, 600));
+  const cron = await owner.request.get(`${BASE}/api/cron/daily`, { headers: { authorization: 'Bearer testcron' } });
+  assert(JSON.stringify(await cron.json()).includes('"integritet"'), 'körs varje natt');
+  log('integritetskontroll (balans, nummerserier, datum, låsta perioder, underlag) – på begäran och varje natt');
+
   await browser.close();
   console.log('Omgång 7: alla steg gick igenom');
 })().catch((e) => { console.error('✘', e.message, (e.stack || '').split('\n').find((l) => l.includes('omgang7.cjs'))); process.exit(1); });

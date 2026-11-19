@@ -39,3 +39,26 @@ describe('integrationer', () => {
     expect(JSON.stringify(s)).not.toContain('hemligt');
   });
 });
+
+import { sequenceGaps } from '@/lib/integrity';
+describe('integritetskontroll', () => {
+  it('luckor i nummerserier som intervall', () => {
+    expect(sequenceGaps([1, 2, 3])).toEqual([]);
+    expect(sequenceGaps([1, 2, 4, 8, 9])).toEqual(['3', '5–7']);
+    expect(sequenceGaps([3])).toEqual(['1–2']);
+    expect(sequenceGaps([])).toEqual([]);
+  });
+});
+
+import { sysdocHtml } from '@/lib/sysdoc-html';
+describe('systemdokumentation', () => {
+  it('escapar allt från användare', () => {
+    const html = sysdocHtml({ company: { name: '<script>alert(1)</script> AB', orgnr: '556', company_type: 'AB', address: '', postal_code: '', city: '', accounting_method: 'invoice', vat_period: 'quarter', locked_until: null, attest_threshold: null, attest_not_registrant: false, created_at: '2026-01-01' },
+      years: [], accounts: [{ number: 1930, name: 'Bank"><img src=x onerror=alert(1)>', active: true }], users: [{ name: "O'Brien <b>", email: 'x', role: 'owner', permissions: null, since: '2026' }], firms: [], audit: [], changes: [], series: [],
+      integrations: { bank: 0, inbox: false, autogiro: false, api_keys: 0, webhooks: 0, stripe: false, rules: 0 }, permissionNames: {}, version: 'x', generated: 'nu' } as never);
+    expect(html).not.toContain('<script>');
+    expect(html).not.toContain('<img');
+    expect(html).toContain('&lt;script&gt;');
+    expect(html).toContain('O&#39;Brien &lt;b&gt;');
+  });
+});

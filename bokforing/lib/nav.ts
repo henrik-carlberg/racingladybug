@@ -93,6 +93,8 @@ export function buildNav(o: {
       { path: '/integrationer', label: 'Integrationer (API)' },
       { path: '/installningar/gdpr', label: 'Dataskydd (GDPR)' },
       { path: '/historik', label: 'Behandlingshistorik' },
+      { path: '/installningar/systemdokumentation', label: 'Systemdokumentation och arkiv', perm: 'ledger', hint: 'Bokföringslagen: dokumentation och arkivpaket per år' },
+      { path: '/installningar/integritet', label: 'Integritetskontroll', perm: 'ledger', hint: 'Nattlig kontroll av balans, nummerserier och låsta perioder' },
     ]) },
   ].filter((s) => s.items.length);
   return { top, sections };

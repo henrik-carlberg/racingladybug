@@ -29,12 +29,14 @@ export async function companyTodos(companyId: number, opts: { modules: string[];
       (SELECT count(*)::int FROM exp_claims WHERE company_id = ${companyId} AND status = 'submitted') AS claims,
       (SELECT count(*)::int FROM res_bookings WHERE company_id = ${companyId} AND status = 'pending' AND ends_at > now()) AS bookings,
       (SELECT dpa_accepted_at IS NULL FROM companies WHERE id = ${companyId}) AS no_dpa,
+      (SELECT errors FROM integrity_runs WHERE company_id = ${companyId} ORDER BY run_at DESC LIMIT 1) AS integrity,
       (SELECT totp_enabled_at IS NULL FROM users WHERE id = ${opts.userId})
         AND NOT EXISTS (SELECT 1 FROM passkeys WHERE user_id = ${opts.userId}) AS no_mfa`;
   const late = (await likelyLate(companyId).catch(() => [])).length;
   const deadlines = (await companyDeadlines(companyId)).filter((d) => d.status === 'overdue' || d.status === 'soon');
   const n = (k: string) => Number(c[k] ?? 0);
   const list: (Todo | false)[] = [
+    n('integrity') > 0 && { key: 'integrity', title: 'Integritetskontrollen hittade avvikelser i bokföringen', count: n('integrity'), href: `${b}/installningar/integritet`, level: 'danger' },
     deadlines.some((d) => d.status === 'overdue') && { key: 'deadline', title: 'Försenade deadlines', count: deadlines.filter((d) => d.status === 'overdue').length, href: `${b}/deadlines`, level: 'danger' },
     n('overdue') > 0 && { key: 'overdue', title: 'Förfallna kundfakturor', count: n('overdue'), href: has('reskontra') ? `${b}/m/reskontra` : `${b}/fakturor`, level: 'danger' },
     n('pay') > 0 && { key: 'pay', title: 'Leverantörsfakturor att betala inom en vecka', count: n('pay'), href: `${b}/leverantorsfakturor/betalning`, level: 'warn' },
