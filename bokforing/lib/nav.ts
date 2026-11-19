@@ -67,7 +67,8 @@ export function buildNav(o: {
       { path: '/periodiseringar', label: 'Periodiseringar' },
       { path: '/konton', label: 'Kontoplan' },
       { path: '/deadlines', label: 'Deadlines', hint: 'Moms, AGI och deklarationer' },
-      { path: '/fragor', label: 'Frågor och svar' },
+      { path: '/fragor', label: 'Frågor och svar', hint: 'Frågor och underlag mellan dig och byrån' },
+      { path: '/kommentarer', label: 'Kommentarer', hint: 'Kommentarer och @nämn' },
       { path: '/kom-igang', label: 'Kom igång' },
     ]) },
     // Tilläggsmoduler samlas i en sektion; modulens namn står först när den har flera sidor

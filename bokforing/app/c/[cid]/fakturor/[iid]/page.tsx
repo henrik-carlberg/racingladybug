@@ -1,3 +1,4 @@
+import { CommentThread } from '@/components/CommentThread';
 import { History } from '@/components/History';
 import { UndoButton } from '@/components/Undo';
 import Link from 'next/link';
@@ -138,6 +139,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
       </div>
 
       <InvoiceDoc inv={inv} lines={lines} co={co} orig={orig} isCredit={isCredit} time={time} />
+      <div className="no-print"><CommentThread cid={co.id} entity="invoice" id={inv.id} back={`/c/${co.id}/fakturor/${inv.id}`} /></div>
       <History companyId={co.id} entity="invoice" id={inv.id} />
     </>
   );

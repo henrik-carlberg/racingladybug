@@ -1,4 +1,5 @@
 import 'server-only';
+import { insertAttachment, type AttachmentIn } from './vouchers';
 import { randomBytes } from 'node:crypto';
 import { sql } from '@/lib/db';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
@@ -145,28 +146,45 @@ export async function setResponsible(userId: number, firmId: number, companyId: 
 export interface Question {
   id: number; firm: string | null; entity: string | null; entity_id: number | null; question: string; answer: string; status: string;
   asked_by: string | null; answered_by: string | null; created_at: string; answered_at: string | null; context: string;
+  needs_document: boolean; attachment_id: number | null;
 }
 
 /** Byråns konsult (eller vem som helst i bolaget) ställer en fråga, valfritt kopplad till en transaktion eller verifikation */
-export async function askQuestion(actor: Actor, input: { question: string; entity?: string; entity_id?: number }) {
+export async function askQuestion(actor: Actor, input: { question: string; entity?: string; entity_id?: number; needs_document?: boolean }) {
   const q = input.question.trim();
   if (!q) throw new ValidationError('Skriv en fråga');
   if (input.entity && !['bank_transaction', 'voucher', 'supplier_invoice', 'invoice'].includes(input.entity)) throw new ValidationError('Ogiltig koppling');
+  if (input.entity && input.entity_id) {
+    const { entityInfo } = await import('./comments');
+    await entityInfo(actor.companyId, input.entity as never, input.entity_id);
+  }
   const [firm] = await sql<{ firm_id: number }[]>`
     SELECT fc.firm_id FROM firm_clients fc JOIN firm_members fm ON fm.firm_id = fc.firm_id WHERE fc.company_id = ${actor.companyId} AND fm.user_id = ${actor.userId} LIMIT 1`;
   const [r] = await sql<{ id: number }[]>`
-    INSERT INTO client_questions (company_id, firm_id, entity, entity_id, question, asked_by)
-    VALUES (${actor.companyId}, ${firm?.firm_id ?? null}, ${input.entity ?? null}, ${input.entity_id ?? null}, ${q.slice(0, 2000)}, ${actor.userId}) RETURNING id`;
+    INSERT INTO client_questions (company_id, firm_id, entity, entity_id, question, asked_by, needs_document)
+    VALUES (${actor.companyId}, ${firm?.firm_id ?? null}, ${input.entity ?? null}, ${input.entity_id ?? null}, ${q.slice(0, 2000)}, ${actor.userId}, ${!!input.needs_document}) RETURNING id`;
   await auditBy(sql, actor, 'ask_question', 'client_question', r.id);
   return r.id;
 }
 
-export async function answerQuestion(actor: Actor, id: number, answer: string) {
-  if (!answer.trim()) throw new ValidationError('Skriv ett svar');
-  const r = await sql`UPDATE client_questions SET answer = ${answer.trim().slice(0, 4000)}, status = 'answered', answered_by = ${actor.userId}, answered_at = now()
-    WHERE id = ${id} AND company_id = ${actor.companyId} AND status <> 'closed'`;
-  if (!r.count) throw new NotFoundError('Frågan');
-  await auditBy(sql, actor, 'answer_question', 'client_question', id);
+export async function answerQuestion(actor: Actor, id: number, answer: string, file?: AttachmentIn | null) {
+  const [q] = await sql<{ needs_document: boolean; entity: string | null; entity_id: number | null }[]>`
+    SELECT needs_document, entity, entity_id FROM client_questions WHERE id = ${id} AND company_id = ${actor.companyId} AND status <> 'closed'`;
+  if (!q) throw new NotFoundError('Frågan');
+  if (!answer.trim() && !file) throw new ValidationError(q.needs_document ? 'Ladda upp underlaget eller skriv varför det saknas' : 'Skriv ett svar');
+  if (file && !/^(image\/(jpeg|png|webp|gif|heic)|application\/pdf)$/.test(file.mimeType)) throw new ValidationError('Underlaget ska vara en bild eller PDF');
+  await sql.begin(async (tx) => {
+    await tx`UPDATE client_questions SET answer = ${answer.trim().slice(0, 4000) || (file ? 'Underlag bifogat' : '')}, status = 'answered', answered_by = ${actor.userId}, answered_at = now() WHERE id = ${id}`;
+    if (file) {
+      // Underlaget hamnar på verifikationen direkt om det finns en; annars kopplas det dit när transaktionen bokförs
+      const [v] = q.entity === 'voucher' ? [{ voucher_id: q.entity_id }]
+        : q.entity === 'bank_transaction' ? await tx<{ voucher_id: number | null }[]>`SELECT voucher_id FROM bank_transactions WHERE id = ${q.entity_id} AND company_id = ${actor.companyId}`
+        : [{ voucher_id: null }];
+      const aid = await insertAttachment(tx, actor, v?.voucher_id ?? null, file);
+      await tx`UPDATE attachments SET question_id = ${id} WHERE id = ${aid}`;
+    }
+    await auditBy(tx, actor, 'answer_question', 'client_question', id);
+  });
 }
 
 export async function closeQuestion(actor: Actor, id: number) {
@@ -176,7 +194,8 @@ export async function closeQuestion(actor: Actor, id: number) {
 
 export async function listQuestions(companyId: number, status?: string[]): Promise<Question[]> {
   return [...await sql<Question[]>`
-    SELECT q.id, f.name AS firm, q.entity, q.entity_id, q.question, q.answer, q.status, a.name AS asked_by, b.name AS answered_by,
+    SELECT q.id, f.name AS firm, q.entity, q.entity_id, q.question, q.answer, q.status, a.name AS asked_by, b.name AS answered_by, q.needs_document,
+      (SELECT max(id) FROM attachments WHERE question_id = q.id) AS attachment_id,
       to_char(q.created_at,'YYYY-MM-DD') AS created_at, to_char(q.answered_at,'YYYY-MM-DD') AS answered_at,
       COALESCE((SELECT to_char(t.booking_date,'YYYY-MM-DD') || ' · ' || COALESCE(NULLIF(t.counterparty,''), t.description) || ' · ' || to_char(t.amount / 100.0, 'FM999G999G990D00') || ' kr'
         FROM bank_transactions t WHERE q.entity = 'bank_transaction' AND t.id = q.entity_id AND t.company_id = q.company_id),

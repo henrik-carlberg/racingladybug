@@ -152,6 +152,16 @@ details.help .help-pop b { display: block; margin-bottom: .2rem; }
 .check-item { display: flex; gap: .5rem; align-items: flex-start; padding: .55rem .8rem; border-radius: var(--radius-sm); background: var(--warn-soft, #fef3c7); color: var(--text); font-size: .9rem; }
 .check-item.info { background: var(--accent-soft); }
 .check-item.error { background: var(--danger-soft, #fee2e2); }
+/* Kommentarer */
+.comment { padding: .55rem .75rem; border-radius: 10px; background: var(--panel-2); margin-bottom: .5rem; max-width: 640px; }
+.comment.mine { background: var(--accent-soft); margin-left: auto; }
+.comment-body { white-space: pre-wrap; margin-top: .15rem; }
+.comment .mention { color: var(--accent); }
+.comment-form { display: grid; gap: .5rem; margin-top: .75rem; }
+.mention-list { position: absolute; left: 0; top: 100%; z-index: 30; list-style: none; margin: 4px 0 0; padding: .3rem; min-width: 220px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-lg); }
+.mention-list li { padding: .4rem .6rem; border-radius: 6px; cursor: pointer; }
+.mention-list li.sel, .mention-list li:hover { background: var(--accent-soft); }
+.comment-row.unseen { border-left: 3px solid var(--accent); }
 /* Ångra */
 .toasts { position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%); z-index: 60; display: grid; gap: .5rem; width: min(440px, calc(100vw - 32px)); }
 .toast { position: relative; overflow: hidden; display: flex; align-items: center; gap: .75rem; padding: .75rem 1rem; border-radius: 12px; background: #111827; color: #f9fafb; box-shadow: var(--shadow-lg); }

@@ -77,3 +77,16 @@ describe('pushnotiser', () => {
     expect(validPushKeys('abc', Buffer.alloc(16).toString('base64url'))).toBe(false);
   });
 });
+
+import { findMentions } from '@/lib/mentions';
+describe('@nämn', () => {
+  const people = [{ id: 1, name: 'Anna Berg' }, { id: 2, name: 'Anna Ek' }, { id: 3, name: 'Klara Konsult' }];
+  it('fullt namn och unikt förnamn', () => {
+    expect(findMentions('Hej @Anna Berg, kolla detta', people)).toEqual([1]);
+    expect(findMentions('@klara kan du titta?', people)).toEqual([3]);
+    expect(findMentions('@Anna kan du titta?', people)).toEqual([]);
+    expect(findMentions('mejla anna@berg.se', people)).toEqual([]);
+    expect(findMentions('@Anna Berg och @Klara Konsult', people).sort()).toEqual([1, 3]);
+    expect(findMentions('@Klarabella', people)).toEqual([]);
+  });
+});

@@ -338,6 +338,9 @@ export async function reconcile(actor: Actor, txId: number, input: Record<string
       booked_account = ${booked?.account ?? null}, booked_vat = ${booked?.vat ?? null}, rule_id = ${booked?.ruleId ?? null},
       learn_key = ${booked ? learnKey(t as never) : null} WHERE id = ${txId}`;
     await auditBy(tx, actor, 'reconcile', 'bank_transaction', txId, { type, match_id: matchId, voucher_id: voucherId });
+    // Underlag som kunden skickade in innan transaktionen bokfördes hamnar på verifikationen
+    if (voucherId) await tx`UPDATE attachments a SET voucher_id = ${voucherId} FROM client_questions q
+      WHERE a.question_id = q.id AND q.company_id = ${actor.companyId} AND q.entity = 'bank_transaction' AND q.entity_id = ${txId} AND a.voucher_id IS NULL`;
     const [out] = await tx<BankTxOut[]>`SELECT ${TCOLS()} FROM bank_transactions WHERE id = ${txId}`;
     await emit(tx, actor.companyId, 'bank.transaction.matched', out);
   });

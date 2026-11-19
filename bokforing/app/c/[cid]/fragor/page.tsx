@@ -31,15 +31,18 @@ export default async function Questions({ params, searchParams }: { params: Prom
       <form action={ask.bind(null, company.id)} className="card stack">
         <input type="hidden" name="entity" value={entity} /><input type="hidden" name="entity_id" value={entityId} />
         <label>{entity ? 'Fråga om den markerade transaktionen' : 'Ny fråga'}<textarea name="question" rows={2} required placeholder={accountant ? 'T.ex. Vad gäller betalningen på 2 450 kr till Bauhaus? Finns kvitto?' : 'Fråga byrån'} /></label>
+        <label className="check"><input type="checkbox" name="needs_document" defaultChecked={sp.underlag === '1'} /> Underlag behövs (kvitto eller faktura) – mottagaren svarar med en bild eller PDF</label>
         <div><button className="secondary">Skicka fråga</button></div>
       </form>
 
       <h2>Obesvarade ({open.length})</h2>
       {open.map((q) => (
         <div key={q.id} className="card stack" id={`q${q.id}`}>
-          <div><b>{q.question}</b><div className="small muted">{q.asked_by}{q.firm ? ` (${q.firm})` : ''} · {q.created_at}</div>{ctx(q)}</div>
+          <div>{q.needs_document && <span className="badge warn">Underlag behövs</span>} <b>{q.question}</b><div className="small muted">{q.asked_by}{q.firm ? ` (${q.firm})` : ''} · {q.created_at}</div>{ctx(q)}</div>
+          {q.needs_document && <div className="learned small">📎 Underlag behövs. Fota kvittot eller välj fakturan – den sparas som underlag i bokföringen.</div>}
           <form action={answer.bind(null, company.id, q.id)} className="stack">
-            <textarea name="answer" rows={2} required aria-label="Svar" />
+            {q.needs_document && <label>Underlag (bild eller PDF)<input type="file" name="file" accept="image/*,application/pdf" capture="environment" /></label>}
+            <textarea name="answer" rows={2} required={!q.needs_document} aria-label="Svar" placeholder={q.needs_document ? 'Kommentar (valfritt), eller skriv varför underlag saknas' : ''} />
             <div className="actions" style={{ margin: 0 }}><button>Svara</button></div>
           </form>
           <form action={close.bind(null, company.id, q.id)}><button className="link small">Avsluta utan svar</button></form>
@@ -52,6 +55,7 @@ export default async function Questions({ params, searchParams }: { params: Prom
         <div key={q.id} className="card">
           <b>{q.question}</b>{ctx(q)}
           <p style={{ margin: '.4rem 0' }}>{q.answer}</p>
+          {q.attachment_id && <p className="small" style={{ margin: '.2rem 0' }}>📎 <a href={`/c/${company.id}/underlag/${q.attachment_id}`}>Visa underlaget</a></p>}
           <div className="small muted">Svar av {q.answered_by} · {q.answered_at}</div>
           <form action={close.bind(null, company.id, q.id)}><button className="link small">Klar – avsluta</button></form>
         </div>

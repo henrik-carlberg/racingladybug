@@ -1,3 +1,4 @@
+import { CommentThread } from '@/components/CommentThread';
 import { History } from '@/components/History';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -67,6 +68,7 @@ export default async function SupplierInvoice({ params, searchParams }: { params
           <div style={{ flex: '0 0 auto' }}><button>Bokför betalning</button></div>
         </form>
       )}
+      <CommentThread cid={company.id} entity="supplier_invoice" id={i.id} back={`/c/${company.id}/leverantorsfakturor/${i.id}`} />
       <History companyId={company.id} entity="supplier_invoice" id={i.id} />
     </>
   );

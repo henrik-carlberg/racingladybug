@@ -25,6 +25,25 @@ async function login(browser, email, password, opts = {}) {
   return p;
 }
 
+async function invite(owner, B, email, role) {
+  await owner.goto(B + '/installningar');
+  await owner.fill('form:has(select[name=role]) input[name=email]', email);
+  await owner.selectOption('form:has(select[name=role]) select[name=role]', role);
+  await owner.click('button:has-text("Skapa inbjudan")');
+  await owner.waitForURL(/invite=/);
+  return (await owner.locator('code').textContent()).trim();
+}
+async function accept(browser, link, name, password) {
+  const p = await (await browser.newContext()).newPage();
+  p.setDefaultTimeout(20000);
+  await p.goto(link);
+  await p.fill('input[name=name]', name);
+  await p.fill('input[name=password]', password);
+  await p.click('button:has-text("Acceptera")');
+  await p.waitForURL(BASE + '/');
+  return p;
+}
+
 (async () => {
   const browser = await chromium.launch();
   const owner = await login(browser, 'agare@example.com', 'hemligtlosen1');
@@ -229,6 +248,62 @@ async function login(browser, email, password, opts = {}) {
   await owner.waitForTimeout(2000);
   assert(pushed.length === 2, 'ingen notis när typen är avstängd: ' + pushed.length);
   log('notistyper kan väljas bort');
+
+  // ================= Del 4: kommentarer, @nämn och underlag =================
+  const klara = await accept(browser, await invite(owner, B, 'klara.omg5@example.com', 'accountant'), 'Klara Konsult', 'konsultlosen1');
+  await owner.goto(B + '/verifikationer');
+  await owner.locator('tbody a:has-text("Hyra förråd")').first().click().catch(async () => { await owner.locator('tbody tr:has-text("Hyra förråd") a').first().click(); });
+  await owner.waitForURL(/verifikationer\/\d+/);
+  const voucherUrl = owner.url();
+  const box = owner.locator('textarea[name=body]');
+  await box.click();
+  await box.pressSequentially('@Kla');
+  await owner.locator('.mention-list li:has-text("Klara Konsult")').waitFor();
+  await box.press('Enter');
+  await box.pressSequentially('kan du kolla momsen på den här?');
+  assert((await box.inputValue()).startsWith('@Klara Konsult kan du'), 'namnet infogas: ' + await box.inputValue());
+  await owner.click('button:has-text("Skicka kommentar")');
+  await owner.waitForURL(/ok=/);
+  assert((await owner.locator('.comment').innerText()).includes('kan du kolla momsen'), 'kommentaren visas');
+  await klara.goto(B);
+  t = await text(klara);
+  assert(t.includes('Kommentarer där du nämns'), 'konsulten får en att göra-punkt: ' + t.slice(0, 500));
+  await klara.goto(B + '/kommentarer');
+  assert((await text(klara)).includes('Ny – du nämns'), 'kommentaren står först och är markerad');
+  await klara.locator('a.comment-row').first().click();
+  await klara.waitForURL(/verifikationer\/\d+/);
+  assert((await klara.locator('.comment b.mention').count()) > 0, '@nämnandet markeras');
+  await klara.locator('textarea[name=body]').fill('Momsen ser rätt ut, ingen moms på hyran.');
+  await klara.click('button:has-text("Skicka kommentar")');
+  await klara.waitForURL(/ok=/);
+  await klara.goto(B);
+  assert(!(await text(klara)).includes('Kommentarer där du nämns'), 'läst när tråden visats');
+  await owner.goto(voucherUrl);
+  assert((await owner.locator('.comment').count()) === 2, 'båda kommentarerna i tråden');
+  log('kommentar på verifikation med @nämn: förslag när man skriver, att göra-punkt och notislista för den som nämns, svar i tråden');
+
+  await klara.goto(B + '/bank/avstamning');
+  const card = klara.locator('.card[id^=t]').first();
+  const cardId = await card.getAttribute('id');
+  await card.locator('button:has-text("Begär underlag")').click();
+  await klara.waitForURL(/ok=/);
+  assert(await klara.locator(`#${cardId} .badge:has-text("Underlag begärt")`).count(), 'kortet visar att underlag är begärt');
+  await owner.goto(B);
+  assert((await text(owner)).includes('Underlag att skicka in'), 'kunden får en att göra-punkt');
+  await owner.goto(B + '/fragor');
+  const q = owner.locator('.card:has(.badge:has-text("Underlag behövs"))').first();
+  const OUT = process.argv[2] || require('node:os').tmpdir();
+  const receiptFile = require('node:path').join(OUT, 'kvitto-omg5.png');
+  require('node:fs').writeFileSync(receiptFile, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'));
+  await q.locator('input[type=file]').setInputFiles(receiptFile);
+  await q.locator('button:has-text("Svara")').click();
+  await owner.waitForURL(/ok=/);
+  const link = owner.locator('a:has-text("Visa underlaget")').first();
+  const res = await owner.request.get(BASE + await link.getAttribute('href'));
+  assert(res.status() === 200 && res.headers()['content-type'].includes('image/png'), 'underlaget kan öppnas');
+  await klara.goto(B + '/bank/avstamning');
+  assert(await klara.locator(`#${cardId} .badge:has-text("Underlag inskickat")`).count(), 'byrån ser att underlaget kommit');
+  log('byrån begär underlag för en banktransaktion, kunden svarar med en bild som sparas som underlag');
 
   pushServer.close();
   await browser.close();

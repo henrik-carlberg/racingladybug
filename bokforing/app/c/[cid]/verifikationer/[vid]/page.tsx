@@ -1,3 +1,4 @@
+import { CommentThread } from '@/components/CommentThread';
 import { History } from '@/components/History';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -78,6 +79,7 @@ export default async function VoucherPage({ params, searchParams }: { params: Pr
           </form>
         </>
       )}
+      <CommentThread cid={company.id} entity="voucher" id={v.id} back={`/c/${company.id}/verifikationer/${v.id}`} />
       <History companyId={company.id} entity="voucher" id={v.id} />
     </>
   );
