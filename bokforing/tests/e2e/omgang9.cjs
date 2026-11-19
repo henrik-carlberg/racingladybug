@@ -25,6 +25,18 @@ async function login(browser, email, password, opts = {}) {
 }
 
 
+// Fejkad Bolagsverket: företrädare och firmateckning
+const bv = { alone: false };
+const bvServer = http.createServer((req, res) => {
+  const send = (code, j) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(j)); };
+  if (req.headers.authorization !== 'Bearer bv-info') return send(401, {});
+  if (req.url === '/foretag/5560269986/foretradare') return send(200, { namn: 'Testbolaget AB', firmateckning: { antalIForening: 2, text: 'Firman tecknas av styrelsen. Två ledamöter i förening.' }, foretradare: [
+    { personnummer: '198001010019', namn: 'Ägare Testsson', roller: ['Styrelseledamot', 'Verkställande direktör'], ensamFirmatecknare: bv.alone },
+    { personnummer: '197505050000', namn: 'Bo Delägare', roller: ['Styrelseledamot'] },
+    { personnummer: '196001010000', namn: 'Revi Sor', roller: ['Revisor'] }] });
+  send(404, {});
+}).listen(3311);
+
 (async () => {
   const browser = await chromium.launch();
   const owner = await login(browser, 'agare@example.com', 'hemligtlosen1');
@@ -102,7 +114,38 @@ async function login(browser, email, password, opts = {}) {
   assert(await cron() >= 1 && await cron() === 0, 'påminnelse skickas en gång tre dagar före');
   log('påminnelse till den ansvarige tre dagar före, bara en gång');
 
+  // ================= Del 2: automatisk verifiering av firmatecknare =================
+  await owner.goto(BASE + '/drift?bolag=556026-9986');
+  await owner.click('#bolag tr:has-text("Testbolaget AB") button:has-text("Ta bort verifiering")');
+  await owner.locator('#bolag tr:has-text("Testbolaget AB") .badge:has-text("Ej verifierat")').waitFor();
+  await owner.goto(B + '/inlamning');
+  assert((await text(owner)).includes('Verifiera bolaget med BankID'), 'länk till verifieringen när bolaget inte är verifierat');
+  await owner.goto(B + '/installningar/verifiering');
+  await owner.click('button:has-text("Bekräfta att jag är firmatecknare")');
+  await owner.waitForURL((u) => decodeURIComponent(u.href).includes('Din bekräftelse är sparad'));
+  t = await text(owner);
+  assert(t.includes('kräver 1 till') && t.includes('Ägare Testsson (du)') && t.includes('Bo Delägare') && t.includes('Revi Sor') && t.includes('Två ledamöter i förening') && t.includes('Inte verifierat'), 'två i förening – en bekräftelse räcker inte: ' + t.slice(0, 1200));
+  log('firmatecknare hämtas från Bolagsverket; när två ledamöter tecknar i förening räcker inte en bekräftelse');
+
+  bv.alone = true;
+  await owner.click('button:has-text("Bekräfta att jag är firmatecknare")');
+  await owner.waitForURL((u) => decodeURIComponent(u.href).includes('Bolaget är verifierat'));
+  t = await text(owner);
+  assert(t.includes('Verifierat') && t.includes('med BankID av firmatecknare'), 'verifierat med BankID: ' + t.slice(0, 600));
+  await owner.goto(BASE + '/drift?bolag=556026-9986');
+  assert((await owner.locator('#bolag tr:has-text("Testbolaget AB") .badge').innerText()).includes('Verifierat'), 'syns som verifierat i driften');
+  await owner.goto(B + '/inlamning');
+  assert(!(await text(owner)).includes('Verifiera bolaget med BankID'), 'direktinlämning öppen igen');
+  log('ensam firmatecknare som bekräftar med BankID verifierar bolaget direkt – Peppol och direktinlämning öppnas');
+
+  await owner.goto(`${BASE}/c/2/installningar/verifiering`);
+  await owner.click('button:has-text("Bekräfta att jag är innehavare")');
+  await owner.waitForURL(/error=/);
+  assert(decodeURIComponent(owner.url()).includes('hör inte till innehavaren'), 'enskild firma: fel person nekas: ' + owner.url());
+  log('enskild firma: bara innehavarens BankID (organisationsnumret) godtas');
+
   //@@NEXT@@
   await browser.close();
+  bvServer.close();
   console.log('Omgång 9: alla steg gick igenom');
 })().catch((e) => { console.error(e); process.exit(1); });

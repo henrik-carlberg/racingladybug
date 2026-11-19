@@ -21,7 +21,7 @@ export default async function Peppol({ params, searchParams }: { params: Promise
       <h1>E-faktura via Peppol</h1>
       <Flash searchParams={searchParams} />
       <p className="muted">{on ? <>Bolaget tar emot e-fakturor på Peppol-ID <code>{participantFor(company.orgnr)}</code>. Mottagna fakturor hamnar i <Link href={`${b}/leverantorsfakturor/inkorg`}>inkorgen</Link> färdiga att registrera. Skicka från en bokförd faktura.</>
-        : apEnabled() ? 'E-faktura via Peppol kräver att bolagets organisationsnummer är verifierat (att du företräder bolaget). Kontakta supporten. Till dess kan du ladda ner e-fakturan som XML och skicka den via din operatör.'
+        : apEnabled() ? <>E-faktura via Peppol kräver att bolagets organisationsnummer är verifierat (att du företräder bolaget). <Link href={`${b}/installningar/verifiering`}>Verifiera bolaget med BankID</Link>. Till dess kan du ladda ner e-fakturan som XML och skicka den via din operatör.</>
         : 'Ingen Peppol-åtkomstpunkt är uppsatt. Ladda ner e-fakturan som XML från fakturan och skicka den via din operatör.'}</p>
       {on && <form action={refreshPeppol.bind(null, company.id, `${b}/peppol`)} className="actions"><button className="secondary">Hämta leveransstatus</button></form>}
       {list.length === 0 ? <EmptyState icon="invoice" title="Inga e-fakturor än">Skickade och mottagna e-fakturor visas här med leveransstatus.</EmptyState> : (

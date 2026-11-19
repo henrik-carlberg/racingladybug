@@ -2091,6 +2091,21 @@ export const PAGES_EN: Record<string, string> = {
   "Aktiviteten är borttagen": "The activity has been deleted",
   "Visa i årshjulet": "Show in the annual wheel",
   "Lönens årshjul": "Payroll annual wheel",
+  "Verifiera bolaget": "Verify the company",
+  "Verifiera bolaget (BankID)": "Verify the company (BankID)",
+  "Verifiera bolaget med BankID": "Verify the company with BankID",
+  "Inte verifierat": "Not verified",
+  "Verifierat": "Verified",
+  "Bekräfta att jag är firmatecknare (BankID)": "Confirm that I am an authorised signatory (BankID)",
+  "Bekräfta att jag är innehavare (BankID)": "Confirm that I am the owner (BankID)",
+  "Företrädare enligt Bolagsverket": "Representatives according to the Companies Registration Office",
+  "Firmateckning": "Signing authority",
+  "Bekräftat": "Confirmed",
+  "Ensam": "Alone",
+  "I förening": "Jointly",
+  "med BankID av firmatecknare": "with BankID by an authorised signatory",
+  "av supporten": "by support",
+  "E-faktura via Peppol och direktinlämning till Skatteverket och Bolagsverket sker i bolagets namn. Därför behöver vi veta att den som använder kontot företräder bolaget. Logga in med BankID – är du firmatecknare enligt Bolagsverket blir bolaget verifierat direkt.": "E-invoicing via Peppol and direct filing with the Swedish Tax Agency and the Companies Registration Office happen in the company's name. So we need to know that the person using the account represents the company. Log in with BankID – if you are an authorised signatory according to the Companies Registration Office, the company is verified immediately.",
 };
 
 const MONTHS: Record<string, string> = { januari: 'January', februari: 'February', mars: 'March', april: 'April', maj: 'May', juni: 'June', juli: 'July', augusti: 'August', september: 'September', oktober: 'October', november: 'November', december: 'December' };

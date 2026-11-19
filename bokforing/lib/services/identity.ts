@@ -12,19 +12,19 @@ export async function isVerified(companyId: number) {
   return !!c?.v;
 }
 export async function requireVerified(companyId: number, what: string) {
-  if (!(await isVerified(companyId))) throw new ValidationError(`${what} kräver att bolagets organisationsnummer är verifierat. Kontakta supporten för att verifiera bolaget.`);
+  if (!(await isVerified(companyId))) throw new ValidationError(`${what} kräver att bolagets organisationsnummer är verifierat. Verifiera bolaget med BankID under Inställningar → Verifiera bolaget.`);
 }
 
-export async function setVerified(opsUserId: number, companyId: number, on: boolean) {
+export async function setVerified(opsUserId: number, companyId: number, on: boolean, method: 'manual' | 'bankid' = 'manual') {
   try {
-    const r = await sql`UPDATE companies SET identity_verified_at = ${on ? new Date() : null}, identity_verified_by = ${on ? opsUserId : null}
+    const r = await sql`UPDATE companies SET identity_verified_at = ${on ? new Date() : null}, identity_verified_by = ${on ? opsUserId : null}, identity_method = ${on ? method : null}
       WHERE id = ${companyId} AND NOT is_demo RETURNING id`;
     if (!r.length) throw new NotFoundError('Bolaget');
   } catch (e) {
     if ((e as { code?: string }).code === '23505') throw new ConflictError('Ett annat bolag med samma organisationsnummer är redan verifierat');
     throw e;
   }
-  await sql`INSERT INTO audit_log (company_id, user_id, action, entity, entity_id, details) VALUES (${companyId}, ${opsUserId}, ${on ? 'verify_identity' : 'unverify_identity'}, 'company', ${companyId}, ${sql.json({} as never)})`.catch(() => {});
+  await sql`INSERT INTO audit_log (company_id, user_id, action, entity, entity_id, details) VALUES (${companyId}, ${opsUserId}, ${on ? `verify_identity_${method}` : 'unverify_identity'}, 'company', ${companyId}, ${sql.json({} as never)})`.catch(() => {});
 }
 
 export async function findCompanies(q: string) {

@@ -36,3 +36,32 @@ describe('Årshjul: geometri, status och kalender', () => {
     expect(c).toContain('SUMMARY:Lönesamtal\\, Anna'); expect(c).toContain('X-WR-CALNAME:Årshjul\\; Test'); expect(c).toContain('UID:egen:1:2026-11-20@bokforing');
   });
 });
+
+import { decide, fullPnr, parseRepresentation, soleTraderPnrs } from '@/lib/signatory';
+describe('Firmateckning', () => {
+  const r = parseRepresentation({ namn: 'Testbolaget AB', firmateckning: { antalIForening: 2, text: 'Två ledamöter i förening' }, foretradare: [
+    { personnummer: '19800101-0019', namn: 'Ägare Testsson', roller: ['Styrelseledamot', 'Verkställande direktör'] },
+    { personnummer: '7505050000', namn: 'Bo Delägare', roller: ['Styrelseledamot'] },
+    { personnummer: '196001010000', namn: 'Revi Sor', roller: ['Revisor'] },
+    { personnummer: 'fel', namn: 'Ingen' },
+  ] });
+  it('läser företrädare', () => {
+    expect(r.reps.map((x) => x.pnr)).toEqual(['198001010019', '197505050000', '196001010000']);
+    expect(r.jointly).toBe(2);
+  });
+  it('två ledamöter i förening krävs; revisorn räknas inte', () => {
+    expect(decide(r, ['198001010019'])).toMatchObject({ verified: false, missing: 1 });
+    expect(decide(r, ['198001010019', '196001010000'])).toMatchObject({ verified: false, missing: 1 });
+    expect(decide(r, ['198001010019', '197505050000'])).toMatchObject({ verified: true, missing: 0 });
+    expect(decide(r, ['199912310000']).verified).toBe(false);
+  });
+  it('ensam firmatecknare räcker', () => {
+    const e = parseRepresentation({ foretradare: [{ personnummer: '198001010019', namn: 'A', roller: ['Styrelseledamot'], ensamFirmatecknare: true }] });
+    expect(decide(e, ['198001010019']).verified).toBe(true);
+  });
+  it('personnummer och enskild firma', () => {
+    expect(fullPnr('0501011234', new Date('2026-01-01'))).toBe('200501011234');
+    expect(fullPnr('8112189876', new Date('2026-01-01'))).toBe('198112189876');
+    expect(soleTraderPnrs('811218-9876')).toEqual(['19811218987' + '6', '20811218' + '9876']);
+  });
+});
