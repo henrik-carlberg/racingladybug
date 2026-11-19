@@ -71,6 +71,6 @@ export async function paySalariesViaBank(cid: number, runId: number, fd: FormDat
 export async function refreshSalaryPayments(cid: number, runId: number) {
   const { refreshPayments } = await import('@/lib/services/bankpay');
   const { company } = await requireCompany(cid, { perm: 'payroll' });
-  await attempt(`/c/${cid}/lon/${runId}`, () => refreshPayments(company.id));
+  await attempt(`/c/${cid}/lon/${runId}`, () => refreshPayments(company.id, 'salary'));
   done(`/c/${cid}/lon/${runId}`, 'Status hämtad från banken');
 }

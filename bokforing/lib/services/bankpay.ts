@@ -8,6 +8,7 @@ import { creditorAccount, mapPaymentStatus, paymentRequest, type PayItem } from 
 import type { Actor } from './actor';
 import { paySupplierInvoiceTx } from './suppliers';
 import { reconcile } from './bank';
+import { hasPermission } from '@/lib/permissions';
 
 export const bankPayEnabled = () => eb.enableBankingConfigured();
 
@@ -33,10 +34,20 @@ async function start(actor: Actor, o: { kind: 'supplier' | 'salary'; runId?: num
   if (!/^\d{4}-\d{2}-\d{2}$/.test(o.date)) throw new ValidationError('Ogiltigt betaldatum');
   const acc = await debtor(actor.companyId, o.accountId);
   const total = o.items.reduce((s, i) => s + i.amount, 0);
-  const [p] = await sql<{ id: number }[]>`INSERT INTO bank_payments (company_id, kind, payroll_run_id, bank_account_id, status, execution_date, total, created_by)
-    VALUES (${actor.companyId}, ${o.kind}, ${o.runId ?? null}, ${acc.id}, 'authorization', ${o.date}, ${total}, ${actor.userId}) RETURNING id`;
-  for (const i of o.items) await sql`INSERT INTO bank_payment_items (payment_id, supplier_invoice_id, payslip_id, name, account, reference, amount)
-    VALUES (${p.id}, ${i.supplierInvoiceId ?? null}, ${i.payslipId ?? null}, ${i.name}, ${`${i.account.kind}:${i.account.id}`}, ${i.reference}, ${i.amount})`;
+  // Samtidiga betalningar av samma fakturor eller lönekörning: låses per bolag och kontrolleras igen i transaktionen
+  const p = await sql.begin(async (tx) => {
+    await tx`SELECT pg_advisory_xact_lock(${7_100_000 + actor.companyId})`;
+    const inv = o.items.map((i) => i.supplierInvoiceId).filter((x): x is number => !!x);
+    const busy = inv.length
+      ? await tx`SELECT 1 FROM bank_payment_items bi JOIN bank_payments bp ON bp.id = bi.payment_id WHERE bi.supplier_invoice_id IN ${tx(inv)} AND bp.status IN ('authorization','accepted','executed') LIMIT 1`
+      : o.runId ? await tx`SELECT 1 FROM bank_payments WHERE payroll_run_id = ${o.runId} AND status IN ('authorization','accepted','executed') LIMIT 1` : [];
+    if (busy.length) throw new ConflictError('Betalningen är redan skickad till banken');
+    const [row] = await tx<{ id: number }[]>`INSERT INTO bank_payments (company_id, kind, payroll_run_id, bank_account_id, status, execution_date, total, created_by)
+      VALUES (${actor.companyId}, ${o.kind}, ${o.runId ?? null}, ${acc.id}, 'authorization', ${o.date}, ${total}, ${actor.userId}) RETURNING id`;
+    for (const i of o.items) await tx`INSERT INTO bank_payment_items (payment_id, supplier_invoice_id, payslip_id, name, account, reference, amount)
+      VALUES (${row.id}, ${i.supplierInvoiceId ?? null}, ${i.payslipId ?? null}, ${i.name}, ${`${i.account.kind}:${i.account.id}`}, ${i.reference}, ${i.amount})`;
+    return row;
+  });
   const state = randomBytes(24).toString('base64url');
   await sql`INSERT INTO bank_payment_states (state, payment_id, user_id, expires_at) VALUES (${state}, ${p.id}, ${actor.userId}, now() + interval '30 minutes')`;
   try {
@@ -133,21 +144,24 @@ export async function completeAuthorization(userId: number, state: string, error
     WHERE st.state = ${state} AND st.expires_at > now()`;
   if (!s) throw new ValidationError('Betalningen har gått ut eller är ogiltig. Försök igen.');
   if (s.user_id !== userId) throw new ForbiddenError('Betalningen startades av en annan användare');
-  const [m] = await sql<{ role: string }[]>`SELECT role FROM memberships WHERE user_id = ${userId} AND company_id = ${s.company_id}`;
-  const actor: Actor = { companyId: s.company_id, userId, apiKeyId: null, role: (m?.role ?? 'owner') as Actor['role'] };
+  // Användaren ska fortfarande ha behörighet att betala i bolaget
+  const [m] = await sql<{ role: string; permissions: string[] | null }[]>`SELECT role, permissions FROM memberships WHERE user_id = ${userId} AND company_id = ${s.company_id}`;
+  if (!m || !hasPermission(m.role, m.permissions, 'payments')) throw new ForbiddenError('Du saknar behörighet att betala i bolaget');
+  const actor: Actor = { companyId: s.company_id, userId, apiKeyId: null, role: m.role as Actor['role'] };
   const back = s.kind === 'salary' && s.run ? `/c/${s.company_id}/lon/${s.run}` : `/c/${s.company_id}/leverantorsfakturor/betalning`;
   await sql`UPDATE bank_payment_states SET expires_at = LEAST(expires_at, now() + interval '5 minutes') WHERE state = ${state}`;
-  if (error || !s.external_id) {
-    await sql`UPDATE bank_payments SET status = 'rejected', message = ${error === 'access_denied' ? 'Avbruten i banken' : error ?? 'Avbruten'}, updated_at = now() WHERE id = ${s.payment_id} AND status = 'authorization'`;
+  // Felparametern i adressen kan ändras av vem som helst – finns betalningen hos banken avgör bankens status, aldrig adressen
+  if (!s.external_id) {
+    await sql`UPDATE bank_payments SET status = 'rejected', message = ${error === 'access_denied' ? 'Avbruten i banken' : 'Avbruten'}, updated_at = now() WHERE id = ${s.payment_id} AND status = 'authorization'`;
     return { back, status: 'rejected' };
   }
   return { back, status: await apply(actor, s.payment_id, await eb.getPayment(s.external_id)) };
 }
 
 /** Hämtar status för betalningar som väntar (på begäran och varje natt) */
-export async function refreshPayments(companyId?: number) {
+export async function refreshPayments(companyId?: number, kind?: 'supplier' | 'salary') {
   const rows = await sql<{ id: number; company_id: number; external_id: string; created_by: number | null }[]>`SELECT id, company_id, external_id, created_by FROM bank_payments
-    WHERE status IN ('authorization','accepted') AND external_id IS NOT NULL AND created_at > now() - interval '45 days' ${companyId ? sql`AND company_id = ${companyId}` : sql``}`;
+    WHERE status IN ('authorization','accepted') AND external_id IS NOT NULL AND created_at > now() - interval '45 days' ${companyId ? sql`AND company_id = ${companyId}` : sql``} ${kind ? sql`AND kind = ${kind}` : sql``}`;
   let n = 0;
   for (const r of rows) {
     try {

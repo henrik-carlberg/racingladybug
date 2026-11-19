@@ -51,7 +51,7 @@ export function evalFormula(expr: string, vals: Record<string, number | null>): 
     const k = toks[p++];
     if (!k) throw new Error('Formeln slutar för tidigt');
     if (k.t === 'num') return k.v;
-    if (k.t === 'ref') { if (!(k.v in vals)) throw new Error(`Okänd rad "${k.v}" i formeln`); return vals[k.v]; }
+    if (k.t === 'ref') { if (!Object.hasOwn(vals, k.v)) throw new Error(`Okänd rad "${k.v}" i formeln`); return vals[k.v]; }
     if (k.t === 'op' && k.v === '-') { const x = prim(); return x == null ? null : -x; }
     if (k.t === '(') { const x = sum(); if (toks[p++]?.t !== ')') throw new Error('Parentes saknas i formeln'); return x; }
     throw new Error('Ogiltig formel');

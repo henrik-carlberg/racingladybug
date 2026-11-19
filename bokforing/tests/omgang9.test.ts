@@ -149,3 +149,10 @@ describe('Revisorns stickprov', () => {
     expect(summary([{ status: 'pending' }], []).done).toBe(false);
   });
 });
+
+describe('Formler: bara rader', () => {
+  it('ärvda egenskaper är inte rader', () => {
+    expect(() => evalFormula('constructor + 1', { r1: 1 })).toThrow(/Okänd rad/);
+    expect(() => evalFormula('toString', {})).toThrow(/Okänd rad/);
+  });
+});

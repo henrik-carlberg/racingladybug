@@ -7,6 +7,7 @@ import { accountSums, openingBalances } from '@/lib/server/ledger';
 import { addDays, today } from '@/lib/format';
 import { evaluate, kpis, ROLE_KPIS, validateDef, type ColumnData, type ReportDef, type RowDef } from '@/lib/report-builder';
 import type { Actor } from './actor';
+import { canView } from '@/lib/permissions';
 
 export const TEMPLATES: Record<string, { name: string; def: ReportDef }> = {
   kort: { name: 'Resultat i korthet', def: { columns: 'year', compare: true, budget: true, rows: [
@@ -145,11 +146,18 @@ export async function resolveShare(token: string) {
 
 /** Nyckeltal för användarens bolag sida vid sida (ägare, konsult eller revisor) */
 export async function compareCompanies(userId: number) {
-  const cs = await sql<{ id: number; name: string }[]>`SELECT c.id, c.name FROM companies c JOIN memberships m ON m.company_id = c.id
+  // Samma behörighet som bolagets egen nyckeltalssida: läsrätt till bokföringen, och abonnemanget får inte vara spärrat
+  const rows = await sql<{ id: number; name: string; role: string; permissions: string[] | null }[]>`SELECT c.id, c.name, m.role, m.permissions FROM companies c JOIN memberships m ON m.company_id = c.id
     WHERE m.user_id = ${userId} AND m.role IN ('owner','accountant','auditor') AND NOT c.is_demo
-    UNION SELECT c.id, c.name FROM companies c JOIN firm_clients fc ON fc.company_id = c.id JOIN firm_members fm ON fm.firm_id = fc.firm_id WHERE fm.user_id = ${userId}
+    UNION SELECT c.id, c.name, 'accountant', NULL FROM companies c JOIN firm_clients fc ON fc.company_id = c.id JOIN firm_members fm ON fm.firm_id = fc.firm_id
+      WHERE fm.user_id = ${userId} AND NOT EXISTS (SELECT 1 FROM memberships m2 WHERE m2.company_id = c.id AND m2.user_id = ${userId})
     ORDER BY name LIMIT 50`;
+  const { companyAccess } = await import('@/lib/server/auth');
   const out = [];
-  for (const c of cs) out.push({ ...c, ...(await kpiView(c.id)) });
+  for (const c of rows) {
+    if (!canView(c.role, c.permissions, 'ledger')) continue;
+    if ((await companyAccess(c.id)).state === 'locked') continue;
+    out.push({ id: c.id, name: c.name, ...(await kpiView(c.id)) });
+  }
   return out;
 }

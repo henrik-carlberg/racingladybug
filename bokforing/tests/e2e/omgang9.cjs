@@ -170,6 +170,10 @@ const ebServer = http.createServer((req, res) => {
   assert(t.includes('Betalningar via banken') && t.includes('Godkänd – genomförs') && t.includes('13 750,00'), 'betalningen listas: ' + t.slice(0, 1500));
   log('attesterade leverantörsfakturor skickas som en betalning till banken och godkänns med BankID');
 
+  // En ändrad återkomstadress med error får inte markera betalningen som avbruten när banken har godkänt den
+  await owner.goto(`${BASE}/bank/betalning?state=${encodeURIComponent(req1.state)}&error=access_denied`);
+  await owner.goto(B + '/leverantorsfakturor/betalning');
+  assert((await text(owner)).includes('Godkänd – genomförs') && !(await text(owner)).includes('Avbruten/avvisad'), 'bankens status gäller, inte adressen');
   await owner.click('button:has-text("Betala valda via banken")');
   await owner.waitForURL(/error=/);
   assert(decodeURIComponent(owner.url().replace(/\+/g, ' ')).includes('ligger redan i en betalning'), 'samma faktura kan inte betalas två gånger: ' + owner.url());

@@ -80,6 +80,6 @@ export async function refreshBankPayments(cid: number) {
   const { refreshPayments } = await import('@/lib/services/bankpay');
   const { company } = await requireCompany(cid, { perm: 'payments' });
   let n = 0;
-  await attempt(`/c/${cid}/leverantorsfakturor/betalning`, async () => { n = await refreshPayments(company.id); });
+  await attempt(`/c/${cid}/leverantorsfakturor/betalning`, async () => { n = await refreshPayments(company.id, 'supplier'); });
   done(`/c/${cid}/leverantorsfakturor/betalning`, n ? `${n} betalning(ar) har ny status` : 'Ingen ny status från banken');
 }

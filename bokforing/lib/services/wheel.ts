@@ -60,7 +60,7 @@ export async function deleteActivity(actor: Actor, id: number) {
 /** Bockar av (eller ångrar) ett tillfälle. Deadlines bockas av i deadlinelistan så att båda vyerna stämmer. */
 export async function markItem(actor: Actor, key: string, done: boolean) {
   if (!/^[a-z0-9:_-]{3,80}$/.test(key)) throw new ValidationError('Ogiltig aktivitet');
-  if (DEADLINE_KEY.test(key)) return markDeadline(actor, key, done);
+  if (DEADLINE_KEY.test(key)) { if (key.length > 60) throw new ValidationError('Ogiltig aktivitet'); return markDeadline(actor, key, done); }
   if (done) await sql`INSERT INTO wheel_done (company_id, key, done_by) VALUES (${actor.companyId}, ${key}, ${actor.userId}) ON CONFLICT DO NOTHING`;
   else await sql`DELETE FROM wheel_done WHERE company_id = ${actor.companyId} AND key = ${key}`;
   await auditBy(sql, actor, done ? 'complete' : 'reopen', 'wheel_item', null, { key });
@@ -168,7 +168,7 @@ export async function hasCalendarToken(userId: number, companyId: number) {
 export async function companyForCalendar(token: string) {
   if (!/^[A-Za-z0-9_-]{20,64}$/.test(token)) return null;
   const [r] = await sql<{ company_id: number; name: string }[]>`SELECT t.company_id, c.name FROM calendar_tokens t JOIN companies c ON c.id = t.company_id
-    JOIN memberships m ON m.company_id = t.company_id AND m.user_id = t.user_id WHERE t.token_hash = ${hash(token)}`;
+    JOIN memberships m ON m.company_id = t.company_id AND m.user_id = t.user_id WHERE t.token_hash = ${hash(token)} AND m.role IN ('owner','accountant','auditor')`;
   return r ?? null;
 }
 
