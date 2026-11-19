@@ -13,7 +13,9 @@ export const dynamic = 'force-dynamic';
 
 export default async function Owners({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
+  // Sidan visar lönesumman och ägarnas egna löner, så behörighet till både bokföring och lön krävs
   const { company } = await requireCompany(cid, { perm: 'ledger' });
+  await requireCompany(cid, { perm: 'payroll' });
   const b = `/c/${company.id}`;
   if (company.company_type !== 'AB') {
     return <div style={{ maxWidth: 760 }}><h1>Ägare och utdelning</h1><EmptyState icon="briefcase" title="Gäller aktiebolag">I en enskild firma tar du ut pengar som eget uttag och beskattas för hela vinsten. 3:12-reglerna och utdelning gäller aktiebolag.</EmptyState></div>;

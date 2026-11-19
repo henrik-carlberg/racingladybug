@@ -87,5 +87,7 @@ export async function linkBankId(userId: number, pnr: string) {
   await sql`UPDATE users SET bankid_pnr_hash = ${pnrHash(pnr, hashSecret())}, bankid_linked_at = now() WHERE id = ${userId}`;
 }
 export async function unlinkBankId(userId: number) { await sql`UPDATE users SET bankid_pnr_hash = NULL, bankid_linked_at = NULL WHERE id = ${userId}`; }
-export const samePerson = async (userId: number, pnr: string) => (await sql`SELECT 1 FROM users WHERE id = ${userId} AND (bankid_pnr_hash IS NULL OR bankid_pnr_hash = ${pnrHash(pnr, hashSecret())})`).length > 0;
+/** Samma person som kontots kopplade BankID (konton utan kopplat BankID kan inte signera med BankID) */
+export const samePerson = async (userId: number, pnr: string) => (await sql`SELECT 1 FROM users WHERE id = ${userId} AND bankid_pnr_hash = ${pnrHash(pnr, hashSecret())}`).length > 0;
+export const hasBankId = async (userId: number) => (await sql`SELECT 1 FROM users WHERE id = ${userId} AND bankid_pnr_hash IS NOT NULL`).length > 0;
 export { maskPnr };

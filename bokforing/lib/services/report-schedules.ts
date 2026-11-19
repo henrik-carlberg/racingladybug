@@ -73,7 +73,12 @@ export async function sendSchedule(companyId: number, id: number, today = todayF
 /** Daglig körning: utskick vars dag är i dag och som inte redan har skickats i dag */
 export async function runDueSchedules(today = todayFn()) {
   const day = Number(today.slice(8, 10));
-  const due = await sql<{ id: number; company_id: number }[]>`SELECT id, company_id FROM report_schedules WHERE day = ${day} AND (last_sent IS NULL OR last_sent < ${today})`;
+  // Skickas bara så länge den som skapade utskicket fortfarande har tillgång till bokföringen
+  const due = await sql<{ id: number; company_id: number }[]>`
+    SELECT s.id, s.company_id FROM report_schedules s WHERE s.day = ${day} AND (s.last_sent IS NULL OR s.last_sent < ${today})
+      AND (EXISTS (SELECT 1 FROM memberships m WHERE m.company_id = s.company_id AND m.user_id = s.created_by AND m.role IN ('owner','accountant')
+                     AND (m.role = 'owner' OR m.permissions IS NULL OR 'ledger' = ANY(m.permissions)))
+        OR EXISTS (SELECT 1 FROM firm_members fm JOIN firm_clients fc ON fc.firm_id = fm.firm_id WHERE fc.company_id = s.company_id AND fm.user_id = s.created_by))`;
   let sent = 0;
   if (mailConfigured()) for (const d of due) sent += (await sendSchedule(d.company_id, d.id, today)).sent;
   return { due: due.length, sent };
