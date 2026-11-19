@@ -49,6 +49,7 @@ export function buildNav(o: {
       { path: '/personalliggare', label: 'Personalliggare' },
       { path: '/lon/skattetabeller', label: 'Skattetabeller', perm: 'payroll' },
       { path: '/lon/bilforman', label: 'Bilförmån', perm: 'payroll' },
+      { path: '/lon/avtal', label: 'Kollektivavtal', perm: 'payroll', hint: 'OB, övertid, beredskap, pension' },
       { path: '/agare', label: 'Ägare och utdelning', perm: 'ledger', hint: 'K10, gränsbelopp och lön eller utdelning' },
     ]) },
     { id: 'rapp', label: t('Rapporter'), icon: 'chart', items: items([

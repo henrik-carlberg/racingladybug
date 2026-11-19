@@ -36,3 +36,33 @@ describe('Peppol-webhook', () => {
     expect(verifyApWebhook('hemligt', { timestamp: null, signature: sig }, body, now)).toBe(false);
   });
 });
+
+import { agreementItems, collectumXml, foraCsv, pensionPremium, salarySacrifice, sameRuleVacation } from '@/lib/payroll-agreements';
+describe('Lön enligt kollektivavtal', () => {
+  it('ITP 1 och SAF-LO: 4,5 % upp till 7,5 IBB/12, 30 % över', () => {
+    const cap = Math.round((7.5 * 8_340_000) / 12); // 52 125 kr
+    expect(pensionPremium('itp1', 40_000_00, 2026)).toBe(1_800_00);
+    expect(pensionPremium('saf_lo', cap + 10_000_00, 2026)).toBe(Math.round(cap * 0.045) + 3_000_00);
+    expect(pensionPremium('itp2', 50_000_00, 2026)).toBe(1_000_00);
+    expect(pensionPremium('custom', 30_000_00, 2026, 5)).toBe(1_500_00);
+  });
+  it('OB, övertid och beredskap', () => {
+    const r = { ob_evening: 25_00, ob_night: 50_00, ob_weekend: 60_00, ob_holiday: 120_00, overtime_simple_divisor: 94, overtime_qualified_divisor: 72, oncall_weekday: 20_00, oncall_weekend: 40_00, vacation_supplement: 0.8 };
+    const it = agreementItems(r, { ob_evening: 10, ot_simple: 4, ot_qualified: 2, oncall_weekend: 48 }, 37_600_00);
+    expect(it.map((x) => x.amount)).toEqual([250_00, 4 * 400_00, 2 * Math.round(37_600_00 / 72), 48 * 40_00]);
+    expect(it[0].description).toBe('OB kväll 10 h à 25,00 kr');
+  });
+  it('sammalöneregeln: tillägg per dag och 12 % av rörlig lön', () => {
+    expect(sameRuleVacation({ monthly: 40_000_00, days: 5, supplementPercent: 0.8, variableLastYear: 25_000_00, paidDays: 25 })).toEqual({ supplement: 1_600_00, variable: 600_00 });
+  });
+  it('löneväxling med uppräkning och varning under 8,07 IBB', () => {
+    const s = salarySacrifice({ amount: 5_000_00, monthlyBefore: 70_000_00, year: 2026 });
+    expect(s.premium).toBe(5_290_00); expect(s.warning).toBe('');
+    expect(salarySacrifice({ amount: 5_000_00, monthlyBefore: 58_000_00, year: 2026 }).warning).toContain('8,07');
+  });
+  it('Collectum- och Fora-filer', () => {
+    const x = collectumXml({ orgnr: '556026-9986', period: '2026-11', rows: [{ pnr: '198001011234', name: 'Anna & Co', plan: 'itp2', event: 'nyanmalan', date: '2026-11-01', annualSalary: 610_000_00 }] });
+    expect(x).toContain('orgnr="5560269986"'); expect(x).toContain('plan="ITP2"'); expect(x).toContain('arslon="610000"'); expect(x).toContain('Anna &amp; Co');
+    expect(foraCsv({ orgnr: '556026-9986', period: '2026-11', rows: [{ pnr: '199001011234', name: 'Bo', salary: 30_000_50 }] })).toContain('5560269986;202611;199001011234;"Bo";30001');
+  });
+});

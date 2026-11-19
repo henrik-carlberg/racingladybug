@@ -211,6 +211,82 @@ const apHook = (event) => { const body = JSON.stringify(event); const ts = Strin
   assert(t.includes('E-faktura via Peppol från 0007:5569998887') && await owner.inputValue('input[name=invoice_number]') === 'LF-9001', 'mottagen e-faktura tolkad i inkorgen: ' + t.slice(0, 600));
   log('e-faktura tas emot via Peppol, hamnar tolkad i inkorgen och visas i Peppol-loggen');
 
+  // ================= Del 3: lön på djupet =================
+  const pnr = (base) => { let sum = 0; [...base.slice(2)].forEach((c, i) => { let d = Number(c) * (i % 2 === 0 ? 2 : 1); sum += d > 9 ? d - 9 : d; }); return `${base.slice(0, 8)}-${base.slice(8)}${(10 - (sum % 10)) % 10}`; };
+  await owner.goto(B + '/lon/avtal');
+  await owner.fill('form:has(button:has-text("Lägg till avtal")) input[name=name]', 'Teknikavtalet');
+  await owner.fill('form:has(button:has-text("Lägg till avtal")) input[name=ob_evening]', '30');
+  await owner.fill('form:has(button:has-text("Lägg till avtal")) input[name=oncall_weekend]', '40');
+  await owner.fill('form:has(button:has-text("Lägg till avtal")) input[name=vacation_supplement]', '0,8');
+  await owner.fill('form:has(button:has-text("Lägg till avtal")) input[name=fora_insurance_percent]', '0,6');
+  await owner.click('button:has-text("Lägg till avtal")');
+  await owner.waitForURL(/ok=/);
+  assert((await text(owner)).includes('Teknikavtalet') && (await text(owner)).includes('semestertillägg 0,8 %'), 'avtalet sparat');
+  log('kollektivavtal med OB, övertid, beredskap, semestertillägg och Fora-försäkringar sparat');
+
+  const addEmp = async (first, last, p, salary, plan, extra = {}) => {
+    await owner.goto(B + '/lon/anstallda');
+    const f = owner.locator('form:has(input[name=first_name])');
+    await f.locator('input[name=first_name]').fill(first); await f.locator('input[name=last_name]').fill(last);
+    await f.locator('input[name=personal_number]').fill(p); await f.locator('input[name=monthly_salary]').fill(salary);
+    await f.locator('input[name=tax_table]').fill('32');
+    await f.locator('select[name=pension_plan]').selectOption(plan);
+    await f.locator('select[name=agreement_id]').selectOption({ label: 'Teknikavtalet' });
+    for (const [k, v] of Object.entries(extra)) await f.locator(`input[name=${k}]`).fill(v);
+    await f.locator('button:has-text("Spara")').click();
+    await owner.waitForURL(/ok=/);
+  };
+  const pA = pnr('19820315010'), pB = pnr('19950707020');
+  await addEmp('Ingrid', 'Ingenjör', pA, '60000', 'itp1', { salary_sacrifice: '3000' });
+  await addEmp('Olle', 'Montör', pB, '30000', 'saf_lo', { employment_start: '2026-12-01' });
+  log('anställda med ITP 1 och löneväxling respektive avtalspension SAF-LO');
+
+  await owner.goto(B + '/lon/2');
+  for (const name of ['Ingrid Ingenjör', 'Olle Montör']) {
+    await owner.selectOption('select[name=employee_id]', { label: name });
+    await owner.click('button:has-text("Lägg till")');
+    await owner.waitForURL(/lon\/2/);
+    await owner.waitForLoadState('networkidle');
+  }
+  const ing = owner.locator('.card:has(h2:has-text("Ingrid Ingenjör"))');
+  assert(await ing.locator('input[value="Löneväxling till tjänstepension"]').count() === 1, 'löneväxlingsrad');
+  await ing.locator('form.hours input[name=ob_evening]').fill('10');
+  await ing.locator('form.hours input[name=ot_simple]').fill('4');
+  await ing.locator('form.hours input[name=oncall_weekend]').fill('12,5');
+  await ing.locator('button:has-text("Beräkna tillägg")').click();
+  await owner.locator('.card:has(h2:has-text("Ingrid Ingenjör")) input[value^="OB kväll 10 h"]').waitFor();
+  const vals = await owner.locator('.card:has(h2:has-text("Ingrid Ingenjör")) input[name^=desc_]').evaluateAll((els) => els.map((e) => e.value));
+  assert(vals.includes('OB kväll 10 h à 30,00 kr') && vals.includes('Enkel övertid 4 h à 638,30 kr') && vals.includes('Beredskap helg 12,5 h à 40,00 kr'), 'avtalstillägg: ' + vals.join(' | '));
+  // Ändra timmar: tidigare avtalsrader ersätts
+  await owner.locator('.card:has(h2:has-text("Ingrid Ingenjör")) form.hours input[name=ob_evening]').fill('2');
+  await owner.locator('.card:has(h2:has-text("Ingrid Ingenjör")) button:has-text("Beräkna tillägg")').click();
+  await owner.locator('.card:has(h2:has-text("Ingrid Ingenjör")) input[value^="OB kväll 2 h"]').waitFor();
+  assert(await owner.locator('.card:has(h2:has-text("Ingrid Ingenjör")) input[value^="OB kväll 10 h"]').count() === 0, 'gamla OB-raden ersatt');
+  log('OB, övertid (månadslön/94) och beredskap räknas ut från timmarna; nya timmar ersätter raderna');
+
+  await owner.click('a:has-text("Pension och försäkringar")');
+  await owner.waitForURL(/pension$/);
+  t = await text(owner);
+  // Ingrid: lön före växling 60 000 + 60 + 2 553,20 + 500 = 63 113,20; ITP 1: 4,5 % av 52 125 + 30 % av resten, plus växlat 3 000 × 1,058
+  const gross = 6000000 + 6000 + 4 * 63830 + 50000, cap = Math.round(7.5 * 8340000 / 12);
+  const premium = Math.round(Math.min(gross, cap) * 0.045 + (gross - cap) * 0.3) + 317400;
+  const krs = (o) => (o / 100).toLocaleString('sv-SE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\s/g, ' ');
+  assert(t.includes('ITP 1 (premiebestämd)') && t.replace(/\s/g, ' ').includes(krs(premium)) && t.includes('Löneväxling 3 000,00'), 'ITP 1-premie ' + krs(premium) + ': ' + t.slice(0, 900));
+  assert(t.includes('Avtalspension SAF-LO') && t.replace(/\s/g, ' ').includes(krs(Math.round(3000000 * 0.006))) && t.replace(/\s/g, ' ').includes(krs(Math.round(3000000 * 0.045))), 'SAF-LO och Fora: ' + t.slice(0, 900));
+  const col = await owner.request.get(owner.url() + '/collectum');
+  const colX = await col.text();
+  assert(col.status() === 200 && colX.includes('typ="nyanmalan" plan="ITP1"') && colX.includes(`personnummer="${pA.replace('-', '')}"`) && colX.includes('Ingrid Ingenjör') && !colX.includes('Olle'), 'Collectum-fil: ' + colX);
+  const fora = await (await owner.request.get(owner.url() + '/fora')).text();
+  assert(fora.includes(';202612;') && fora.includes('"Olle Montör";30000'), 'Fora-rapport: ' + fora);
+  log('pension enligt ITP 1 (4,5 %/30 %) med löneväxling, SAF-LO och Fora-försäkringar; Collectum-fil och Fora-rapport');
+  await owner.goto(B + '/lon/2');
+  await owner.click('button:has-text("Bokför lönekörning")');
+  await owner.locator('a:has-text("visa verifikation")').click();
+  await owner.waitForURL(/verifikationer\/\d+/);
+  t = await text(owner);
+  assert(t.includes('7411') && t.includes('7533') && t.includes('7570') && t.includes('Upplupna avtalsförsäkringar (Fora)'), 'bokföring av pension och försäkringar: ' + t.slice(0, 1500));
+  log('lönekörningen bokförs med pensionspremie (7411), särskild löneskatt (7533) och Fora-försäkringar (7570)');
+
   //@@NEXT@@
   await browser.close();
   skvServer.close(); apServer.close();

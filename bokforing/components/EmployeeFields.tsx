@@ -3,9 +3,10 @@ export type EmployeeRow = {
   bank_clearing: string; bank_account: string; employment_start: string | null; employment_end: string | null; monthly_salary: number;
   tax_mode: 'table' | 'percent'; tax_table: number | null; tax_column: number; tax_percent: string | null; fee_override: string | null; active: boolean; vacation_days: number; hours_per_week: number;
   car_benefit: number; pension_percent: number; vacation_rule: string; employment_form: string; title: string; id06: string;
+  pension_plan: string; agreement_id: number | null; salary_sacrifice: number;
 };
 
-export function EmployeeFields({ e }: { e?: Partial<EmployeeRow> }) {
+export function EmployeeFields({ e, agreements = [] }: { e?: Partial<EmployeeRow>; agreements?: { id: number; name: string }[] }) {
   return (
     <>
       <div className="row">
@@ -53,7 +54,12 @@ export function EmployeeFields({ e }: { e?: Partial<EmployeeRow> }) {
       </div>
       <div className="row">
         <label>Bilförmån kr/mån (se Lön → Bilförmån)<input name="car_benefit" inputMode="decimal" defaultValue={e?.car_benefit ? (Number(e.car_benefit) / 100).toFixed(2).replace('.', ',') : ''} /></label>
-        <label>Tjänstepension % av lönen<input name="pension_percent" inputMode="decimal" defaultValue={Number(e?.pension_percent) ? Number(e!.pension_percent).toLocaleString('sv-SE', { maximumFractionDigits: 2 }) : ''} placeholder="T.ex. 4,5" /></label>
+        <label>Tjänstepension<select name="pension_plan" defaultValue={e?.pension_plan ?? 'custom'}><option value="custom">Egen procentsats</option><option value="itp1">ITP 1 (premiebestämd)</option><option value="itp2">ITP 2 (förmånsbestämd)</option><option value="saf_lo">Avtalspension SAF-LO (Fora)</option></select></label>
+        <label>Egen pension % av lönen<input name="pension_percent" inputMode="decimal" defaultValue={Number(e?.pension_percent) ? Number(e!.pension_percent).toLocaleString('sv-SE', { maximumFractionDigits: 2 }) : ''} placeholder="T.ex. 4,5" /></label>
+      </div>
+      <div className="row">
+        <label>Kollektivavtal<select name="agreement_id" defaultValue={e?.agreement_id ?? ''}><option value="">Inget</option>{agreements.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
+        <label>Löneväxling kr/mån<input name="salary_sacrifice" inputMode="decimal" defaultValue={e?.salary_sacrifice ? (Number(e.salary_sacrifice) / 100).toFixed(2).replace('.', ',') : ''} placeholder="0" /></label>
       </div>
       <p className="muted small" style={{ margin: 0 }}>Skattetabell och kolumn framgår av den anställdes skattebesked (Skatteverket). Kolumn 1 gäller för de flesta löntagare. Saknas A-skattsedel/skattebesked ska 30 % dras.</p>
     </>
