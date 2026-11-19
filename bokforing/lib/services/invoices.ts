@@ -300,7 +300,7 @@ export async function registerPaymentTx(tx: Tx, actor: Actor, invoiceId: number,
   if (amount > remaining) throw new ValidationError(`Beloppet är större än det som återstår att betala (${(remaining / 100).toFixed(2).replace('.', ',')} kr)`);
   const d = date(input, 'date', 'Betaldatum');
   const bank = optInt(input, 'bank_account', 'Bankkonto') ?? 1930;
-  if ((bank < 1900 || bank > 1999) && bank !== ACC.cardClearing) throw new ValidationError('Bankkonto måste vara ett 19xx-konto');
+  if ((bank < 1900 || bank > 1999) && bank !== ACC.cardClearing && bank !== 1689) throw new ValidationError('Bankkonto måste vara ett 19xx-konto');
   const full = paidBefore + amount === total;
   // Kontantmetoden: fakturan är inte bokförd än – intäkt och moms bokförs vid betalningen, vid delbetalning med betalningens andel
   const lines = inv.voucher_id || inv.imported ? invoicePaymentLines(amount, bank) : await (async () => {
@@ -330,7 +330,7 @@ async function registerFxPayment(tx: Tx, actor: Actor, invoiceId: number, inv: {
   if (received < remaining * 0.8 || received > remaining * 1.2) throw new ValidationError(`Inbetalt belopp avviker mer än 20 % från fordran (${(remaining / 100).toFixed(2).replace('.', ',')} kr). Delbetalning stöds inte för fakturor i ${inv.currency}.`);
   const d = date(input, 'date', 'Betaldatum');
   const bank = optInt(input, 'bank_account', 'Bankkonto') ?? 1930;
-  if ((bank < 1900 || bank > 1999) && bank !== ACC.cardClearing) throw new ValidationError('Bankkonto måste vara ett 19xx-konto');
+  if ((bank < 1900 || bank > 1999) && bank !== ACC.cardClearing && bank !== 1689) throw new ValidationError('Bankkonto måste vara ett 19xx-konto');
   await tx`INSERT INTO accounts (company_id, number, name) VALUES (${actor.companyId}, 3960, 'Valutakursvinster på fordringar och skulder av rörelsekaraktär'), (${actor.companyId}, 7960, 'Valutakursförluster på fordringar och skulder av rörelsekaraktär') ON CONFLICT DO NOTHING`;
   const v = await createVoucher(tx, {
     actor, date: d, description: `Inbetalning kundfaktura ${inv.invoice_number} (${inv.currency}), ${inv.customer}`,

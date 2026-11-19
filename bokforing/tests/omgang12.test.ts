@@ -37,3 +37,24 @@ describe('Klimatbokföring', () => {
     expect(e.total).toBe(1300 + 150 + 120);
   });
 });
+
+import { creditUse, factoringLines, paymentLines, schedule } from '@/lib/loans';
+describe('Lån och finansiering', () => {
+  it('rak amortering', () => {
+    const s = schedule({ principal: 12000000, ratePct: 6, firstDate: '2026-01-31', months: 12, type: 'straight' });
+    expect(s[0]).toEqual({ n: 1, date: '2026-01-31', interest: 60000, amortization: 1000000, payment: 1060000, balance: 11000000 });
+    expect(s[1].date).toBe('2026-02-28');
+    expect(s[11].balance).toBe(0);
+  });
+  it('annuitet: lika stora betalningar', () => {
+    const s = schedule({ principal: 10000000, ratePct: 5, firstDate: '2026-01-25', months: 24, type: 'annuity' });
+    expect(new Set(s.slice(0, 23).map((r) => r.payment)).size).toBeLessThanOrEqual(2);
+    expect(s[23].balance).toBe(0);
+    expect(s.reduce((x, r) => x + r.amortization, 0)).toBe(10000000);
+  });
+  it('bokföring', () => {
+    expect(paymentLines({ interest: 60000, amortization: 1000000 }, 2350)).toEqual([{ account: 8410, amount: 60000 }, { account: 2350, amount: 1000000 }, { account: 1930, amount: -1060000 }]);
+    expect(factoringLines({ invoiceAmount: 100000, advance: 97000, fee: 3000 })).toEqual([{ account: 1930, amount: 97000 }, { account: 6064, amount: 3000 }, { account: 1689, amount: -100000 }]);
+    expect(creditUse(10000000, -2500000)).toEqual({ used: 2500000, left: 7500000, pct: 25 });
+  });
+});

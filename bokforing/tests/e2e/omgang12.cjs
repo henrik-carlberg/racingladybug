@@ -21,6 +21,20 @@ async function login(browser, email, password) {
 
 const mailServer = http.createServer((req, res) => { req.resume(); req.on('end', () => { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"id":"m1"}'); }); }).listen(3303);
 
+// Finansiär (factoring)
+const fin = { offers: {} };
+const finServer = http.createServer((req, res) => {
+  let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => {
+    const send = (c, j) => { res.writeHead(c, { 'content-type': 'application/json' }); res.end(JSON.stringify(j)); };
+    if (req.headers.authorization !== 'Bearer fact-key') return send(401, {});
+    if (req.method === 'POST' && req.url === '/offers') { const j = JSON.parse(b); const id = 'F' + (Object.keys(fin.offers).length + 1); const fee = Math.round(j.invoice.amount * 0.03);
+      fin.offers[id] = { id, status: 'offered', advance: j.invoice.amount - fee, fee, req: j }; return send(201, fin.offers[id]); }
+    const m = /^\/offers\/(F\d+)(\/accept)?$/.exec(req.url);
+    if (m && fin.offers[m[1]]) { if (m[2]) fin.offers[m[1]].status = 'accepted'; return send(200, fin.offers[m[1]]); }
+    send(404, {});
+  });
+}).listen(3316);
+
 (async () => {
   const browser = await chromium.launch();
   const owner = await login(browser, 'agare@example.com', 'hemligtlosen1');
@@ -112,7 +126,67 @@ const mailServer = http.createServer((req, res) => { req.resume(); req.on('end',
   assert(await ton('.climate-total') <= tot1, 'egen faktor används');
   log('exakta mängder (liter, kWh) ersätter schablonen, egna faktorer per kategori och underlag som CSV');
 
+  // ================= Del 3: lån och finansiering =================
+  const camt = (rows) => `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02"><BkToCstmrStmt><Stmt>${rows.map(([amt, d, ref, txt]) =>
+    `<Ntry><Amt Ccy="SEK">${amt}</Amt><CdtDbtInd>DBIT</CdtDbtInd><Sts>BOOK</Sts><BookgDt><Dt>${d}</Dt></BookgDt><AcctSvcrRef>${ref}</AcctSvcrRef><NtryDtls><TxDtls><RmtInf><Ustrd>${txt}</Ustrd></RmtInf></TxDtls></NtryDtls></Ntry>`).join('')}</Stmt></BkToCstmrStmt></Document>`;
+  await owner.goto(B + '/bank');
+  const brow = owner.locator('tr:has-text("Företagskonto")').first();
+  await brow.locator('input[type=file]').setInputFiles({ name: 'lan.xml', mimeType: 'application/xml', buffer: Buffer.from(camt([['10600.00', day(40), 'LAN-1', 'LAN ZQ AMORTERING']])) });
+  await brow.locator('button:has-text("Importera")').click();
+  await owner.locator('.flash.ok').first().waitFor();
+  await owner.goto(B + '/finansiering');
+  await owner.fill('input[name=name]', 'Företagslån ZQ');
+  await owner.fill('input[name=lender]', 'Banken');
+  await owner.fill('input[name=principal]', '120000');
+  await owner.fill('form:has(input[name=principal]) input[name=rate_pct]', '6');
+  await owner.fill('input[name=months]', '12');
+  await owner.fill('input[name=first_date]', day(40));
+  await owner.fill('input[name=loan_account]', '2355');
+  await owner.fill('input[name=disbursed_on]', day(70));
+  await owner.click('button:has-text("Lägg upp lånet")');
+  await owner.locator('text=Lånet är upplagt med amorteringsplan').waitFor();
+  t = await text(owner);
+  assert(/Företagslån ZQ.*6 %.*120[\s ]000,00/.test(t) && t.includes('10 600,00') && t.includes('Det finns förfallna betalningar'), 'lånet och planen: ' + t.slice(0, 2000));
+  await owner.click('button:has-text("Bokför nu")');
+  await owner.locator('text=/[12] betalningar bokförda/').waitFor();
+  t = await text(owner);
+  assert(/Konto 2355: bokfört [\d\s ]+,00, enligt lånen [\d\s ]+,00 ✅ stämmer/.test(t), 'avstämning mot lånekontot: ' + t.slice(0, 2000));
+  await owner.goto(B + '/bank/avstamning');
+  assert(!(await text(owner)).includes('LAN ZQ AMORTERING'), 'uttaget är avstämt mot lånebetalningen');
+  log('lån med amorteringsplan: betalningar bokförs automatiskt (ränta 8410, amortering), kopplas till banken och stäms av mot lånekontot');
+
+  await owner.goto(B + '/finansiering');
+  await owner.fill('form:has(button:has-text("Ändra räntan")) input[name=rate_pct]', '3');
+  await owner.click('button:has-text("Ändra räntan")');
+  await owner.locator('text=Räntan är ändrad').waitFor();
+  const open = owner.locator('.loan-rows tbody tr:not(:has(a))').first();
+  assert((await open.innerText()).replace(/\s+/g, ' ').includes(' 250,00 10 000,00 10 250,00'), 'ny ränta på resten av planen: ' + await open.innerText());
+  await owner.fill('form:has(input[name=credit_limit]) input[name=name]', 'Checkräkning ZQ');
+  await owner.selectOption('select[name=bank_account_id]', { label: 'Företagskonto' });
+  await owner.fill('input[name=credit_limit]', '50000');
+  await owner.click('form:has(input[name=credit_limit]) button:has-text("Lägg till")');
+  await owner.locator('text=Krediten är tillagd').waitFor();
+  assert(/Checkräkning ZQ.*gräns 50 000,00.*utnyttjat/.test(await text(owner)), 'kreditöversikt');
+  log('räntan ändras för resten av planen; krediter med gräns och utnyttjande');
+
+  await owner.click('tr.fact-row[data-invoice="1007"] button:has-text("Begär erbjudande")');
+  await owner.locator('text=/Erbjudande: 4[\\s ]850,00 kr utbetalt, avgift 150,00 kr/').waitFor();
+  await owner.click('tr.fact-row[data-invoice="1007"] button:has-text("Sälj fakturan")');
+  await owner.locator('text=Erbjudandet är accepterat').waitFor();
+  const fo = Object.values(fin.offers).find((o) => o.req.invoice.number === 1007);
+  assert(fo && fo.req.debtor.name === 'Lind Design AB' && fo.req.invoice.amount === 500000, 'begäran till finansiären: ' + JSON.stringify(fo && fo.req));
+  fo.status = 'funded';
+  const crypto = require('node:crypto');
+  const body = JSON.stringify({ id: fo.id });
+  assert((await owner.request.post(BASE + '/api/factoring/webhook', { data: body, headers: { 'content-type': 'application/json', 'x-factoring-signature': 'sha256=bad' } })).status() === 401, 'osignerad');
+  assert((await owner.request.post(BASE + '/api/factoring/webhook', { data: body, headers: { 'content-type': 'application/json', 'x-factoring-signature': 'sha256=' + crypto.createHmac('sha256', 'factsecret').update(body).digest('hex') } })).status() === 200, 'signerad');
+  await owner.goto(B + '/finansiering');
+  assert((await owner.locator('tr.fact-row[data-invoice="1007"]').innerText()).includes('Såld och utbetald'), 'såld');
+  await owner.goto(B + '/fakturor/13');
+  assert(/Betald/.test(await text(owner)), 'kundfakturan är betald via finansiären');
+  log('factoring: erbjudande från finansiären, försäljning och utbetalning bokförd (1689, 6064) när finansiären bekräftar');
+
   //@@NEXT@@
-  await browser.close(); mailServer.close();
+  await browser.close(); mailServer.close(); finServer.close();
   console.log('Omgång 12: alla steg gick igenom');
 })().catch((e) => { console.error(e); process.exit(1); });
