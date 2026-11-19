@@ -110,6 +110,97 @@ async function accept(browser, link, name, password) {
   assert(t.includes(`Kontrolluppgift KU31 för ${year}`) && t.includes('18 000,00') && t.includes('12 000,00'), 'KU31 fördelad efter ägarandel: ' + t.slice(-1200));
   log('utdelning beslutas (2091 → 2898), betalas ut och fördelas på ägarna, underlag för KU31');
 
+  // ================= Del 2: BankID (fejkad OIDC-leverantör på localhost:3307) =================
+  const ISS = 'http://localhost:3307';
+  const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const jwk = { ...publicKey.export({ format: 'jwk' }), kid: 'test-1', alg: 'RS256', use: 'sig' };
+  let person = { ssn: '198001010019', name: 'Ägare Testsson' };
+  const codes = new Map();
+  const idp = http.createServer((req, res) => {
+    const u = new URL(req.url, ISS);
+    const json = (o, st = 200) => { res.writeHead(st, { 'content-type': 'application/json' }); res.end(JSON.stringify(o)); };
+    if (u.pathname === '/.well-known/openid-configuration') return json({ issuer: ISS, authorization_endpoint: ISS + '/authorize', token_endpoint: ISS + '/token', jwks_uri: ISS + '/jwks' });
+    if (u.pathname === '/jwks') return json({ keys: [jwk] });
+    if (u.pathname === '/authorize') {
+      // "Användaren legitimerar sig" direkt och skickas tillbaka med en kod
+      const code = crypto.randomBytes(12).toString('hex');
+      codes.set(code, { nonce: u.searchParams.get('nonce'), challenge: u.searchParams.get('code_challenge'), redirect: u.searchParams.get('redirect_uri'), person: { ...person }, hint: u.searchParams.get('login_hint') });
+      res.writeHead(302, { location: `${u.searchParams.get('redirect_uri')}?code=${code}&state=${encodeURIComponent(u.searchParams.get('state'))}` });
+      return res.end();
+    }
+    if (u.pathname === '/token' && req.method === 'POST') {
+      let body = '';
+      req.on('data', (c) => { body += c; });
+      req.on('end', () => {
+        const f = new URLSearchParams(body);
+        const c = codes.get(f.get('code'));
+        codes.delete(f.get('code'));
+        if (req.headers.authorization !== 'Basic ' + Buffer.from('test-client:test-secret').toString('base64')) return json({ error: 'invalid_client' }, 401);
+        if (!c || crypto.createHash('sha256').update(f.get('code_verifier') || '').digest('base64url') !== c.challenge || f.get('redirect_uri') !== c.redirect) return json({ error: 'invalid_grant' }, 400);
+        const now = Math.floor(Date.now() / 1000);
+        const h = Buffer.from(JSON.stringify({ alg: 'RS256', kid: 'test-1' })).toString('base64url');
+        const pl = Buffer.from(JSON.stringify({ iss: ISS, aud: 'test-client', exp: now + 300, iat: now, nonce: c.nonce, sub: 'sub-' + c.person.ssn, ssn: c.person.ssn, name: c.person.name })).toString('base64url');
+        json({ id_token: `${h}.${pl}.${crypto.sign('RSA-SHA256', Buffer.from(`${h}.${pl}`), privateKey).toString('base64url')}`, token_type: 'Bearer' });
+      });
+      return;
+    }
+    res.writeHead(404); res.end();
+  }).listen(3307);
+
+  await owner.goto(`${BASE}/konto#bankid`);
+  await owner.click('button:has-text("Koppla BankID")');
+  await owner.waitForURL(/ok=/);
+  assert(decodeURIComponent(owner.url()).includes('BankID är kopplat (19800101-****)'), 'BankID kopplat: ' + owner.url());
+  assert(await owner.locator('.badge:has-text("Kopplat")').count(), 'kontosidan visar att BankID är kopplat');
+
+  const anon = await (await browser.newContext()).newPage();
+  anon.setDefaultTimeout(20000);
+  await anon.goto(BASE + '/login');
+  await anon.click('button:has-text("Fortsätt med BankID")');
+  await anon.waitForURL(BASE + '/');
+  assert((await text(anon)).includes('Testbolaget AB'), 'inloggad med BankID');
+  person = { ssn: '199002024567', name: 'Okänd Person' };
+  const anon2 = await (await browser.newContext()).newPage();
+  await anon2.goto(BASE + '/login');
+  await anon2.click('button:has-text("Fortsätt med BankID")');
+  await anon2.waitForURL(/login\?error=/);
+  assert(decodeURIComponent(anon2.url()).includes('Inget konto är kopplat'), 'okänt personnummer loggas inte in');
+  const forged = await anon2.goto(`${BASE}/api/bankid/callback?state=falsk&code=falsk`);
+  assert(decodeURIComponent(anon2.url()).includes('startades inte i den här webbläsaren'), 'svar som inte startats i webbläsaren nekas: ' + anon2.url() + ' ' + forged.status());
+  log('BankID kopplas till kontot, inloggning med BankID, okänd person och förfalskat svar nekas');
+
+  // Signering med BankID: inloggad och via länk
+  await owner.goto(B + '/dokument');
+  await owner.fill('input[name=title]', 'Styrelsebeslut om firmatecknare');
+  await owner.fill('textarea[name=text]', 'Styrelsen beslutar att Ägare Testsson tecknar firman ensam.');
+  await owner.fill('input[name=name_1]', 'Extern Revisor');
+  await owner.fill('input[name=email_1]', 'extern.revisor@example.com');
+  await owner.click('button:has-text("Skapa dokument")');
+  await owner.waitForURL(/\/dokument\/\d+/);
+  const docUrl = owner.url().split('?')[0];
+  const link = (await owner.locator('code.mono').first().textContent()).trim();
+  person = { ssn: '199002024567', name: 'Okänd Person' };
+  await owner.click('button:has-text("Signera med BankID")');
+  await owner.waitForURL(/error=/);
+  assert(decodeURIComponent(owner.url()).includes('annan person'), 'annans BankID kan inte signera åt dig');
+  person = { ssn: '198001010019', name: 'Ägare Testsson' };
+  await owner.goto(docUrl);
+  await owner.click('button:has-text("Signera med BankID")');
+  await owner.waitForURL(/ok=/);
+  assert(decodeURIComponent(owner.url()).includes('signerat med BankID'), 'signerat med BankID');
+  assert([...codes.values()].length === 0, 'koderna används en gång');
+  person = { ssn: '197203154321', name: 'Extern Revisor' };
+  const ext = await (await browser.newContext()).newPage();
+  ext.setDefaultTimeout(20000);
+  await ext.goto(link);
+  await ext.click('button:has-text("Signera med BankID")');
+  await ext.locator('text=Du signerade dokumentet').waitFor();
+  await owner.goto(docUrl);
+  t = await text(owner);
+  assert(/bankid/i.test(t) && !(await owner.locator('button:has-text("Signera med BankID")').count()), 'båda har signerat med BankID: ' + t.slice(0, 800));
+  log('dokument signeras med BankID av inloggad undertecknare och via länk; fel person nekas');
+  idp.close();
+
   await browser.close();
   console.log('Omgång 6: alla steg gick igenom');
 })().catch((e) => { console.error('✘', e.message, (e.stack || '').split('\n').find((l) => l.includes('omgang6.cjs'))); process.exit(1); });

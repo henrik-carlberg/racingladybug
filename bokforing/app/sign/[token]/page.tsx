@@ -1,3 +1,5 @@
+import { bankidEnabled } from '@/lib/services/bankid';
+import { bankidSignLink } from '@/app/bankid-actions';
 import { clientInfo } from '@/lib/server/origin';
 import { getSigningView } from '@/lib/services/documents';
 import { Flash, type SP } from '@/components/ui';
@@ -26,6 +28,7 @@ export default async function SignPage({ params, searchParams }: { params: Promi
       <p className="small muted mono">Dokumentets SHA-256: {s.sha256}</p>
       {open && (
         <>
+          {bankidEnabled() && <form action={bankidSignLink.bind(null, token)} className="card row" style={{ alignItems: 'center', borderColor: 'var(--accent)' }}><button className="bankid-btn">Signera med BankID</button><span className="small muted">Rekommenderas – eller signera med ditt namn nedan.</span></form>}
           <form action={sign.bind(null, token)} className="card stack" style={{ borderColor: 'var(--accent)' }}>
             <h2 style={{ margin: 0 }}>Signera</h2>
             <label className="check"><input type="checkbox" name="consent" required /> Jag har läst dokumentet och godkänner innehållet. Jag förstår att min elektroniska signatur är juridiskt bindande.</label>

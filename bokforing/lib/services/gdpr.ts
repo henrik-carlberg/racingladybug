@@ -9,7 +9,7 @@ import type { Actor } from './actor';
 
 /** Registerutdrag (art. 15) och dataportabilitet (art. 20) för den inloggade användaren */
 export async function exportUserData(userId: number) {
-  const [user] = await sql`SELECT id, email, name, created_at, totp_enabled_at IS NOT NULL AS two_factor FROM users WHERE id = ${userId}`;
+  const [user] = await sql`SELECT id, email, name, created_at, totp_enabled_at IS NOT NULL AS two_factor, bankid_linked_at FROM users WHERE id = ${userId}`;
   const memberships = await sql`SELECT c.id AS company_id, c.name AS company, m.role, m.created_at FROM memberships m JOIN companies c ON c.id = m.company_id WHERE m.user_id = ${userId}`;
   const firms = await sql`SELECT f.name, m.role, m.created_at FROM firm_members m JOIN firms f ON f.id = m.firm_id WHERE m.user_id = ${userId}`;
   const passkeys = await sql`SELECT name, device_type, created_at, last_used_at FROM passkeys WHERE user_id = ${userId}`;
@@ -41,6 +41,7 @@ export async function deleteAccount(userId: number, password: string, confirm: s
     await tx`DELETE FROM sessions WHERE user_id = ${userId}`;
     await tx`DELETE FROM user_usage WHERE user_id = ${userId}`;
     await tx`DELETE FROM push_subscriptions WHERE user_id = ${userId}`;
+    await tx`UPDATE users SET bankid_pnr_hash = NULL, bankid_linked_at = NULL WHERE id = ${userId}`;
     await tx`DELETE FROM passkeys WHERE user_id = ${userId}`;
     await tx`DELETE FROM mfa_challenges WHERE user_id = ${userId}`;
     await tx`DELETE FROM memberships WHERE user_id = ${userId}`;
