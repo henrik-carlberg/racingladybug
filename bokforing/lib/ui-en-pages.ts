@@ -11,7 +11,6 @@ export const PAGES_EN: Record<string, string> = {
   'Mina kort': 'My cards',
   'Alla kort': 'All cards',
   'Ingen särskild': 'No one in particular',
-  'Kort': 'Card',
   'Spara resa': 'Save trip',
   'Egen bil (milersättning)': 'Own car (mileage allowance)',
   'Företagets bil eller förmånsbil': 'Company or benefit car',
