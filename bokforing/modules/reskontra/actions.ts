@@ -17,7 +17,7 @@ export async function remind(cid: number, invoiceId: number, back: string, fd: F
   let id = 0, msg = '';
   await attempt(back, async () => {
     const r = await svc.createReminder(actor, invoiceId, { email: fd.get('email') === 'on' });
-    id = r.id; msg = `Påminnelse ${r.level} är skapad${r.emailed ? ` och skickad till ${r.emailed}` : ''}`;
+    id = r.id; msg = `Påminnelse ${r.level} är skapad${r.emailed ? ` och skickad till ${r.emailed}` : ''}${r.sms ? ` och som SMS till ${r.sms}` : ''}`;
   });
   done(`${base(cid)}/paminnelse/${id}`, msg);
 }
@@ -47,7 +47,25 @@ export async function saveSettings(cid: number, fd: FormData) {
   await attempt(`${base(cid)}/installningar`, () => svc.saveSettings(actor, {
     first_days: str(fd, 'first_days'), second_days: str(fd, 'second_days'), collection_days: str(fd, 'collection_days'), fee: amount(fd, 'fee', 'Avgift') ?? 0,
     reference_rate: str(fd, 'reference_rate'), fee_account: str(fd, 'fee_account'), interest_account: str(fd, 'interest_account'),
-    auto_remind: fd.get('auto_remind') === 'on', message: str(fd, 'message'),
+    auto_remind: fd.get('auto_remind') === 'on', message: str(fd, 'message'), sms: fd.get('sms') === 'on',
   }));
   done(`${base(cid)}/installningar`, 'Inställningarna är sparade');
+}
+
+export async function handOver(cid: number, invoiceId: number) {
+  const actor = await ctx(cid);
+  await attempt(base(cid), () => svc.handOver(actor, invoiceId));
+  done(base(cid), 'Fakturan är lämnad till inkassobolaget');
+}
+
+export async function recall(cid: number, invoiceId: number) {
+  const actor = await ctx(cid);
+  await attempt(base(cid), () => svc.recall(actor, invoiceId));
+  done(base(cid), 'Inkassoärendet är återkallat');
+}
+
+export async function refreshCases(cid: number) {
+  const actor = await ctx(cid);
+  await attempt(base(cid), () => svc.refreshCases(actor.companyId));
+  done(base(cid), 'Status hämtad från inkassobolaget');
 }

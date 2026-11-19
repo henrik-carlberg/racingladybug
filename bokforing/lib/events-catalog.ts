@@ -11,6 +11,8 @@ export const CORE_EVENTS: EventType[] = [
   { type: 'invoice.deleted', description: 'Ett fakturautkast har tagits bort' },
   { type: 'invoice.booked', description: 'En kundfaktura har bokförts och fått fakturanummer' },
   { type: 'invoice.paid', description: 'En kundfaktura är helt betald' },
+  { type: 'invoice.swish.paid', description: 'Kunden har betalat en faktura med Swish' },
+  { type: 'invoice.plan.chosen', description: 'Kunden har valt delbetalning i kundportalen' },
   { type: 'invoice.partly_paid', description: 'En delbetalning på en kundfaktura har bokförts' },
   { type: 'invoice.credited', description: 'En kundfaktura har krediterats (data = kreditfakturan)' },
   { type: 'project.created', description: 'Ett uppdrag (för tidrapportering) har skapats' },

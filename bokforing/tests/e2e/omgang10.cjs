@@ -44,6 +44,37 @@ const ebServer = http.createServer((req, res) => {
   });
 }).listen(3301);
 
+// Swish Handel, SMS (46elks) och inkassobolag
+const sw = { got: [], status: {} };
+const swServer = http.createServer((req, res) => {
+  let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => {
+    const m = /^\/api\/v[12]\/paymentrequests\/([0-9A-F]{32})$/.exec(req.url);
+    if (m && req.method === 'PUT') { const j = JSON.parse(b); sw.got.push({ id: m[1], ...j }); sw.status[m[1]] = 'CREATED';
+      res.writeHead(201, j.payerAlias ? {} : { PaymentRequestToken: 'tok-' + m[1].slice(0, 6) }); return res.end(); }
+    if (m && req.method === 'GET' && sw.status[m[1]]) { const r = sw.got.find((x) => x.id === m[1]); res.writeHead(200, { 'content-type': 'application/json' });
+      return res.end(JSON.stringify({ id: m[1], status: sw.status[m[1]], amount: Number(r.amount), paymentReference: 'SWREF1', datePaid: new Date().toISOString() })); }
+    res.writeHead(404); res.end();
+  });
+}).listen(3312);
+const sms = [];
+const smsServer = http.createServer((req, res) => {
+  let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => {
+    if (req.headers.authorization === 'Basic ' + Buffer.from('sms-user:sms-pass').toString('base64')) sms.push(Object.fromEntries(new URLSearchParams(b)));
+    res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}');
+  });
+}).listen(3313);
+const ink = { cases: {}, got: [] };
+const inkServer = http.createServer((req, res) => {
+  let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => {
+    const send = (code, j) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(j)); };
+    if (req.headers.authorization !== 'Bearer ink-key') return send(401, { message: 'nyckel' });
+    if (req.method === 'POST' && req.url === '/cases') { const j = JSON.parse(b); const id = 'C-' + (ink.got.length + 1); ink.got.push({ id, ...j }); ink.cases[id] = { status: 'registered' }; return send(201, { id, status: 'registered' }); }
+    const m = /^\/cases\/([^/]+)(\/recall)?$/.exec(req.url);
+    if (m && ink.cases[m[1]]) { if (m[2]) ink.cases[m[1]].status = 'recalled'; return send(200, ink.cases[m[1]]); }
+    send(404, {});
+  });
+}).listen(3314);
+
 (async () => {
   const browser = await chromium.launch();
   const owner = await login(browser, 'agare@example.com', 'hemligtlosen1');
@@ -281,8 +312,86 @@ const ebServer = http.createServer((req, res) => {
   assert(t.includes('Avstämning ruta för ruta') && t.includes('Utgående moms stämmer mot försäljningen'), 'momsavstämning: ' + t.slice(0, 2000));
   log('momsdeklarationen stäms av ruta för ruta innan den lämnas in');
 
+  // ================= Del 4: betalt snabbare =================
+  await owner.goto(B + '/installningar/betalningar');
+  await owner.check('input[name=swish_commerce]');
+  await owner.selectOption('select[name=part_payment_max]', '3');
+  await owner.fill('input[name=part_payment_min]', '1000');
+  await owner.click('.pay-options button:has-text("Spara")');
+  await owner.locator('text=Betalsätten är sparade').waitFor();
+  await owner.goto(B + '/m/reskontra/installningar');
+  await owner.check('input[name=sms]');
+  await owner.click('button:has-text("Spara")');
+  await owner.locator('.flash.ok').first().waitFor();
+  await owner.goto(B + '/kunder/12');
+  await owner.fill('input[name=phone]', '070-987 65 43');
+  await owner.click('form button:text-is("Spara")');
+  await owner.locator('text=Kunden är sparad').waitFor();
+  await owner.goto(B + '/m/reskontra');
+  await owner.click('tr:has-text("Portalkund AB") button:has-text("Påminnelse 1")');
+  await owner.locator('text=/som SMS till \\+46709876543/').waitFor();
+  const sm = sms[sms.length - 1];
+  assert(sm && sm.to === '+46709876543' && /Påminnelse – faktura 1016 på 2 560,00 kr förföll/.test(sm.message.replace(/\s/g, ' ')) && /\/f\/[\w-]{20,}$/.test(sm.message), 'SMS-påminnelse: ' + JSON.stringify(sm));
+  log('påminnelsen skickas även som SMS i samma serie, med länk till fakturan där kunden kan betala');
+
+  await owner.goto(B + '/kunder/12');
+  if (!(await owner.locator('code.portal-url').count())) { await owner.click('button:has-text("Skapa länk till kundportalen")'); await owner.locator('code.portal-url').waitFor(); }
+  const portalUrl = (await owner.locator('code.portal-url').innerText()).replace(/^https?:\/\/[^/]+/, BASE);
+  const cust = await (await browser.newContext()).newPage();
+  await cust.goto(portalUrl);
+  await cust.locator('.part-payment:has-text("faktura 1016")').waitFor();
+  await cust.check('.part-payment input[name=n][value="3"]');
+  await cust.click('.part-payment button:has-text("Dela upp betalningen")');
+  await cust.locator('text=Betalningen är uppdelad').waitFor();
+  assert(!(await cust.locator('.part-payment').count()), 'kan inte väljas två gånger');
+  await cust.click('a:has-text("Faktura 1016")');
+  await cust.locator('.installments').waitFor();
+  t = await text(cust);
+  assert(t.includes('Del 1') && t.includes('Del 3') && t.includes('833,00') && t.includes('834,00'), 'delbetalningsplanen syns på fakturan: ' + t.slice(0, 1500));
+  log('kunden delar själv upp betalningen i kundportalen (3 delar, en månad mellan) och ser delarna på fakturan');
+
+  assert((await text(cust)).includes('Betala 833,00 kr med Swish'), 'Swish för nästa del');
+  await cust.fill('.swish-form input[name=phone]', '0701234567');
+  await cust.click('button:has-text("Betala med Swish")');
+  await cust.locator('.swish-wait').waitFor();
+  const sr = sw.got[sw.got.length - 1];
+  assert(sr.payeeAlias === '1234567890' && sr.amount === '833.00' && sr.payerAlias === '46701234567' && sr.currency === 'SEK' && sr.message === 'Faktura 1016' && /\/api\/swish\/callback$/.test(sr.callbackUrl), 'Swish-förfrågan: ' + JSON.stringify(sr));
+  const swcb = async () => (await owner.request.post(BASE + '/api/swish/callback', { data: { id: sr.id, status: 'PAID', amount: 833 } })).status();
+  assert(await swcb() === 200, 'callback');
+  await cust.click('button:has-text("Jag har godkänt – kontrollera")');
+  await cust.locator('.swish-wait').waitFor();
+  log('Swish-förfrågan går till kundens app; ett falskt ”betald”-anrop gör ingenting – statusen hämtas från Swish');
+  sw.status[sr.id] = 'PAID';
+  assert(await swcb() === 200, 'callback 2');
+  await cust.goto(cust.url());
+  await cust.locator('.swish-paid').waitFor();
+  t = await text(cust);
+  assert(t.includes('833,00 kr är mottagen') && /Del 1 \S+ 833,00 Betald/.test(t), 'betald del: ' + t.slice(0, 1500));
+  await owner.goto(B + '/fakturor/30');
+  assert(/833,00/.test(await text(owner)), 'inbetalningen bokförd på fakturan');
+  log('när Swish bekräftar bokförs inbetalningen på fakturan automatiskt och delen visas som betald');
+
+  await owner.goto(B + '/m/reskontra');
+  await owner.click('tr:has-text("Sen Betalare AB") button:has-text("Skicka till inkassobolaget")');
+  await owner.locator('text=Fakturan är lämnad till inkassobolaget').waitFor();
+  const ic = ink.got[0];
+  assert(ic && ic.debtor.name === 'Sen Betalare AB' && ic.invoice.number === 1009 && ic.invoice.remaining === 1250000 && ic.reminders.length === 2 && ic.creditor.orgnr === '556026-9986', 'ärendet: ' + JSON.stringify(ic));
+  t = await text(owner);
+  assert(t.includes('Hos inkassobolaget') && t.includes('Registrerat hos inkassobolaget') && t.includes('C-1'), 'ärendet syns: ' + t.slice(0, 2000));
+  const sign = (b) => 'sha256=' + crypto.createHmac('sha256', 'inksecret').update(b).digest('hex');
+  const inkHook = async (b, sig) => (await owner.request.post(BASE + '/api/inkasso/webhook', { data: b, headers: { 'content-type': 'application/json', 'x-inkasso-signature': sig } })).status();
+  assert(await inkHook('{"case_id":"C-1"}', 'sha256=00') === 401, 'osignerad webhook avvisas');
+  ink.cases['C-1'] = { status: 'paid', status_text: 'Gäldenären har betalat', collected: 1250000 };
+  assert(await inkHook('{"case_id":"C-1"}', sign('{"case_id":"C-1"}')) === 200, 'signerad webhook');
+  await owner.goto(B + '/m/reskontra');
+  t = await text(owner);
+  assert(t.includes('Gäldenären har betalat') && /Betalt/.test(t) && !(await owner.locator('tr:has-text("Sen Betalare AB") button:has-text("Påminnelse")').count()), 'status tillbaka: ' + t.slice(0, 2000));
+  await owner.goto(B + '/fakturor/20');
+  assert(/Betald/.test(await text(owner)), 'fakturan är betald');
+  log('inkasso lämnas via API; status kommer tillbaka (signerad webhook) och betalt hos inkassobolaget bokförs på fakturan');
+
   //@@NEXT@@
   await browser.close();
-  appServer.close(); ebServer.close();
+  appServer.close(); ebServer.close(); swServer.close(); smsServer.close(); inkServer.close();
   console.log('Omgång 10: alla steg gick igenom');
 })().catch((e) => { console.error(e); process.exit(1); });

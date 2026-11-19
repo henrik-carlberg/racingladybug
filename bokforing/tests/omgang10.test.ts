@@ -81,3 +81,23 @@ describe('Skatt och bokslut', () => {
     expect(c.find((x) => x.key === 'inlamnad')!.detail.replace(/\s/g, ' ')).toContain('ruta 05 90 000 kr → 100 000 kr');
   });
 });
+
+import { installmentPlan, mapSwishStatus, mobileE164, planStatus, smsReminder, swishMessage } from '@/lib/paid-faster';
+describe('Betalt snabbare', () => {
+  it('delbetalningsplan i hela kronor med månadsvisa förfallodagar', () => {
+    expect(installmentPlan(1000050, 3, '2026-01-31')).toEqual([{ n: 1, due: '2026-01-31', amount: 333300 }, { n: 2, due: '2026-02-28', amount: 333300 }, { n: 3, due: '2026-03-31', amount: 333450 }]);
+    expect(() => installmentPlan(1000, 1, '2026-01-01')).toThrow();
+  });
+  it('planstatus: förfallet och nästa del', () => {
+    const plan = installmentPlan(300000, 3, '2026-01-10');
+    expect(planStatus(plan, 0, '2026-02-15')).toEqual({ overdue: 200000, next: { n: 1, due: '2026-01-10', amount: 100000, left: 100000 }, paidParts: 0 });
+    expect(planStatus(plan, 150000, '2026-02-15')).toMatchObject({ overdue: 50000, next: { n: 2, left: 50000 }, paidParts: 1 });
+  });
+  it('telefonnummer, Swish och SMS', () => {
+    expect(mobileE164('070-123 45 67')).toBe('+46701234567');
+    expect(mobileE164('08-123 456')).toBeNull();
+    expect(swishMessage('Faktura 1001 <script>')).toBe('Faktura 1001 script');
+    expect(mapSwishStatus('PAID')).toBe('paid');
+    expect(smsReminder({ company: 'AB', number: 7, amount: '100,00', due: '2026-01-01', link: 'https://x/f/t', level: 1 })).toContain('Betala här: https://x/f/t');
+  });
+});

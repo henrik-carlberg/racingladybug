@@ -1,7 +1,7 @@
 'use server';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { acceptQuote, updateContact } from '@/lib/services/portal';
+import { acceptQuote, portalByToken, updateContact } from '@/lib/services/portal';
 import { limit, LIMITS } from '@/lib/server/ratelimit';
 
 const back = (token: string, q: string) => `/k/${token}?${q}`;
@@ -21,4 +21,18 @@ export async function contact(token: string, fd: FormData) {
     redirect(back(token, `fel=${encodeURIComponent((e as Error).message)}`));
   }
   redirect(back(token, `ok=${encodeURIComponent('Dina uppgifter är uppdaterade')}`));
+}
+
+/** Kunden väljer att dela upp betalningen av en faktura */
+export async function plan(token: string, invoiceId: number, fd: FormData) {
+  const { choosePlan } = await import('@/lib/services/paid-faster');
+  try {
+    await limit(`portal:${token}`, LIMITS.publicAction.max, LIMITS.publicAction.window);
+    const p = await portalByToken(token);
+    if (!p) throw new Error('Länken är ogiltig');
+    await choosePlan(p.company_id, p.customer_id, invoiceId, Number(fd.get('n')));
+  } catch (e) {
+    redirect(back(token, `fel=${encodeURIComponent((e as Error).message)}`));
+  }
+  redirect(back(token, `ok=${encodeURIComponent('Tack! Betalningen är uppdelad – du ser delarna på fakturan.')}`));
 }

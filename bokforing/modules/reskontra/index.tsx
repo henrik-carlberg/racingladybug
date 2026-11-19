@@ -1,3 +1,5 @@
+import { collectionConfigured } from '@/lib/server/collection';
+import { smsConfigured } from '@/lib/server/sms';
 import Link from 'next/link';
 import type { ModuleDefinition, ModulePageProps } from '@/lib/modules/types';
 import { PrintButton } from '@/components/PrintButton';
@@ -20,6 +22,9 @@ async function Overview({ companyId, basePath }: ModulePageProps) {
   const s = await svc.settings((await import('@/lib/db')).sql, companyId);
   const due = r.open.filter((i) => i.action === 'reminder1' || i.action === 'reminder2');
   const mail = mailConfigured();
+  const api = collectionConfigured();
+  const cases = await svc.collections(companyId);
+  const caseOf = new Map(cases.map((c) => [c.invoice_id, c]));
   return (
     <>
       <h1>Kundreskontra och påminnelser</h1>
@@ -58,19 +63,33 @@ async function Overview({ companyId, basePath }: ModulePageProps) {
                   <button className="link">{i.levels.includes(1) ? 'Påminnelse 2' : 'Påminnelse 1'}{mail && i.email ? ' (e-post)' : ''}</button>
                 </form>
               )}
+              {api && i.days_overdue > 0 && !caseOf.get(i.id)?.case_id && (i.action === 'collection' || i.in_collection) && <form action={a.handOver.bind(null, companyId, i.id)} style={{ display: 'inline', marginLeft: '.5rem' }}><button className="link">Skicka till inkassobolaget</button></form>}
               {i.action === 'collection' && <form action={a.collection.bind(null, companyId, i.id, true)} style={{ display: 'inline', marginLeft: '.5rem' }}><input type="hidden" name="note" value="" /><button className="link">Markera för inkasso</button></form>}
-              {i.in_collection && <form action={a.collection.bind(null, companyId, i.id, false)} style={{ display: 'inline' }}><button className="link">Ta bort inkasso</button></form>}
+              {i.in_collection && caseOf.get(i.id)?.case_id && !['recalled', 'closed', 'paid'].includes(caseOf.get(i.id)?.status ?? '') && <form action={a.recall.bind(null, companyId, i.id)} style={{ display: 'inline' }}><button className="link">Återkalla</button></form>}
+              {i.in_collection && !caseOf.get(i.id)?.case_id && <form action={a.collection.bind(null, companyId, i.id, false)} style={{ display: 'inline' }}><button className="link">Ta bort inkasso</button></form>}
               {!i.action && !i.in_collection && i.days_overdue <= 0 && <span className="small muted">{ACTION[i.action ?? ''] ?? '–'}</span>}
             </td>
           </tr>
         ))}{r.open.length === 0 && <tr><td colSpan={8} className="muted">Alla fakturor är betalda. 🎉</td></tr>}</tbody>
       </table></div>
-      {r.open.some((i) => i.in_collection) && (<>
+      {cases.some((c) => c.case_id) && (<>
+        <h2>Hos inkassobolaget</h2>
+        <div className="table-wrap"><table className="collection-cases">
+          <thead><tr><th>Faktura</th><th>Kund</th><th>Lämnad</th><th>Ärende</th><th>Status</th><th className="num">Inbetalt</th></tr></thead>
+          <tbody>{cases.filter((c) => c.case_id).map((c) => (
+            <tr key={c.invoice_id}><td><Link href={`/c/${companyId}/fakturor/${c.invoice_id}`}>{c.number}</Link></td><td>{c.customer}</td><td>{c.date}</td><td className="small">{c.case_id}</td>
+              <td><span className={`badge ${c.status === 'paid' ? 'ok' : c.status === 'recalled' || c.status === 'closed' ? '' : 'warn'}`}>{c.label}</span>{c.status_text && <div className="small muted">{c.status_text}</div>}</td>
+              <td className="num">{c.collected != null ? kr(c.collected) : ''}</td></tr>
+          ))}</tbody>
+        </table></div>
+        <form action={a.refreshCases.bind(null, companyId)} className="actions"><button className="secondary">Hämta status från inkassobolaget</button></form>
+      </>)}
+      {r.open.some((i) => i.in_collection && !caseOf.get(i.id)?.case_id) && (<>
         <h2>Underlag för inkasso</h2>
         <p className="small">Lämna uppgifterna till ert inkassoombud (inkassoverksamhet kräver tillstånd från IMY). Skriv ut sidan eller kopiera tabellen.</p>
         <div className="table-wrap"><table>
           <thead><tr><th>Gäldenär</th><th>Faktura</th><th>Fakturadatum</th><th>Förföll</th><th className="num">Kapital</th><th className="num">Ränta t.o.m. {today()}</th><th>Påminnelser</th></tr></thead>
-          <tbody>{r.open.filter((i) => i.in_collection).map((i) => (
+          <tbody>{r.open.filter((i) => i.in_collection && !caseOf.get(i.id)?.case_id).map((i) => (
             <tr key={i.id}><td>{i.customer}</td><td>{i.number}</td><td>{i.invoice_date}</td><td>{i.due_date}</td><td className="num">{kr(i.total)}</td><td className="num">{kr(i.interest)}</td><td className="small">{i.levels.length} st, senast {i.last_reminder}</td></tr>
           ))}</tbody>
         </table></div>
@@ -158,6 +177,7 @@ async function Settings({ companyId, basePath }: ModulePageProps) {
           <label>Konto för ränta<input name="interest_account" type="number" defaultValue={s.interest_account} /></label>
         </div>
         <label>Extra text i påminnelsen<input name="message" defaultValue={s.message} placeholder="T.ex. Kontakta oss om ni vill göra en avbetalningsplan." /></label>
+        <label className="check"><input type="checkbox" name="sms" defaultChecked={s.sms} disabled={!smsConfigured()} /> Skicka påminnelserna även som SMS med länk till fakturan (kundens mobilnummer){!smsConfigured() && ' – SMS är inte uppsatt på tjänsten'}</label>
         <label className="check"><input type="checkbox" name="auto_remind" defaultChecked={s.auto_remind} /> Skapa och skicka påminnelser automatiskt varje natt (kräver e-post)</label>
         <div><button>Spara</button></div>
         <p className="small muted" style={{ margin: 0 }}>Dröjsmålsränta = referensräntan + 8 procentenheter (räntelagen 6 §); referensräntan fastställs 1 januari och 1 juli på riksbank.se.
@@ -178,7 +198,7 @@ export const reskontra: ModuleDefinition = {
     { scope: 'reskontra:read', description: 'Läsa åldersanalys, reskontra och påminnelser' },
     { scope: 'reskontra:write', description: 'Skapa påminnelser och avgiftsfakturor' },
   ],
-  events: [{ type: 'reskontra.reminder.created', description: 'En betalningspåminnelse har skapats' }],
+  events: [{ type: 'reskontra.reminder.created', description: 'En betalningspåminnelse har skapats' }, { type: 'reskontra.collection.updated', description: 'Ett inkassoärende har ny status' }],
   api: [
     { method: 'GET', path: '/aging', scope: 'reskontra:read', tag: 'Reskontra', summary: 'Åldersanalys och obetalda fakturor', handler: ({ actor }) => svc.agingReport(actor.companyId) },
     { method: 'GET', path: '/customers/:id/ledger', scope: 'reskontra:read', tag: 'Reskontra', summary: 'Kundreskontra med löpande saldo',

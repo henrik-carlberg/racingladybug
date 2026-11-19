@@ -1,5 +1,5 @@
 export type CustomerRow = {
-  id: number; name: string; orgnr: string; vat_number: string; email: string; address: string; postal_code: string;
+  id: number; name: string; orgnr: string; vat_number: string; email: string; phone?: string; address: string; postal_code: string;
   city: string; country: string; payment_terms: number | null; reverse_charge: boolean; construction_rc: boolean; peppol_id: string; currency: string; language: string;
 };
 
@@ -10,6 +10,7 @@ export function CustomerFields({ c }: { c?: Partial<CustomerRow> }) {
         <label style={{ flex: '2 1 260px' }}>Namn<input name="name" defaultValue={c?.name} required /></label>
         <label>Org.nr / personnr<input name="orgnr" defaultValue={c?.orgnr} /></label>
         <label>E-post<input name="email" type="email" defaultValue={c?.email} /></label>
+        <label>Mobil (för SMS-påminnelser)<input name="phone" type="tel" defaultValue={c?.phone} /></label>
       </div>
       <div className="row">
         <label style={{ flex: '2 1 260px' }}>Adress<input name="address" defaultValue={c?.address} /></label>
