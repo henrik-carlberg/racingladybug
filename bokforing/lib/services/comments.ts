@@ -35,13 +35,24 @@ export async function mentionable(companyId: number): Promise<{ id: number; name
     ORDER BY u.name`];
 }
 
+/** Användare som får se poster med behörigheten: ägare, medlemmar utan begränsning eller med behörigheten, revisorer och byråns konsulter */
+async function canSee(companyId: number, perm: Permission): Promise<Set<number>> {
+  const rows = await sql<{ id: number }[]>`
+    SELECT user_id AS id FROM memberships WHERE company_id = ${companyId} AND role <> 'employee'
+      AND (role IN ('owner','auditor') OR permissions IS NULL OR ${perm} = ANY(permissions))
+    UNION SELECT fm.user_id FROM firm_members fm JOIN firm_clients fc ON fc.firm_id = fm.firm_id WHERE fc.company_id = ${companyId}`;
+  return new Set(rows.map((r) => r.id));
+}
+
 export async function addComment(actor: Actor & { userName: string }, entity: Entity, id: number, body: string) {
   const text = body.trim();
   if (!text) throw new ValidationError('Skriv en kommentar');
   if (text.length > 4000) throw new ValidationError('Kommentaren är för lång');
   const info = await entityInfo(actor.companyId, entity, id);
   const people = await mentionable(actor.companyId);
-  const mentioned = findMentions(text, people).filter((u) => u !== actor.userId);
+  // Bara de som får se posten kan nämnas (annars skulle notisen visa kommentaren för fel person)
+  const allowed = await canSee(actor.companyId, ENTITY_PERM[entity]);
+  const mentioned = findMentions(text, people).filter((u) => u !== actor.userId && allowed.has(u));
   const commentId = await sql.begin(async (tx) => {
     const [c] = await tx<{ id: number }[]>`INSERT INTO comments (company_id, entity, entity_id, user_id, body) VALUES (${actor.companyId}, ${entity}, ${id}, ${actor.userId}, ${text}) RETURNING id`;
     for (const u of mentioned) await tx`INSERT INTO comment_mentions (comment_id, user_id) VALUES (${c.id}, ${u})`;

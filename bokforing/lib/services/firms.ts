@@ -177,7 +177,7 @@ export async function answerQuestion(actor: Actor, id: number, answer: string, f
     await tx`UPDATE client_questions SET answer = ${answer.trim().slice(0, 4000) || (file ? 'Underlag bifogat' : '')}, status = 'answered', answered_by = ${actor.userId}, answered_at = now() WHERE id = ${id}`;
     if (file) {
       // Underlaget hamnar på verifikationen direkt om det finns en; annars kopplas det dit när transaktionen bokförs
-      const [v] = q.entity === 'voucher' ? [{ voucher_id: q.entity_id }]
+      const [v] = q.entity === 'voucher' ? await tx<{ voucher_id: number }[]>`SELECT id AS voucher_id FROM vouchers WHERE id = ${q.entity_id} AND company_id = ${actor.companyId}`
         : q.entity === 'bank_transaction' ? await tx<{ voucher_id: number | null }[]>`SELECT voucher_id FROM bank_transactions WHERE id = ${q.entity_id} AND company_id = ${actor.companyId}`
         : [{ voucher_id: null }];
       const aid = await insertAttachment(tx, actor, v?.voucher_id ?? null, file);

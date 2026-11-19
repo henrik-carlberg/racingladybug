@@ -21,7 +21,8 @@ export async function subscribe(userId: number, input: { endpoint?: unknown; key
   if (n >= 10) throw new ValidationError('Högst tio enheter kan ta emot notiser');
   await sql`
     INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, device) VALUES (${userId}, ${endpoint}, ${p256dh}, ${auth}, ${device.slice(0, 120)})
-    ON CONFLICT (endpoint) DO UPDATE SET user_id = EXCLUDED.user_id, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth, device = EXCLUDED.device, failures = 0`;
+    ON CONFLICT (endpoint) DO UPDATE SET user_id = EXCLUDED.user_id, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth, device = EXCLUDED.device, failures = 0
+    WHERE push_subscriptions.user_id = EXCLUDED.user_id OR push_subscriptions.auth = EXCLUDED.auth`; // en annan användares enhet kan bara tas över av webbläsaren som har dess hemliga nyckel
 }
 
 export async function unsubscribe(userId: number, endpoint: string) {
