@@ -27,3 +27,9 @@ export async function retry(cid: number, invoiceId: number) {
   await attempt(back(cid), async () => { await svc.retryMirror(actor, invoiceId); });
   done(back(cid), 'Fakturan är speglad');
 }
+
+export async function accept(cid: number, fd: FormData) {
+  const actor = userActor(await requireCompany(cid, { owner: true }));
+  await attempt(back(cid), () => svc.setAccept(actor, fd.get('accept') === 'on'));
+  done(back(cid), fd.get('accept') === 'on' ? 'Koncernbolagens fakturor blir nu leverantörsfakturor här automatiskt' : 'Koncernfakturor tas inte längre emot automatiskt');
+}

@@ -4,7 +4,7 @@ import { Flash, type SP } from '@/components/ui';
 import { kr, today } from '@/lib/format';
 import { CHARGE_KINDS } from '@/lib/intercompany';
 import { balances, eliminations, linkedCompanies, listCharges } from '@/lib/services/intercompany';
-import { addCharge, run, stop } from './actions';
+import { accept, addCharge, run, stop } from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,10 +21,14 @@ export default async function Intercompany({ params, searchParams }: { params: P
       <p className="muted">Fakturor till ett koncernbolag (kunden har bolagets organisationsnummer) blir automatiskt en leverantörsfaktura hos mottagaren. Mellanhavandena stäms av åt båda håll och underlaget används vid elimineringen i <Link href="/koncern">koncernrapporten</Link>.</p>
       <Flash searchParams={searchParams} />
       {linked.length === 0 ? <div className="card">Bolaget är inte kopplat till någon koncern. Koppla moder- och dotterbolag under <Link href="/koncern">Koncern</Link>.</div> : (<>
+        <form action={accept.bind(null, id)} className="card row ic-accept" style={{ alignItems: 'center' }}>
+          <label className="check" style={{ flex: '3 1 320px' }}><input type="checkbox" name="accept" defaultChecked={ctx.company.accept_intercompany} disabled={!owner} /> Ta emot koncernbolagens fakturor automatiskt som leverantörsfakturor här (de attesteras som vanligt)</label>
+          {owner && <div style={{ flex: '0 0 auto' }}><button className="secondary">Spara</button></div>}
+        </form>
         <h2>Mellanhavanden</h2>
         <div className="table-wrap"><table className="ic-balances"><thead><tr><th>Koncernbolag</th><th className="num">Vår fordran</th><th className="num">Deras skuld till oss</th><th className="num">Vår skuld</th><th className="num">Deras fordran på oss</th><th>Avstämning</th></tr></thead>
           <tbody>{bal.map((b) => (
-            <tr key={b.company.id} className="ic-row"><td><b>{b.company.name}</b><div className="small muted">{b.company.relation}</div></td>
+            <tr key={b.company.id} className="ic-row"><td><b>{b.company.name}</b><div className="small muted">{b.company.relation}{!b.company.accepts && ' · tar inte emot koncernfakturor'}</div></td>
               <td className="num">{kr(b.receivable)}</td><td className="num">{b.theirPayable != null ? kr(b.theirPayable) : '–'}</td><td className="num">{kr(b.payable)}</td><td className="num">{b.theirReceivable != null ? kr(b.theirReceivable) : '–'}</td>
               <td>{!b.access ? <span className="small muted">Du har inte tillgång till bolaget</span> : b.out!.ok && b.in!.ok ? <span className="badge ok">Stämmer</span>
                 : <span className="badge warn ic-diff">Skiljer {kr(b.out!.ok ? b.in!.diff : b.out!.diff)}</span>}</td></tr>

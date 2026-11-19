@@ -22,3 +22,5 @@ CREATE TABLE intercompany_charges (
   created_by         integer REFERENCES users(id) ON DELETE SET NULL,
   created_at         timestamptz NOT NULL DEFAULT now()
 );
+-- Mottagaren måste själv tillåta att koncernbolag lägger in leverantörsfakturor hos den
+ALTER TABLE companies ADD COLUMN accept_intercompany boolean NOT NULL DEFAULT false;

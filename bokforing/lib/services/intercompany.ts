@@ -14,8 +14,8 @@ const ownerOf = async (companyId: number): Promise<Actor | null> => {
 
 /** Koncernbolag som bolaget är kopplat till (moder eller dotter) */
 export async function linkedCompanies(companyId: number) {
-  return [...await sql<{ id: number; name: string; orgnr: string; relation: string }[]>`
-    SELECT c.id, c.name, c.orgnr, CASE WHEN g.parent_company_id = ${companyId} THEN 'dotterbolag' ELSE 'moderbolag' END AS relation
+  return [...await sql<{ id: number; name: string; orgnr: string; relation: string; accepts: boolean }[]>`
+    SELECT c.id, c.name, c.orgnr, c.accept_intercompany AS accepts, CASE WHEN g.parent_company_id = ${companyId} THEN 'dotterbolag' ELSE 'moderbolag' END AS relation
     FROM group_links g JOIN companies c ON c.id = CASE WHEN g.parent_company_id = ${companyId} THEN g.subsidiary_company_id ELSE g.parent_company_id END
     WHERE g.parent_company_id = ${companyId} OR g.subsidiary_company_id = ${companyId} ORDER BY c.name`];
 }
@@ -34,6 +34,7 @@ export async function mirrorInvoice(companyId: number, invoiceId: number) {
   if ((await sql`SELECT 1 FROM intercompany_invoices WHERE invoice_id = ${invoiceId}`).length) return null;
   const record = async (si: number | null, message: string) => sql`INSERT INTO intercompany_invoices (source_company_id, invoice_id, target_company_id, supplier_invoice_id, message)
     VALUES (${companyId}, ${invoiceId}, ${target.id}, ${si}, ${message}) ON CONFLICT (invoice_id) DO NOTHING`;
+  if (!target.accepts) { await record(null, `${target.name} tar inte emot koncernfakturor automatiskt – ägaren slår på det under Koncerninterna flöden`); return null; }
   if (i.credit || i.total <= 0 || i.currency !== 'SEK') { await record(null, 'Kreditfakturor och fakturor i utländsk valuta speglas inte – registrera dem hos mottagaren'); return null; }
   const actor = await ownerOf(target.id);
   if (!actor) { await record(null, 'Mottagaren saknar ägare'); return null; }
@@ -82,7 +83,9 @@ export async function eliminations(companyId: number, from: string, to: string) 
 export async function addCharge(actor: Actor, input: Record<string, unknown>) {
   if (actor.role !== 'owner') throw new ValidationError('Bara ägaren kan lägga upp koncernavgifter');
   const target = int(input, 'target_company_id', 'Koncernbolag');
-  if (!(await linkedCompanies(actor.companyId)).some((c) => c.id === target)) throw new ValidationError('Bolaget är inte ett koncernbolag');
+  const t = (await linkedCompanies(actor.companyId)).find((c) => c.id === target);
+  if (!t) throw new ValidationError('Bolaget är inte ett koncernbolag');
+  if (!t.accepts) throw new ValidationError(`${t.name} tar inte emot koncernfakturor – ägaren där slår på det först`);
   const kind = str(input, 'kind') as ChargeKind;
   if (!(kind in CHARGE_KINDS)) throw new ValidationError('Välj typ');
   const start = str(input, 'start_period');
@@ -152,4 +155,11 @@ export async function retryMirror(actor: Actor, invoiceId: number) {
   const r = await sql`DELETE FROM intercompany_invoices WHERE invoice_id = ${invoiceId} AND source_company_id = ${actor.companyId} AND supplier_invoice_id IS NULL RETURNING id`;
   if (!r.length) throw new ConflictError('Fakturan är redan speglad');
   return mirrorInvoice(actor.companyId, invoiceId);
+}
+
+/** Mottagarens samtycke: koncernbolag får lägga in leverantörsfakturor (för attest) i det här bolaget */
+export async function setAccept(actor: Actor, on: boolean) {
+  if (actor.role !== 'owner') throw new ValidationError('Bara ägaren kan ändra det');
+  await sql`UPDATE companies SET accept_intercompany = ${on} WHERE id = ${actor.companyId}`;
+  await auditBy(sql, actor, 'accept_intercompany', 'company', actor.companyId, { on });
 }

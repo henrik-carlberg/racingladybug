@@ -230,6 +230,10 @@ const finServer = http.createServer((req, res) => {
   log('OSS-deklaration per land och skattesats med förfallodag och underlag; periodisk sammanställning som fil till Skatteverket');
 
   // ================= Del 5: koncerninterna flöden =================
+  await owner.goto(`${BASE}/c/2/koncerninternt`);
+  await owner.check('.ic-accept input[name=accept]');
+  await owner.click('.ic-accept button:has-text("Spara")');
+  await owner.locator('text=Koncernbolagens fakturor blir nu leverantörsfakturor här automatiskt').waitFor();
   await owner.goto(B + '/kunder');
   await owner.fill('input[name=name]', 'Firma Test (koncern)');
   await owner.fill('input[name=orgnr]', '811218-9876');
@@ -251,7 +255,7 @@ const finServer = http.createServer((req, res) => {
   await owner.goto(`${BASE}/c/2/leverantorsfakturor`);
   t = await text(owner);
   assert(t.includes('Testbolaget AB') && t.includes(icNo) && t.includes('2 500,00'), 'speglad hos mottagaren: ' + icNo + ' ' + t.slice(0, 1500));
-  log('kundfaktura till ett koncernbolag blir automatiskt en leverantörsfaktura hos mottagaren');
+  log('kundfaktura till ett koncernbolag blir automatiskt en leverantörsfaktura hos mottagaren – när mottagarens ägare har tillåtit det');
 
   await owner.goto(B + '/koncerninternt');
   t = await text(owner);
