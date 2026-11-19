@@ -76,6 +76,24 @@ const apServer = http.createServer((req, res) => {
 const apHook = (event) => { const body = JSON.stringify(event); const ts = String(Math.floor(Date.now() / 1000));
   return fetch(BASE + '/api/peppol/inbound', { method: 'POST', body, headers: { 'content-type': 'application/json', 'x-peppol-timestamp': ts, 'x-peppol-signature': crypto.createHmac('sha256', 'apsecret').update(`${ts}.${body}`).digest('hex') } }); };
 
+// Fejkade kortterminaler och betalleverantörer
+const todayIso = new Date().toISOString().slice(0, 10), yIso = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+const pp = { calls: [] };
+const ppServer = http.createServer((req, res) => {
+  const u = new URL(req.url, 'http://x'); pp.calls.push(u.pathname);
+  const send = (j, code = 200) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(j)); };
+  if (u.pathname === '/zettle/token') return send({ access_token: 'zt' });
+  if (u.pathname.startsWith('/zettle/') && req.headers.authorization !== 'Bearer zt') return send({}, 401);
+  if (u.pathname === '/zettle/purchases/v2') return send({ purchases: u.searchParams.get('startDate').startsWith(yIso) ? [
+    { amount: 25000, products: [{ unitPrice: 12500, quantity: '2', vatPercentage: 25 }] }, { amount: 11200, products: [{ unitPrice: 11200, quantity: '1', vatPercentage: 12 }] }] : [] });
+  if (u.pathname === '/zettle/v2/accounts/liquid/transactions') return send({ data: [{ timestamp: todayIso + 'T05:00:00Z', amount: -35548, originatorTransactionType: 'PAYOUT' }, { timestamp: todayIso + 'T01:00:00Z', amount: -652, originatorTransactionType: 'PAYMENT_FEE' }] });
+  if (u.pathname.startsWith('/stripe/') && req.headers.authorization !== 'Bearer sk_live_kund') return send({}, 401);
+  if (u.pathname === '/stripe/v1/payouts') return send({ data: [{ id: 'po_77', amount: 94000, arrival_date: Math.floor(Date.parse(todayIso) / 1000) + 3600, currency: 'sek', status: 'paid' }] });
+  if (u.pathname === '/stripe/v1/balance_transactions') return send({ data: [{ type: 'charge', amount: 100000, fee: 3000 }, { type: 'refund', amount: -3000, fee: 0 }, { type: 'payout', amount: -94000, fee: 0 }] });
+  if (u.pathname === '/klarna/settlements/v1/payouts') return send({ payouts: [{ payout_date: todayIso + 'T00:00:00Z', payment_reference: 'KL-1', currency_code: 'SEK', totals: { sale_amount: 50000, fee_amount: 1500, settlement_amount: 49000 } }] });
+  send({}, 404);
+}).listen(3310);
+
 (async () => {
   const browser = await chromium.launch();
   const owner = await login(browser, 'agare@example.com', 'hemligtlosen1');
@@ -287,8 +305,55 @@ const apHook = (event) => { const body = JSON.stringify(event); const ts = Strin
   assert(t.includes('7411') && t.includes('7533') && t.includes('7570') && t.includes('Upplupna avtalsförsäkringar (Fora)'), 'bokföring av pension och försäkringar: ' + t.slice(0, 1500));
   log('lönekörningen bokförs med pensionspremie (7411), särskild löneskatt (7533) och Fora-försäkringar (7570)');
 
+  // ================= Del 4: kassor och utbetalningar =================
+  const camtIn = `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02"><BkToCstmrStmt><Stmt><Ntry><Amt Ccy="SEK">355.48</Amt><CdtDbtInd>CRDT</CdtDbtInd><Sts>BOOK</Sts><BookgDt><Dt>${todayIso}</Dt></BookgDt><AcctSvcrRef>ZT-1</AcctSvcrRef><NtryDtls><TxDtls><RmtInf><Ustrd>ZETTLE PAYOUT</Ustrd></RmtInf></TxDtls></NtryDtls></Ntry></Stmt></BkToCstmrStmt></Document>`;
+  await owner.goto(B + '/bank');
+  const brow = owner.locator('tr:has-text("Företagskonto")').first();
+  await brow.locator('input[type=file]').setInputFiles({ name: 'konto.xml', mimeType: 'application/xml', buffer: Buffer.from(camtIn) });
+  await brow.locator('button:has-text("Importera")').click();
+  await owner.waitForURL(/ok=/);
+
+  const connectPP = async (provider, fields) => {
+    await owner.goto(B + '/kassa/betalningar');
+    await owner.selectOption('select[name=provider]', provider);
+    for (const [k, v] of Object.entries(fields)) await owner.fill(`input[name=${k}]`, v);
+    await owner.click('button:has-text("Spara koppling")');
+    await owner.waitForURL(/ok=/);
+  };
+  await connectPP('zettle', { name: 'Butiken', api_key: 'zk', secret: 'klient-1' });
+  await owner.click('section.provider:has-text("Butiken") button:has-text("Hämta nu")');
+  await owner.waitForURL(/ok=.*dagsrapporter/);
+  assert(decodeURIComponent(owner.url()).includes('1 dagsrapporter och 1 utbetalningar bokförda, 1 avstämda mot banken'), 'Zettle-synk: ' + decodeURIComponent(owner.url()));
+  t = await text(owner);
+  assert(t.includes('Dagsrapport') && t.includes('362,00') && t.includes('Avstämd mot banken') && t.includes('355,48') && t.includes('6,52'), 'rapporter: ' + t.slice(0, 1500));
+  await owner.click('tr:has-text("Dagsrapport") a:has-text("verifikation")');
+  await owner.waitForURL(/verifikationer\/\d+/);
+  t = await text(owner);
+  assert(t.includes('Dagsrapport Zettle') && t.includes('2 köp') && t.includes('1580') && t.includes('2611') && t.includes('50,00') && t.includes('2621') && t.includes('12,00'), 'dagsrapportens kontering: ' + t.slice(0, 1200));
+  log('Zettle: dagsrapporten bokförs per momssats, utbetalningen delas i avgift och netto och stäms av mot bankens insättning');
+
+  await owner.goto(B + '/kassa/betalningar');
+  await owner.click('section.provider:has-text("Butiken") button:has-text("Hämta nu")');
+  await owner.waitForURL((u) => decodeURIComponent(u.href).includes('0 dagsrapporter'));
+  assert(decodeURIComponent(owner.url()).includes('0 dagsrapporter och 0 utbetalningar'), 'samma rapporter bokförs inte två gånger');
+
+  await connectPP('stripe', { name: 'Stripe-kort', api_key: 'sk_live_kund', clearing_account: '1582' });
+  await owner.click('section.provider:has-text("Stripe-kort") button:has-text("Hämta nu")');
+  await owner.waitForURL(/ok=.*utbetalningar/);
+  await owner.click('tr:has-text("Stripe-kort") a:has-text("verifikation")');
+  t = await text(owner);
+  assert(t.includes('Utbetalning Stripe') && t.includes('1582') && t.includes('970,00') && t.includes('6570') && t.includes('30,00') && t.includes('940,00'), 'Stripe-utbetalning: ' + t.slice(0, 1200));
+  log('Stripe: utbetalningen delas i försäljning, återbetalning och avgifter mot avräkningskontot');
+
+  await connectPP('klarna', { name: 'Klarna', api_key: 'K123', secret: 'hemlis' });
+  await owner.click('section.provider:has-text("Klarna") button:has-text("Hämta nu")');
+  await owner.waitForURL((u) => decodeURIComponent(u.href).includes('att kontrollera'));
+  t = await text(owner);
+  assert(t.includes('Kontrollera') && t.includes('går inte ihop'), 'Klarna-utbetalning som inte går ihop flaggas: ' + t.slice(0, 1500));
+  log('Klarna: utbetalning som inte går ihop bokförs inte utan flaggas för kontroll');
+
   //@@NEXT@@
   await browser.close();
-  skvServer.close(); apServer.close();
+  skvServer.close(); apServer.close(); ppServer.close();
   console.log('Omgång 8: alla steg gick igenom');
 })().catch((e) => { console.error(e); process.exit(1); });

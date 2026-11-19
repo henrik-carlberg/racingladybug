@@ -22,6 +22,7 @@ export function buildNav(o: {
       { path: '/fakturor', label: 'Kundfakturor', perm: 'invoicing', hint: 'Skapa, skicka och följ upp fakturor' },
       { path: '/kunder', label: 'Kunder', perm: 'invoicing' },
       { path: '/kassa', label: 'Kassa och e-handel', hint: 'Dagskassa och webbutik' },
+      { path: '/kassa/betalningar', label: 'Kortterminaler och utbetalningar', perm: 'ledger', hint: 'Zettle, SumUp, Stripe, Klarna, Shopify' },
       { path: '/fakturor/rotrut', label: 'ROT och RUT', perm: 'invoicing' },
       { path: '/peppol', label: 'E-faktura (Peppol)', perm: 'invoicing', hint: 'Skickade och mottagna e-fakturor' },
       { path: '/autogiro', label: 'Autogiro', perm: 'invoicing', hint: 'Dra betalningen från kundens konto' },

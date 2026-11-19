@@ -66,3 +66,37 @@ describe('Lön enligt kollektivavtal', () => {
     expect(foraCsv({ orgnr: '556026-9986', period: '2026-11', rows: [{ pnr: '199001011234', name: 'Bo', salary: 30_000_50 }] })).toContain('5560269986;202611;199001011234;"Bo";30001');
   });
 });
+
+import { klarnaPayouts, payoutLines, salesLines, shopifyPayouts, stripePayout, sumupPayouts, sumupSales, zettlePayouts, zettleSales } from '@/lib/payproviders';
+describe('Kortterminaler och utbetalningar', () => {
+  const sum = (l: { debit: number; credit: number }[]) => l.reduce((a, x) => a + x.debit - x.credit, 0);
+  it('Zettle: dagsförsäljning per momssats med retur', () => {
+    const s = zettleSales('2026-11-18', { purchases: [
+      { amount: 15000, products: [{ unitPrice: 10000, quantity: '1', vatPercentage: 25 }, { unitPrice: 5000, quantity: '1', vatPercentage: 12 }] },
+      { amount: 10000, refund: true, products: [{ unitPrice: 10000, quantity: '1', vatPercentage: 25 }] },
+      { amount: 2000 },
+    ] }, 25);
+    expect(s.gross).toEqual({ 25: 2000, 12: 5000 }); expect(s.count).toBe(3);
+    const l = salesLines(s, 1580);
+    expect(sum(l)).toBe(0);
+    expect(l.find((x) => x.account === 1580)?.debit).toBe(7000);
+    expect(l.find((x) => x.account === 2621)?.credit).toBe(536);
+  });
+  it('Zettle-utbetalning per dag och kontering', () => {
+    const [p] = zettlePayouts({ data: [{ timestamp: '2026-11-19T06:00:00Z', amount: -98_50, originatorTransactionType: 'PAYOUT' }, { timestamp: '2026-11-19T01:00:00Z', amount: -1_50, originatorTransactionType: 'PAYMENT_FEE' }] });
+    expect(p).toMatchObject({ date: '2026-11-19', net: 98_50, fees: 1_50, gross: 100_00 });
+    const l = payoutLines(p, { clearing: 1580, bank: 1930, fee: 6570 });
+    expect(l.find((x) => x.account === 1930)?.debit).toBe(98_50); expect(l.find((x) => x.account === 6570)?.debit).toBe(1_50); expect(l.find((x) => x.account === 1580)?.credit).toBe(100_00);
+  });
+  it('SumUp, Stripe, Klarna, Shopify', () => {
+    expect(sumupSales('2026-11-18', { items: [{ amount: 100, status: 'SUCCESSFUL' }, { amount: 20, type: 'REFUND', status: 'SUCCESSFUL' }, { amount: 50, status: 'FAILED' }] }, 12).gross).toEqual({ 12: 8000 });
+    expect(sumupPayouts([{ date: '2026-11-19', amount: 97.5, fee: 2.5, type: 'PAYOUT' }])[0]).toMatchObject({ net: 9750, fees: 250, gross: 10000 });
+    const sp = stripePayout({ id: 'po_1', amount: 9400, arrival_date: 1_795_000_000, currency: 'sek' }, [{ type: 'charge', amount: 10000, fee: 270 }, { type: 'refund', amount: -300, fee: 0 }, { type: 'payout', amount: -9430, fee: 0 }]);
+    expect(sp).toMatchObject({ gross: 10000, refunds: 300, fees: 270, net: 9400, currency: 'SEK' });
+    expect(() => payoutLines(sp, { clearing: 1580, bank: 1930, fee: 6570 })).toThrow(/går inte ihop/);
+    const [k] = klarnaPayouts({ payouts: [{ payout_date: '2026-11-19T00:00:00Z', payment_reference: 'K-1', currency_code: 'SEK', totals: { sale_amount: 50000, fee_amount: 1500, return_amount: 5000, settlement_amount: 43500 } }] });
+    expect(sum(payoutLines(k, { clearing: 1581, bank: 1930, fee: 6570 }))).toBe(0);
+    const [s] = shopifyPayouts({ payouts: [{ id: 7, date: '2026-11-19', currency: 'SEK', amount: '960.00', status: 'paid', summary: { charges_gross_amount: '1000.00', charges_fee_amount: '-30.00', refunds_gross_amount: '-10.00' } }] });
+    expect(s).toMatchObject({ gross: 100000, refunds: 1000, net: 96000 });
+  });
+});
