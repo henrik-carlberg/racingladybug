@@ -229,6 +229,53 @@ const finServer = http.createServer((req, res) => {
   assert(!(await text(owner)).includes('190'), 'OSS-momsen ingår inte i den svenska momsdeklarationen');
   log('OSS-deklaration per land och skattesats med förfallodag och underlag; periodisk sammanställning som fil till Skatteverket');
 
+  // ================= Del 5: koncerninterna flöden =================
+  await owner.goto(B + '/kunder');
+  await owner.fill('input[name=name]', 'Firma Test (koncern)');
+  await owner.fill('input[name=orgnr]', '811218-9876');
+  await owner.click('form button:has-text("Spara")');
+  await owner.locator('text=Kunden är sparad').waitFor();
+  await owner.goto(B + '/fakturor/ny');
+  await owner.selectOption('select[name=customer_id]', { label: 'Firma Test (koncern)' });
+  await owner.fill('input[name=invoice_date]', day(1));
+  const ir = owner.locator('tbody tr').first();
+  await ir.locator('td:nth-child(1) input').fill('Konsulttjänster inom koncernen');
+  await ir.locator('td:nth-child(2) input').fill('1');
+  await ir.locator('td:nth-child(3) input').fill('st');
+  await ir.locator('td:nth-child(4) input').fill('2000');
+  await owner.click('button:has-text("Spara utkast")');
+  await owner.waitForURL(/fakturor\/\d+\?ok/);
+  await owner.click('button:has-text("Bokför faktura")');
+  await owner.locator('text=klar att skicka').first().waitFor();
+  const icNo = ((await owner.locator('h1').first().innerText()).match(/\d{3,}/) || [])[0];
+  await owner.goto(`${BASE}/c/2/leverantorsfakturor`);
+  t = await text(owner);
+  assert(t.includes('Testbolaget AB') && t.includes(icNo) && t.includes('2 500,00'), 'speglad hos mottagaren: ' + icNo + ' ' + t.slice(0, 1500));
+  log('kundfaktura till ett koncernbolag blir automatiskt en leverantörsfaktura hos mottagaren');
+
+  await owner.goto(B + '/koncerninternt');
+  t = await text(owner);
+  assert(/Firma Test.*2[\s ]500,00 2[\s ]500,00.*Stämmer/.test(t), 'mellanhavanden: ' + t.slice(0, 1500));
+  assert((await owner.locator('.ic-elim tr:has-text("Speglad")').count()) >= 1 && /Att eliminera \(koncernintern försäljning\) 2[\s ]000,00/.test(t), 'elimineringsunderlag: ' + t.slice(0, 2500));
+  log('mellanhavanden stäms av åt båda håll och elimineringsunderlaget visar den koncerninterna försäljningen');
+
+  const addCh = async (kind, f) => {
+    await owner.selectOption('select[name=target_company_id]', { label: 'Firma Test' });
+    await owner.selectOption('select[name=kind]', kind);
+    for (const [k, v] of Object.entries(f)) await owner.fill(`form:has(select[name=kind]) input[name=${k}]`, v);
+    await owner.click('button:has-text("Lägg upp avgift")');
+    await owner.locator('text=Koncernavgiften är upplagd').waitFor();
+  };
+  await addCh('management_fee', { amount: '1000' });
+  await addCh('interest', { principal: '1200000', rate_pct: '5' });
+  await owner.click('button:has-text("Fakturera förfallna månader nu")');
+  await owner.locator('text=2 koncernfakturor är skapade och speglade hos mottagarna').waitFor();
+  t = await text(owner);
+  assert(/Firma Test.*8[\s ]750,00 8[\s ]750,00.*Stämmer/.test(t), 'mellanhavanden efter avgifter (2 500 + 1 250 + 5 000): ' + t.slice(0, 1500));
+  await owner.click('button:has-text("Fakturera förfallna månader nu")');
+  await owner.locator('text=0 koncernfakturor är skapade').waitFor();
+  log('management fee och koncernränta faktureras varje månad och speglas hos mottagaren – en gång per månad');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); finServer.close();
   console.log('Omgång 12: alla steg gick igenom');

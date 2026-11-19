@@ -67,6 +67,7 @@ export function buildNav(o: {
       { path: '/rapporter/manad', label: 'Månadsrapport' },
       { path: '/nyckeltal', label: 'Nyckeltal', perm: 'ledger', hint: 'För vd, ekonomi och styrelse' },
       { path: '/rapporter/egna', label: 'Egna rapporter', perm: 'ledger', hint: 'Bygg och dela egna rapporter' },
+      { path: '/koncerninternt', label: 'Koncerninterna flöden', perm: 'ledger', hint: 'Speglade fakturor, mellanhavanden och koncernavgifter' },
       { path: '/klimat', label: 'Klimatbokföring', perm: 'ledger', hint: 'Utsläpp ur bokföringen per scope' },
       { path: '/rapporter', label: 'Resultat & balans' },
       { path: '/rapporter/budget', label: 'Budget' },

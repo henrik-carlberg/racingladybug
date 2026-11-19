@@ -275,6 +275,11 @@ export async function bookInvoice(actor: Actor, invoiceId: number): Promise<Invo
     const out = await fetchInvoice(tx, actor.companyId, invoiceId);
     await emit(tx, actor.companyId, 'invoice.booked', out);
     return out;
+  }).then(async (out) => {
+    // Faktura till ett koncernbolag blir en leverantörsfaktura hos mottagaren
+    const { mirrorInvoice } = await import('./intercompany');
+    await mirrorInvoice(actor.companyId, invoiceId).catch((e) => console.error('koncernfaktura', e instanceof Error ? e.message : e));
+    return out;
   });
 }
 

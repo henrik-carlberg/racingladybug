@@ -83,3 +83,19 @@ describe('Moms för e-handel inom EU', () => {
       .toBe('SKV574008;\r\nSE556026998601;26-4;Ägare T;070;a@b.se\r\nDE123456789;1000;;\r\n');
   });
 });
+
+import { chargeAmount, duePeriods, normOrg, reconcilePair } from '@/lib/intercompany';
+describe('Koncerninterna flöden', () => {
+  it('avstämning och avgifter', () => {
+    expect(normOrg('16556026-9986')).toBe('5560269986');
+    expect(reconcilePair({ receivable: 100000, payable: 100000 }).ok).toBe(true);
+    expect(reconcilePair({ receivable: 100000, payable: 90000 })).toEqual({ diff: 10000, ok: false });
+    expect(chargeAmount({ kind: 'interest', amount: null, principal: 120000000, ratePct: 5 })).toBe(500000);
+    expect(chargeAmount({ kind: 'management_fee', amount: 2500000, principal: null, ratePct: null })).toBe(2500000);
+  });
+  it('perioder att fakturera', () => {
+    expect(duePeriods(null, '2026-10', '2026-11')).toEqual(['2026-10', '2026-11']);
+    expect(duePeriods('2026-11', '2026-01', '2026-11')).toEqual([]);
+    expect(duePeriods('2026-11', '2026-01', '2027-01')).toEqual(['2026-12', '2027-01']);
+  });
+});
