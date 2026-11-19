@@ -1,4 +1,5 @@
 import 'server-only';
+import { notify } from './push';
 import { sql, type Tx } from '@/lib/db';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import { createVoucher } from '@/lib/server/ledger';
@@ -318,6 +319,7 @@ export async function registerPaymentTx(tx: Tx, actor: Actor, invoiceId: number,
   await auditBy(tx, actor, full ? 'paid' : 'partly_paid', 'invoice', invoiceId, { amount });
   const out = await fetchInvoice(tx, actor.companyId, invoiceId);
   await emit(tx, actor.companyId, full ? 'invoice.paid' : 'invoice.partly_paid', out);
+  notify.paid(actor.companyId, inv.customer, inv.invoice_number, amount, invoiceId);
   return out;
 }
 
@@ -337,6 +339,7 @@ async function registerFxPayment(tx: Tx, actor: Actor, invoiceId: number, inv: {
   await auditBy(tx, actor, 'paid', 'invoice', invoiceId, { received, fx: received - remaining });
   const out = await fetchInvoice(tx, actor.companyId, invoiceId);
   await emit(tx, actor.companyId, 'invoice.paid', out);
+  notify.paid(actor.companyId, inv.customer, inv.invoice_number, received, invoiceId);
   return out;
 }
 

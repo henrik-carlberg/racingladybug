@@ -1,5 +1,6 @@
 import 'server-only';
 import { rememberCoding } from './coding-memory';
+import { notify } from './push';
 import { vatRateOf } from '@/lib/coding-memory';
 import { sql, type Tx } from '@/lib/db';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
@@ -148,6 +149,7 @@ export async function registerSupplierInvoice(actor: Actor, input: Record<string
       await auditBy(tx, actor, 'register', 'supplier_invoice', id);
       const out = await fetchSI(tx, actor.companyId, id);
       await emit(tx, actor.companyId, 'supplier_invoice.registered', out);
+      notify.attest(actor.companyId, actor.userId ?? null, sup.name, total, id);
       return out;
     });
   } catch (e) {

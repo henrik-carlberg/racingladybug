@@ -1,6 +1,8 @@
 // End-to-end, omgång 5: inlärd kontering, mönster och förslag, ångra, hjälp i sammanhanget och kontroller,
 // pushnotiser, kommentarer och frågor till kunden, flytt från andra program och årsredovisning i iXBRL.
 const { chromium } = require('playwright');
+const http = require('node:http');
+const crypto = require('node:crypto');
 const BASE = process.env.BASE_URL || 'http://localhost:3000';
 const log = (...a) => console.log('✔', ...a);
 const assert = (c, m) => { if (!c) throw new Error(m); };
@@ -177,6 +179,58 @@ async function login(browser, email, password, opts = {}) {
   assert(!(await owner.locator('button:text-is("Bokför")').isDisabled()), 'varning stoppar inte bokföringen');
   log('verifikation: varning när momsen inte är 25, 12 eller 6 %');
 
+  // ================= Del 3: pushnotiser =================
+  // En egen "pushtjänst" på localhost tar emot notiserna; enheten har riktiga nycklar så att innehållet kan dekrypteras
+  const pushed = [];
+  const pushServer = http.createServer((req, res) => {
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => { pushed.push({ path: req.url, headers: req.headers, body: Buffer.concat(chunks) }); res.writeHead(201); res.end(); });
+  }).listen(3306);
+  const ecdh = crypto.createECDH('prime256v1');
+  ecdh.generateKeys();
+  const authSecret = crypto.randomBytes(16);
+  const device = { endpoint: 'http://localhost:3306/push/agare', keys: { p256dh: ecdh.getPublicKey().toString('base64url'), auth: authSecret.toString('base64url') } };
+  const post = (data, origin = BASE) => owner.request.post(`${BASE}/api/push`, { headers: { origin, 'content-type': 'application/json' }, data: JSON.stringify(data) });
+  assert((await post(device)).status() === 200, 'enheten registreras');
+  assert((await post({ ...device, endpoint: 'https://evil.example/push' })).status() === 400, 'okänd pushtjänst nekas');
+  assert((await post(device, 'https://evil.example')).status() === 403, 'annan webbplats nekas');
+  const decrypt = (m) => JSON.parse(require('http_ece').decrypt(m.body, { version: 'aes128gcm', privateKey: ecdh, authSecret }).toString());
+  const waitPush = async (n) => { for (let i = 0; i < 50 && pushed.length < n; i++) await owner.waitForTimeout(200); assert(pushed.length >= n, `notis ${n} kom inte fram (${pushed.length})`); return pushed[n - 1]; };
+
+  await owner.goto(`${BASE}/konto#notiser`);
+  assert((await text(owner)).includes('1 enhet tar emot notiser'), 'enheten syns på kontosidan');
+  await owner.click('button:has-text("Skicka en testnotis")');
+  await owner.waitForURL(/ok=/);
+  let m = await waitPush(1);
+  assert(String(m.headers.authorization).startsWith('vapid t='), 'VAPID-signerad');
+  assert(decrypt(m).title === 'Testnotis', 'testnotisen kan dekrypteras: ' + JSON.stringify(decrypt(m)));
+  log('enheten registreras, testnotis skickas krypterad och signerad; okända pushtjänster och andra webbplatser nekas');
+
+  await owner.goto(B + '/fakturor?status=booked');
+  const openInv = await owner.locator('tbody a[href*="/fakturor/"]').first().getAttribute('href');
+  await owner.goto(BASE + openInv);
+  await owner.click('form:has(input[name=amount]) button');
+  await owner.waitForURL(/ok=/);
+  m = await waitPush(2);
+  const paid = decrypt(m);
+  assert(paid.title === 'Kunden har betalat' && paid.url === openInv, 'notis när kunden betalar: ' + JSON.stringify(paid));
+  log('notis när en kund betalar, med länk till fakturan');
+
+  // Avstängd notistyp skickas inte
+  await owner.goto(`${BASE}/konto#notiser`);
+  await owner.uncheck('input[name=paid]');
+  await owner.click('form:has(input[name=paid]) button:has-text("Spara")');
+  await owner.waitForURL(/ok=/);
+  await owner.goto(B + '/fakturor?status=booked');
+  await owner.goto(BASE + await owner.locator('tbody a[href*="/fakturor/"]').first().getAttribute('href'));
+  await owner.click('form:has(input[name=amount]) button');
+  await owner.waitForURL(/ok=/);
+  await owner.waitForTimeout(2000);
+  assert(pushed.length === 2, 'ingen notis när typen är avstängd: ' + pushed.length);
+  log('notistyper kan väljas bort');
+
+  pushServer.close();
   await browser.close();
   console.log('Omgång 5: alla steg gick igenom');
 })().catch((e) => { console.error('✘', e.message); process.exit(1); });

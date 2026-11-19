@@ -11,7 +11,10 @@ import { AddPasskey } from '@/components/Passkeys';
 import { changePassword, removePasskey } from '../passkey-actions';
 import { logout } from '../auth-actions';
 import { removeAccount } from '../gdpr-actions';
-import { forgetLearning, saveDigest, saveLanguage, saveLearning } from '../digest-actions';
+import { forgetLearning, saveDigest, saveLanguage, saveLearning, savePushPrefs, sendTestPush } from '../digest-actions';
+import { PushSettings } from '@/components/PushSettings';
+import { pushEnabled, vapidPublicKey } from '@/lib/services/push';
+import { PUSH_KINDS } from '@/lib/push';
 import { uiLang } from '@/lib/server/lang';
 import { translator } from '@/lib/ui-i18n';
 
@@ -24,6 +27,7 @@ export default async function Account({ searchParams }: { searchParams: SP }) {
   const t = translator(lang);
   const [{ digest, monthly_report, learn_usage }] = await sql<{ digest: string; monthly_report: boolean; learn_usage: boolean }[]>`SELECT digest, monthly_report, learn_usage FROM users WHERE id = ${user.id}`;
   const [{ n: learned }] = await sql<{ n: number }[]>`SELECT count(*)::int AS n FROM user_usage WHERE user_id = ${user.id}`;
+  const [{ prefs, devices }] = await sql<{ prefs: string[]; devices: number }[]>`SELECT push_prefs AS prefs, (SELECT count(*)::int FROM push_subscriptions WHERE user_id = ${user.id}) AS devices FROM users WHERE id = ${user.id}`;
   const [mfa] = await sql<{ secret: string | null; on: string | null; codes: number }[]>`
     SELECT totp_secret AS secret, to_char(totp_enabled_at,'YYYY-MM-DD') AS on, cardinality(backup_codes)::int AS codes FROM users WHERE id = ${user.id}`;
   const setupQr = mfa.secret && !mfa.on ? await QRCode.toString(otpauthUri(mfa.secret, user.email), { type: 'svg', margin: 1, width: 180 }) : null;
@@ -104,6 +108,16 @@ export default async function Account({ searchParams }: { searchParams: SP }) {
         <div style={{ flex: '0 0 auto' }}><button className="secondary">{t('Spara')}</button></div>
         <span className="small muted">{lang === 'en' ? 'Menus and common pages are shown in English. Bookkeeping terms, reports and forms for Swedish authorities stay in Swedish.' : 'Menyer och vanliga sidor visas på engelska. Bokföringstermer, rapporter och blanketter till svenska myndigheter är kvar på svenska.'}</span>
       </form>
+
+      <h2 id="notiser">{t('Notiser i mobilen')}</h2>
+      <div className="card stack">
+        {pushEnabled() ? <PushSettings publicKey={vapidPublicKey()} devices={devices} /> : <p className="small muted" style={{ margin: 0 }}>Pushnotiser är inte uppsatta på servern (VAPID-nycklar saknas).</p>}
+        <form action={savePushPrefs} className="stack" style={{ gap: '.35rem' }}>
+          <b className="small">{t('Skicka notis när')}</b>
+          {Object.entries(PUSH_KINDS).map(([k, label]) => <label key={k} className="check"><input type="checkbox" name={k} defaultChecked={prefs.includes(k)} /> {label}</label>)}
+          <div className="actions" style={{ margin: 0 }}><button className="secondary">{t('Spara')}</button>{devices > 0 && <button className="link" formAction={sendTestPush}>{t('Skicka en testnotis')}</button>}</div>
+        </form>
+      </div>
 
       <h2 id="anpassning">{t('Anpassning')}</h2>
       <div className="card">

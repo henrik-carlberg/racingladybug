@@ -57,3 +57,23 @@ describe('kontroller', () => {
     expect(voucherChecks({ date: '2026-11-10', lines: ok, today: '2026-11-19', period })).toEqual([]);
   });
 });
+
+import { validPushEndpoint, validPushKeys } from '@/lib/push';
+describe('pushnotiser', () => {
+  it('bara kända pushtjänster över https', () => {
+    expect(validPushEndpoint('https://fcm.googleapis.com/fcm/send/abc')).toBe(true);
+    expect(validPushEndpoint('https://updates.push.services.mozilla.com/wpush/v2/x')).toBe(true);
+    expect(validPushEndpoint('https://web.push.apple.com/QG')).toBe(true);
+    expect(validPushEndpoint('https://evil.example/push')).toBe(false);
+    expect(validPushEndpoint('https://fcm.googleapis.com:8443/x')).toBe(false);
+    expect(validPushEndpoint('http://fcm.googleapis.com/x')).toBe(false);
+    expect(validPushEndpoint('https://u:p@fcm.googleapis.com/x')).toBe(false);
+    expect(validPushEndpoint('http://localhost:3306/x')).toBe(false);
+    expect(validPushEndpoint('http://localhost:3306/x', true)).toBe(true);
+    expect(validPushEndpoint('http://10.0.0.1/x', true)).toBe(false);
+  });
+  it('nycklarnas längd', () => {
+    expect(validPushKeys(Buffer.alloc(65, 4).toString('base64url'), Buffer.alloc(16).toString('base64url'))).toBe(true);
+    expect(validPushKeys('abc', Buffer.alloc(16).toString('base64url'))).toBe(false);
+  });
+});
