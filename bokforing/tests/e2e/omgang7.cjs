@@ -151,6 +151,65 @@ async function accept(browser, link, name, password) {
   assert(await m.evaluate(() => document.querySelector('input[type=file][name=file]').files[0].name) === 'kvitto-galleri.png', 'den delade bilden ligger i kvittot');
   log('genvägar på appikonen och dela en bild från bildgalleriet direkt till ett kvitto');
 
+  // ================= Del 4: byråns månadsbokslut och tid =================
+  const byra = await (await browser.newContext()).newPage();
+  byra.setDefaultTimeout(20000);
+  await byra.goto(BASE + '/register');
+  await byra.fill('input[name=name]', 'Bo Byråsson');
+  await byra.fill('input[name=email]', 'bo.byra.omg7@example.com');
+  await byra.fill('input[name=password]', 'byralosen123');
+  await byra.check('input[name=terms]');
+  await byra.click('button:has-text("Skapa konto")');
+  await byra.waitForURL(BASE + '/');
+  await byra.fill('input[name=name]', 'Byråsson Redovisning AB');
+  await byra.fill('input[name=orgnr]', orgnr('559923456'));
+  await byra.fill('input[name=fy_start]', `${new Date().getUTCFullYear()}-01-01`);
+  await byra.click('button:has-text("Skapa bolag")');
+  await byra.waitForURL(/kom-igang/);
+  const ownCid = byra.url().match(/\/c\/(\d+)/)[1];
+  await byra.goto(BASE + '/byra');
+  await byra.fill('input[name=name]', 'Byråsson Redovisning');
+  await byra.click('button:has-text("Skapa byrå")');
+  await byra.waitForURL(/ok=/);
+  const code = (await byra.locator('code.firm-code').textContent()).trim();
+  await owner.goto(B + '/installningar/byra');
+  await owner.fill('input[name=code]', code);
+  await owner.click('button:has-text("Ge åtkomst")');
+  await owner.waitForURL(/ok=/);
+  await byra.goto(BASE + '/byra');
+  await byra.click('a:has-text("Månadsbokslut")');
+  await byra.waitForURL(/byra\/manad/);
+  const row = byra.locator('details.close-row:has-text("Testbolaget AB")');
+  await row.locator('summary').click();
+  t = await row.innerText();
+  assert(t.includes('Banken är avstämd') && t.includes('Momsen är redovisad') && t.includes('Kunden har skickat begärda underlag') && /\d+ av \d+ klara|Väntar på kunden/.test(t), 'checklista per klient: ' + t.slice(0, 800));
+  if (await row.locator('button:has-text("Påminn kunden")').count()) {
+    await row.locator('button:has-text("Påminn kunden")').click();
+    await byra.waitForURL(/ok=/);
+    assert(/Påminnelse/.test(decodeURIComponent(byra.url())), 'påminnelse: ' + byra.url());
+  }
+  await byra.locator('details.close-row:has-text("Testbolaget AB") summary').click().catch(() => {});
+  await byra.locator('details.close-row:has-text("Testbolaget AB") button:has-text("Markera månaden som klar")').click();
+  await byra.locator('details.close-row.done:has-text("Testbolaget AB")').waitFor();
+  assert((await text(byra)).includes('Klara 1 av 1'), 'månaden klar');
+  log('byråns månadsbokslut: checklista per klient, påminnelse om det som saknas och markering som klar');
+
+  await byra.goto(BASE + '/byra/tid');
+  await byra.selectOption('select[name=company_id]', { label: 'Testbolaget AB' });
+  await byra.fill('input[name=time]', '1:30');
+  await byra.fill('input[name=description]', 'Bankavstämning och moms');
+  await byra.click('button:has-text("Registrera")');
+  await byra.waitForURL(/ok=/);
+  await byra.selectOption('select[name=own_company_id]', ownCid);
+  await byra.locator('input[name^=rate_]').first().fill('1200');
+  await byra.click('form:has(select[name=own_company_id]) button:has-text("Spara")');
+  await byra.locator('td:has-text("1 200,00")').waitFor();
+  await byra.click('button:has-text("Skapa fakturautkast")');
+  await byra.waitForURL(new RegExp(`/c/${ownCid}/fakturor/\\d+`));
+  t = await text(byra);
+  assert(t.includes('Redovisningstjänster') && t.includes('Testbolaget AB') && t.includes('1 800,00'), 'fakturautkast för byråns tid: ' + t.slice(0, 900));
+  log('byråns tid per klient blir ett fakturautkast i byråns eget bolag (1,5 h à 1 200 kr)');
+
   await browser.close();
   console.log('Omgång 7: alla steg gick igenom');
 })().catch((e) => { console.error('✘', e.message, (e.stack || '').split('\n').find((l) => l.includes('omgang7.cjs'))); process.exit(1); });

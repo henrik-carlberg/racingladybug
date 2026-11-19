@@ -192,6 +192,12 @@ td.neg { color: var(--danger); }
 .shared-preview { text-align: center; }
 .shared-preview img { max-width: 100%; max-height: 320px; border-radius: 8px; }
 @media (max-width: 640px) { .receipt-actions { position: sticky; bottom: 0; z-index: 5; background: var(--bg); padding: .6rem 0; border-top: 1px solid var(--border); } .receipt-actions button { flex: 1; } }
+/* Månadsbokslut */
+.close-row summary { display: flex; gap: .6rem; align-items: center; cursor: pointer; }
+.close-row.done { border-left: 4px solid var(--ok); }
+.close-row.waiting { border-left: 4px solid var(--warn); }
+.checklist { list-style: none; padding: 0; margin: .6rem 0; display: grid; gap: .3rem; }
+.checklist li.ok { color: var(--muted); }
 /* Ångra */
 .toasts { position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%); z-index: 60; display: grid; gap: .5rem; width: min(440px, calc(100vw - 32px)); }
 .toast { position: relative; overflow: hidden; display: flex; align-items: center; gap: .75rem; padding: .75rem 1rem; border-radius: 12px; background: #111827; color: #f9fafb; box-shadow: var(--shadow-lg); }
