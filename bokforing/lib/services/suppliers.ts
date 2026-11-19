@@ -17,6 +17,8 @@ import type { Actor } from './actor';
 import { arr, date, has, int, list, optInt, ore, str, type Page } from './input';
 import { insertAttachment, type AttachmentIn } from './vouchers';
 import { dimId } from './dimensions';
+import { BANK_FIELDS, bankChanges } from '@/lib/fraud';
+import { blockedInvoices, checkDuplicate, requestBankChange } from './fraud';
 
 // ---------- Leverantörer ----------
 
@@ -63,6 +65,16 @@ export async function createSupplier(actor: Actor, input: Record<string, unknown
 export async function updateSupplier(actor: Actor, id: number, input: Record<string, unknown>) {
   const f = readSupplier(input, true);
   return sql.begin(async (tx) => {
+    // Nya bankuppgifter gäller först när en annan behörig person har godkänt dem (skydd mot bedrägerier)
+    const [cur] = await tx<{ name: string; bankgiro: string; plusgiro: string; bank_account: string }[]>`SELECT name, bankgiro, plusgiro, bank_account FROM suppliers WHERE id = ${id} AND company_id = ${actor.companyId} FOR UPDATE`;
+    if (!cur) throw new NotFoundError('Leverantören');
+    const changed = bankChanges(cur, f as never);
+    let pending = false;
+    if (Object.keys(changed).length) {
+      for (const k of BANK_FIELDS) delete f[k];
+      await requestBankChange(tx, actor, id, cur.name, { bankgiro: cur.bankgiro, plusgiro: cur.plusgiro, bank_account: cur.bank_account }, changed);
+      pending = true;
+    }
     const r = Object.keys(f).length
       ? await tx`UPDATE suppliers SET ${tx(f)} WHERE id = ${id} AND company_id = ${actor.companyId} RETURNING id`
       : await tx`SELECT id FROM suppliers WHERE id = ${id} AND company_id = ${actor.companyId}`;
@@ -70,7 +82,7 @@ export async function updateSupplier(actor: Actor, id: number, input: Record<str
     const [s] = await tx<SupplierOut[]>`SELECT ${SCOLS()} FROM suppliers WHERE id = ${id}`;
     await auditBy(tx, actor, 'update', 'supplier', id, Object.keys(f));
     await emit(tx, actor.companyId, 'supplier.updated', s);
-    return s;
+    return { ...s, pending_bank_change: pending };
   });
 }
 
@@ -147,6 +159,7 @@ export async function registerSupplierInvoice(actor: Actor, input: Record<string
         account: costs[0].account, vatRate: vatRateOf(total, vat), costCenterId: costs[0].costCenterId ?? null, projectId: costs[0].projectId ?? null,
       });
       await auditBy(tx, actor, 'register', 'supplier_invoice', id);
+      await checkDuplicate(tx, actor.companyId, id);
       const out = await fetchSI(tx, actor.companyId, id);
       await emit(tx, actor.companyId, 'supplier_invoice.registered', out);
       notify.attest(actor.companyId, actor.userId ?? null, sup.name, total, id);
@@ -166,6 +179,8 @@ export async function approveSupplierInvoice(actor: Actor, id: number) {
       SELECT status, total, registered_by FROM supplier_invoices WHERE id = ${id} AND company_id = ${actor.companyId} FOR UPDATE`;
     if (!inv) throw new NotFoundError('Leverantörsfakturan');
     if (inv.status !== 'booked') throw new ConflictError('Fakturan är redan attesterad eller betald');
+    const blocked = (await blockedInvoices(tx, actor.companyId, [id], { forPayment: false })).get(id);
+    if (blocked) throw new ConflictError(`Fakturan kan inte attesteras: ${blocked}`);
     const [co] = await tx<{ threshold: number | null; not_registrant: boolean }[]>`SELECT attest_threshold AS threshold, attest_not_registrant AS not_registrant FROM companies WHERE id = ${actor.companyId}`;
     const rules = { threshold: co.threshold == null ? null : Number(co.threshold), notRegistrant: co.not_registrant };
     const approvedBy = (await tx<{ user_id: number }[]>`SELECT user_id FROM supplier_invoice_approvals WHERE supplier_invoice_id = ${id}`).map((r) => r.user_id);

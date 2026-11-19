@@ -3,6 +3,7 @@ import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
 import { today } from '@/lib/format';
 import { pain001Xml, paymentError, type Pain001Payment } from '@/lib/pain001';
+import { blockedInvoices } from '@/lib/services/fraud';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,8 +14,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ cid: st
   const rows = await sql<{ id: number; supplier: string; bankgiro: string; plusgiro: string; bank_account: string; invoice_number: string; due: string; reference: string; total: number }[]>`
     SELECT i.id, s.name AS supplier, s.bankgiro, s.plusgiro, s.bank_account, i.invoice_number, to_char(i.due_date,'YYYY-MM-DD') AS due, i.payment_reference AS reference, (i.total - i.paid_amount)::bigint AS total
     FROM supplier_invoices i JOIN suppliers s ON s.id = i.supplier_id WHERE i.company_id = ${company.id} AND i.status = 'approved' ORDER BY i.due_date`;
+  // Fakturor med öppen dubblettvarning eller nya bankuppgifter som inte är godkända tas inte med
+  const blocked = await blockedInvoices(sql, company.id, rows.map((r) => r.id));
   const t = today();
-  const payments: Pain001Payment[] = rows.map((r) => ({
+  const payments: Pain001Payment[] = rows.filter((r) => !blocked.has(r.id)).map((r) => ({
     id: `LF${r.id}`, name: r.supplier, bankgiro: r.bankgiro || undefined, plusgiro: r.plusgiro || undefined, bankAccount: r.bank_account || undefined,
     reference: r.reference, amount: Number(r.total), date: r.due < t ? t : r.due, invoiceNumber: r.invoice_number,
   }));

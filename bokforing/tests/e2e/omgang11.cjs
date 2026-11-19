@@ -87,6 +87,78 @@ const mailServer = http.createServer((req, res) => { let b = ''; req.on('data', 
   assert(r.status() === 404, 'annan byrå kommer inte åt kundkännedomen');
   log('uppdragsbrev skickas för e-signering till kundens ägare; översikten visar status; andra byråer kommer inte åt uppgifterna');
 
+  // ================= Del 2: bedrägeri- och felskydd =================
+  const att = await login(browser, 'attest1.omg4@example.com', 'attestlosen11');
+  await owner.goto(B + '/leverantorer/5');
+  await owner.fill('input[name=bankgiro]', '5402-9999');
+  await owner.click('form button:text-is("Spara")');
+  await owner.locator('text=De nya bankuppgifterna gäller först när en annan person har godkänt dem').waitFor();
+  await owner.goto(B + '/leverantorer/5');
+  assert(await owner.inputValue('input[name=bankgiro]') === '5402-9616', 'gamla bankgirot gäller tills vidare');
+  await owner.goto(B + '/kontroll');
+  await owner.locator('.bank-change:has-text("Kontorsvaror Norden AB")').waitFor();
+  t = await text(owner);
+  assert(t.includes('5402-9616') && t.includes('5402-9999') && t.includes('Ring leverantören'), 'ändringen visas: ' + t.slice(0, 1200));
+  await owner.check('.bank-change input[name=verified]');
+  await owner.click('.bank-change button:has-text("Godkänn")');
+  await owner.locator('text=En annan person än den som ändrade bankuppgifterna måste godkänna').waitFor();
+  log('nya bankuppgifter hos en leverantör gäller inte direkt; den som ändrade får inte själv godkänna');
+
+  await owner.goto(B + '/leverantorsfakturor/ny');
+  const regSI = async (no, total) => {
+    await owner.goto(B + '/leverantorsfakturor/ny');
+    await owner.selectOption('select[name=supplier_id]', { label: 'Kontorsvaror Norden AB' });
+    await owner.fill('input[name=invoice_number]', no);
+    await owner.fill('input[name=invoice_date]', day(3));
+    await owner.fill('input[name=due_date]', day(-20));
+    await owner.fill('input[name=total]', total);
+    await owner.click('button:has-text("25 % moms")');
+    await owner.click('button:has-text("Registrera och bokför")');
+    await owner.waitForURL(/leverantorsfakturor\/\d+\?ok/);
+    return owner.url().match(/leverantorsfakturor\/(\d+)/)[1];
+  };
+  const si1 = await regSI('K-777', '3125');
+  const si2 = await regSI('0K777', '3125');
+  await att.goto(`${B}/leverantorsfakturor/${si2}`);
+  await att.click('button:has-text("Attestera")');
+  await att.locator('text=Fakturan kan inte attesteras: kan vara en dubblett').waitFor();
+  await att.goto(`${B}/leverantorsfakturor/${si1}`);
+  await att.click('button:has-text("Attestera")');
+  await att.locator('text=attesterad').first().waitFor();
+  log('en möjlig dubblett (samma fakturanummer med annan formatering) spärras från attest och betalning');
+
+  await att.goto(B + '/kontroll');
+  await att.fill('.bank-change input[name=comment]', 'Ringde Kontorsvaror på 08-555 00 00, bekräftat');
+  await att.click('.bank-change button:has-text("Godkänn")');
+  await att.locator('text=De nya bankuppgifterna är godkända').waitFor();
+  await att.goto(B + '/leverantorer/5');
+  assert(await att.inputValue('input[name=bankgiro]') === '5402-9999', 'nya bankgirot gäller efter godkännande');
+  await att.goto(B + '/kontroll');
+  const dup = att.locator('.alert[data-kind=duplicate]:has-text("0K777")');
+  await dup.locator('input[name=comment]').fill('Kontrollerat: leverantören har skickat samma faktura två gånger');
+  await dup.locator('button:has-text("Det är ett fel")').click();
+  await att.locator('text=Varningen är markerad som ett verkligt problem').waitFor();
+  t = await text(att);
+  assert(t.includes('Hanterade') && t.includes('Kontrollerad (Anna Attest)') && t.includes('Fel/avslagen'), 'historik: ' + t.slice(0, 2000));
+  await att.goto(`${B}/leverantorsfakturor/${si2}`);
+  await att.click('button:has-text("Attestera")');
+  await att.locator('text=Fakturan kan inte attesteras: kan vara en dubblett').waitFor();
+  log('en annan person med attesträtt godkänner bankbytet efter kontroll; granskade varningar sparas med kommentar');
+
+  const camt = (rows) => `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02"><BkToCstmrStmt><Stmt>${rows.map(([amt, d, ref, txt]) =>
+    `<Ntry><Amt Ccy="SEK">${amt}</Amt><CdtDbtInd>DBIT</CdtDbtInd><Sts>BOOK</Sts><BookgDt><Dt>${d}</Dt></BookgDt><AcctSvcrRef>${ref}</AcctSvcrRef><NtryDtls><TxDtls><RmtInf><Ustrd>${txt}</Ustrd></RmtInf></TxDtls></NtryDtls></Ntry>`).join('')}</Stmt></BkToCstmrStmt></Document>`;
+  await owner.goto(B + '/bank');
+  const brow = owner.locator('tr:has-text("Företagskonto")').first();
+  await brow.locator('input[type=file]').setInputFiles({ name: 'ut.xml', mimeType: 'application/xml', buffer: Buffer.from(camt([
+    ['1000.00', day(9), 'U-1', 'STADBOLAGET XK'], ['1000.00', day(8), 'U-2', 'STADBOLAGET XK'], ['1000.00', day(7), 'U-3', 'STADBOLAGET XK'],
+    ['9000.00', day(6), 'U-4', 'STADBOLAGET XK'], ['15000.00', day(5), 'U-5', 'OKAND MOTTAGARE XK']])) });
+  await brow.locator('button:has-text("Importera")').click();
+  await owner.locator('.flash.ok').first().waitFor();
+  await owner.goto(B + '/kontroll');
+  t = await text(owner);
+  assert(/Ovanligt stort belopp 9[\s ]000 kr till STADBOLAGET XK/.test(t) && t.includes('9 gånger det vanliga beloppet') && /Ny mottagare 15[\s ]000 kr till OKAND MOTTAGARE XK/.test(t), 'ovanliga utbetalningar: ' + t.slice(0, 2500));
+  log('ovanliga utbetalningar flaggas: mycket större belopp än vanligt till samma mottagare och större belopp till en ny mottagare');
+
   //@@NEXT@@
   await browser.close(); bvServer.close(); mailServer.close();
   console.log('Omgång 11: alla steg gick igenom');

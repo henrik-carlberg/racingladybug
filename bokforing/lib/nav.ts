@@ -36,6 +36,7 @@ export function buildNav(o: {
       { path: '/leverantorsfakturor', label: 'Leverantörsfakturor', perm: 'purchasing' },
       { path: '/leverantorsfakturor/betalning', label: 'Betalningar', perm: 'payments', hint: 'Betala attesterade fakturor' },
       { path: '/leverantorer', label: 'Leverantörer' },
+      { path: '/kontroll', label: 'Varningar och kontroll', perm: 'ledger', hint: 'Nya bankuppgifter, dubbletter och ovanliga utbetalningar' },
     ]) },
     { id: 'bank', label: t('Bank'), icon: 'bank', items: items([
       { path: '/bank/avstamning', label: 'Bankavstämning', perm: 'ledger', hint: 'Bokför transaktionerna från banken' },

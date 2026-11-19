@@ -11,6 +11,7 @@ import { reconcile } from './bank';
 import { createVoucher } from '@/lib/server/ledger';
 import { fromSigned } from '@/lib/ledger-lines';
 import { hasPermission } from '@/lib/permissions';
+import { blockedInvoices } from './fraud';
 
 type Kind = 'supplier' | 'salary' | 'expense';
 export const bankPayEnabled = () => eb.enableBankingConfigured();
@@ -75,6 +76,8 @@ export async function payInvoices(actor: Actor, ids: number[], accountId: number
       EXISTS (SELECT 1 FROM bank_payment_items bi JOIN bank_payments bp ON bp.id = bi.payment_id WHERE bi.supplier_invoice_id = i.id AND bp.status IN ('authorization','accepted','executed')) AS busy
     FROM supplier_invoices i JOIN suppliers s ON s.id = i.supplier_id WHERE i.company_id = ${actor.companyId} AND i.id IN ${sql(ids)}`;
   if (rows.length !== new Set(ids).size) throw new NotFoundError('Leverantörsfakturan');
+  const blocked = await blockedInvoices(sql, actor.companyId, ids);
+  for (const r of rows) if (blocked.has(r.id)) throw new ConflictError(`Faktura ${r.invoice_number} (${r.supplier}) ${blocked.get(r.id)}`);
   const items = rows.map((r) => {
     if (r.status !== 'approved') throw new ConflictError(`Faktura ${r.invoice_number} (${r.supplier}) är inte attesterad`);
     if (r.busy) throw new ConflictError(`Faktura ${r.invoice_number} (${r.supplier}) ligger redan i en betalning`);
