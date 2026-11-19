@@ -36,7 +36,7 @@ export async function buildArchive(companyId: number, fyId: number, sysdocHtml: 
   for (const a of atts) {
     const [row] = await sql<{ data: Buffer }[]>`SELECT data FROM attachments WHERE id = ${a.id}`;
     const v = vouchers.find((x) => x.id === a.voucher_id);
-    const path = `underlag/${v?.ver ?? 'okand'}_${a.id}_${safe(a.filename)}`;
+    const path = `underlag/${safe(v?.ver ?? 'okand')}_${a.id}_${safe(a.filename)}`;
     files.push({ name: path, data: Buffer.from(row.data) });
     byVoucher.set(a.voucher_id, [...(byVoucher.get(a.voucher_id) ?? []), { path, name: a.filename }]);
   }

@@ -48,10 +48,12 @@ export async function createManualVoucher(actor: Actor, input: Record<string, un
     if (debit && credit) throw new ValidationError(`Rad ${i + 1}: ange antingen debet eller kredit`);
     return { account, debit, credit, description: str(r, 'description'), costCenterId: dimId(r.cost_center_id), projectId: dimId(r.project_id) };
   });
+  const series = str(input, 'series') || 'A';
+  if (!/^[A-Za-z0-9ÅÄÖåäö]{1,5}$/.test(series)) throw new ValidationError('Verifikationsserien får bara innehålla bokstäver och siffror (högst fem tecken)');
   const id = await sql.begin(async (tx) => {
     const v = await createVoucher(tx, {
       actor, date: date(input, 'date', 'Datum'), description: str(input, 'description', { required: true, label: 'Beskrivning' }), lines,
-      series: str(input, 'series') || 'A',
+      series,
     });
     if (attachment) await insertAttachment(tx, actor, v.id, attachment);
     return v.id;

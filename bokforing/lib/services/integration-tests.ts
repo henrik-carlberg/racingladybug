@@ -39,6 +39,7 @@ export async function testIntegration(key: string, user: { id: number; email: st
     return { ok: false, message: 'Den här integrationen kan inte testas härifrån' };
   } catch (e) {
     const m = e instanceof Error ? e.message : String(e);
-    return { ok: false, message: `Fel: ${m.replace(/(sk|re|whsec)_[A-Za-z0-9_]+/g, '***').slice(0, 200)}` };
+    // Långa token-liknande strängar (nycklar, JWT) visas aldrig
+    return { ok: false, message: `Fel: ${m.replace(/(sk|re|whsec|rk|pk)_[A-Za-z0-9_]+/g, '***').replace(/[A-Za-z0-9+/_=.-]{24,}/g, '***').slice(0, 200)}` };
   }
 }

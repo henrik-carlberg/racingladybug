@@ -23,4 +23,7 @@ jobs:
           SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
           SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
           SMOKE_VERSION: ${{ github.event.deployment.sha }}
-        run: node tests/smoke/smoke.cjs
+        run: |
+          # Inloggningsuppgifterna skickas bara till tjänstens egna adresser
+          case "$SMOKE_URL" in https://bokforing-pearl.vercel.app) ;; *) echo "Okänd adress: $SMOKE_URL"; exit 1;; esac
+          node tests/smoke/smoke.cjs
