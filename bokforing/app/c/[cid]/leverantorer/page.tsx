@@ -31,7 +31,7 @@ export default async function Suppliers({ params, searchParams }: { params: Prom
                 <td>{s.bankgiro ? `BG ${s.bankgiro}` : s.plusgiro ? `PG ${s.plusgiro}` : s.bank_account}</td>
                 <td>{s.default_account}</td><td className="num">{s.open ? kr(s.open) : ''}</td></tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={4}><EmptyState icon="briefcase" title={L('Inga leverantörer ännu')}>Lägg upp leverantören ovan med bankgiro och standardkonto. Fakturor som kommer till inkorgen kan också skapa leverantören åt dig.</EmptyState></td></tr>}
+            {rows.length === 0 && <tr><td colSpan={4}><EmptyState icon="briefcase" title={L('Inga leverantörer ännu')}>Lägg upp leverantören nedan med bankgiro och standardkonto. Fakturor som kommer till inkorgen kan också skapa leverantören åt dig.</EmptyState></td></tr>}
           </tbody>
         </table>
       </div>

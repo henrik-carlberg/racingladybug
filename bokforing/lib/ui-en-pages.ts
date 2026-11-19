@@ -2191,6 +2191,8 @@ export const PAGES_EN: Record<string, string> = {
   "Bokförda på helgdag": "Booked on a weekend",
   "Jämna belopp": "Round amounts",
   "Inga stickprov än.": "No samples yet.",
+  "Lägg upp kunden i formuläret nedan, eller importera en lista från ditt gamla program under Inställningar → Import. Sedan kan du fakturera med några klick.": "Add the customer in the form below, or import a list from your old program under Settings → Import. Then you can invoice in a few clicks.",
+  "Lägg upp leverantören nedan med bankgiro och standardkonto. Fakturor som kommer till inkorgen kan också skapa leverantören åt dig.": "Add the supplier below with bankgiro and default account. Invoices arriving in the inbox can also create the supplier for you.",
 };
 
 const MONTHS: Record<string, string> = { januari: 'January', februari: 'February', mars: 'March', april: 'April', maj: 'May', juni: 'June', juli: 'July', augusti: 'August', september: 'September', oktober: 'October', november: 'November', december: 'December' };

@@ -75,7 +75,7 @@ export function InvoiceForm({ action, customers, accounts, initial }: {
           <label style={{ flex: '0 0 120px' }}>Valuta<select name="currency" value={currency} onChange={(e) => setCurrency(e.target.value)}>{['SEK', 'EUR', 'USD', 'GBP', 'NOK', 'DKK'].map((v) => <option key={v}>{v}</option>)}</select></label>
           {foreign && <label style={{ flex: '0 0 200px' }}>Kurs (kr per {currency})<input name="exchange_rate" value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" required placeholder="T.ex. 11,25" /></label>}
           <label style={{ flex: '0 0 140px' }}>Språk<select name="language" value={lang} onChange={(e) => setLang(e.target.value)}><option value="sv">Svenska</option><option value="en">Engelska</option></select></label>
-          {foreign && <span className="small muted" style={{ alignSelf: 'end', flex: '1 1 260px' }}>Priserna anges i {currency}. Fakturan bokförs i kronor med kursen ovan (t.ex. Riksbankens kurs på fakturadagen); kursdifferensen vid betalningen bokförs på 3960/7960.</span>}
+          {foreign && <span className="small muted" style={{ alignSelf: 'end', flex: '1 1 260px' }}>Priserna anges i {currency}. Fakturan bokförs i kronor med kursen du anger (t.ex. Riksbankens kurs på fakturadagen); kursdifferensen vid betalningen bokförs på 3960/7960.</span>}
         </div>
         <div className="row">
           <label>Vår referens<input name="our_reference" defaultValue={initial.our_reference} /></label>
