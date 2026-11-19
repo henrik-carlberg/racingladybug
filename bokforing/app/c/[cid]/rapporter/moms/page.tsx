@@ -2,6 +2,7 @@ import { requireCompany } from '@/lib/server/auth';
 import { sql } from '@/lib/db';
 import { accountSums } from '@/lib/server/ledger';
 import { vatReport } from '@/lib/vat';
+import { vatChecks } from '@/lib/services/tax-planning';
 import { Flash, type SP } from '@/components/ui';
 import { kr, monthEnd, today } from '@/lib/format';
 import { settleVat } from './actions';
@@ -30,6 +31,7 @@ export default async function Vat({ params, searchParams }: { params: Promise<{ 
   const from = String(sp.from ?? df), to = String(sp.to ?? dt);
   const sums = await accountSums(company.id, from, to, { excludeVatSettlements: true });
   const { boxes, toPay } = vatReport(sums);
+  const checks = await vatChecks(company.id, from, to);
   const [settled] = await sql<{ id: number; label: string }[]>`
     SELECT v.id, v.series || v.number AS label FROM vouchers v WHERE v.company_id = ${company.id} AND v.source_type = 'vat'
       AND v.date BETWEEN ${from} AND ${to} AND NOT EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = v.id)`;
@@ -53,6 +55,13 @@ export default async function Vat({ params, searchParams }: { params: Promise<{ 
           ))}
         </tbody>
       </table>
+      <section className="vat-checks">
+        <h2>Avstämning ruta för ruta</h2>
+        <ul className="stack" style={{ listStyle: 'none', padding: 0 }}>{checks.checks.map((c) => (
+          <li key={c.key} className={`card vat-check ${c.ok ? 'ok' : 'warn'}`}><b>{c.ok ? '✅' : '⚠️'} {c.title}</b><div className="small">{c.detail}</div></li>
+        ))}</ul>
+        {!checks.filed && <p className="small muted">När deklarationen är inlämnad jämförs bokföringen med den – ändringar efteråt visas här.</p>}
+      </section>
       <p>{toPay >= 0 ? `Moms att betala: ${kr(toPay)}` : `Moms att få tillbaka: ${kr(-toPay)}`}</p>
       <form action={prepareVat.bind(null, company.id)} className="card actions">
         <input type="hidden" name="from" value={from} /><input type="hidden" name="to" value={to} />

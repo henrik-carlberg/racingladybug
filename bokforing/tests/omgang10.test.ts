@@ -47,3 +47,37 @@ describe('Företagskort och resor', () => {
     expect(() => allowanceDays('2026-11-10T08:00', '2026-11-09T08:00')).toThrow();
   });
 });
+
+import { maxDepreciation, parseEskd, prelimProposal, taxForecast, vatReconcile, yearEndProposals } from '@/lib/tax-planning';
+describe('Skatt och bokslut', () => {
+  it('skattekontoprognos visar när saldot blir negativt', () => {
+    const f = taxForecast(1000000, [{ date: '2026-12-12', text: 'Moms', amount: -1500000 }, { date: '2026-12-12', text: 'F-skatt', amount: -200000 }, { date: '2027-01-17', text: 'F-skatt', amount: -200000 }]);
+    expect(f.rows.map((r) => r.balance)).toEqual([-500000, -700000, -900000]);
+    expect(f.shortfall).toEqual({ date: '2026-12-12', amount: 900000 });
+  });
+  it('preliminärskatt: höj när prognosen är högre', () => {
+    const p = prelimProposal({ type: 'AB', ytdProfit: 50000000, nonDeductible: 0, monthsElapsed: 10, currentMonthly: 500000 });
+    expect(p.profit).toBe(60000000); expect(p.tax).toBe(12360000); expect(p.monthly).toBe(1030000); expect(p.change).toBe(true);
+    expect(p.advice).toContain('Höj');
+  });
+  it('30-regeln och 20-regeln', () => {
+    expect(maxDepreciation({ bookStart: 10000000, overStart: 0, acquisitions: 0, disposals: 0, bookedDepreciation: 0 }).max).toBe(3000000);
+    const m = maxDepreciation({ bookStart: 2000000, overStart: 0, acquisitions: 0, disposals: 0, bookedDepreciation: 0, byYear: [{ yearsHeld: 4, cost: 5000000 }] });
+    expect(m.rule).toBe('20-regeln'); expect(m.max).toBe(1000000);
+  });
+  it('bokslutsförslag i rätt ordning med skatteeffekt', () => {
+    const r = yearEndProposals({ type: 'AB', year: 2026, resultBeforeAppropriations: 100000000, nonDeductible: 0,
+      inventories: { bookStart: 10000000, overStart: 0, acquisitions: 0, disposals: 0, bookedDepreciation: 2000000 },
+      fonds: [{ account: 2120, year: 2020, amount: 5000000 }], group: [{ name: 'Dotter AB', result: -20000000, ownership: 100 }] });
+    expect(r.proposals.map((p) => [p.kind, p.amount])).toEqual([['aterforing', 5000000], ['koncernbidrag', 20000000], ['overavskrivning', 1000000], ['periodiseringsfond', 21000000]]);
+    expect(r.proposals[3].lines).toEqual([{ account: 2126, amount: -21000000 }, { account: 8811, amount: 21000000 }]);
+    expect(r.taxAfter).toBe(Math.round(63000000 * 0.206));
+  });
+  it('momsavstämning ruta för ruta och mot inlämnad deklaration', () => {
+    const boxes = new Map([['05', 10000000], ['10', 2500000], ['21', 400000], ['30', 100000], ['48', 50000], ['49', 2550000]]);
+    const c = vatReconcile(boxes, parseEskd('<MomsUtgHog>25000</MomsUtgHog><ForsMomsEjAnnan>90000</ForsMomsEjAnnan><MomsIngAvdr>500</MomsIngAvdr><MomsInkopUtgHog>1000</MomsInkopUtgHog><InkopTjanstAnnatEg>4000</InkopTjanstAnnatEg>'));
+    expect(c.find((x) => x.key === 'utgaende')!.ok).toBe(true);
+    expect(c.find((x) => x.key === 'avdrag')!.ok).toBe(false);
+    expect(c.find((x) => x.key === 'inlamnad')!.detail.replace(/\s/g, ' ')).toContain('ruta 05 90 000 kr → 100 000 kr');
+  });
+});

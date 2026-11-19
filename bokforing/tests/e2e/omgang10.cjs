@@ -239,6 +239,48 @@ const ebServer = http.createServer((req, res) => {
   assert(t.includes('Utbetald') && /verifikation/.test(t), 'räkningen är utbetald och bokförd: ' + t.slice(0, 1500));
   log('attesterat utlägg betalas till den anställdas konto via banken med BankID och bokförs när banken genomfört betalningen');
 
+  // ================= Del 3: skatt och bokslut som optimerar =================
+  await owner.goto(B + '/verifikationer/ny');
+  await owner.fill('input[name=date]', day(2));
+  await owner.fill('input[name=description]', 'Engångsintäkt skatteplanering');
+  const vr = owner.locator('tbody tr');
+  await vr.nth(0).locator('td').nth(0).locator('input').fill('1930');
+  await vr.nth(0).locator('td').nth(2).locator('input').fill('1222921,70');
+  await vr.nth(1).locator('td').nth(0).locator('input').fill('3990');
+  await vr.nth(1).locator('td').nth(3).locator('input').fill('1222921,70');
+  await owner.click('button:text-is("Bokför")');
+  await owner.waitForURL(/verifikationer\/\d+\?ok/);
+
+  await owner.goto(B + '/skatt');
+  t = await text(owner);
+  assert(t.includes('Skattekontot framåt') && (t.includes('Saldot räcker') || /sätt in minst .* senast \d{4}-\d{2}-\d{2}/.test(t)), 'skattekontoprognos: ' + t.slice(0, 1500));
+  await owner.fill('input[name=monthly]', '1000');
+  await owner.click('.prelim button:has-text("Spara")');
+  await owner.locator('text=Debiterad preliminärskatt är sparad').waitFor();
+  t = await text(owner);
+  assert(/Höj preliminärskatten till [\d\s ]+ kr i månaden/.test(t) && t.includes('Inbetalt med nuvarande F-skatt') && t.includes('12 000,00'), 'förslag på preliminärskatt: ' + t.slice(0, 2000));
+  log('skattekontot framåt (moms, arbetsgivaravgifter, F-skatt) och förslag på ny preliminärskatt utifrån årets resultat');
+
+  await owner.click('a:has-text("Bokslutsdispositioner för")');
+  await owner.locator('.proposal[data-kind=periodiseringsfond]').waitFor();
+  t = await text(owner);
+  assert(t.includes('Resultat före dispositioner') && t.includes('Upp till 25 %') && t.includes('skjuter upp skatten i högst sex år') && /Skatten blir [\d\s ]+,\d\d kr lägre i år/.test(t), 'förslag med förklaring: ' + t.slice(0, 2000));
+  const fondAcc = '212' + (Number(day(0).slice(3, 4)));
+  assert(t.includes('kredit ' + fondAcc), 'fonden bokas på ' + fondAcc + ': ' + t.slice(0, 2000));
+  await owner.click('.proposal[data-kind=periodiseringsfond] button');
+  await owner.locator('text=Dispositionen är bokförd per bokslutsdagen').waitFor();
+  assert((await owner.locator('.proposal[data-kind=periodiseringsfond]').count()) === 0 && (await owner.locator('tr.booked-appr:has-text("Periodiseringsfond")').count()) === 1, 'bokförd');
+  await owner.click('tr.booked-appr:has-text("Periodiseringsfond") a');
+  await owner.waitForURL(/verifikationer\/\d+/);
+  t = await text(owner);
+  assert(t.includes('8811') && t.includes(fondAcc) && t.includes('Periodiseringsfond'), 'verifikationen: ' + t.slice(0, 1200));
+  log('bokslutsdispositioner föreslås med förklaring och skatteeffekt (periodiseringsfond 25 %) och bokförs med ett klick');
+
+  await owner.goto(B + '/rapporter/moms');
+  t = await text(owner);
+  assert(t.includes('Avstämning ruta för ruta') && t.includes('Utgående moms stämmer mot försäljningen'), 'momsavstämning: ' + t.slice(0, 2000));
+  log('momsdeklarationen stäms av ruta för ruta innan den lämnas in');
+
   //@@NEXT@@
   await browser.close();
   appServer.close(); ebServer.close();

@@ -42,6 +42,7 @@ export function buildNav(o: {
       { path: '/bank/regler', label: 'Konteringsregler', perm: 'ledger' },
       { path: '/kort', label: 'Företagskort', perm: 'ledger', hint: 'Kortköp som saknar kvitto' },
       { path: '/skattekonto', label: 'Skattekontot', perm: 'ledger' },
+      { path: '/skatt', label: 'Skatteplanering', perm: 'ledger', hint: 'Prognos för skattekontot, preliminärskatt och bokslutsdispositioner' },
     ]) },
     { id: 'lon', label: t('Lön och personal'), icon: 'users', items: items([
       { path: '/lon', label: 'Lönekörningar', perm: 'payroll', hint: 'Betala ut lön och skapa AGI' },
