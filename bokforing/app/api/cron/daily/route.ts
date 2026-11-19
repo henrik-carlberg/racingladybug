@@ -5,6 +5,7 @@ import { cleanupRateLimits } from '@/lib/server/ratelimit';
 import { runCron } from '@/lib/server/monitor';
 import { sendDigests, sendMonthlyReports } from '@/lib/services/digest';
 import { pushDaily } from '@/lib/services/push';
+import { cardsDaily } from '@/lib/services/cards';
 import { runDueSchedules } from '@/lib/services/report-schedules';
 import { runJobs } from '@/lib/server/jobs';
 import { runAllIntegrity } from '@/lib/services/integrity';
@@ -23,7 +24,7 @@ export async function GET(req: Request) {
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) return new Response('Unauthorized', { status: 401 });
   return Response.json(await runCron('daily', async () => {
     const out: Record<string, unknown> = {};
-    const jobs = [['avtal', generateAll], ['paminnelser', remindAll], ['inkorg', () => processPending(100)], ['inkorg_gallring', cleanupInbox], ['ratelimit_gallring', cleanupRateLimits], ['sammandrag', () => sendDigests()], ['manadsrapport', () => sendMonthlyReports()], ['notiser', pushDaily], ['rapportutskick', () => runDueSchedules()], ['jobbko', () => runJobs(500)], ['integritet', runAllIntegrity], ['peppol_status', () => refreshStatuses()], ['betalleverantorer', () => syncAllProviders()], ['arshjul', () => sendWheelReminders()], ['bankbetalningar', () => refreshPayments()], ['api_logg_gallring', async () => (await sql`DELETE FROM api_requests WHERE created_at < now() - interval '90 days'`).count + (await sql`DELETE FROM oauth_codes WHERE expires_at < now() - interval '1 day'`).count + (await sql`DELETE FROM oauth_tokens WHERE expires_at < now() - interval '7 days'`).count]] as const;
+    const jobs = [['avtal', generateAll], ['paminnelser', remindAll], ['inkorg', () => processPending(100)], ['inkorg_gallring', cleanupInbox], ['ratelimit_gallring', cleanupRateLimits], ['sammandrag', () => sendDigests()], ['manadsrapport', () => sendMonthlyReports()], ['notiser', pushDaily], ['rapportutskick', () => runDueSchedules()], ['jobbko', () => runJobs(500)], ['integritet', runAllIntegrity], ['peppol_status', () => refreshStatuses()], ['betalleverantorer', () => syncAllProviders()], ['arshjul', () => sendWheelReminders()], ['bankbetalningar', () => refreshPayments()], ['kortkvitton', cardsDaily], ['api_logg_gallring', async () => (await sql`DELETE FROM api_requests WHERE created_at < now() - interval '90 days'`).count + (await sql`DELETE FROM oauth_codes WHERE expires_at < now() - interval '1 day'`).count + (await sql`DELETE FROM oauth_tokens WHERE expires_at < now() - interval '7 days'`).count]] as const;
     for (const [k, job] of jobs) {
       try { out[k] = await job(); } catch (e) { out[k] = { error: (e as Error).message }; }
     }

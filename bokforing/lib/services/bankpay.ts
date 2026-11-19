@@ -8,8 +8,11 @@ import { creditorAccount, mapPaymentStatus, paymentRequest, type PayItem } from 
 import type { Actor } from './actor';
 import { paySupplierInvoiceTx } from './suppliers';
 import { reconcile } from './bank';
+import { createVoucher } from '@/lib/server/ledger';
+import { fromSigned } from '@/lib/ledger-lines';
 import { hasPermission } from '@/lib/permissions';
 
+type Kind = 'supplier' | 'salary' | 'expense';
 export const bankPayEnabled = () => eb.enableBankingConfigured();
 
 async function debtor(companyId: number, accountId: number) {
@@ -29,7 +32,7 @@ export async function payAccounts(companyId: number) {
     WHERE a.company_id = ${companyId} AND a.currency = 'SEK' AND a.iban <> '' ORDER BY a.name`];
 }
 
-async function start(actor: Actor, o: { kind: 'supplier' | 'salary'; runId?: number; accountId: number; date: string; items: (PayItem & { supplierInvoiceId?: number; payslipId?: number })[]; origin: string }) {
+async function start(actor: Actor, o: { kind: Kind; runId?: number; claimId?: number; accountId: number; date: string; items: (PayItem & { supplierInvoiceId?: number; payslipId?: number })[]; origin: string }) {
   if (!bankPayEnabled()) throw new ValidationError('Betalning via banken är inte uppsatt');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(o.date)) throw new ValidationError('Ogiltigt betaldatum');
   const acc = await debtor(actor.companyId, o.accountId);
@@ -40,10 +43,12 @@ async function start(actor: Actor, o: { kind: 'supplier' | 'salary'; runId?: num
     const inv = o.items.map((i) => i.supplierInvoiceId).filter((x): x is number => !!x);
     const busy = inv.length
       ? await tx`SELECT 1 FROM bank_payment_items bi JOIN bank_payments bp ON bp.id = bi.payment_id WHERE bi.supplier_invoice_id IN ${tx(inv)} AND bp.status IN ('authorization','accepted','executed') LIMIT 1`
-      : o.runId ? await tx`SELECT 1 FROM bank_payments WHERE payroll_run_id = ${o.runId} AND status IN ('authorization','accepted','executed') LIMIT 1` : [];
+      : o.runId ? await tx`SELECT 1 FROM bank_payments WHERE payroll_run_id = ${o.runId} AND status IN ('authorization','accepted','executed') LIMIT 1`
+      : o.claimId ? await tx`SELECT 1 FROM bank_payments WHERE expense_claim_id = ${o.claimId} AND status IN ('authorization','accepted','executed')
+          UNION ALL SELECT 1 FROM exp_claims WHERE id = ${o.claimId} AND status <> 'approved' LIMIT 1` : [];
     if (busy.length) throw new ConflictError('Betalningen är redan skickad till banken');
-    const [row] = await tx<{ id: number }[]>`INSERT INTO bank_payments (company_id, kind, payroll_run_id, bank_account_id, status, execution_date, total, created_by)
-      VALUES (${actor.companyId}, ${o.kind}, ${o.runId ?? null}, ${acc.id}, 'authorization', ${o.date}, ${total}, ${actor.userId}) RETURNING id`;
+    const [row] = await tx<{ id: number }[]>`INSERT INTO bank_payments (company_id, kind, payroll_run_id, expense_claim_id, bank_account_id, status, execution_date, total, created_by)
+      VALUES (${actor.companyId}, ${o.kind}, ${o.runId ?? null}, ${o.claimId ?? null}, ${acc.id}, 'authorization', ${o.date}, ${total}, ${actor.userId}) RETURNING id`;
     for (const i of o.items) await tx`INSERT INTO bank_payment_items (payment_id, supplier_invoice_id, payslip_id, name, account, reference, amount)
       VALUES (${row.id}, ${i.supplierInvoiceId ?? null}, ${i.payslipId ?? null}, ${i.name}, ${`${i.account.kind}:${i.account.id}`}, ${i.reference}, ${i.amount})`;
     return row;
@@ -100,11 +105,26 @@ export async function paySalaries(actor: Actor, runId: number, accountId: number
   return start(actor, { kind: 'salary', runId, accountId, date: run.date < today ? today : run.date, items, origin });
 }
 
+/** En attesterad utläggsräkning betalas till den anställdas konto */
+export async function payExpense(actor: Actor, claimId: number, accountId: number, origin: string) {
+  const [c] = await sql<{ status: string; title: string; total: number; name: string; clearing: string; account: string }[]>`
+    SELECT c.status, c.title, COALESCE((SELECT SUM(amount) FROM exp_lines WHERE claim_id = c.id), 0)::bigint AS total,
+      e.first_name || ' ' || e.last_name AS name, e.bank_clearing AS clearing, e.bank_account AS account
+    FROM exp_claims c JOIN employees e ON e.id = c.employee_id WHERE c.id = ${claimId} AND c.company_id = ${actor.companyId}`;
+  if (!c) throw new NotFoundError('Utläggsräkningen');
+  if (c.status !== 'approved') throw new ConflictError('Räkningen är inte attesterad eller redan utbetald');
+  if (Number(c.total) <= 0) throw new ValidationError('Inget att betala ut');
+  const account = creditorAccount({ clearing: c.clearing, account: c.account });
+  if (!account) throw new ValidationError(`${c.name} saknar clearing- och kontonummer`);
+  return start(actor, { kind: 'expense', claimId, accountId, date: new Date().toISOString().slice(0, 10), origin,
+    items: [{ name: c.name, account, amount: Number(c.total), reference: `Utlägg ${c.title}`.slice(0, 35), endToEnd: `utl-${claimId}` }] });
+}
+
 /** Leverantörsfakturorna bokförs som betalda när banken har genomfört betalningen; insättningen/uttaget stäms av mot verifikationerna */
 async function apply(actor: Actor, paymentId: number, raw: { status?: string; status_reason?: string }) {
   const st = mapPaymentStatus(raw.status);
-  const [p] = await sql<{ status: string; kind: string; date: string; ledger: number; bank_account_id: number }[]>`
-    SELECT p.status, p.kind, to_char(p.execution_date,'YYYY-MM-DD') AS date, a.ledger_account AS ledger, p.bank_account_id FROM bank_payments p JOIN bank_accounts a ON a.id = p.bank_account_id WHERE p.id = ${paymentId}`;
+  const [p] = await sql<{ status: string; kind: string; date: string; ledger: number; bank_account_id: number; claim: number | null }[]>`
+    SELECT p.status, p.kind, to_char(p.execution_date,'YYYY-MM-DD') AS date, a.ledger_account AS ledger, p.bank_account_id, p.expense_claim_id AS claim FROM bank_payments p JOIN bank_accounts a ON a.id = p.bank_account_id WHERE p.id = ${paymentId}`;
   if (!p || p.status === 'executed' || p.status === 'rejected' || p.status === 'failed') return p?.status;
   // Låser betalningen så att två samtidiga statusuppdateringar inte bokför samma faktura två gånger
   const changed = await sql.begin(async (tx) => {
@@ -114,6 +134,19 @@ async function apply(actor: Actor, paymentId: number, raw: { status?: string; st
       for (const it of await tx<{ id: number; supplier_invoice_id: number; amount: number }[]>`SELECT id, supplier_invoice_id, amount::bigint AS amount FROM bank_payment_items WHERE payment_id = ${paymentId} AND supplier_invoice_id IS NOT NULL AND voucher_id IS NULL`) {
         await paySupplierInvoiceTx(tx as never, actor, it.supplier_invoice_id, { date: p.date, bank_account: p.ledger, amount: Number(it.amount) });
         await tx`UPDATE bank_payment_items i SET voucher_id = s.payment_voucher_id FROM supplier_invoices s WHERE i.id = ${it.id} AND s.id = ${it.supplier_invoice_id}`;
+      }
+    }
+    if (st === 'executed' && p.kind === 'expense' && p.claim) {
+      // Skulden till den anställda regleras mot bankkontot och räkningen blir utbetald
+      const [c] = await tx<{ status: string; title: string; employee: string; liability: number }[]>`SELECT c.status, c.title, e.first_name || ' ' || e.last_name AS employee,
+          COALESCE((SELECT liability_account FROM exp_settings WHERE company_id = c.company_id), 2820) AS liability
+        FROM exp_claims c JOIN employees e ON e.id = c.employee_id WHERE c.id = ${p.claim} FOR UPDATE OF c`;
+      const [it] = await tx<{ id: number; amount: number }[]>`SELECT id, amount::bigint AS amount FROM bank_payment_items WHERE payment_id = ${paymentId} AND voucher_id IS NULL`;
+      if (c?.status === 'approved' && it) {
+        const v = await createVoucher(tx as never, { actor, date: p.date, description: `Utbetalning utlägg ${c.employee}: ${c.title}`, sourceType: 'expense_claim', sourceId: p.claim,
+          lines: fromSigned([{ account: c.liability, amount: Number(it.amount) }, { account: p.ledger, amount: -Number(it.amount) }]) });
+        await tx`UPDATE exp_claims SET status = 'paid', paid_voucher_id = ${v.id} WHERE id = ${p.claim}`;
+        await tx`UPDATE bank_payment_items SET voucher_id = ${v.id} WHERE id = ${it.id}`;
       }
     }
     await tx`UPDATE bank_payments SET status = ${st}, message = ${raw.status_reason ?? ''}, updated_at = now() WHERE id = ${paymentId}`;
@@ -139,8 +172,8 @@ async function matchBank(actor: Actor, paymentId: number) {
 /** Banken skickar tillbaka användaren efter godkännandet */
 export async function completeAuthorization(userId: number, state: string, error: string | null) {
   // Koden används inte upp direkt: webbläsaren kan hämta adressen två gånger. Statusuppdateringen är idempotent.
-  const [s] = await sql<{ payment_id: number; user_id: number; company_id: number; external_id: string | null; kind: string; run: number | null }[]>`
-    SELECT st.payment_id, st.user_id, p.company_id, p.external_id, p.kind, p.payroll_run_id AS run FROM bank_payment_states st JOIN bank_payments p ON p.id = st.payment_id
+  const [s] = await sql<{ payment_id: number; user_id: number; company_id: number; external_id: string | null; kind: string; run: number | null; claim: number | null }[]>`
+    SELECT st.payment_id, st.user_id, p.company_id, p.external_id, p.kind, p.payroll_run_id AS run, p.expense_claim_id AS claim FROM bank_payment_states st JOIN bank_payments p ON p.id = st.payment_id
     WHERE st.state = ${state} AND st.expires_at > now()`;
   if (!s) throw new ValidationError('Betalningen har gått ut eller är ogiltig. Försök igen.');
   if (s.user_id !== userId) throw new ForbiddenError('Betalningen startades av en annan användare');
@@ -148,7 +181,7 @@ export async function completeAuthorization(userId: number, state: string, error
   const [m] = await sql<{ role: string; permissions: string[] | null }[]>`SELECT role, permissions FROM memberships WHERE user_id = ${userId} AND company_id = ${s.company_id}`;
   if (!m || !hasPermission(m.role, m.permissions, 'payments')) throw new ForbiddenError('Du saknar behörighet att betala i bolaget');
   const actor: Actor = { companyId: s.company_id, userId, apiKeyId: null, role: m.role as Actor['role'] };
-  const back = s.kind === 'salary' && s.run ? `/c/${s.company_id}/lon/${s.run}` : `/c/${s.company_id}/leverantorsfakturor/betalning`;
+  const back = s.kind === 'salary' && s.run ? `/c/${s.company_id}/lon/${s.run}` : s.kind === 'expense' && s.claim ? `/c/${s.company_id}/m/utlagg/r/${s.claim}` : `/c/${s.company_id}/leverantorsfakturor/betalning`;
   await sql`UPDATE bank_payment_states SET expires_at = LEAST(expires_at, now() + interval '5 minutes') WHERE state = ${state}`;
   // Felparametern i adressen kan ändras av vem som helst – finns betalningen hos banken avgör bankens status, aldrig adressen
   if (!s.external_id) {
@@ -159,7 +192,7 @@ export async function completeAuthorization(userId: number, state: string, error
 }
 
 /** Hämtar status för betalningar som väntar (på begäran och varje natt) */
-export async function refreshPayments(companyId?: number, kind?: 'supplier' | 'salary') {
+export async function refreshPayments(companyId?: number, kind?: Kind) {
   const rows = await sql<{ id: number; company_id: number; external_id: string; created_by: number | null }[]>`SELECT id, company_id, external_id, created_by FROM bank_payments
     WHERE status IN ('authorization','accepted') AND external_id IS NOT NULL AND created_at > now() - interval '45 days' ${companyId ? sql`AND company_id = ${companyId}` : sql``} ${kind ? sql`AND kind = ${kind}` : sql``}`;
   let n = 0;
@@ -173,10 +206,10 @@ export async function refreshPayments(companyId?: number, kind?: 'supplier' | 's
   return n;
 }
 
-export async function listBankPayments(companyId: number, f: { kind?: 'supplier' | 'salary'; runId?: number } = {}) {
+export async function listBankPayments(companyId: number, f: { kind?: Kind; runId?: number; claimId?: number } = {}) {
   return [...await sql<{ id: number; kind: string; status: string; message: string; date: string; total: number; items: number; created: string; by: string | null }[]>`
     SELECT p.id, p.kind, p.status, p.message, to_char(p.execution_date,'YYYY-MM-DD') AS date, p.total::float8 AS total, (SELECT count(*)::int FROM bank_payment_items i WHERE i.payment_id = p.id) AS items,
       to_char(p.created_at,'YYYY-MM-DD HH24:MI') AS created, u.name AS by
     FROM bank_payments p LEFT JOIN users u ON u.id = p.created_by WHERE p.company_id = ${companyId}
-      ${f.kind ? sql`AND p.kind = ${f.kind}` : sql``} ${f.runId ? sql`AND p.payroll_run_id = ${f.runId}` : sql``} ORDER BY p.created_at DESC LIMIT 30`];
+      ${f.kind ? sql`AND p.kind = ${f.kind}` : sql``} ${f.runId ? sql`AND p.payroll_run_id = ${f.runId}` : sql``} ${f.claimId ? sql`AND p.expense_claim_id = ${f.claimId}` : sql``} ORDER BY p.created_at DESC LIMIT 30`];
 }

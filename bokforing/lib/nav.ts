@@ -40,6 +40,7 @@ export function buildNav(o: {
       { path: '/bank/avstamning', label: 'Bankavstämning', perm: 'ledger', hint: 'Bokför transaktionerna från banken' },
       { path: '/bank', label: 'Bankkonton', perm: 'ledger' },
       { path: '/bank/regler', label: 'Konteringsregler', perm: 'ledger' },
+      { path: '/kort', label: 'Företagskort', perm: 'ledger', hint: 'Kortköp som saknar kvitto' },
       { path: '/skattekonto', label: 'Skattekontot', perm: 'ledger' },
     ]) },
     { id: 'lon', label: t('Lön och personal'), icon: 'users', items: items([

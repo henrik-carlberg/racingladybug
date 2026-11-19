@@ -32,3 +32,18 @@ describe('OAuth', () => {
     expect(canReceive('invoice.paid', ['sales:write'])).toBe(true);
   });
 });
+
+import { allowanceDays, matchReceipts } from '@/lib/cards';
+describe('Företagskort och resor', () => {
+  it('kortköp matchas mot kvitton: belopp, datum, butik', () => {
+    const tx = [{ id: 1, date: '2026-11-10', amount: -12500, text: 'KORTKÖP ICA MAXI' }, { id: 2, date: '2026-11-11', amount: -12500, text: 'KORTKÖP CIRCLE K' }, { id: 3, date: '2026-11-12', amount: -999, text: 'X' }];
+    const rc = [{ id: 10, date: '2026-11-11', amount: 12500, text: 'Drivmedel Circle K' }, { id: 11, date: '2026-11-10', amount: 12500, text: 'Fika ICA' }, { id: 12, date: '2026-11-20', amount: 999, text: 'X' }];
+    expect(matchReceipts(tx, rc)).toEqual([{ txId: 1, voucherId: 11 }, { txId: 2, voucherId: 10 }]);
+  });
+  it('traktamente efter tider', () => {
+    expect(allowanceDays('2026-11-10T07:00', '2026-11-12T20:00')).toEqual({ full: 3, half: 0, nights: 2 });
+    expect(allowanceDays('2026-11-10T13:00', '2026-11-11T15:00')).toEqual({ full: 0, half: 2, nights: 1 });
+    expect(allowanceDays('2026-11-10T08:00', '2026-11-10T22:00')).toEqual({ full: 0, half: 0, nights: 0 });
+    expect(() => allowanceDays('2026-11-10T08:00', '2026-11-09T08:00')).toThrow();
+  });
+});

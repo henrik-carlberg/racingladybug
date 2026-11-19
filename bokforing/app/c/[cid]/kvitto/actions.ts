@@ -4,20 +4,28 @@ import { amount, done, fileFrom, str } from '@/lib/server/action';
 import { requireCompany } from '@/lib/server/auth';
 import { userActor } from '@/lib/services/actor';
 import { createReceipt } from '@/lib/services/receipts';
+import { cardLedger, linkReceipt } from '@/lib/services/cards';
 
 export type ReceiptState = { error?: string } | undefined;
 
 export async function saveReceipt(cid: number, _prev: ReceiptState, fd: FormData): Promise<ReceiptState> {
   const actor = userActor(await requireCompany(cid));
+  const txId = Number(str(fd, 'tx')) || 0;
+  let linked = false;
   try {
-    await createReceipt(actor, {
+    // Kvitto för ett kortköp: bokförs mot kortets konto och kopplas till köpet
+    const card = txId ? await cardLedger(actor.companyId, txId) : null;
+    if (txId && !card) throw new Error('Kortköpet finns inte eller har redan ett kvitto');
+    const v = await createReceipt(actor, {
       category: str(fd, 'category'), total: amount(fd, 'total', 'Belopp'), vat_rate: str(fd, 'vat_rate'), persons: str(fd, 'persons'),
-      paid_with: str(fd, 'paid_with'), date: str(fd, 'date'), description: str(fd, 'description'),
+      paid_with: card ? 'company' : str(fd, 'paid_with'), date: str(fd, 'date'), description: str(fd, 'description'), pay_account: card?.ledger_account,
     }, await fileFrom(fd));
+    if (card) linked = !!(await linkReceipt(actor, txId, v.id).catch(() => null));
   } catch (e) {
     unstable_rethrow(e);
     return { error: e instanceof Error ? e.message : 'Något gick fel' };
   }
+  if (txId) done(`/c/${cid}/kort`, linked ? 'Kvittot är bokfört och kopplat till kortköpet' : 'Kvittot är bokfört men beloppet stämmer inte med kortköpet – koppla det under Bank');
   done(`/c/${cid}/kvitto`, fd.get('another') === '1' ? 'Kvittot är bokfört – registrera nästa' : 'Kvittot är bokfört');
 }
 

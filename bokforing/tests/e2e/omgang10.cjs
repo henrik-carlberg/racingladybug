@@ -31,6 +31,19 @@ const appServer = http.createServer((req, res) => {
   });
 }).listen(3399);
 
+// Enable Banking (betalningar)
+const ebp = { got: [], status: {} };
+const ebServer = http.createServer((req, res) => {
+  let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => {
+    const send = (code, j) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(j)); };
+    if (!/^Bearer .+\..+\..+$/.test(req.headers.authorization || '')) return send(401, {});
+    if (req.method === 'POST' && req.url === '/payments') { const j = JSON.parse(b); const id = 'PAY-' + (ebp.got.length + 1); ebp.got.push({ id, ...j }); ebp.status[id] = 'ACTC'; return send(201, { payment_id: id, url: `${j.redirect_url}?state=${encodeURIComponent(j.state)}` }); }
+    const m = /^\/payments\/(.+)$/.exec(req.url);
+    if (m && ebp.status[m[1]]) return send(200, { payment_id: m[1], status: ebp.status[m[1]] });
+    send(404, {});
+  });
+}).listen(3301);
+
 (async () => {
   const browser = await chromium.launch();
   const owner = await login(browser, 'agare@example.com', 'hemligtlosen1');
@@ -121,8 +134,113 @@ const appServer = http.createServer((req, res) => {
   assert((await text(owner)).includes('Demobolaget AB'), 'testbolag');
   log('utvecklaren skapar ett testbolag att prova appen mot');
 
+  // ================= Del 2: företagskort och utlägg =================
+  const day = (n) => iso(new Date(Date.now() - n * 864e5));
+  await owner.goto(B + '/kort');
+  assert((await text(owner)).includes('Inget bankkonto är markerat som företagskort'), 'inga kort ännu');
+  const crow = owner.locator('tr:has-text("Företagskort")').last();
+  await crow.locator('input[name=is_card]').check();
+  await crow.locator('select[name=holder]').selectOption({ label: 'Ägare Testsson' });
+  await crow.locator('button:has-text("Spara")').click();
+  await owner.locator('tr.card-row:has-text("Företagskort")').waitFor();
+  const camt = (rows) => `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02"><BkToCstmrStmt><Stmt>${rows.map(([amt, d, ref, txt]) =>
+    `<Ntry><Amt Ccy="SEK">${amt}</Amt><CdtDbtInd>DBIT</CdtDbtInd><Sts>BOOK</Sts><BookgDt><Dt>${d}</Dt></BookgDt><AcctSvcrRef>${ref}</AcctSvcrRef><NtryDtls><TxDtls><RmtInf><Ustrd>${txt}</Ustrd></RmtInf></TxDtls></NtryDtls></Ntry>`).join('')}</Stmt></BkToCstmrStmt></Document>`;
+  const importCard = async (rows) => {
+    await owner.goto(B + '/bank');
+    const r = owner.locator('tr:has-text("Företagskort")').first();
+    await r.locator('input[type=file]').setInputFiles({ name: 'kort.xml', mimeType: 'application/xml', buffer: Buffer.from(camt(rows)) });
+    await r.locator('button:has-text("Importera")').click();
+    await owner.locator('.flash.ok').first().waitFor();
+  };
+  await importCard([['125.00', day(1), 'KORT-1', 'KORTKOP ICA MAXI XK'], ['349.00', day(5), 'KORT-2', 'KORTKOP CLAS OHLSON XK']]);
+  await owner.goto(B + '/kvitto');
+  await owner.fill('input[name=total]', '125');
+  await owner.fill('input[name=date]', day(1));
+  await owner.click('button:has-text("Kontorsmaterial")');
+  await owner.fill('input[name=description]', 'Fika ICA');
+  await owner.click('button:has-text("Bokför kvitto")');
+  await owner.locator('text=Kvittot är bokfört').first().waitFor();
+  await owner.goto(B + '/kort');
+  t = await text(owner);
+  assert(/\d+ st · /.test(t) && t.includes('ICA MAXI XK') && t.includes('CLAS OHLSON XK'), 'två kortköp saknar kvitto: ' + t.slice(0, 1200));
+  await owner.click('button:has-text("Koppla kvitton till kortköp")');
+  await owner.locator('text=/\\d+ kortköp kopplades till kvitton/').waitFor();
+  t = await text(owner);
+  assert(!t.includes('ICA MAXI XK') && t.includes('CLAS OHLSON XK'), 'redan bokfört kvitto kopplas till köpet: ' + t.slice(0, 1200));
+  log('bankkonto markeras som företagskort; kortköp kopplas automatiskt till redan bokförda kvitton (belopp och datum)');
+
+  await owner.click('tr.missing-tx:has-text("CLAS OHLSON XK") a:has-text("Fota kvitto")');
+  await owner.locator('.card-tx').waitFor();
+  assert(await owner.inputValue('input[name=total]') === '349,00' && await owner.inputValue('input[name=date]') === day(5), 'belopp och datum förifyllda');
+  await owner.click('button:has-text("Kontorsmaterial")');
+  await owner.setInputFiles('input[type=file][name=file]', { name: 'kvitto.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') });
+  await owner.click('button:has-text("Bokför kvitto")');
+  await owner.locator('text=Kvittot är bokfört och kopplat till kortköpet').waitFor();
+  assert(!(await text(owner)).includes('CLAS OHLSON XK'), 'köpet har kvitto');
+  log('”Fota kvitto” på ett kortköp: förifyllt belopp och datum, kvittot bokförs och stäms av mot köpet direkt');
+
+  await importCard([['89.00', day(3), 'KORT-3', 'KORTKOP PARKERING XK']]);
+  const cronDaily = async () => (await (await owner.request.get(`${BASE}/api/cron/daily`, { headers: { authorization: 'Bearer testcron' } })).json()).kortkvitton;
+  const k1 = await cronDaily(), k2 = await cronDaily();
+  assert(k1 && k1.reminded >= 1 && k2.reminded === 0, 'påminnelse om kvitto en gång: ' + JSON.stringify([k1, k2]));
+  log('kortinnehavaren påminns (pushnotis) om kortköp som saknar kvitto efter två dagar, inte varje natt');
+
+  // Körjournal → milersättning, traktamente från tider, utbetalning via banken
+  await owner.goto(B + '/m/utlagg/korjournal');
+  const trip = async (o) => {
+    await owner.selectOption('select[name=employee_id]', { label: 'Anna Andersson' });
+    await owner.fill('input[name=date]', o.date);
+    await owner.selectOption('select[name=vehicle]', o.vehicle);
+    await owner.fill('input[name=from]', o.from); await owner.fill('input[name=to]', o.to); await owner.fill('input[name=purpose]', o.purpose);
+    if (o.km) await owner.fill('input[name=km]', o.km);
+    if (o.odo) { await owner.fill('input[name=odo_start]', o.odo[0]); await owner.fill('input[name=odo_end]', o.odo[1]); }
+    const n = await owner.locator('tr.trip').count();
+    await owner.click('button:has-text("Spara resa")');
+    await owner.waitForFunction((n) => document.querySelectorAll('tr.trip').length > n, n);
+  };
+  await trip({ date: day(4), vehicle: 'private', from: 'Kontoret', to: 'Kund Borås', purpose: 'Kundmöte', km: '42' });
+  await trip({ date: day(3), vehicle: 'private', from: 'Kontoret', to: 'Mässan', purpose: 'Mässa', odo: ['1000', '1080'] });
+  await trip({ date: day(2), vehicle: 'company', from: 'Kontoret', to: 'Lager', purpose: 'Leverans', km: '15' });
+  t = await text(owner);
+  assert(t.includes('Egen bil 122 km') && t.includes('företagets bil 15 km') && t.includes('mätare 1000–1080'), 'körjournal: ' + t.slice(0, 1500));
+  await owner.goto(B + '/m/utlagg');
+  await owner.selectOption('select[name=employee_id]', { label: 'Anna Andersson' });
+  await owner.fill('input[name=title]', 'Resa Borås ZK');
+  await owner.click('button:has-text("Skapa")');
+  await owner.locator('text=2 oersatta resor med egen bil').waitFor();
+  const claimUrl = owner.url().split('?')[0];
+  await owner.click('button:has-text("Lägg till resorna")');
+  await owner.locator('text=2 resor från körjournalen är tillagda').waitFor();
+  await owner.fill('input[name=depart]', `${day(3)}T07:00`);
+  await owner.fill('input[name=return]', `${day(1)}T20:00`);
+  await owner.fill('form:has-text("Traktamente") input[name=description]', 'Göteborg, mässa');
+  await owner.click('button:has-text("Lägg till traktamente")');
+  await owner.locator('text=3 hela, 0 halva dagar, 2 nätter').waitFor();
+  t = await text(owner);
+  assert(t.includes('Kontoret – Kund Borås, Kundmöte') && t.includes('105,00') && t.includes('200,00') && t.includes('1 200,00') && t.includes('1 505,00'), 'räkningen: ' + t.slice(0, 1800));
+  log('körjournalens resor med egen bil blir milersättning med ett klick; traktamente räknas ut från avresa och hemkomst');
+
+  await owner.click('button:has-text("Skicka in för attest")');
+  await owner.locator('text=Räkningen är inskickad').waitFor();
+  await owner.click('button:has-text("Attestera och bokför")');
+  await owner.locator('text=Räkningen är attesterad och bokförd').waitFor();
+  await owner.selectOption('form.pay-bank select[name=pay_account]', { label: 'Företagskonto' });
+  await owner.click('button:has-text("Betala med BankID")');
+  await owner.locator('text=Godkänd – genomförs').waitFor();
+  const exp = ebp.got[ebp.got.length - 1].payment_request.credit_transfer_transaction;
+  assert(exp.length === 1 && exp[0].instructed_amount.amount === '1505.00' && JSON.stringify(exp[0]).includes('1234567890'), 'utbetalning till Annas konto: ' + JSON.stringify(exp));
+  assert(!(await owner.locator('button:has-text("Betala med BankID")').count()), 'kan inte betalas två gånger medan den väntar');
+  ebp.status[ebp.got[ebp.got.length - 1].id] = 'ACSC';
+  await owner.goto(claimUrl);
+  await owner.click('button:has-text("Hämta status från banken")');
+  await owner.waitForURL(/Status/);
+  await owner.locator('.bank-payments .badge:has-text("Genomförd och bokförd")').waitFor();
+  t = await text(owner);
+  assert(t.includes('Utbetald') && /verifikation/.test(t), 'räkningen är utbetald och bokförd: ' + t.slice(0, 1500));
+  log('attesterat utlägg betalas till den anställdas konto via banken med BankID och bokförs när banken genomfört betalningen');
+
   //@@NEXT@@
   await browser.close();
-  appServer.close();
+  appServer.close(); ebServer.close();
   console.log('Omgång 10: alla steg gick igenom');
 })().catch((e) => { console.error(e); process.exit(1); });

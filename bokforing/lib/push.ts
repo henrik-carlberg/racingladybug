@@ -6,6 +6,7 @@ export const PUSH_KINDS = {
   deadline: 'Deadline om tre dagar',
   bank: 'Bankkopplingen behöver förnyas',
   mention: 'Någon nämner dig i en kommentar',
+  receipt: 'Kvitto saknas för ett kortköp',
 } as const;
 export type PushKind = keyof typeof PUSH_KINDS;
 export const isPushKind = (k: string): k is PushKind => k in PUSH_KINDS;
