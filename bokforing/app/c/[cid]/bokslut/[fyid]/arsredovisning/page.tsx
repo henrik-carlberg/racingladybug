@@ -8,6 +8,7 @@ import { DocumentBody } from '@/components/DocumentBody';
 import { PrintButton } from '@/components/PrintButton';
 import { today } from '@/lib/format';
 import { minutes, saveReport } from '../../actions';
+import { prepareAnnual } from '../../../inlamning/actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +22,7 @@ export default async function AnnualReport({ params, searchParams }: { params: P
     <div style={{ maxWidth: 900 }}>
       <div className="header no-print">
         <h1>{ab ? 'Årsredovisning' : 'Förenklat årsbokslut'}</h1>
-        <div className="actions" style={{ margin: 0 }}><PrintButton />{ab && <a className="btn secondary" href={`${b}/arsredovisning/ixbrl`} download title="För digital inlämning till Bolagsverket">Ladda ner iXBRL</a>}<Link className="btn secondary" href={b}>Tillbaka</Link></div>
+        <div className="actions" style={{ margin: 0 }}><PrintButton />{ab && <a className="btn secondary" href={`${b}/arsredovisning/ixbrl`} download title="För digital inlämning till Bolagsverket">Ladda ner iXBRL</a>}{ab && <form action={prepareAnnual.bind(null, company.id, Number(fyid))}><button className="secondary">Förbered inlämning till Bolagsverket</button></form>}<Link className="btn secondary" href={b}>Tillbaka</Link></div>
       </div>
       <Flash searchParams={searchParams} />
       {ab && (

@@ -3,7 +3,7 @@ export type UiLang = 'sv' | 'en';
 
 const EN: Record<string, string> = {
   // Meny
-  'Bokföring': 'Bookkeeping', 'Översikt': 'Overview', 'Kom igång': 'Get started', '📷 Nytt kvitto': '📷 New receipt', 'Deadlines': 'Deadlines',
+  'Bokföring': 'Bookkeeping', 'Översikt': 'Overview', 'Kom igång': 'Get started', '📷 Nytt kvitto': '📷 New receipt', 'Deadlines': 'Deadlines', 'Inlämning': 'Filing', 'Skatteverket och Bolagsverket': 'Swedish Tax Agency and Companies Registration Office',
   'Verifikationer': 'Vouchers', 'Ny verifikation': 'New voucher', 'Kontoplan': 'Chart of accounts', 'Försäljning': 'Sales', 'Kundfakturor': 'Customer invoices',
   'ROT och RUT': 'ROT and RUT', 'Kassa och e-handel': 'POS and e-commerce', 'Kunder': 'Customers', '⏱ Tidrapportering': '⏱ Time tracking',
   'Uppdrag & timbanker': 'Engagements & hour banks', 'Inköp': 'Purchasing', 'Inkorg för fakturor': 'Invoice inbox', 'Leverantörsfakturor': 'Supplier invoices',

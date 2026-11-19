@@ -5,6 +5,7 @@ import { requireCompany } from '@/lib/server/auth';
 import { Flash, type SP } from '@/components/ui';
 import { kr } from '@/lib/format';
 import { PAY_ITEM_LABELS, type PayItem } from '@/lib/payroll';
+import { prepareAgi } from '../../inlamning/actions';
 import { addEmployee, bookRun, deleteRun, removeSlip, saveSlip, applyAbsence } from '../actions';
 
 export const dynamic = 'force-dynamic';
@@ -40,6 +41,7 @@ export default async function Run({ params, searchParams }: { params: Promise<{ 
         <h1>Lön {run.period} <span className={`badge ${draft ? '' : 'ok'}`}>{draft ? 'Utkast' : 'Bokförd'}</span></h1>
         <div className="actions" style={{ margin: 0 }}>
           {!draft && <a className="btn" href={`${b}/lon/${run.id}/agi`}>Ladda ner AGI-fil</a>}
+          {!draft && <form action={prepareAgi.bind(null, company.id, run.id)}><button className="secondary">Förbered AGI för inlämning</button></form>}
           <Link className="btn secondary" href={`${b}/lon`}>Tillbaka</Link>
         </div>
       </div>
