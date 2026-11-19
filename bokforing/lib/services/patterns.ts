@@ -2,6 +2,7 @@ import 'server-only';
 import { sql } from '@/lib/db';
 import { kr, today as todayFn } from '@/lib/format';
 import { daysBetween, monthlyPattern, ordinal, plusDays } from '@/lib/patterns';
+import { findAnomalies } from '@/lib/ai-voucher';
 
 export interface Suggestion { key: string; title: string; text: string; href: string; action: string; icon: string }
 
@@ -68,12 +69,34 @@ export async function patternSuggestions(companyId: number, opts: { can: (p: 'pa
     }
   }
 
+  // Avvikelser förra månaden: ovanligt höga kostnader och kostnader som brukar komma men saknas
+  if (opts.can('ledger')) {
+    const lastMonth = new Date(Date.UTC(Number(t.slice(0, 4)), Number(t.slice(5, 7)) - 2, 1)).toISOString().slice(0, 7);
+    const from = new Date(Date.UTC(Number(lastMonth.slice(0, 4)), Number(lastMonth.slice(5, 7)) - 7, 1)).toISOString().slice(0, 10);
+    const rows = await sql<{ account: number; m: string; v: number }[]>`
+      SELECT l.account_number AS account, to_char(v.date,'YYYY-MM') AS m, SUM(l.debit - l.credit)::bigint AS v
+      FROM voucher_lines l JOIN vouchers v ON v.id = l.voucher_id
+      WHERE v.company_id = ${companyId} AND v.date >= ${from} AND v.date < ${plusDays(lastMonth + '-01', 32).slice(0, 7) + '-01'} AND l.account_number BETWEEN 4000 AND 7999
+        AND v.source_type IS DISTINCT FROM 'opening_balance' GROUP BY 1, 2`;
+    const monthly = new Map<number, Map<string, number>>();
+    for (const r of rows) { const m = monthly.get(r.account) ?? new Map(); m.set(r.m, Number(r.v)); monthly.set(r.account, m); }
+    const names = new Map((await sql<{ number: number; name: string }[]>`SELECT number, name FROM accounts WHERE company_id = ${companyId} AND number BETWEEN 4000 AND 7999`).map((a) => [a.number, a.name]));
+    for (const a of findAnomalies(monthly, lastMonth, names)) {
+      const range = `from=${lastMonth}-01&to=${plusDays(plusDays(lastMonth + '-01', 32).slice(0, 7) + '-01', -1)}`;
+      out.push(a.kind === 'high'
+        ? { key: `anomaly:${a.account}:${lastMonth}`, icon: 'alert', title: `${a.name || `Konto ${a.account}`}: ${Math.round(a.amount / Math.max(a.usual, 1) * 10) / 10} gånger högre än vanligt i ${monthName(lastMonth + '-01')}`, href: `${b}/rapporter/huvudbok?account=${a.account}&${range}`, action: 'Visa verifikationerna',
+            text: `${kr(a.amount)} mot i snitt ${kr(a.usual)} per månad. Kontrollera att inget är dubbelbokfört eller bokfört på fel konto.` }
+        : { key: `anomaly:${a.account}:${lastMonth}`, icon: 'alert', title: `${a.name || `Konto ${a.account}`} saknas för ${monthName(lastMonth + '-01')}`, href: `${b}/rapporter/huvudbok?account=${a.account}`, action: 'Visa kontot',
+            text: `Brukar vara runt ${kr(a.usual)} varje månad. Har fakturan eller betalningen kommit in?` });
+    }
+  }
+
   if (!out.length) return out;
   const dismissed = new Set((await sql<{ key: string }[]>`SELECT key FROM suggestion_dismissals WHERE company_id = ${companyId} AND key IN ${sql(out.map((s) => s.key))}`).map((r) => r.key));
   return out.filter((s) => !dismissed.has(s.key));
 }
 
 export async function dismissSuggestion(companyId: number, userId: number, key: string) {
-  if (!/^(payroll|supplier|voucher):[\d:-]+$/.test(key)) return;
+  if (!/^(payroll|supplier|voucher|anomaly):[\d:-]+$/.test(key)) return;
   await sql`INSERT INTO suggestion_dismissals (company_id, key, user_id) VALUES (${companyId}, ${key}, ${userId}) ON CONFLICT DO NOTHING`;
 }

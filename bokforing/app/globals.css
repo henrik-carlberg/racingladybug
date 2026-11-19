@@ -185,6 +185,9 @@ td.neg { color: var(--danger); }
 .status-icon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; font-weight: 700; flex: 0 0 auto; background: var(--panel-2); color: var(--muted); }
 .status-row.ok .status-icon { background: var(--ok-soft); color: var(--ok); }
 .status-row.todo .status-icon { background: var(--warn-soft); color: var(--warn); }
+/* AI */
+.ai-box { border-color: var(--accent); background: linear-gradient(180deg, var(--accent-soft), var(--panel)); }
+.ai-box.warn { border-color: var(--warn); }
 /* Ångra */
 .toasts { position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%); z-index: 60; display: grid; gap: .5rem; width: min(440px, calc(100vw - 32px)); }
 .toast { position: relative; overflow: hidden; display: flex; align-items: center; gap: .75rem; padding: .75rem 1rem; border-radius: 12px; background: #111827; color: #f9fafb; box-shadow: var(--shadow-lg); }
