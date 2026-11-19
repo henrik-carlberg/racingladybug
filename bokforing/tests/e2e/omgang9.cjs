@@ -214,6 +214,66 @@ const ebServer = http.createServer((req, res) => {
   assert(!(await owner.locator('button:has-text("Betala ut nettolönerna via banken")').count()) && (await text(owner)).includes('Genomförd och bokförd'), 'lönerna kan inte betalas två gånger');
   log('nettolönerna i en bokförd lönekörning betalas ut till de anställdas konton via banken');
 
+  // ================= Del 4: egna rapporter och nyckeltal =================
+  await owner.goto(B + '/rapporter/egna');
+  await owner.selectOption('select[name=template]', 'kort');
+  await owner.fill('input[name=name]', 'Styrelserapport');
+  await owner.click('button:has-text("Skapa rapport")');
+  await owner.waitForURL(/rapporter\/egna\/\d+/);
+  const repUrl = owner.url().split('?')[0];
+  t = await text(owner);
+  assert(t.includes('Styrelserapport') && t.includes('Nettoomsättning') && t.includes('Bruttovinst') && t.includes('Rörelsemarginal %') && t.includes('samma period') && /\d+(,\d)? %/.test(t), 'rapport från mall: ' + t.slice(0, 1200));
+  const cells = await owner.locator('table.report-table tr:has-text("Rörelseresultat") td.num').allInnerTexts();
+  assert(cells.length === 4 && cells.every((c) => /^-?[\d ]+,\d{2}$|^–$/.test(c.replace(/\s/g, ' '))), 'rörelseresultat i år och i fjol: ' + cells.join(' | '));
+  log('egen rapport från mall: kontointervall, formler, procent och jämförelse med i fjol');
+
+  await owner.fill('input[name=label_8]', 'Kassa och bank');
+  await owner.fill('input[name=value_8]', '1900-1999');
+  await owner.fill('input[name=label_9]', 'Fel');
+  await owner.selectOption('select[name=type_9]', 'formula');
+  await owner.fill('input[name=value_9]', 'r20 + 1');
+  await owner.click('button:has-text("Spara rapporten")');
+  await owner.waitForURL(/error=/);
+  assert(decodeURIComponent(owner.url().replace(/\+/g, ' ')).includes('Okänd rad "r20"'), 'formel mot okänd rad avvisas: ' + owner.url());
+  await owner.goto(repUrl);
+  await owner.fill('input[name=label_8]', 'Kassa och bank');
+  await owner.fill('input[name=value_8]', '1900-1999');
+  await owner.click('button:has-text("Spara rapporten")');
+  await owner.locator('table.report-table tr:has-text("Kassa och bank")').waitFor();
+  const x = await owner.request.get(repUrl + '/xlsx');
+  assert(x.status() === 200 && x.headers()['content-type'].includes('spreadsheetml') && (await x.body()).slice(0, 2).toString() === 'PK', 'Excel');
+  log('rader läggs till (saldo för balanskonton), felaktiga formler avvisas, export till Excel');
+
+  await owner.fill('#dela input[name=label]', 'Banken');
+  await owner.click('#dela button:has-text("Skapa delningslänk")');
+  await owner.locator('code.share-url').waitFor();
+  const shareUrl = (await owner.locator('code.share-url').textContent()).trim();
+  const anon = await (await browser.newContext()).newPage();
+  await anon.goto(shareUrl);
+  t = await text(anon);
+  assert(t.includes('Testbolaget AB') && t.includes('Styrelserapport') && t.includes('Nettoomsättning') && t.includes('Länken gäller till') && !t.includes('Spara rapporten'), 'delad rapport utan inloggning: ' + t.slice(0, 600));
+  await owner.goto(repUrl);
+  await owner.click('#dela tr:has-text("Banken") button:has-text("Återkalla")');
+  await owner.waitForURL(/ok=/);
+  assert((await anon.goto(shareUrl)).status() === 404, 'återkallad länk fungerar inte');
+  assert((await anon.goto(BASE + '/delad/' + 'x'.repeat(32))).status() === 404, 'okänd länk');
+  log('rapporten delas med banken via en läsbar länk utan inloggning, som kan återkallas');
+
+  await owner.goto(B + '/nyckeltal?roll=styrelse');
+  t = await text(owner);
+  assert(t.includes('Soliditet') && t.includes('Kassalikviditet') && t.includes('Rörelsemarginal') && t.includes('mot i fjol') && t.includes('procentenheter') && (await owner.locator('[data-kpi=dso]').count()) === 0, 'styrelsens nyckeltal: ' + t.slice(0, 800));
+  await owner.goto(B + '/nyckeltal?roll=vd');
+  assert((await owner.locator('[data-kpi=dso]').count()) === 1, 'vd:ns nyckeltal');
+  await owner.goto(B + '/nyckeltal?roll=styrelse');
+  await owner.click('#dela button:has-text("Skapa delningslänk")');
+  await owner.locator('code.share-url').waitFor();
+  await anon.goto((await owner.locator('code.share-url').textContent()).trim());
+  assert((await text(anon)).includes('Soliditet'), 'delade nyckeltal');
+  await owner.goto(BASE + '/nyckeltal');
+  t = await text(owner);
+  assert(t.includes('Testbolaget AB') && t.includes('Firma Test') && t.includes('Soliditet'), 'jämförelse mellan bolag: ' + t.slice(0, 600));
+  log('nyckeltal per roll (vd, ekonomi, styrelse) med jämförelse mot i fjol, delning och jämförelse mellan bolag');
+
   //@@NEXT@@
   await browser.close();
   bvServer.close(); ebServer.close();

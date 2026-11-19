@@ -347,3 +347,5 @@ html.i18n-pending main { animation: i18n-reveal 0s linear 1.2s forwards; visibil
 .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: 0; }
 .wheel-item.overdue td:first-child { color: var(--danger); font-weight: 600; }
 .wheel-item.done td { color: var(--muted); }
+.ok-text { color: var(--ok); }
+.danger-text { color: var(--danger); }

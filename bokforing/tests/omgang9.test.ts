@@ -88,3 +88,41 @@ describe('Betalning via banken', () => {
     expect(mapPaymentStatus('ACSC')).toBe('executed'); expect(mapPaymentStatus('ACTC')).toBe('accepted'); expect(mapPaymentStatus('RJCT')).toBe('rejected'); expect(mapPaymentStatus('RCVD')).toBe('authorization');
   });
 });
+
+import { evalFormula, evaluate, kpis, parseRanges, validateDef } from '@/lib/report-builder';
+describe('Rapportbyggare', () => {
+  it('kontointervall', () => {
+    expect(parseRanges('3000-3999, -4000-4999, 8310')).toEqual([{ from: 3000, to: 3999, sign: 1 }, { from: 4000, to: 4999, sign: -1 }, { from: 8310, to: 8310, sign: 1 }]);
+    expect(() => parseRanges('abc')).toThrow(/Ogiltigt/); expect(() => parseRanges('3999-3000')).toThrow(); expect(() => parseRanges('')).toThrow();
+  });
+  it('formler utan eval', () => {
+    expect(evalFormula('r1 - r2 * 2', { r1: 10, r2: 3 })).toBe(4);
+    expect(evalFormula('(r1 - r2) / r1 * 100', { r1: 200, r2: 50 })).toBe(75);
+    expect(evalFormula('r1 / r2', { r1: 1, r2: 0 })).toBeNull();
+    expect(evalFormula('-r1', { r1: 5 })).toBe(-5);
+    expect(() => evalFormula('r9', { r1: 1 })).toThrow(/Okänd rad/);
+    expect(() => evalFormula('process.exit()', {})).toThrow();
+    expect(() => evalFormula('r1 +', { r1: 1 })).toThrow();
+  });
+  it('rapport med perioder, formel, balansrad och budget', () => {
+    const m = (o: Record<number, number>) => new Map(Object.entries(o).map(([k, v]) => [Number(k), v]));
+    const def = { columns: 'year' as const, compare: false, budget: true, rows: [
+      { key: 'r1', label: 'Intäkter', type: 'accounts' as const, value: '3000-3999' },
+      { key: 'r2', label: 'Kostnader', type: 'accounts' as const, value: '4000-7999' },
+      { key: 'r3', label: 'Resultat', type: 'formula' as const, value: 'r1 - r2', bold: true },
+      { key: 'r4', label: 'Marginal %', type: 'formula' as const, value: 'r3 / r1 * 100' },
+      { key: 'r5', label: 'Kassa', type: 'accounts' as const, value: '1900-1999' },
+    ] };
+    expect(validateDef(def)).toEqual([]);
+    const out = evaluate(def, [{ label: '2026', result: m({ 3001: -100000, 5010: 30000, 7010: 20000 }), balance: m({ 1930: 55000, 2440: -5000 }), budget: m({ 3001: 120000, 5010: 30000 }) }]);
+    expect(out.map((r) => r.values[0])).toEqual([100000, 50000, 50000, 50, 55000]);
+    expect(out.map((r) => r.budget[0])).toEqual([120000, 30000, 90000, 75, null]);
+    expect(validateDef({ ...def, rows: [{ key: 'r1', label: 'X', type: 'formula', value: 'r2 + 1' }] })[0]).toContain('Okänd rad');
+  });
+  it('nyckeltal', () => {
+    const m = (o: Record<number, number>) => new Map(Object.entries(o).map(([k, v]) => [Number(k), v]));
+    const k = kpis(m({ 3001: -1000000, 4010: 400000, 5010: 200000, 7010: 200000, 8410: 10000 }), m({ 1510: 125000, 1930: 375000, 1220: 500000, 2081: -50000, 2099: -500000, 2440: -250000, 2710: -200000 }), 365);
+    expect(k).toMatchObject({ revenue: 1000000, grossProfit: 600000, grossMargin: 60, operatingResult: 200000, operatingMargin: 20, result: 190000, cash: 375000, currentLiabilities: 450000 });
+    expect(k.equityRatio).toBe(55); expect(k.quickRatio).toBe(111.1); expect(k.dso).toBe(37);
+  });
+});

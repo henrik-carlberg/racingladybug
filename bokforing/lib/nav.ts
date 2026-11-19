@@ -56,6 +56,8 @@ export function buildNav(o: {
     { id: 'rapp', label: t('Rapporter'), icon: 'chart', items: items([
       { path: '/rapporter/panel', label: 'Instrumentpanel', hint: 'Diagram och nyckeltal' },
       { path: '/rapporter/manad', label: 'Månadsrapport' },
+      { path: '/nyckeltal', label: 'Nyckeltal', perm: 'ledger', hint: 'För vd, ekonomi och styrelse' },
+      { path: '/rapporter/egna', label: 'Egna rapporter', perm: 'ledger', hint: 'Bygg och dela egna rapporter' },
       { path: '/rapporter', label: 'Resultat & balans' },
       { path: '/rapporter/budget', label: 'Budget' },
       { path: '/rapporter/moms', label: 'Moms', hint: 'Momsdeklarationen' },
