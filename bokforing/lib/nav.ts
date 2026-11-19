@@ -59,6 +59,7 @@ export function buildNav(o: {
       { path: '/lon/bilforman', label: 'Bilförmån', perm: 'payroll' },
       { path: '/lon/avtal', label: 'Kollektivavtal', perm: 'payroll', hint: 'OB, övertid, beredskap, pension' },
       { path: '/agare', label: 'Ägare och utdelning', perm: 'ledger', hint: 'K10, gränsbelopp och lön eller utdelning' },
+      { path: '/aktiebok', label: 'Aktiebok', perm: 'ledger', hint: 'Aktieägare, överlåtelser, nyemission och styrelseprotokoll' },
     ]) },
     { id: 'rapp', label: t('Rapporter'), icon: 'chart', items: items([
       { path: '/rapporter/panel', label: 'Instrumentpanel', hint: 'Diagram och nyckeltal' },
