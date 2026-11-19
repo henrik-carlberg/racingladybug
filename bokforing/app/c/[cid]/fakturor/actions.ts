@@ -1,6 +1,6 @@
 'use server';
 import { unstable_rethrow } from 'next/navigation';
-import { amount, attempt, done, str } from '@/lib/server/action';
+import { amount, attempt, done, result, str } from '@/lib/server/action';
 import { requireCompany } from '@/lib/server/auth';
 import { userActor } from '@/lib/services/actor';
 import * as svc from '@/lib/services/invoices';
@@ -75,4 +75,10 @@ export async function settleAdvance(cid: number, invoiceId: number, advanceId: n
   const actor = userActor(await requireCompany(cid, { perm: 'invoicing' }));
   await attempt(`/c/${cid}/fakturor/${invoiceId}`, () => svc.settleAdvance(actor, invoiceId, advanceId));
   done(`/c/${cid}/fakturor/${invoiceId}`, 'Förskottet är avräknat på fakturan');
+}
+
+/** Ta bort utkast (kan ångras på klienten: anropas först när tiden för att ångra har gått) */
+export async function deleteDraftNow(cid: number, invoiceId: number) {
+  const actor = userActor(await requireCompany(cid, { perm: 'invoicing' }));
+  return result(() => svc.deleteDraft(actor, invoiceId));
 }

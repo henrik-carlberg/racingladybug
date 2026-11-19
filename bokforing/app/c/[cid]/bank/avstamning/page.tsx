@@ -1,10 +1,11 @@
 import Link from 'next/link';
+import { UndoButton } from '@/components/Undo';
 import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
 import { listBankAccounts, listTransactions } from '@/lib/services/bank';
 import { Flash, type SP } from '@/components/ui';
 import { kr } from '@/lib/format';
-import { autoMatch, bookAllSuggestions, reconcileTx, reopenTx } from '../actions';
+import { autoMatch, bookAllSuggestions, ignoreTxNow, reconcileTx, reopenTx } from '../actions';
 import { learnKey } from '@/lib/bank/rules';
 import { listCostCenters, listProjectRefs } from '@/lib/services/dimensions';
 
@@ -48,7 +49,7 @@ export default async function Reconcile({ params, searchParams }: { params: Prom
       <datalist id="chart">{chart.map((a) => <option key={a.number} value={a.number}>{a.name}</option>)}</datalist>
       {rows.length === 0 && <p className="muted">Inga transaktioner.</p>}
       {rows.map((t) => (
-        <div key={t.id} className="card" id={`t${t.id}`}>
+        <div key={t.id} className="card" id={`t${t.id}`} data-undo-row>
           <div className="header" style={{ marginBottom: '.5rem' }}>
             <div>
               <b>{t.booking_date}</b> · {t.counterparty || t.description || 'Transaktion'}
@@ -88,10 +89,7 @@ export default async function Reconcile({ params, searchParams }: { params: Prom
                 </form>
               </details>
               <Link className="small" href={`${b}/fragor?entity=bank_transaction&id=${t.id}`}>Fråga {role === 'accountant' ? 'kunden' : 'byrån'} om transaktionen</Link>
-              <form action={reconcileTx.bind(null, company.id, t.id)}>
-                <input type="hidden" name="type" value="ignore" /><input type="hidden" name="qs" value={qs} />
-                <button className="link small">Ignorera (bokförs inte, t.ex. överföring mellan egna konton som redan är bokförd)</button>
-              </form>
+              <div><UndoButton action={ignoreTxNow.bind(null, company.id, t.id)} message="Transaktionen ignoreras" className="link small">Ignorera (bokförs inte, t.ex. överföring mellan egna konton som redan är bokförd)</UndoButton></div>
             </div>
           ) : (
             <div className="small">

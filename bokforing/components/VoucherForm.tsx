@@ -6,7 +6,8 @@ import type { FormState } from '@/app/c/[cid]/verifikationer/actions';
 type Row = { account: string; debit: string; credit: string; description: string; cc: string; project: string };
 const empty = (): Row => ({ account: '', debit: '', credit: '', description: '', cc: '', project: '' });
 
-export function VoucherForm({ action, accounts, today, costCenters = [], projects = [] }: {
+export function VoucherForm({ action, accounts, today, costCenters = [], projects = [], initial }: {
+  initial?: { description: string; rows: { account: number; debit: number; credit: number; description: string }[] };
   action: (s: FormState, fd: FormData) => Promise<FormState>;
   accounts: { number: number; name: string }[];
   today: string;
@@ -14,7 +15,8 @@ export function VoucherForm({ action, accounts, today, costCenters = [], project
   projects?: { id: number; name: string }[];
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
-  const [rows, setRows] = useState<Row[]>([empty(), empty()]);
+  const amt = (o: number) => (o ? formatAmount(o).replace(/ /g, '') : '');
+  const [rows, setRows] = useState<Row[]>(initial?.rows.length ? initial.rows.map((r) => ({ ...empty(), account: String(r.account), debit: amt(r.debit), credit: amt(r.credit), description: r.description ?? '' })) : [empty(), empty()]);
   const set = (i: number, k: keyof Row, v: string) => setRows((r) => r.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
   const sum = (k: 'debit' | 'credit') => rows.reduce((s, r) => s + (parseAmount(r[k]) ?? 0), 0);
   const diff = sum('debit') - sum('credit');
@@ -24,7 +26,7 @@ export function VoucherForm({ action, accounts, today, costCenters = [], project
       {state?.error && <div className="flash error">{state.error}</div>}
       <div className="card row">
         <label style={{ flex: '0 0 180px' }}>Datum<input type="date" name="date" defaultValue={today} required /></label>
-        <label style={{ flex: '3 1 300px' }}>Beskrivning<input name="description" required placeholder="T.ex. Kvitto kontorsmaterial" /></label>
+        <label style={{ flex: '3 1 300px' }}>Beskrivning<input name="description" required placeholder="T.ex. Kvitto kontorsmaterial" defaultValue={initial?.description} /></label>
       </div>
       <datalist id="accounts">{accounts.map((a) => <option key={a.number} value={a.number}>{a.name}</option>)}</datalist>
       <div className="table-wrap">

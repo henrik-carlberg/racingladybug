@@ -13,6 +13,8 @@ import { Icon } from '@/components/Icon';
 import { buildNav, createActions, type NavItem } from '@/lib/nav';
 import { canView, type Permission } from '@/lib/permissions';
 import { usageScores } from '@/lib/services/usage';
+import { patternSuggestions } from '@/lib/services/patterns';
+import { dismiss } from './suggestion-actions';
 import { FREQUENT, TOP, rankByUsage } from '@/lib/usage';
 
 export const dynamic = 'force-dynamic';
@@ -70,6 +72,7 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
   const frequent = rankByUsage([...known.values()], (x) => score(x.href)).filter((x) => score(x.href) >= FREQUENT).slice(0, 6);
   const topAction = frequent[0] && score(frequent[0].href) >= TOP ? frequent[0] : null;
   const rankedTiles = rankByUsage(tiles, ([, , , href]) => score(href));
+  const suggestions = ctx.role === 'auditor' ? [] : await patternSuggestions(id, { can: ctx.can }).catch(() => []);
   return (
     <>
       <div className="hello">
@@ -91,6 +94,21 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
             <Link className="btn" href={`/c/${id}/kom-igang`}>{L("Fortsätt")}</Link>
           </div>
         </div>
+      )}
+      {suggestions.length > 0 && (
+        <section className="card suggestions">
+          <h2 style={{ marginTop: 0 }}>{L('Förslag')}</h2>
+          {suggestions.map((x) => (
+            <div key={x.key} className="suggestion">
+              <span className="tile-icon"><Icon name={x.icon} size={18} /></span>
+              <div><b>{x.title}</b><div className="small muted">{x.text}</div></div>
+              <div className="suggestion-actions">
+                <Link className="btn" href={x.href}>{x.action}</Link>
+                <form action={dismiss.bind(null, id, x.key)}><button className="link small">{L('Inte nu')}</button></form>
+              </div>
+            </div>
+          ))}
+        </section>
       )}
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', alignItems: 'start' }}>
         <section className="card">

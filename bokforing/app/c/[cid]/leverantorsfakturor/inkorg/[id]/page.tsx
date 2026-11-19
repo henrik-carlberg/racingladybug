@@ -1,11 +1,12 @@
 import Link from 'next/link';
+import { UndoButton } from '@/components/Undo';
 import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
 import { Flash, type SP } from '@/components/ui';
 import { addDays, today } from '@/lib/format';
 import { getInboxDoc } from '@/lib/services/inbox';
 import { invoiceAiEnabled } from '@/lib/services/invoice-ai';
-import { register, reject, retry } from '../actions';
+import { register, rejectNow, retry } from '../actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -93,7 +94,7 @@ export default async function InboxDoc({ params, searchParams }: { params: Promi
       {!done && (
         <div className="actions">
           {doc.has_file && invoiceAiEnabled() && <form action={retry.bind(null, company.id, doc.id)}><button className="secondary">Läs av igen</button></form>}
-          <form action={reject.bind(null, company.id, doc.id)}><button className="secondary">Ta bort ur inkorgen</button></form>
+          <UndoButton action={rejectNow.bind(null, company.id, doc.id)} message="Dokumentet tas bort ur inkorgen" after={`${b}/inkorg`} className="secondary">Ta bort ur inkorgen</UndoButton>
         </div>
       )}
     </div>

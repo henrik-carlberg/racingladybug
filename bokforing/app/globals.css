@@ -134,7 +134,25 @@ p.muted, .muted.small { max-width: 72ch; }
 .tile:hover { border-color: var(--accent); text-decoration: none; transform: translateY(-1px); }
 .tile .tile-icon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); flex: 0 0 auto; }
 .tile b { display: block; }
+/* Ångra */
+.toasts { position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%); z-index: 60; display: grid; gap: .5rem; width: min(440px, calc(100vw - 32px)); }
+.toast { position: relative; overflow: hidden; display: flex; align-items: center; gap: .75rem; padding: .75rem 1rem; border-radius: 12px; background: #111827; color: #f9fafb; box-shadow: var(--shadow-lg); }
+.toast.error { background: var(--danger); }
+.toast span:first-child { flex: 1; }
+.toast-undo { background: transparent; color: #93c5fd; border: 0; font-weight: 650; padding: .25rem .5rem; cursor: pointer; box-shadow: none; }
+.toast.error .toast-undo { color: #fff; }
+.toast-bar { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: #60a5fa; transform-origin: left; animation: toast-shrink linear forwards; }
+@keyframes toast-shrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .toast-bar { animation: none; } }
+/* Förslag utifrån mönster */
+.suggestion { display: flex; gap: .85rem; align-items: center; padding: .7rem 0; border-top: 1px solid var(--border); }
+.suggestion:first-of-type { border-top: 0; padding-top: 0; }
+.suggestion .tile-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); flex: 0 0 auto; }
+.suggestion > div:nth-child(2) { flex: 1; }
+.suggestion-actions { display: flex; gap: .5rem; align-items: center; flex: 0 0 auto; }
+@media (max-width: 640px) { .suggestion { flex-wrap: wrap; } .suggestion-actions { width: 100%; } }
 /* Inlärda genvägar */
+.learned { background: var(--accent-soft); color: var(--text); border-radius: var(--radius-sm); padding: .55rem .8rem; }
 .top-action { display: flex; gap: .85rem; align-items: center; padding: .9rem 1.1rem; margin: 0 0 1rem; background: var(--panel); border: 1px solid var(--accent); border-radius: var(--radius); box-shadow: var(--shadow); color: var(--text); }
 .top-action:hover { text-decoration: none; background: var(--accent-soft); }
 .top-action .tile-icon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); flex: 0 0 auto; }

@@ -2,10 +2,12 @@
 import { useActionState, useState } from 'react';
 import { RECEIPT_CATEGORIES, receiptLines, type ReceiptGuess } from '@/lib/receipts';
 import { formatAmount, parseAmount } from '@/lib/money';
+import { receiptKey, type ReceiptCoding } from '@/lib/coding-memory';
 
 type State = { error?: string } | undefined;
 
-export function ReceiptForm({ action, read, today, companyType, accountNames }: {
+export function ReceiptForm({ action, read, today, companyType, accountNames, learned = {} }: {
+  learned?: Record<string, ReceiptCoding & { streak: number }>;
   action: (s: State, fd: FormData) => Promise<State>;
   read?: (fd: FormData) => Promise<{ guess?: ReceiptGuess; error?: string }>;
   today: string;
@@ -21,6 +23,14 @@ export function ReceiptForm({ action, read, today, companyType, accountNames }: 
   const [date, setDate] = useState(today);
   const [description, setDescription] = useState('');
   const [reading, setReading] = useState<'' | 'busy' | 'done' | string>('');
+  const [picked, setPicked] = useState(false);
+  const [applied, setApplied] = useState<(ReceiptCoding & { streak: number }) | null>(null);
+  /** Samma butik som de senaste gångerna → samma kategori, moms och betalsätt (om användaren inte själv har valt) */
+  const learn = (desc: string, force = false) => {
+    const l = learned[receiptKey(desc)];
+    if (!l || (picked && !force)) { if (!l) setApplied(null); return; }
+    setCatKey(l.category); setVat(String(l.vatRate)); setPaidWith(l.paidWith); setApplied(l);
+  };
   const onFile = async (f: File | undefined) => {
     if (!read || !f) return;
     setReading('busy');
@@ -34,7 +44,7 @@ export function ReceiptForm({ action, read, today, companyType, accountNames }: 
       if (g.total) setTotal((g.total / 100).toFixed(2).replace('.', ','));
       if (g.category) setCatKey(g.category);
       setVat(g.vatRate != null ? String(g.vatRate) : '');
-      if (g.description || g.merchant) setDescription([g.merchant, g.description].filter(Boolean).join(': '));
+      if (g.description || g.merchant) { const d = [g.merchant, g.description].filter(Boolean).join(': '); setDescription(d); learn(d, true); }
       setReading('done');
     } catch { setReading('Kvittot kunde inte läsas av'); }
   };
@@ -66,7 +76,7 @@ export function ReceiptForm({ action, read, today, companyType, accountNames }: 
             <div className="small muted">{g}</div>
             <div className="actions" style={{ margin: '.25rem 0' }}>
               {RECEIPT_CATEGORIES.filter((c) => c.group === g).map((c) => (
-                <button type="button" key={c.key} className={catKey === c.key ? '' : 'secondary'} onClick={() => { setCatKey(c.key); setVat(''); }}>{c.label}</button>
+                <button type="button" key={c.key} className={catKey === c.key ? '' : 'secondary'} onClick={() => { setCatKey(c.key); setVat(''); setPicked(true); setApplied(null); }}>{c.label}</button>
               ))}
             </div>
           </div>
@@ -84,7 +94,8 @@ export function ReceiptForm({ action, read, today, companyType, accountNames }: 
           <option value="private">Privata pengar (utlägg){companyType === 'AB' ? ' – bolaget är skyldigt dig' : ' – egen insättning'}</option>
         </select></label>
       </div>
-      <label>Beskrivning (valfritt)<input name="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder={cat?.label ?? 'T.ex. Pennor och block'} /></label>
+      <label>Beskrivning (valfritt)<input name="description" value={description} onChange={(e) => { setDescription(e.target.value); learn(e.target.value); }} placeholder={cat?.label ?? 'T.ex. Pennor och block'} /></label>
+      {applied && <div className="learned small" role="status">✨ Ifyllt som de {applied.streak} senaste kvittona från samma ställe: {RECEIPT_CATEGORIES.find((c) => c.key === applied.category)?.label}, {applied.vatRate} % moms. Ändra om det inte stämmer.</div>}
       {preview && (
         <div className="card small">
           <b>Bokförs så här:</b>

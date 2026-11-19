@@ -1,11 +1,14 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { parseAmount, formatAmount } from '@/lib/money';
+import { splitVat, type SupplierCoding } from '@/lib/coding-memory';
 
 type Supplier = { id: number; name: string; default_account: number };
 
-export function SupplierInvoiceForm({ action, suppliers, accounts, today, costCenters = [], projects = [] }: {
+export function SupplierInvoiceForm({ action, suppliers, accounts, today, costCenters = [], projects = [], learned = {}, initialSupplier }: {
+  initialSupplier?: number;
   action: (fd: FormData) => Promise<void>;
+  learned?: Record<string, SupplierCoding & { streak: number }>;
   suppliers: Supplier[]; accounts: { number: number; name: string }[]; today: string;
   costCenters?: { id: number; code: string; name: string }[]; projects?: { id: number; name: string }[];
 }) {
@@ -13,6 +16,11 @@ export function SupplierInvoiceForm({ action, suppliers, accounts, today, costCe
   const [total, setTotal] = useState('');
   const [vat, setVat] = useState('');
   const [rows, setRows] = useState([{ account: '', amount: '', text: '' }]);
+  const [cc, setCc] = useState('');
+  const [pr, setPr] = useState('');
+  const hint = sid ? learned[sid] : undefined;
+  // Leverantören förvald (t.ex. från ett förslag på översikten)
+  useEffect(() => { if (initialSupplier && suppliers.some((x) => x.id === initialSupplier)) onSupplier(String(initialSupplier)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const tot = parseAmount(total) ?? 0;
   const v = parseAmount(vat) ?? 0;
   const rowSum = rows.reduce((s, r) => s + (parseAmount(r.amount) ?? 0), 0);
@@ -21,8 +29,22 @@ export function SupplierInvoiceForm({ action, suppliers, accounts, today, costCe
   const onSupplier = (id: string) => {
     setSid(id);
     const s = suppliers.find((x) => String(x.id) === id);
-    if (s && !rows[0].account) setRows((r) => [{ ...r[0], account: String(s.default_account) }, ...r.slice(1)]);
+    const l = learned[id];
+    // Inlärd kontering går före leverantörens standardkonto
+    if (l) {
+      setRows((r) => [{ ...r[0], account: String(l.account) }, ...r.slice(1)]);
+      if (l.costCenterId && costCenters.some((c) => c.id === l.costCenterId)) setCc(String(l.costCenterId));
+      if (l.projectId && projects.some((p) => p.id === l.projectId)) setPr(String(l.projectId));
+      if (l.vatRate != null && tot && !vat) applyVat(l.vatRate);
+    } else if (s && !rows[0].account) setRows((r) => [{ ...r[0], account: String(s.default_account) }, ...r.slice(1)]);
   };
+  const applyVat = (rate: number, t = tot) => {
+    if (!t) return;
+    const x = splitVat(t, rate);
+    setVat(fmt(x.vat));
+    if (rows.length === 1) setRows((r) => [{ ...r[0], amount: fmt(x.net) }]);
+  };
+  const onTotalBlur = () => { if (hint?.vatRate != null && !vat) applyVat(hint.vatRate); };
   const vat25 = () => { if (tot) { const x = Math.round(tot / 5); setVat(fmt(x)); if (rows.length === 1) setRows([{ ...rows[0], amount: fmt(tot - x) }]); } };
   return (
     <form action={action} className="stack">
@@ -41,15 +63,21 @@ export function SupplierInvoiceForm({ action, suppliers, accounts, today, costCe
           <label>Förfallodatum<input type="date" name="due_date" required /></label>
           <label style={{ flex: '0 0 110px' }}>Valuta<select name="currency" defaultValue="SEK">{['SEK', 'EUR', 'USD', 'GBP', 'NOK', 'DKK'].map((v) => <option key={v}>{v}</option>)}</select></label>
           <label>Belopp i valutan (om ej SEK)<input name="total_currency" inputMode="decimal" placeholder="T.ex. 1 200,00" /></label>
-          <label>Att betala i kronor (inkl. moms)<input name="total" value={total} onChange={(e) => setTotal(e.target.value)} inputMode="decimal" required /></label>
+          <label>Att betala i kronor (inkl. moms)<input name="total" value={total} onChange={(e) => setTotal(e.target.value)} onBlur={onTotalBlur} inputMode="decimal" required /></label>
           <label>Varav moms<input name="vat" value={vat} onChange={(e) => setVat(e.target.value)} inputMode="decimal" /></label>
           <div style={{ flex: '0 0 auto' }}><button type="button" className="secondary" onClick={vat25}>25 % moms</button></div>
         </div>
         <div className="row">
           <label style={{ flex: '2 1 260px' }}>Beskrivning<input name="description" /></label>
-          {costCenters.length > 0 && <label>Kostnadsställe<select name="cost_center_id" defaultValue=""><option value="">Leverantörens standard</option>{costCenters.map((c) => <option key={c.id} value={c.id}>{c.code} {c.name}</option>)}</select></label>}
-          {projects.length > 0 && <label>Projekt<select name="project_id" defaultValue=""><option value="">–</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>}
+          {costCenters.length > 0 && <label>Kostnadsställe<select name="cost_center_id" value={cc} onChange={(e) => setCc(e.target.value)}><option value="">Leverantörens standard</option>{costCenters.map((c) => <option key={c.id} value={c.id}>{c.code} {c.name}</option>)}</select></label>}
+          {projects.length > 0 && <label>Projekt<select name="project_id" value={pr} onChange={(e) => setPr(e.target.value)}><option value="">–</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>}
         </div>
+        {hint && (
+          <div className="learned small" role="status">
+            ✨ Ifyllt som de {hint.streak} senaste fakturorna från leverantören: konto {hint.account}{hint.vatRate != null ? `, ${hint.vatRate} % moms` : ''}
+            {hint.costCenterId ? `, kostnadsställe ${costCenters.find((c) => c.id === hint.costCenterId)?.code ?? ''}` : ''}. Ändra om det inte stämmer.
+          </div>
+        )}
       </div>
       <datalist id="cost-accounts">{accounts.map((a) => <option key={a.number} value={a.number}>{a.name}</option>)}</datalist>
       <table>

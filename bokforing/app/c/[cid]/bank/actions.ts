@@ -1,6 +1,6 @@
 'use server';
 import { redirect } from 'next/navigation';
-import { attempt, done, str } from '@/lib/server/action';
+import { attempt, done, result, str } from '@/lib/server/action';
 import { requireCompany } from '@/lib/server/auth';
 import { requestOrigin } from '@/lib/server/origin';
 import { userActor } from '@/lib/services/actor';
@@ -87,4 +87,9 @@ export async function bookAllSuggestions(cid: number) {
   let n = 0;
   await attempt(`/c/${cid}/bank/avstamning`, async () => { n = await bank.bookSuggestions(actor, { onlyAuto: false }); });
   done(`/c/${cid}/bank/avstamning`, `${n} transaktioner bokfördes enligt förslagen`);
+}
+
+export async function ignoreTxNow(cid: number, txId: number) {
+  const actor = userActor(await requireCompany(cid, { perm: 'ledger' }));
+  return result(() => bank.reconcile(actor, txId, { type: 'ignore' }));
 }

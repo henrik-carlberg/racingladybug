@@ -1,4 +1,6 @@
 import 'server-only';
+import { rememberCoding } from './coding-memory';
+import { vatRateOf } from '@/lib/coding-memory';
 import { sql, type Tx } from '@/lib/db';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import { createVoucher } from '@/lib/server/ledger';
@@ -139,6 +141,10 @@ export async function registerSupplierInvoice(actor: Actor, input: Record<string
       });
       if (v) await tx`UPDATE supplier_invoices SET voucher_id = ${v.id} WHERE id = ${id}`;
       if (attachment) await insertAttachment(tx, actor, v?.id ?? null, attachment, id);
+      // Kom ihåg konteringen för leverantören (huvudkontot, moms och dimensioner)
+      if (!isForeign(currency)) await rememberCoding(tx, actor.companyId, 'supplier', String(supplierId), {
+        account: costs[0].account, vatRate: vatRateOf(total, vat), costCenterId: costs[0].costCenterId ?? null, projectId: costs[0].projectId ?? null,
+      });
       await auditBy(tx, actor, 'register', 'supplier_invoice', id);
       const out = await fetchSI(tx, actor.companyId, id);
       await emit(tx, actor.companyId, 'supplier_invoice.registered', out);

@@ -1,11 +1,12 @@
 import Link from 'next/link';
+import { UndoButton } from '@/components/Undo';
 import { requireCompany } from '@/lib/server/auth';
 import { Flash, type SP } from '@/components/ui';
 import { Help } from '@/components/Help';
 import { addDays, today } from '@/lib/format';
 import { fmtHours, isoWeek, weekStart } from '@/lib/time';
 import { listProjects, listTimeEntries } from '@/lib/services/time';
-import { addTime, removeTime } from './actions';
+import { addTime, removeTimeNow } from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,7 +99,7 @@ export default async function TimePage({ params, searchParams }: { params: Promi
                     <td className="num">{fmtHours(e.minutes)}</td>
                     <td className="num">{e.invoice_id
                       ? (role === 'employee' ? <span className="small muted">Fakturerad</span> : <Link className="small" href={`${b}/fakturor/${e.invoice_id}`}>Fakturerad</Link>)
-                      : <form action={removeTime.bind(null, company.id, week, e.id)}><button className="link" aria-label="Ta bort">Ta bort</button></form>}</td>
+                      : <UndoButton action={removeTimeNow.bind(null, company.id, e.id)} message="Tidraden tas bort">Ta bort</UndoButton>}</td>
                   </tr>
                 )),
               ];

@@ -11,6 +11,7 @@ import { deleteDemo } from '@/app/company-actions';
 import { buildNav, createActions } from '@/lib/nav';
 import { CommandPalette, CreateMenu, SideNav, UsageTracker } from '@/components/AppNav';
 import { usageScores } from '@/lib/services/usage';
+import { UndoProvider } from '@/components/Undo';
 
 export default async function CompanyLayout({ children, params }: { children: ReactNode; params: Promise<{ cid: string }> }) {
   const { cid } = await params;
@@ -41,7 +42,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
             <Link href="/">{t('Byt bolag')}</Link>
           </nav>
         </aside>
-        <main id="main">{children}</main>
+        <main id="main"><UndoProvider undoLabel={t('Ångra')}>{children}</UndoProvider></main>
       </div>
     );
   }
@@ -74,7 +75,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
           {role === 'auditor' && <div className="card small auditor-banner" style={{ borderColor: 'var(--warn)' }}>Du är inloggad som revisor och har läsbehörighet. Du kan inte ändra något i bokföringen.</div>}
           {(company as { is_demo?: boolean }).is_demo && <div className="flash ok no-print demo-banner">Det här är ett demobolag med exempeldata. {role === 'owner' && <form action={deleteDemo.bind(null, company.id)} style={{ display: 'inline' }}><button className="link">Ta bort demobolaget</button></form>}</div>}
           {banner && <div className="flash error no-print">{banner} <Link href={`${b}/abonnemang`}>{role === 'owner' ? 'Starta abonnemang' : 'Se abonnemang'}</Link></div>}
-          {children}
+          <UndoProvider undoLabel={t('Ångra')}>{children}</UndoProvider>
         </main>
       </div>
     </div>
