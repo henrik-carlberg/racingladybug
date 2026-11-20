@@ -265,6 +265,32 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   await owner.locator('text=ingen attesterad tid').waitFor();
   log('samma attesterade tid blir kundfaktura och lönerader (OB, övertid, restid) enligt kollektivavtalet – en gång');
 
+  // ================= Del 5: bokslutspärm =================
+  await owner.goto(MO + '/bokslut');
+  await owner.locator(`tr:has-text("${YEAR}-01-01") a:has-text("Öppna")`).first().click();
+  await owner.waitForURL(/bokslut\/\d+/);
+  const BU = owner.url().split('?')[0].replace(/\/$/, '');
+  await owner.goto(BU + '/parm');
+  const row = (a) => owner.locator(`tr.binder-row#a${a}`);
+  assert(await row(1385).count() && await row(1930).count(), 'balanskonton i pärmen: ' + (await text(owner)).slice(0, 600));
+  await row(1385).locator('input[name=amount]').fill('40000'); await row(1385).locator('input[name=done]').check();
+  await row(1385).locator('button:has-text("Spara")').click();
+  await owner.locator('text=stämmer inte med huvudboken').waitFor();
+  await owner.goto(BU + '/parm');
+  await row(1385).locator('input[name=amount]').fill('45000'); await row(1385).locator('input[name=reference]').fill('Värdebesked från försäkringsbolaget'); await row(1385).locator('input[name=done]').check();
+  await row(1385).locator('button:has-text("Spara")').click();
+  await owner.locator('text=Konto 1385 är avstämt').waitFor();
+  await owner.goto(BU + '/parm');
+  await row(1930).locator('input[name=amount]').fill('-50000'); await row(1930).locator('input[name=reference]').fill('Kontoutdrag 31/12'); await row(1930).locator('input[name=done]').check();
+  await row(1930).locator('button:has-text("Spara")').click();
+  await owner.locator('text=Konto 1930 är avstämt').waitFor();
+  await owner.goto(BU + '/parm');
+  assert((await row(1385).getAttribute('class')).includes('ok') && (await row(1930).getAttribute('class')).includes('ok'), 'avstämda');
+  const pr = await owner.request.get(BU + '/parm/pdf');
+  const body = await pr.body();
+  assert(pr.status() === 200 && pr.headers()['content-type'] === 'application/pdf' && body.slice(0, 5).toString() === '%PDF-' && body.toString('latin1').includes('Bokslutsp'), 'PDF');
+  log('bokslutspärm: specifikation per balanskonto mot huvudboken, avstämning blockeras vid differens, signatur och PDF till revisor och bank');
+
   //@@NEXT@@
   await browser.close(); mailServer.close();
   console.log('Omgång 17: alla steg gick igenom');

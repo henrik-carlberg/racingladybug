@@ -104,3 +104,18 @@ describe('Tid till lön och faktura', () => {
     expect(mergeHours({ ob_evening: 1.5 }, { ob_evening: 4, worked: 17 })).toEqual({ ob_evening: 5.5 });
   });
 });
+
+import { binderPdf, binderRows, sections } from '@/lib/closing-binder';
+describe('Bokslutspärm', () => {
+  it('specifikation per konto mot huvudboken', () => {
+    const rows = binderRows(new Map([[1510, 100000], [1930, 50000], [2440, -30000], [3010, -999]]), new Map([[1510, 'Kundfordringar']]),
+      new Map([[1510, { amount: 100000, source: 'Kundreskontra' }], [2440, { amount: -25000, source: 'Leverantörsreskontra' }]]),
+      new Map([[1930, { amount: 50000, note: '', reference: 'Kontoutdrag', done: true, signed_by: 'Anna', signed_at: '2027-01-10' }]]));
+    expect(rows.map((r) => [r.account, r.status, r.diff])).toEqual([[1510, 'open', 0], [1930, 'ok', 0], [2440, 'diff', -5000]]);
+    const s = sections(rows);
+    expect(s.map((x) => x.key)).toEqual(['kundfordringar', 'kassa_bank', 'leverantorer']);
+    expect(s[1].done).toBe(true);
+    const pdf = binderPdf({ company: 'Test AB', orgnr: '556677-8899', start: '2026-01-01', end: '2026-12-31', created: '2027-01-15', secs: s, result: 12345 });
+    expect(pdf.some((l) => l.text.includes('Bokslutspärm')) && pdf.every((l) => !/[–—]/.test(l.text))).toBe(true);
+  });
+});
