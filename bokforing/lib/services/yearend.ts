@@ -62,7 +62,7 @@ export async function yearStatus(companyId: number, fyId: number): Promise<YearS
       (SELECT count(*) FROM supplier_invoices WHERE company_id = ${companyId} AND status = 'booked' AND invoice_date <= ${y.end_date})::int AS si,
       NOT EXISTS (SELECT 1 FROM vouchers WHERE company_id = ${companyId} AND source_type = 'vat' AND date = ${y.end_date}) AS vat`;
   return {
-    fy: y, companyType: c.company_type, association: c.org_form === 'ideell', resultBeforeTax, taxBooked: tax, nonDeductible: nonDed, suggestedTax,
+    fy: y, companyType: c.company_type, association: c.org_form === 'ideell' || c.org_form === 'brf', resultBeforeTax, taxBooked: tax, nonDeductible: nonDed, suggestedTax,
     resultAfterTax: resultBeforeTax - tax, resultBooked: (sums.get(8999) ?? 0) !== 0,
     unreconciledBank: o.bank, draftInvoices: o.drafts, unpaidSupplierInvoicesWithoutApproval: o.si, vatUnsettled: o.vat,
     accountingMethod: c.accounting_method, cashOpenInvoices: o.cash,
@@ -136,7 +136,7 @@ export async function carryForward(actor: Actor, fyId: number, input: Record<str
   if (done.length) throw new ConflictError('Förra årets resultat är redan överfört');
   const ib = await openingBalances(actor.companyId, y.start_date);
   const entries: { account: number; amount: number }[] = [];
-  if (c.org_form === 'ideell') {
+  if (c.org_form === 'ideell' || c.org_form === 'brf') {
     // Förening: årets resultat (2069) balanseras i ny räkning enligt årsmötets beslut
     const v = ib.get(2069) ?? 0;
     if (!v) throw new ValidationError('Det finns inget resultat på 2069 att balansera');
@@ -159,7 +159,7 @@ export async function carryForward(actor: Actor, fyId: number, input: Record<str
     entries.push({ account: 2010, amount: total });
   }
   return sql.begin((tx) => createVoucher(tx, {
-    actor, date: y.start_date, description: c.org_form === 'ideell' ? 'Resultatdisposition enligt årsmöte' : c.company_type === 'AB' ? 'Resultatdisposition enligt årsstämma' : 'Överföring till eget kapital',
+    actor, date: y.start_date, description: c.org_form === 'ideell' || c.org_form === 'brf' ? (c.org_form === 'brf' ? 'Resultatdisposition enligt föreningsstämma' : 'Resultatdisposition enligt årsmöte') : c.company_type === 'AB' ? 'Resultatdisposition enligt årsstämma' : 'Överföring till eget kapital',
     lines: fromSigned(entries), sourceType: 'carry_forward',
   }));
 }

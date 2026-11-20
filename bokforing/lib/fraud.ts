@@ -1,6 +1,6 @@
 // Bedrägeri- och felskydd: dubbletter, ändrade bankuppgifter och ovanliga transaktioner. Ren logik, belopp i öre.
 
-export const BANK_FIELDS = ['bankgiro', 'plusgiro', 'bank_account'] as const;
+export const BANK_FIELDS = ['bankgiro', 'plusgiro', 'bank_account', 'iban', 'bic'] as const;
 export type BankField = typeof BANK_FIELDS[number];
 const norm = (s: string) => s.replace(/[\s-]/g, '');
 
@@ -9,7 +9,7 @@ const norm = (s: string) => s.replace(/[\s-]/g, '');
  * – även ett nytt bankgiro i ett tomt fält, eftersom bankgiro går före plusgiro och konto vid betalning.
  * En leverantör utan några bankuppgifter alls får dem utan godkännande (första registreringen).
  */
-export function bankChanges(old: Record<BankField, string>, next: Partial<Record<BankField, unknown>>) {
+export function bankChanges(old: Partial<Record<BankField, string>>, next: Partial<Record<BankField, unknown>>) {
   const out: Partial<Record<BankField, string>> = {};
   if (!BANK_FIELDS.some((f) => norm(old[f] ?? '') !== '')) return out;
   for (const f of BANK_FIELDS) {
