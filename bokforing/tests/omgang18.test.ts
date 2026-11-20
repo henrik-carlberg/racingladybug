@@ -59,3 +59,24 @@ describe('Ägarbyte och generationsskifte', () => {
     expect(contributionLines(100)).toEqual([{ account: 1930, amount: 100 }, { account: 2093, amount: -100 }]);
   });
 });
+
+import { board, summary } from '@/lib/firm-tasks';
+describe('Byråns arbetstavla', () => {
+  const dl = [
+    { companyId: 1, company: 'A', key: 'moms:2026-11', title: 'Moms', due: '2026-11-12', status: 'overdue' as const, href: '/c/1' },
+    { companyId: 2, company: 'B', key: 'ag:2026-12', title: 'AGI', due: '2026-12-12', status: 'upcoming' as const, href: '/c/2' },
+    { companyId: 2, company: 'B', key: 'ink:2027', title: 'Ink', due: '2027-05-02', status: 'done' as const, href: '/c/2' },
+  ];
+  const tasks = [
+    { id: 7, companyId: 2, deadlineKey: 'ag:2026-12', title: 'AGI', due: '2026-12-12', assignee: 5, assigneeName: 'Eva', status: 'open' as const },
+    { id: 8, companyId: 1, deadlineKey: null, title: 'Underlag', due: '2026-11-25', assignee: null, assigneeName: null, status: 'open' as const },
+  ];
+  it('sorterar försenade, snart, kommande och slår ihop ansvarig', () => {
+    const r = board(dl, tasks, '2026-11-20');
+    expect(r.map((x) => [x.title, x.state])).toEqual([['Moms', 'overdue'], ['Underlag', 'soon'], ['AGI', 'upcoming']]);
+    expect(r[2]).toMatchObject({ assigneeName: 'Eva', taskId: 7 });
+    expect(summary(r)).toEqual({ overdue: 1, soon: 1, unassigned: 2 });
+    expect(board(dl, tasks, '2026-11-20', { assignee: 5 }).map((x) => x.title)).toEqual(['AGI']);
+    expect(board(dl, tasks, '2026-11-20', { showDone: true, companyId: 2 }).map((x) => x.state)).toEqual(['upcoming', 'done']);
+  });
+});

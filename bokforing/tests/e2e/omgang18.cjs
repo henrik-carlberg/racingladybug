@@ -186,6 +186,50 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await text(owner)).includes('50000,00'), '2093');
   log('ovillkorat aktieägartillskott bokförs på 2093 och ökar ägarens omkostnadsbelopp');
 
+  // ===== Del 4: byråns arbetsflöde =====
+  await owner.goto(BASE + '/byra');
+  await owner.fill('input[name=name]', 'Uppgiftsbyrån AB'); await owner.fill('input[name=orgnr]', '559000-0018');
+  await owner.click('button:has-text("Skapa byrå")');
+  await owner.locator('text=Byrån är skapad').waitFor();
+  const fid = new URL(owner.url()).searchParams.get('f') || (await owner.locator('a[href*="/byra/uppgifter?f="]').first().getAttribute('href')).match(/f=(\d+)/)[1];
+  const fcode = (await owner.locator('code.firm-code').textContent()).trim();
+  await owner.goto(GS + '/installningar/byra');
+  await owner.fill('input[name=code]', fcode);
+  await owner.click('button:has-text("Ge åtkomst")');
+  await owner.locator('text=har fått åtkomst').waitFor();
+  await owner.goto(`${BASE}/byra/uppgifter?f=${fid}`);
+  const gsRows = owner.locator('tr.task-row[data-company="Generationsskifte AB"]');
+  assert(await gsRows.count() > 0, 'kundens deadlines visas på tavlan');
+  const before = Number(await owner.locator('.task-unassigned').innerText());
+  const first = gsRows.first();
+  const ftitle = (await first.locator('td').nth(2).innerText()).trim();
+  const me = await first.locator('select[name=assignee] option').nth(1).getAttribute('value');
+  await first.locator('select[name=assignee]').selectOption(me);
+  await first.locator('button:has-text("Spara")').click();
+  await owner.locator('text=Ansvarig är satt').waitFor();
+  assert(Number(await owner.locator('.task-unassigned').innerText()) === before - 1, 'utan ansvarig minskar');
+  await owner.goto(`${BASE}/byra/uppgifter?f=${fid}&mine=1`);
+  t = await text(owner);
+  assert(t.includes(ftitle), 'bara mina visar den tilldelade deadlinen');
+  await owner.goto(`${BASE}/byra/uppgifter?f=${fid}`);
+  await owner.selectOption('form.add-task select[name=company_id]', { label: 'Generationsskifte AB' });
+  await owner.fill('form.add-task input[name=title]', 'Hämta in underlag för bilförmån');
+  await owner.fill('form.add-task input[name=due]', '2020-01-15');
+  await owner.click('button:has-text("Lägg till uppgiften")');
+  await owner.locator('text=Uppgiften är tillagd').waitFor();
+  const own = owner.locator('tr.task-row:has-text("Hämta in underlag för bilförmån")');
+  assert(await own.evaluate((e) => e.classList.contains('overdue')), 'egen uppgift med passerat datum är försenad');
+  assert((await owner.locator('tr.task-row').first().innerText()).includes('Hämta in underlag'), 'försenade först');
+  await own.locator('button:has-text("Klar")').click();
+  await owner.locator('text=Markerad som klar').waitFor();
+  assert(!(await text(owner)).includes('Hämta in underlag för bilförmån'), 'klar uppgift döljs');
+  await owner.locator(`tr.task-row[data-company="Generationsskifte AB"]:has-text("${ftitle}") button:has-text("Klar")`).first().click();
+  await owner.locator('text=Markerad som klar').waitFor();
+  await owner.goto(`${BASE}/byra/uppgifter?f=${fid}&done=1`);
+  t = await text(owner);
+  assert(t.includes('Hämta in underlag för bilförmån') && t.includes(ftitle), 'klara visas med filtret');
+  log('byråns uppgifter: kundens deadlines med ansvarig, egna uppgifter, försenade först, klarmarkering');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 18: alla steg gick igenom');

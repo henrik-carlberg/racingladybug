@@ -40,6 +40,7 @@ export default async function FirmPage({ searchParams }: { searchParams: SP }) {
           {firms.length > 1 && firms.map((f) => <Link key={f.id} className={`btn ${f.id === firm.id ? '' : 'secondary'}`} href={`/byra?f=${f.id}`}>{f.name}</Link>)}
           <Link className="btn" href={`/byra/manad?f=${firm.id}`}>Månadsbokslut</Link>
           <Link className="btn secondary" href={`/byra/tid?f=${firm.id}`}>Byråns tid</Link>
+          <Link className="btn secondary" href={`/byra/uppgifter?f=${firm.id}`}>Uppgifter</Link>
           <Link className="btn secondary" href="/">Mina bolag</Link>
         </div>
       </div>
