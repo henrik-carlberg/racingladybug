@@ -47,3 +47,21 @@ describe('Fastighetsskatt och värdeminskningsavdrag', () => {
     expect(taxDepreciation(p, 2050, { building: 590000000, improvement: 40000000 })).toMatchObject({ building: 10000000, improvement: 0 });
   });
 });
+
+import { amountLimit, rollForward } from '@/lib/deficits';
+describe('Underskottsavdrag', () => {
+  const y = (year: number, taxable: number, gc = 0) => ({ year, start: `${year}-01-01`, end: `${year}-12-31`, taxable, groupContribution: gc });
+  it('rullar underskott och kvittar mot överskott', () => {
+    const r = rollForward([y(2023, -500000), y(2024, -300000), y(2025, 200000)]);
+    expect(r.map((x) => x.outgoing)).toEqual([500000, 800000, 600000]);
+    expect(r[2]).toMatchObject({ incoming: 800000, usedNew: 200000 });
+  });
+  it('beloppsspärr och koncernbidragsspärr vid ägarförändring', () => {
+    expect(amountLimit({ date: '2025-06-01', price: 100000, contributions: 50000 })).toBe(150000);
+    const r = rollForward([y(2023, -1000000), y(2024, -500000), y(2025, 300000, 300000), y(2026, 400000, 100000)], { date: '2025-06-01', price: 300000, contributions: 0 });
+    // 1 500 000 gamla underskott, gräns 600 000 → 900 000 faller bort
+    expect(r[2]).toMatchObject({ change: true, cut: 900000, usedOld: 0, outgoing: 600000, locked: 600000 });
+    // 2026: överskott 400 000 varav koncernbidrag 100 000 → bara 300 000 får kvittas mot gamla
+    expect(r[3]).toMatchObject({ usedOld: 300000, outgoing: 300000 });
+  });
+});

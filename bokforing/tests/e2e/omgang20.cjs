@@ -169,6 +169,31 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await owner.locator('.pt-booked-dep').innerText()) === '200000,00' && nb(await owner.locator('.pt-adjustment').innerText()) === '5000,00' && (await owner.locator('.pt-summary').innerText()).includes('Läggs till'), 'justering INK2S');
   log('fastighetsskatt 1 % per månad från förvärvet (5191/2513), värdeminskningsavdrag 4 % byggnad och 5 % markanläggningar pro rata, justering mot bokförd avskrivning');
 
+  // ================= Del 4: underskottsavdrag och spärrar =================
+  const UA = await newCompany('Förlustbolaget AB', 559080000);
+  await owner.goto(UA + '/installningar');
+  await owner.fill(`form:has(button:has-text("Lägg till")) input[name=start]`, `${YEAR - 1}-01-01`);
+  await owner.fill(`form:has(button:has-text("Lägg till")) input[name=end]`, `${YEAR - 1}-12-31`);
+  await owner.click('form:has(input[name=end]) button:has-text("Lägg till")');
+  await owner.locator('text=Räkenskapsåret är tillagt').waitFor();
+  await voucher(UA, 'Förlustår', [[5010, 100000], [1930, -100000]], `${YEAR - 1}-06-01`);
+  await voucher(UA, 'Vinst i år', [[1930, 30000], [3001, -30000]], `${YEAR}-03-01`);
+  await owner.goto(UA + '/bokslut/underskott');
+  const outOf = async (y) => nb(await owner.locator(`.df-row[data-year="${y}"] .df-out`).innerText());
+  assert(await outOf(YEAR - 1) === '100000,00' && await outOf(YEAR) === '70000,00', 'rullat underskott utan ägarförändring');
+  await owner.fill('.df-change input[name=date]', `${YEAR}-02-01`);
+  await owner.fill('.df-change input[name=price]', '20000');
+  await owner.click('button:has-text("Spara ägarförändring")');
+  await owner.locator('text=Ägarförändringen är sparad').waitFor();
+  assert(nb(await owner.locator(`.df-row[data-year="${YEAR}"] .df-cut`).innerText()) === '60000,00' && await outOf(YEAR) === '10000,00'
+    && (await owner.locator(`.df-row[data-year="${YEAR}"] .df-note`).innerText()).includes('Beloppsspärr'), 'beloppsspärr: ' + await owner.locator('.df-years').innerText());
+  assert(nb(await owner.locator('.df-locked').innerText()) === '10000,00', 'gamla underskott spärrade mot koncernbidrag');
+  await owner.fill(`.df-row[data-year="${YEAR - 1}"] input[name=taxable]`, '-120000');
+  await owner.click(`.df-row[data-year="${YEAR - 1}"] button:has-text("Spara")`);
+  await owner.locator('text=Det skattemässiga resultatet är sparat').waitFor();
+  assert(await outOf(YEAR - 1) === '120000,00' && await outOf(YEAR) === '10000,00', 'justerat resultat (gränsen 40 000 kr gäller fortfarande)');
+  log('underskottsavdrag: rullande underskott, beloppsspärr vid ägarförändring (200 % av köpeskillingen) och koncernbidragsspärr');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 20: alla steg gick igenom');
