@@ -222,6 +222,78 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   await owner.locator('text=kr är innehållet och bokfört på 2446').waitFor(); assert(nb(await owner.locator('.flash').first().innerText()).includes('2000,00'), '5 % av 40 000');
   log('innehållna belopp: kunden håller inne 10 % (1682) som betalas vid slutbesiktning, vi håller inne 5 % hos underentreprenören (2446)');
 
+  // ================= Del 3: lagervärdering =================
+  const L = await newCompany('Lagertest Handel AB', 559400000);
+  await owner.goto(L + '/leverantorer');
+  await owner.fill('input[name=name]', 'Grossisten AB');
+  await owner.click('button:has-text("Spara leverantör")');
+  await owner.locator('text=Leverantören är sparad').waitFor();
+  await owner.goto(L + '/moduler');
+  await owner.locator('.card:has(h2:text-is("Inköp, lager och logistik")) button:has-text("Aktivera")').click();
+  await owner.waitForLoadState('networkidle');
+  const M = L + '/m/lager';
+  await owner.goto(M + '/artiklar');
+  await owner.fill('input[name=sku]', 'V-1'); await owner.fill('input[name=name]', 'Vas');
+  await owner.fill('input[name=purchase_price]', '100'); await owner.fill('input[name=sales_price]', '90');
+  await owner.selectOption('select[name=supplier_id]', { index: 1 });
+  await owner.fill('input[name=opening_qty]', '10');
+  await owner.click('button:has-text("Lägg upp artikel")');
+  await owner.waitForLoadState('networkidle');
+  await owner.goto(M + '/artiklar');
+  await owner.fill('input[name=sku]', 'K-1'); await owner.fill('input[name=name]', 'Kruka');
+  await owner.fill('input[name=purchase_price]', '50'); await owner.fill('input[name=sales_price]', '200');
+  await owner.selectOption('select[name=supplier_id]', { index: 1 });
+  await owner.fill('input[name=opening_qty]', '20');
+  await owner.click('button:has-text("Lägg upp artikel")');
+  await owner.waitForLoadState('networkidle');
+  // Inleverans av V-1 till högre pris via inköpsorder
+  await owner.goto(M + '/inkop');
+  await owner.selectOption('select[name=supplier_id]', { label: 'Grossisten AB' });
+  await owner.selectOption('select[name=product_0]', await owner.locator('select[name=product_0] option:has-text("V-1 ")').first().getAttribute('value'));
+  await owner.fill('input[name=qty_0]', '10'); await owner.fill('input[name=price_0]', '130');
+  await owner.click('button:text-is("Skapa inköpsorder")');
+  await owner.locator('text=Inköpsordern är skapad').waitFor();
+  await owner.click('button:has-text("Markera som skickad")');
+  await owner.locator('text=markerad som skickad').waitFor();
+  await owner.click('button:has-text("Registrera inleverans")');
+  await owner.locator('text=Inleveransen är registrerad').waitFor();
+
+  // Inventering: V-1 20 → 15 (svinn 5 st) bokförs direkt
+  await owner.goto(M + '/inventering');
+  const v1 = await owner.locator('tr:has-text("V-1") input[name=product_id]').inputValue();
+  await owner.fill(`input[name=counted_${v1}]`, '15');
+  await owner.click('button:has-text("Registrera inventering")');
+  await owner.locator('text=bokförd mot 1460/4960').waitFor();
+  t = nb(await owner.locator('.flash').first().innerText());
+  assert(t.includes('-575,00') || t.includes('−575,00'), 'svinn till snittpris 115: ' + t);
+  await owner.goto(L + '/rapporter/huvudbok?account=4960');
+  assert((await text(owner)).includes('Inventeringsdifferens'), 'inventeringsdifferens bokförd');
+  log('inventeringsdifferens (svinn 5 st till snittpris) bokförs direkt mot 1460/4960');
+
+  await owner.goto(M + '/varde');
+  assert(nb(await owner.locator('.val-cost').innerText()) === '2725,00', 'snittpris: 15×115 + 20×50 = ' + await owner.locator('.val-cost').innerText());
+  await owner.selectOption('select[name=cost_method]', 'fifo');
+  await owner.fill('input[name=sell_cost_pct]', '10');
+  await owner.click('button:has-text("Spara metod")');
+  await owner.locator('text=Värderingsmetoden är sparad').waitFor();
+  await owner.goto(M + '/varde');
+  assert(nb(await owner.locator('.val-cost').innerText()) === '2800,00', 'FIFO: 10×130 + 5×100 + 20×50 = ' + await owner.locator('.val-cost').innerText());
+  // Vas säljs för 90 kr minus 10 % = 81 kr/st < anskaffning – Kruka: 25 % inkurans
+  const k1row = owner.locator('tr.val-row:has(td:text-is("K-1"))');
+  await k1row.locator('input[name=obsolete_pct]').fill('25');
+  await k1row.locator('button:has-text("Spara")').click();
+  await owner.locator('text=Inkuransen är sparad').waitFor();
+  await owner.goto(M + '/varde');
+  assert(nb(await owner.locator('.val-lvp').innerText()) === '1965,00', 'LVP: 15×81 + 20×50×0,75 = ' + await owner.locator('.val-lvp').innerText());
+  assert(nb(await owner.locator('.val-97').innerText()) === '2716,00', '97 %');
+  assert((await owner.locator('.val-hint').innerText()).includes('lägsta värdets princip'), 'lägst tillåtna');
+  await owner.goto(M + '/varde?regel=lvp');
+  await owner.click('button:has-text("Bokför lagerförändring")');
+  await owner.locator('text=Lagervärderingen är bokförd').waitFor();
+  await owner.goto(M + '/varde?regel=lvp');
+  assert(nb(await owner.locator('.val-booked').innerText()) === '1965,00' && nb(await owner.locator('.val-change').innerText()) === '0,00', 'bokfört 1460');
+  log('lagervärdering: FIFO eller snittpris, lägsta värdets princip med nettoförsäljningsvärde och inkurans per artikel, jämfört med 97 %-regeln');
+
   //@@NEXT@@
   await browser.close(); mailServer.close();
   console.log('Omgång 16: alla steg gick igenom');

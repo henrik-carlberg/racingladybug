@@ -57,3 +57,30 @@ describe('Bygg och entreprenad', () => {
     expect(rcCheck({ rcKind: 'construction', customerIsCompany: true, lines: [{ description: 'Byggstädning' }] })[0].status).toBe('ok');
   });
 });
+
+import { bookValue, countLines, fifoValue, lowestValue } from '@/modules/lager/calc';
+describe('Lagervärdering', () => {
+  const ms = [
+    { date: '2026-01-01', qty: 10, unit_cost: 100, type: 'receipt' },
+    { date: '2026-02-01', qty: 10, unit_cost: 120, type: 'receipt' },
+    { date: '2026-02-05', qty: -4, unit_cost: 110, type: 'transfer' },
+    { date: '2026-02-05', qty: 4, unit_cost: 110, type: 'transfer' },
+    { date: '2026-03-01', qty: -15, unit_cost: 110, type: 'delivery' },
+  ];
+  it('FIFO värderar kvarvarande till de senaste inleveranserna', () => {
+    expect(fifoValue(ms)).toMatchObject({ qty: 5, value: 600 });
+    expect(fifoValue([...ms, { date: '2026-03-02', qty: -5, unit_cost: 0, type: 'adjustment' }])).toMatchObject({ qty: 0, value: 0 });
+  });
+  it('lägsta värdets princip med nettoförsäljningsvärde och inkurans, och 97 %-regeln', () => {
+    const v = lowestValue([
+      { sku: 'A', name: 'A', qty: 5, cost: 600, salesPrice: 100, obsoletePct: 0 },
+      { sku: 'B', name: 'B', qty: 10, cost: 1000, salesPrice: 500, obsoletePct: 50 },
+      { sku: 'C', name: 'C', qty: 2, cost: 200, salesPrice: 0, obsoletePct: 0 },
+    ], 10);
+    expect(v.rows.map((r) => r.lvp)).toEqual([450, 500, 200]);
+    expect(v).toMatchObject({ cost: 1800, lvp: 1150, r97: 1746 });
+    expect(bookValue(v, '97')).toEqual({ book: 1746, lowest: 'lvp', lowestValue: 1150 });
+    expect(bookValue({ cost: 1000, lvp: 990, r97: 970 }, 'lvp')).toEqual({ book: 990, lowest: '97', lowestValue: 970 });
+    expect(countLines(-500)).toEqual([{ account: 1460, amount: -500 }, { account: 4960, amount: 500 }]);
+  });
+});

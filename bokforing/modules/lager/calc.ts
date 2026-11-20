@@ -52,3 +52,60 @@ export function parseQty(s: unknown): number | null {
   const n = Number(String(s).replace(/\s/g, '').replace(',', '.'));
   return Number.isFinite(n) ? q3(n) : null;
 }
+
+export type CostMethod = 'avg' | 'fifo';
+export type ValuationRule = 'cost' | 'lvp' | '97';
+export interface Movement { date: string; qty: number; unit_cost: number; type: string }
+
+/**
+ * FIFO (först in, först ut): det som finns kvar i lagret värderas till de senaste inleveranserna.
+ * Uttag och negativa justeringar förbrukar de äldsta lagren först; flyttar mellan lagerställen påverkar inte artikelns värde.
+ */
+export function fifoValue(movements: Movement[]) {
+  const layers: { qty: number; cost: number }[] = [];
+  const sorted = [...movements].filter((m) => m.type !== 'transfer').sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  for (const m of sorted) {
+    if (m.qty > 0) { layers.push({ qty: m.qty, cost: m.unit_cost }); continue; }
+    let out = -m.qty;
+    while (out > 0.0005 && layers.length) {
+      const l = layers[0];
+      const take = Math.min(l.qty, out);
+      l.qty = q3(l.qty - take); out = q3(out - take);
+      if (l.qty <= 0.0005) layers.shift();
+    }
+  }
+  const qty = q3(layers.reduce((s, l) => s + l.qty, 0));
+  return { qty, value: Math.round(layers.reduce((s, l) => s + l.qty * l.cost, 0)), layers };
+}
+
+export interface ValuedItem { sku: string; name: string; qty: number; cost: number; salesPrice: number; obsoletePct: number }
+/**
+ * Lägsta värdets princip per artikel: det lägsta av anskaffningsvärdet och nettoförsäljningsvärdet
+ * (försäljningspris minus beräknade försäljningskostnader), med individuell nedskrivning för inkurans.
+ */
+export function lowestValue<T extends ValuedItem>(items: T[], sellCostPct = 0) {
+  const rows = items.map((i) => {
+    const qty = Math.max(0, i.qty);
+    const nrvUnit = i.salesPrice > 0 ? i.salesPrice * (1 - sellCostPct / 100) : null;
+    const costValue = Math.round(i.cost);
+    const unitCost = qty ? i.cost / qty : 0;
+    const lvpUnit = nrvUnit != null ? Math.min(unitCost, nrvUnit) : unitCost;
+    const lvp = Math.round(qty * lvpUnit * (1 - Math.min(100, Math.max(0, i.obsoletePct)) / 100));
+    return { ...i, qty, costValue, nrvUnit, lvp, writedown: costValue - lvp, belowCost: nrvUnit != null && nrvUnit < unitCost };
+  });
+  const cost = rows.reduce((s, r) => s + r.costValue, 0);
+  const lvp = rows.reduce((s, r) => s + r.lvp, 0);
+  return { rows, cost, lvp, r97: Math.round(cost * 0.97) };
+}
+
+/** Värde att bokföra enligt vald regel, och vilken av de tillåtna reglerna som ger lägst värde (IL 17 kap. 3–4 §§) */
+export function bookValue(v: { cost: number; lvp: number; r97: number }, rule: ValuationRule) {
+  const book = rule === '97' ? v.r97 : rule === 'lvp' ? v.lvp : v.cost;
+  const lowest: ValuationRule = v.lvp <= v.r97 ? 'lvp' : '97';
+  return { book, lowest, lowestValue: Math.min(v.lvp, v.r97) };
+}
+
+/** Inventeringsdifferens: överskott ökar lagret (1460) mot lagerförändring (4960), svinn tvärtom */
+export function countLines(value: number, inventory = 1460, change = 4960) {
+  return [{ account: inventory, amount: value }, { account: change, amount: -value }];
+}

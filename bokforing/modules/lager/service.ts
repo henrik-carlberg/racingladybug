@@ -13,7 +13,7 @@ import type { Actor } from '@/lib/services/actor';
 import { arr, date, int, optInt, str } from '@/lib/services/input';
 import { saveDraftTx } from '@/lib/services/invoices';
 import { registerSupplierInvoice } from '@/lib/services/suppliers';
-import { inventoryValue, orderTotals, parseQty, q3, receiptStatus, reorderSuggestions, weightedAverage } from './calc';
+import { bookValue, countLines, fifoValue, lowestValue, orderTotals, parseQty, q3, receiptStatus, reorderSuggestions, weightedAverage, type CostMethod, type Movement, type ValuationRule } from './calc';
 
 type Db = Tx | typeof sql;
 const INVENTORY = 1460, STOCK_CHANGE = 4960, PURCHASES = 4010;
@@ -196,7 +196,8 @@ export async function applyCount(actor: Actor, input: Record<string, unknown>) {
   return sql.begin(async (tx) => {
     const wid = await warehouseId(tx, actor.companyId, input);
     const d = date(input, 'date', 'Datum', false) || today();
-    let changed = 0;
+    let changed = 0, diffValue = 0;
+    const diffs: string[] = [];
     for (const r of rows) {
       const counted = parseQty(r.counted);
       if (counted == null) continue;
@@ -205,11 +206,21 @@ export async function applyCount(actor: Actor, input: Record<string, unknown>) {
       const [st] = await tx<{ qty: number }[]>`SELECT qty::float8 AS qty FROM inv_stock WHERE product_id = ${pid} AND warehouse_id = ${wid}`;
       const diff = q3(counted - (st?.qty ?? 0));
       if (diff === 0) continue;
+      const [pc] = await tx<{ avg_cost: number; sku: string }[]>`SELECT avg_cost::float8 AS avg_cost, sku FROM inv_products WHERE id = ${pid} AND company_id = ${actor.companyId}`;
       await move(tx, actor, { product_id: pid, warehouse_id: wid, qty: diff, type: 'adjustment', date: d, ref_type: 'count', note: str(input, 'note') || 'Inventering' });
+      if (pc) { diffValue += Math.round(diff * pc.avg_cost); diffs.push(`${pc.sku} ${diff > 0 ? '+' : ''}${diff}`); }
       changed++;
     }
-    await auditBy(tx, actor, 'count', 'inv.warehouse', wid, { changed });
-    return { changed };
+    // Inventeringsdifferensen bokförs direkt till snittpris: svinn minskar 1460 mot 4960, överskott tvärtom
+    let voucherId: number | null = null;
+    if (diffValue !== 0 && input.book !== false && input.book !== 'false') {
+      await ensureAccounts(tx, actor.companyId);
+      voucherId = (await createVoucher(tx, { actor, date: d, description: `Inventeringsdifferens ${diffs.slice(0, 6).join(', ')}${diffs.length > 6 ? ' …' : ''}`,
+        lines: fromSigned(countLines(diffValue, INVENTORY, STOCK_CHANGE)), sourceType: 'inventory_count', sourceId: wid })).id;
+      await tx`UPDATE inv_movements SET voucher_id = ${voucherId} WHERE company_id = ${actor.companyId} AND ref_type = 'count' AND warehouse_id = ${wid} AND date = ${d} AND voucher_id IS NULL`;
+    }
+    await auditBy(tx, actor, 'count', 'inv.warehouse', wid, { changed, value: diffValue });
+    return { changed, value: diffValue, voucherId };
   });
 }
 
@@ -499,33 +510,86 @@ async function ensureAccounts(db: Db, companyId: number) {
     ON CONFLICT (company_id, number) DO NOTHING`;
 }
 
-export async function valuation(companyId: number, at = today(), use97 = false) {
-  const items = await sql<{ qty: number; avg_cost: number }[]>`SELECT COALESCE(SUM(st.qty), 0)::float8 AS qty, p.avg_cost::float8 AS avg_cost
-    FROM inv_products p LEFT JOIN inv_stock st ON st.product_id = p.id WHERE p.company_id = ${companyId} GROUP BY p.id`;
-  const v = inventoryValue(items, use97);
+export async function settings(companyId: number) {
+  const [r] = await sql<{ cost_method: CostMethod; sell_cost_pct: number }[]>`SELECT cost_method, sell_cost_pct::float8 AS sell_cost_pct FROM inv_settings WHERE company_id = ${companyId}`;
+  return r ?? { cost_method: 'avg' as CostMethod, sell_cost_pct: 0 };
+}
+export async function saveSettings(actor: Actor, input: Record<string, unknown>) {
+  const method = str(input, 'cost_method') === 'fifo' ? 'fifo' : 'avg';
+  const pct = Number(String(input.sell_cost_pct ?? '0').replace(',', '.'));
+  if (!(pct >= 0 && pct < 100)) throw new ValidationError('Försäljningskostnaden anges i procent (0–99)');
+  await sql`INSERT INTO inv_settings ${sql({ company_id: actor.companyId, cost_method: method, sell_cost_pct: pct })}
+    ON CONFLICT (company_id) DO UPDATE SET cost_method = EXCLUDED.cost_method, sell_cost_pct = EXCLUDED.sell_cost_pct`;
+  await auditBy(sql, actor, 'settings', 'inv.valuation', actor.companyId, { method, pct });
+}
+/** Inkurans: individuell nedskrivning i procent för en artikel (t.ex. utgående eller skadade varor) */
+export async function setObsolete(actor: Actor, productId: number, input: Record<string, unknown>) {
+  const pct = Number(String(input.obsolete_pct ?? '0').replace(',', '.'));
+  if (!(pct >= 0 && pct <= 100)) throw new ValidationError('Inkuransen anges i procent (0–100)');
+  const r = await sql`UPDATE inv_products SET obsolete_pct = ${pct} WHERE id = ${productId} AND company_id = ${actor.companyId} RETURNING id`;
+  if (!r.length) throw new NotFoundError('Artikeln');
+  await auditBy(sql, actor, 'obsolete', 'inv.product', productId, { pct });
+}
+
+/** Snittpris enligt lagerrörelserna fram till datumet (inleveranser väger in, uttag till snittpris) */
+function averageValue(ms: Movement[]) {
+  let qty = 0, avg = 0;
+  for (const m of [...ms].filter((x) => x.type !== 'transfer').sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))) {
+    if (m.qty > 0 && (m.type === 'receipt' || m.type === 'opening')) avg = weightedAverage(qty, avg, m.qty, m.unit_cost);
+    qty = q3(qty + m.qty);
+  }
+  return { qty, value: Math.round(Math.max(0, qty) * avg) };
+}
+
+/**
+ * Lagervärde per datum enligt lagerrörelserna: anskaffningsvärde (vägt snitt eller FIFO), lägsta värdets princip med
+ * nettoförsäljningsvärde och inkurans per artikel, samt 97 %-regeln. `rule` avgör vad som bokförs.
+ */
+export async function valuation(companyId: number, at = today(), rule: ValuationRule | boolean = 'cost') {
+  const r: ValuationRule = rule === true ? '97' : rule === false ? 'cost' : rule;
+  const st = await settings(companyId);
+  const products = await sql<{ id: number; sku: string; name: string; sales_price: number; obsolete_pct: number }[]>`
+    SELECT id, sku, name, sales_price::float8 AS sales_price, obsolete_pct::float8 AS obsolete_pct FROM inv_products WHERE company_id = ${companyId} ORDER BY sku`;
+  const ms = await sql<(Movement & { product_id: number })[]>`SELECT product_id, to_char(date,'YYYY-MM-DD') AS date, qty::float8 AS qty, unit_cost::float8 AS unit_cost, type
+    FROM inv_movements WHERE company_id = ${companyId} AND date <= ${at} ORDER BY date, id`;
+  const by = new Map<number, Movement[]>();
+  for (const m of ms) by.set(m.product_id, [...(by.get(m.product_id) ?? []), m]);
+  const items = products.map((p) => {
+    const mv = by.get(p.id) ?? [];
+    const v = st.cost_method === 'fifo' ? fifoValue(mv) : averageValue(mv);
+    return { id: p.id, sku: p.sku, name: p.name, qty: v.qty, cost: v.value, salesPrice: p.sales_price, obsoletePct: p.obsolete_pct };
+  }).filter((i) => i.qty !== 0 || i.cost !== 0);
+  const lv = lowestValue(items, st.sell_cost_pct);
+  const bv = bookValue(lv, r);
   const [b] = await sql<{ balance: number }[]>`SELECT COALESCE(SUM(l.debit - l.credit), 0)::bigint AS balance FROM voucher_lines l JOIN vouchers v ON v.id = l.voucher_id
     WHERE v.company_id = ${companyId} AND l.account_number = ${INVENTORY} AND v.date <= ${at}`;
-  const history = await sql<{ date: string; cost_value: number; book_value: number; voucher_id: number | null }[]>`
-    SELECT to_char(date,'YYYY-MM-DD') AS date, cost_value::bigint AS cost_value, book_value::bigint AS book_value, voucher_id FROM inv_valuations
+  const history = await sql<{ date: string; cost_value: number; book_value: number; voucher_id: number | null; rule: string; method: string }[]>`
+    SELECT to_char(date,'YYYY-MM-DD') AS date, cost_value::bigint AS cost_value, book_value::bigint AS book_value, voucher_id, rule, method FROM inv_valuations
     WHERE company_id = ${companyId} ORDER BY date DESC, id DESC LIMIT 20`;
-  return { ...v, booked: Number(b.balance), change: v.book - Number(b.balance), date: at, history: history.map((h) => ({ ...h, cost_value: Number(h.cost_value), book_value: Number(h.book_value) })) };
+  return {
+    method: st.cost_method, sellCostPct: st.sell_cost_pct, rule: r, rows: lv.rows, cost: lv.cost, lvp: lv.lvp, r97: lv.r97, book: bv.book, lowest: bv.lowest, lowestValue: bv.lowestValue,
+    booked: Number(b.balance), change: bv.book - Number(b.balance), date: at,
+    history: history.map((h) => ({ ...h, cost_value: Number(h.cost_value), book_value: Number(h.book_value) })),
+  };
 }
 
 /** Bokför lagerförändringen så att konto 1460 motsvarar lagervärdet (normalt på bokslutsdagen) */
 export async function bookValuation(actor: Actor, input: Record<string, unknown>) {
   const d = date(input, 'date', 'Datum');
   const use97 = input.use97 === true || input.use97 === 'on' || input.use97 === 'true';
-  const v = await valuation(actor.companyId, d, use97);
+  const rr = str(input, 'rule');
+  const rule: ValuationRule = rr === 'lvp' || rr === '97' || rr === 'cost' ? rr : use97 ? '97' : 'cost';
+  const v = await valuation(actor.companyId, d, rule);
   return sql.begin(async (tx) => {
     await ensureAccounts(tx, actor.companyId);
     let voucherId: number | null = null;
     if (v.change !== 0) {
       voucherId = (await createVoucher(tx, {
-        actor, date: d, description: `Lagervärdering ${d}${use97 ? ' (97 %-regeln)' : ''}`, sourceType: 'inventory',
+        actor, date: d, description: `Lagervärdering ${d}${rule === '97' ? ' (97 %-regeln)' : rule === 'lvp' ? ' (lägsta värdets princip)' : ''}${v.method === 'fifo' ? ', FIFO' : ''}`, sourceType: 'inventory',
         lines: fromSigned([{ account: INVENTORY, amount: v.change }, { account: STOCK_CHANGE, amount: -v.change }]),
       })).id;
     }
-    await tx`INSERT INTO inv_valuations ${tx({ company_id: actor.companyId, date: d, cost_value: v.cost, book_value: v.book, voucher_id: voucherId, created_by: actor.userId })}`;
+    await tx`INSERT INTO inv_valuations ${tx({ company_id: actor.companyId, date: d, cost_value: v.cost, book_value: v.book, voucher_id: voucherId, created_by: actor.userId, rule, method: v.method })}`;
     await auditBy(tx, actor, 'valuation', 'inv.valuation', voucherId ?? 0, { cost: v.cost, book: v.book, change: v.change });
     return { ...v, voucher_id: voucherId };
   });
