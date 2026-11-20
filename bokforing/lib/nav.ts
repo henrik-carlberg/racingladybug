@@ -55,6 +55,7 @@ export function buildNav(o: {
       { path: '/skattekonto', label: 'Skattekontot', perm: 'ledger' },
       { path: '/leasing', label: 'Leasing', perm: 'ledger', hint: 'Leasade bilar, maskiner och lokaler med automatisk bokföring' },
       { path: '/finansiering', label: 'Lån och finansiering', perm: 'ledger', hint: 'Amorteringsplaner, krediter och factoring' },
+      { path: '/vardepapper', label: 'Värdepapper och placeringar', perm: 'ledger', hint: 'Aktier, fonder och kryptotillgångar med värdering och skatt' },
       { path: '/skatt', label: 'Skatteplanering', perm: 'ledger', hint: 'Prognos för skattekontot, preliminärskatt och bokslutsdispositioner' },
     ]) },
     { id: 'lon', label: t('Lön och personal'), icon: 'users', items: items([
@@ -71,6 +72,7 @@ export function buildNav(o: {
       { path: '/lon/avtal', label: 'Kollektivavtal', perm: 'payroll', hint: 'OB, övertid, beredskap, pension' },
       { path: '/agare', label: 'Ägare och utdelning', perm: 'ledger', hint: 'K10, gränsbelopp och lön eller utdelning' },
       { path: '/aktiebok', label: 'Aktiebok', perm: 'ledger', hint: 'Aktieägare, överlåtelser, nyemission och styrelseprotokoll' },
+      { path: '/kontrollbalans', label: 'Kontrollbalansräkning', perm: 'ledger', hint: 'Kapitalbrist, kontrollstämmor och likvidation' },
       { path: '/brf', label: 'Bostadsrättsförening', perm: 'ledger', hint: 'Lägenhetsförteckning, avgifter efter andelstal, underhållsplan och nyckeltal' },
       { path: '/forening', label: 'Förening', perm: 'ledger', hint: 'Medlemsregister, medlemsavgifter, gåvor och årsmöte' },
       { path: '/ekforening', label: 'Ekonomisk förening och stiftelse', perm: 'ledger', hint: 'Medlemsinsatser, återbäring, stiftelsens bidrag och fullföljdskrav' },

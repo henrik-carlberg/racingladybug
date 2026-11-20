@@ -140,9 +140,12 @@ export async function annualReport(companyId: number, fyId: number): Promise<{ h
   const leasing = await leasingNote(companyId, fy.end_date);
   const { pocNote } = await import('./poc');
   const poc = (await pocNote(companyId, fy.end_date)) ?? undefined;
+  const { notes: provisionNotes } = await import('./provisions');
+  const pn = await provisionNotes(companyId, fy.start_date, fy.end_date);
   const input: AnnualReportInput = {
     company: c, years, activity: data.activity ?? '', events: data.events ?? '', dividend: data.dividend ?? 0,
     board, employees: await averageEmployees(companyId, fy), place: data.place ?? c.city, k3, brf, leasing: leasing.total ? leasing : undefined, poc,
+    provisions: pn.provisions.length ? pn.provisions : undefined, commitments: pn.note.pledgeTotal || pn.note.contingentTotal ? pn.note : undefined,
   };
   return { html: annualReportHtml(input), data: { ...data, board }, figures: keyFigures(years[0]), input };
 }

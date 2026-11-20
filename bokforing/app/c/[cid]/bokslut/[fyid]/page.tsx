@@ -46,6 +46,10 @@ export default async function YearendYear({ params, searchParams }: { params: Pr
       </div>
       {s.companyType === 'EF' && <p className="small"><Link href={`${b}/bokslut/${s.fy.id}/ne-planering`}>Skatteplanering NE</Link> – räntefördelning, periodiseringsfond och expansionsfond med förslag som ger lägst skatt.</p>}
       <p className="small"><Link href={`${b}/bokslut/${s.fy.id}/kassaflode`}>Kassaflödesanalys</Link> per månad och år · <Link href={`${b}/bokslut/${s.fy.id}/k3`}>Regelverk K2/K3</Link> – byte till K3, uppskjuten skatt och utökade noter.</p>
+      {s.companyType === 'EF' && <p className="small"><Link href={`${b}/ombildning`}>Ombildning till aktiebolag</Link> – för över verksamheten till ditt aktiebolag till bokfört värde och gör den slutliga NE-bilagan.</p>}
+      {ab && <p className="small"><Link href={`${b}/kontrollbalans`}>Kontrollbalansräkning</Link> – kapitalbrist, kontrollstämmor och likvidation.</p>}
+      <p className="small"><Link href={`${b}/bokslut/${s.fy.id}/avsattningar`}>Avsättningar och åtaganden</Link> – garantiavsättningar, ställda säkerheter och eventualförpliktelser till noterna.</p>
+      <p className="small"><Link href={`${b}/bokslut/${s.fy.id}/kundforluster`}>Kundförluster</Link> – reserv för befarade förluster på förfallna och inkasserade fakturor.</p>
       <p className="small"><Link href={`${b}/bokslut/${s.fy.id}/kontroller`}>Kontroller före bokslut</Link> – ovanliga saldon, gamla avräkningskonton och momsavvikelser med förslag på åtgärd.</p>
       <p className="small"><Link href={`${b}/bokslut/${s.fy.id}/parm`}>Bokslutspärm</Link> – specifikation och avstämning per balanskonto, som PDF till revisor och bank.</p>
       <p className="small"><Link href={`${b}/bokslut/${s.fy.id}/dispositioner`}>Bokslutsdispositioner</Link> – periodiseringsfond, överavskrivningar och koncernbidrag som sänker skatten (gör dem före skatten).</p>

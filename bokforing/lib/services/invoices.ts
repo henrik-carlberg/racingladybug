@@ -23,7 +23,7 @@ import type { Actor } from './actor';
 import { arr, date, int, list, optInt, str, type Page } from './input';
 
 export interface InvoiceOut {
-  id: number; object: 'invoice'; number: number | null; status: 'draft' | 'booked' | 'paid' | 'credited';
+  id: number; object: 'invoice'; number: number | null; status: 'draft' | 'booked' | 'paid' | 'credited' | 'written_off';
   customer_id: number; customer_name: string; invoice_date: string; due_date: string; delivery_date: string;
   ocr: string | null; our_reference: string; your_reference: string; notes: string; reverse_charge: boolean; currency: string; exchange_rate: number; total_currency: number | null; language: 'sv' | 'en'; fx_result: number;
   total_net: number; total_vat: number; rounding: number; total: number; paid_date: string | null;
