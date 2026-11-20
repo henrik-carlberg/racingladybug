@@ -88,6 +88,10 @@ export async function createContract(actor: Actor, input: Record<string, unknown
 /** Bokför förfallna leasingavgifter till och med en månad (en verifikation per avtal och månad) */
 export async function bookDue(actor: Actor, upTo: string, contractId?: number, until?: string) {
   if (!/^\d{4}-\d{2}$/.test(upTo)) throw new ValidationError('Ange månad som ÅÅÅÅ-MM');
+  // Månader i låsta perioder, stängda räkenskapsår eller utan räkenskapsår hoppas över (avgifterna bokförs då manuellt)
+  const [lock] = await sql<{ locked: string | null }[]>`SELECT to_char(locked_until,'YYYY-MM-DD') AS locked FROM companies WHERE id = ${actor.companyId}`;
+  const open = await sql<{ s: string; e: string }[]>`SELECT to_char(start_date,'YYYY-MM-DD') AS s, to_char(end_date,'YYYY-MM-DD') AS e FROM fiscal_years WHERE company_id = ${actor.companyId} AND NOT closed`;
+  const bookable = (d: string) => (!lock.locked || d > lock.locked) && open.some((y) => y.s <= d && d <= y.e);
   const contracts = await sql<Contract[]>`SELECT ${COLS} FROM leasing_contracts WHERE company_id = ${actor.companyId} ${contractId ? sql`AND id = ${contractId}` : sql``} AND ended_on IS NULL ORDER BY id`;
   let n = 0;
   for (const c of contracts) {
@@ -95,6 +99,7 @@ export async function bookDue(actor: Actor, upTo: string, contractId?: number, u
     for (let i = 0; i < c.months; i++) {
       const p = addLeaseMonths(c.start_date.slice(0, 7), i);
       if (p > upTo || (until && payDate(c.start_date, p) > until)) break;
+      if (!bookable(payDate(c.start_date, p))) continue;
       const done = await sql.begin(async (tx) => {
         const claimed = await tx`INSERT INTO leasing_postings (contract_id, period) VALUES (${c.id}, ${p}) ON CONFLICT DO NOTHING RETURNING period`;
         if (!claimed.length) return false;

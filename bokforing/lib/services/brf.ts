@@ -107,7 +107,8 @@ export async function transfer(actor: Actor, apartmentId: number, input: Record<
     await auditBy(tx, actor, 'transfer', 'brf_apartment', a.id, { date: d });
     return inv;
   });
-  if (invoiceId) await bookInvoice(actor, invoiceId);
+  // Stoppas bokningen (t.ex. av kreditkontrollen) ligger avgiftsfakturan kvar som utkast under Kundfakturor
+  if (invoiceId) await bookInvoice(actor, invoiceId).catch(() => {});
 }
 
 /** Pantsättning: noteras i förteckningen; pantsättningsavgiften (högst 1 % av prisbasbeloppet) faktureras innehavaren */
@@ -125,7 +126,8 @@ export async function addPledge(actor: Actor, apartmentId: number, input: Record
     await auditBy(tx, actor, 'pledge', 'brf_apartment', a.id, { lender });
     return inv;
   });
-  if (invoiceId) await bookInvoice(actor, invoiceId);
+  // Stoppas bokningen (t.ex. av kreditkontrollen) ligger avgiftsfakturan kvar som utkast under Kundfakturor
+  if (invoiceId) await bookInvoice(actor, invoiceId).catch(() => {});
 }
 
 export async function releasePledge(actor: Actor, pledgeId: number) {
@@ -183,7 +185,9 @@ export async function invoiceFees(actor: Actor, input: Record<string, unknown>) 
     await auditBy(tx, actor, 'invoice_fees', 'brf', actor.companyId, { period: per.key, count: out.length });
     return out;
   });
-  for (const id of ids) await bookInvoice(actor, id);
+  const failed: string[] = [];
+  for (const id of ids) await bookInvoice(actor, id).catch((e) => { failed.push(e instanceof Error ? e.message : String(e)); });
+  if (failed.length) throw new ValidationError(`${ids.length - failed.length} avier bokfördes. ${failed.length} ligger kvar som utkast under Kundfakturor: ${failed[0]}`);
   return ids.length;
 }
 

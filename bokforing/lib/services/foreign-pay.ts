@@ -88,7 +88,7 @@ export async function batchXml(companyId: number, batch: string) {
     SELECT i.id, s.name AS supplier, i.invoice_number, to_char(GREATEST(i.due_date, f.created_at::date),'YYYY-MM-DD') AS due, i.payment_reference AS reference, f.currency,
       f.amount_currency::float8 AS amount_currency, s.iban, s.bic, s.country, f.charge_bearer AS charge_bearer2, s.reg_code
     FROM foreign_payments f JOIN supplier_invoices i ON i.id = f.supplier_invoice_id JOIN suppliers s ON s.id = i.supplier_id
-    WHERE f.company_id = ${companyId} AND f.batch = ${batch} AND f.status <> 'cancelled' ORDER BY f.id`;
+    WHERE f.company_id = ${companyId} AND f.batch = ${batch} AND f.status = 'sent' ORDER BY f.id`;
   if (!rows.length) throw new NotFoundError('Betalfilen');
   const d = await debtorAccounts(companyId);
   return foreignPain001Xml({

@@ -368,6 +368,8 @@ const creditServer = http.createServer((req, res) => {
   const xml = await (await owner.context().request.get(BASE + href)).text();
   assert(xml.includes('<InstdAmt Ccy="EUR">300.00</InstdAmt>') && xml.includes('<ChrgBr>SLEV</ChrgBr>') && xml.includes('<IBAN>DE89370400440532013000</IBAN>') && xml.includes('<Cd>SEPA</Cd>') && xml.includes('<IBAN>SE4550000000058398257466</IBAN></Id><Ccy>SEK</Ccy>'), 'pain.001 i euro: ' + xml.slice(0, 1500));
   assert((await owner.locator('tr.payable').count()) === 0 && (await owner.locator('tr.fpayment.sent').count()) === 1, 'skickad');
+  const dom = await (await owner.context().request.get(B + '/leverantorsfakturor/betalning/pain001')).text();
+  assert(!dom.includes('Müller'), 'fakturan i utlandsbetalningen tas inte med i den svenska betalfilen');
   log('betalfil pain.001 i euro: SEPA med delade avgifter, leverantörens IBAN och debitering från kronkontot');
 
   const fp = owner.locator('tr.fpayment.sent');
