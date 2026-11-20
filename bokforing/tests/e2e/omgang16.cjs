@@ -216,6 +216,8 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   await owner.fill('input[name=account_0]', '4010'); await owner.fill('input[name=amount_0]', '40000');
   await owner.click('button:has-text("Registrera och bokför")');
   await owner.waitForURL(/leverantorsfakturor\/\d+\?ok/);
+  await owner.click('button:has-text("Attestera")');
+  await owner.locator('text=Attesterad').first().waitFor();
   await owner.goto(G + '/bygg');
   await owner.locator('form:has(select[name=supplier_invoice_id]) input[name=pct]').fill('5');
   await owner.locator('form:has(select[name=supplier_invoice_id]) button:has-text("Bokför innehållet belopp")').click();

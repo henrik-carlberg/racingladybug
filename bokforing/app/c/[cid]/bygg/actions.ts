@@ -9,12 +9,12 @@ async function run<T>(b: string, fn: () => Promise<T>): Promise<T> { let r!: T; 
 const obj = (fd: FormData) => Object.fromEntries([...fd.entries()].filter(([, v]) => typeof v === 'string'));
 
 export async function addAta(cid: number, contractId: number, fd: FormData) {
-  const a = userActor(await requireCompany(cid, { perm: 'invoicing' }));
+  const a = userActor(await requireCompany(cid, { perm: 'ledger' }));
   const r = await run(back(cid), () => s.addChangeOrder(a, contractId, obj(fd)));
   done(back(cid), `ÄTA ${r.no} är registrerad och väntar på beställarens beslut`);
 }
 export async function decideAta(cid: number, id: number, fd: FormData) {
-  const a = userActor(await requireCompany(cid, { perm: 'invoicing' }));
+  const a = userActor(await requireCompany(cid, { perm: 'ledger' }));
   await attempt(back(cid), () => s.decideChangeOrder(a, id, obj(fd)));
   done(back(cid), fd.get('decision') === 'approve' ? 'ÄTA:n är godkänd – kontraktsvärdet är uppdaterat' : 'ÄTA:n är avslagen');
 }

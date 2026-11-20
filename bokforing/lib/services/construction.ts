@@ -48,6 +48,8 @@ export async function addChangeOrder(actor: Actor, contractId: number, input: Re
 export async function decideChangeOrder(actor: Actor, id: number, input: Record<string, unknown>) {
   const approve = str(input, 'decision') === 'approve';
   const d = date(input, 'decided_on', 'Beslutsdag', false) || today();
+  const [lk] = await sql<{ l: string | null }[]>`SELECT to_char(locked_until,'YYYY-MM-DD') AS l FROM companies WHERE id = ${actor.companyId}`;
+  if (lk?.l && d <= lk.l) throw new ValidationError(`Perioden är låst till och med ${lk.l} – beslutsdagen måste vara senare`);
   const r = await sql<{ id: number }[]>`UPDATE poc_change_orders o SET status = ${approve ? 'approved' : 'rejected'}, decided_on = ${d}
     FROM poc_contracts c WHERE o.id = ${id} AND o.company_id = ${actor.companyId} AND o.status = 'proposed' AND c.id = o.contract_id AND c.status = 'open' RETURNING o.id`;
   if (!r.length) throw new ConflictError('ÄTA:n är redan beslutad eller uppdraget avslutat');
@@ -100,7 +102,7 @@ export async function retainSupplier(actor: Actor, input: Record<string, unknown
       SELECT s.status, s.total::float8 AS total, s.paid_amount::float8 AS paid, s.voucher_id, s.invoice_number, to_char(s.invoice_date,'YYYY-MM-DD') AS invoice_date, p.name AS supplier
       FROM supplier_invoices s JOIN suppliers p ON p.id = s.supplier_id WHERE s.id = ${id} AND s.company_id = ${actor.companyId} FOR UPDATE OF s`;
     if (!i) throw new NotFoundError('Leverantörsfakturan');
-    if (i.status === 'paid' || !i.voucher_id) throw new ConflictError('Bara bokförda, obetalda leverantörsfakturor kan få innehållna belopp');
+    if (i.status !== 'approved' || !i.voucher_id) throw new ConflictError('Bara attesterade, obetalda leverantörsfakturor kan få innehållna belopp');
     if (d < i.invoice_date) throw new ValidationError('Datumet kan inte vara före fakturadatumet');
     let amount: number;
     try { amount = retentionAmount(i.total, pct, i.total - i.paid); } catch (e) { throw new ValidationError((e as Error).message); }
@@ -148,7 +150,7 @@ export async function openInvoices(companyId: number) {
     FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.company_id = ${companyId} AND i.status = 'booked' AND i.voucher_id IS NOT NULL AND i.currency = 'SEK' AND i.total > 0
       AND NOT EXISTS (SELECT 1 FROM retentions r WHERE r.invoice_id = i.id) ORDER BY i.invoice_date DESC LIMIT 200`;
   const supplier = await sql<{ id: number; label: string }[]>`SELECT s.id, p.name || ' ' || s.invoice_number || ' (' || to_char(s.total / 100.0, 'FM999G999G990D00') || ' kr)' AS label
-    FROM supplier_invoices s JOIN suppliers p ON p.id = s.supplier_id WHERE s.company_id = ${companyId} AND s.status <> 'paid' AND s.voucher_id IS NOT NULL AND s.total > 0
+    FROM supplier_invoices s JOIN suppliers p ON p.id = s.supplier_id WHERE s.company_id = ${companyId} AND s.status = 'approved' AND s.voucher_id IS NOT NULL AND s.total > 0
       AND NOT EXISTS (SELECT 1 FROM retentions r WHERE r.supplier_invoice_id = s.id) ORDER BY s.invoice_date DESC LIMIT 200`;
   return { customer, supplier };
 }

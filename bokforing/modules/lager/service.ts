@@ -195,6 +195,8 @@ export async function applyCount(actor: Actor, input: Record<string, unknown>) {
   const rows = arr(input, 'counts', 'Inventering');
   return sql.begin(async (tx) => {
     const wid = await warehouseId(tx, actor.companyId, input);
+    // En inventering åt gången per lagerställe – annars räknas samma differens två gånger vid dubbelklick
+    await tx`SELECT pg_advisory_xact_lock(67001, ${wid})`;
     const d = date(input, 'date', 'Datum', false) || today();
     let changed = 0, diffValue = 0;
     const diffs: string[] = [];
@@ -579,8 +581,10 @@ export async function bookValuation(actor: Actor, input: Record<string, unknown>
   const use97 = input.use97 === true || input.use97 === 'on' || input.use97 === 'true';
   const rr = str(input, 'rule');
   const rule: ValuationRule = rr === 'lvp' || rr === '97' || rr === 'cost' ? rr : use97 ? '97' : 'cost';
-  const v = await valuation(actor.companyId, d, rule);
   return sql.begin(async (tx) => {
+    // Lås och räkna om i transaktionen så att två samtidiga bokningar inte båda bokar samma förändring
+    await tx`SELECT pg_advisory_xact_lock(67002, ${actor.companyId})`;
+    const v = await valuation(actor.companyId, d, rule);
     await ensureAccounts(tx, actor.companyId);
     let voucherId: number | null = null;
     if (v.change !== 0) {

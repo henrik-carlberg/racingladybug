@@ -70,6 +70,13 @@ export default async function AuditWorkspace({ params, searchParams }: { params:
       {w.materiality > 0 && <p className="small materiality">Väsentlighet <b>{kr(w.materiality)} kr</b>{w.materiality_basis && ` (${w.materiality_basis})`} · genomförandeväsentlighet <b className="perf">{kr(w.performance)} kr</b> · obetydlighetsgräns {kr(w.trivial)} kr</p>}
       {edit && (
         <>
+          <Post url={url} eid={w.id} op="materiality" className="card row" style={{ alignItems: 'end' }}>
+            <label>Väsentlighet (kr)<input name="materiality" inputMode="decimal" defaultValue={krIn(w.materiality)} /></label>
+            <label>Genomförandeväsentlighet (kr)<input name="performance" inputMode="decimal" defaultValue={krIn(w.performance)} placeholder="75 %" /></label>
+            <label>Obetydlighetsgräns (kr)<input name="trivial" inputMode="decimal" defaultValue={krIn(w.trivial)} placeholder="5 %" /></label>
+            <div style={{ flex: '0 0 auto' }}><button className="secondary">Spara</button></div>
+            <span className="small muted">Väsentligheten är gräns för urvalet över väsentlighetsbeloppet; genomförandeväsentligheten är intervallet i det beloppsviktade urvalet; fel under obetydlighetsgränsen behöver inte samlas.</span>
+          </Post>
           {sug && sug.options.length > 0 && <div className="card small materiality-suggestion">
             <b>Förslag till väsentlighet</b>
             <ul style={{ margin: '.3rem 0' }}>{sug.options.map((o) => <li key={o.basis}>{o.pct} % av {o.basis.toLowerCase()} ({kr(o.base)} kr): {kr(o.amount)} kr</li>)}</ul>
@@ -79,13 +86,6 @@ export default async function AuditWorkspace({ params, searchParams }: { params:
               <span>Lägst: <b>{kr(sug.amount)} kr</b> ({sug.recommended.basis.toLowerCase()}), genomförandeväsentlighet {kr(sug.performance)} kr, obetydligt under {kr(sug.trivial)} kr.</span>
               <button className="secondary small">Använd förslaget</button></Post>}
           </div>}
-          <Post url={url} eid={w.id} op="materiality" className="card row" style={{ alignItems: 'end' }}>
-            <label>Väsentlighet (kr)<input name="materiality" inputMode="decimal" defaultValue={krIn(w.materiality)} /></label>
-            <label>Genomförandeväsentlighet (kr)<input name="performance" inputMode="decimal" defaultValue={krIn(w.performance)} placeholder="75 %" /></label>
-            <label>Obetydlighetsgräns (kr)<input name="trivial" inputMode="decimal" defaultValue={krIn(w.trivial)} placeholder="5 %" /></label>
-            <div style={{ flex: '0 0 auto' }}><button className="secondary">Spara</button></div>
-            <span className="small muted">Väsentligheten är gräns för urvalet över väsentlighetsbeloppet; genomförandeväsentligheten är intervallet i det beloppsviktade urvalet; fel under obetydlighetsgränsen behöver inte samlas.</span>
-          </Post>
           <Post url={url} eid={w.id} op="sample" className="card row new-sample" style={{ alignItems: 'end' }}>
             <label>Urval<select name="method">{Object.entries(SAMPLE_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
             <label style={{ flex: '0 0 110px' }}>Antal (högst)<input name="count" inputMode="numeric" defaultValue="10" /></label>
