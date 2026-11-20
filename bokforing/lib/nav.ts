@@ -26,6 +26,7 @@ export function buildNav(o: {
       { path: '/kassa/betalningar', label: 'Kortterminaler och utbetalningar', perm: 'ledger', hint: 'Zettle, SumUp, Stripe, Klarna, Shopify' },
       { path: '/fakturor/rotrut', label: 'ROT och RUT', perm: 'invoicing' },
       { path: '/peppol', label: 'E-faktura (Peppol)', perm: 'invoicing', hint: 'Skickade och mottagna e-fakturor' },
+      { path: '/fastighet', label: 'Fastighet och uthyrning', perm: 'ledger', hint: 'Lokaler, hyresavier med index, moms per lokal och depositioner' },
       { path: '/autogiro', label: 'Autogiro', perm: 'invoicing', hint: 'Dra betalningen från kundens konto' },
       { path: '/tid', label: '⏱ Tidrapportering' },
       { path: '/uppdrag', label: 'Uppdrag & timbanker' },
@@ -36,6 +37,7 @@ export function buildNav(o: {
       { path: '/leverantorsfakturor', label: 'Leverantörsfakturor', perm: 'purchasing' },
       { path: '/leverantorsfakturor/betalning', label: 'Betalningar', perm: 'payments', hint: 'Betala attesterade fakturor' },
       { path: '/leverantorer', label: 'Leverantörer' },
+      { path: '/tull', label: 'Import och tull', perm: 'ledger', hint: 'Tullverkets beslut, importmoms ruta 50/60 och tull på varorna' },
       { path: '/leverantorsavtal', label: 'Leverantörsavtal', perm: 'purchasing', hint: 'Uppsägningstider, förlängningar och prishöjningar' },
       { path: '/kontroll', label: 'Varningar och kontroll', perm: 'ledger', hint: 'Nya bankuppgifter, dubbletter och ovanliga utbetalningar' },
     ]) },
@@ -61,6 +63,7 @@ export function buildNav(o: {
       { path: '/lon/avtal', label: 'Kollektivavtal', perm: 'payroll', hint: 'OB, övertid, beredskap, pension' },
       { path: '/agare', label: 'Ägare och utdelning', perm: 'ledger', hint: 'K10, gränsbelopp och lön eller utdelning' },
       { path: '/aktiebok', label: 'Aktiebok', perm: 'ledger', hint: 'Aktieägare, överlåtelser, nyemission och styrelseprotokoll' },
+      { path: '/forening', label: 'Förening', perm: 'ledger', hint: 'Medlemsregister, medlemsavgifter, gåvor och årsmöte' },
     ]) },
     { id: 'rapp', label: t('Rapporter'), icon: 'chart', items: items([
       { path: '/rapporter/panel', label: 'Instrumentpanel', hint: 'Diagram och nyckeltal' },

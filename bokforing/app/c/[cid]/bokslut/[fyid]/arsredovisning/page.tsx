@@ -18,13 +18,14 @@ export default async function AnnualReport({ params, searchParams }: { params: P
   const { company } = await requireCompany(cid, { perm: 'ledger' });
   const r = await annualReport(company.id, Number(fyid)).catch((e) => { if (e instanceof NotFoundError) notFound(); throw e; });
   const ab = company.company_type === 'AB';
+  const k3 = r.input?.k3 != null;
   const reps = (await representativeNames(company.id)).filter((x) => x.roles.some((r) => !/revisor/i.test(r)));
   const b = `/c/${company.id}/bokslut/${fyid}`;
   return (
     <div style={{ maxWidth: 900 }}>
       <div className="header no-print">
         <h1>{ab ? 'Årsredovisning' : 'Förenklat årsbokslut'}</h1>
-        <div className="actions" style={{ margin: 0 }}><PrintButton />{ab && <a className="btn secondary" href={`${b}/arsredovisning/ixbrl`} download title="För digital inlämning till Bolagsverket">Ladda ner iXBRL</a>}{ab && <form action={prepareAnnual.bind(null, company.id, Number(fyid))}><button className="secondary">Förbered inlämning till Bolagsverket</button></form>}<Link className="btn secondary" href={b}>Tillbaka</Link></div>
+        <div className="actions" style={{ margin: 0 }}><PrintButton />{ab && !k3 && <a className="btn secondary" href={`${b}/arsredovisning/ixbrl`} download title="För digital inlämning till Bolagsverket">Ladda ner iXBRL</a>}{ab && <form action={prepareAnnual.bind(null, company.id, Number(fyid))}><button className="secondary">Förbered inlämning till Bolagsverket</button></form>}<Link className="btn secondary" href={b}>Tillbaka</Link></div>
       </div>
       <Flash searchParams={searchParams} />
       {ab && (
@@ -61,7 +62,8 @@ export default async function AnnualReport({ params, searchParams }: { params: P
           </form>
         </div>
       )}
-      {ab && <p className="small muted no-print">iXBRL-filen innehåller årsredovisningen med siffrorna märkta enligt Bolagsverkets taxonomi, för digital inlämning. Kontrollera filen i Bolagsverkets testtjänst första gången innan du lämnar in den.</p>}
+      {ab && k3 && <p className="small muted no-print">Årsredovisningen är upprättad enligt K3. iXBRL-filen för digital inlämning stöder K2 – lämna in K3-årsredovisningen som PDF via Bolagsverkets e-tjänst.</p>}
+      {ab && !k3 && <p className="small muted no-print">iXBRL-filen innehåller årsredovisningen med siffrorna märkta enligt Bolagsverkets taxonomi, för digital inlämning. Kontrollera filen i Bolagsverkets testtjänst första gången innan du lämnar in den.</p>}
       {!ab && <p className="small muted no-print">Det förenklade årsbokslutet innehåller resultat- och balansräkning (BFL 6:6). Skriv ut, signera och spara det med räkenskapsinformationen i sju år.</p>}
       <DocumentBody kind="html" html={r.html} pdfUrl="" filename={null} />
     </div>

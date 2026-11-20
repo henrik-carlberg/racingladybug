@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { requireUser } from '@/lib/server/auth';
+import { allowedCompanies, requireUser } from '@/lib/server/auth';
 import { Flash, type SP } from '@/components/ui';
 import { saveLink } from './actions';
 import { PrintButton } from '@/components/PrintButton';
@@ -17,8 +17,10 @@ export default async function Group({ searchParams }: { searchParams: SP }) {
   const from = /^\d{4}-\d{2}-\d{2}$/.test(String(sp.from)) ? String(sp.from) : `${t.slice(0, 4)}-01-01`;
   const to = /^\d{4}-\d{2}-\d{2}$/.test(String(sp.to)) ? String(sp.to) : t;
   const raw = sp.c == null ? [] : Array.isArray(sp.c) ? sp.c : [sp.c];
-  const candidates = await groupCandidates(user.id);
-  const ids = raw.length ? raw.map(Number) : candidates.map((c) => c.id);
+  // Bara bolag vars åtkomstregler (IP, SSO, tvåstegskrav, utloggning) sessionen uppfyller
+  const candidates = await allowedCompanies(await groupCandidates(user.id));
+  const okIds = new Set(candidates.map((c) => c.id));
+  const ids = (raw.length ? raw.map(Number) : candidates.map((c) => c.id)).filter((i) => okIds.has(i));
   const parentId = Number(sp.moder) || null;
   const r = ids.length >= 1 ? await groupReport(user.id, ids, from, to, parentId) : null;
   const qs = new URLSearchParams([['from', from], ['to', to], ...ids.map((i) => ['c', String(i)]), ...(parentId ? [['moder', String(parentId)]] : [])] as [string, string][]).toString();

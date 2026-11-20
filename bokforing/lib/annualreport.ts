@@ -3,6 +3,7 @@
 // Delar enligt ÅRL 2:1: förvaltningsberättelse, resultaträkning, balansräkning och noter.
 import { formatAmount } from './money';
 import type { Sums } from './taxforms';
+import type { CashFlow } from './cashflow';
 
 export type Range = [number, number];
 const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -52,6 +53,8 @@ export interface AnnualReportInput {
   board: { name: string; role: string }[];
   employees: number; // medelantal anställda
   place: string;
+  /** K3 (BFNAR 2012:1): kassaflödesanalys och utökade noter */
+  k3?: { cashflow: CashFlow; opening: number; closing: number; deferred: { rows: { label: string; amount: number; tax: number }[]; liability: number; asset: number }; components: { name: string; cost: number; life_months: number; booked: number }[]; untaxed: number };
 }
 
 function row(label: string, cur: number, prev: number | null, opts: { bold?: boolean; note?: string } = {}) {
@@ -172,11 +175,17 @@ ${bal('Upplupna kostnader och förutbetalda intäkter', [[2900, 2999]], true)}
 ${row('Summa eget kapital och skulder', k.totalAssets, kp?.totalAssets ?? null, { bold: true })}
 </tbody></table>
 
+${i.k3 ? k3CashFlowHtml(i.k3) : ''}
 <h2>Noter</h2>
 <h3>Not 1 Redovisningsprinciper</h3>
-<p>Årsredovisningen har upprättats i enlighet med årsredovisningslagen och Bokföringsnämndens allmänna råd (BFNAR 2016:10) om årsredovisning i mindre företag (K2).</p>
-<h3>Not 2 Medelantalet anställda</h3>
+${i.k3 ? `<p>Årsredovisningen har upprättats i enlighet med årsredovisningslagen och Bokföringsnämndens allmänna råd BFNAR 2012:1 Årsredovisning och koncernredovisning (K3).</p>
+<p>Materiella anläggningstillgångar redovisas till anskaffningsvärde minskat med ackumulerade avskrivningar. Tillgångar med väsentliga komponenter med olika nyttjandeperiod delas upp och skrivs av var för sig (komponentavskrivning). Mark skrivs inte av.</p>
+<p>Inkomstskatt består av aktuell och uppskjuten skatt. Uppskjuten skatt beräknas på temporära skillnader mellan redovisade och skattemässiga värden med ${'20,6'} % skattesats.</p>
+<p>Kassaflödesanalysen är upprättad enligt indirekt metod. Likvida medel utgörs av kassa och banktillgodohavanden.</p>` : '<p>Årsredovisningen har upprättats i enlighet med årsredovisningslagen och Bokföringsnämndens allmänna råd (BFNAR 2016:10) om årsredovisning i mindre företag (K2).</p>'}
+${i.k3 ? `<h3>Not 2 Viktiga uppskattningar och bedömningar</h3><p>Nyttjandeperioder för materiella anläggningstillgångar och deras komponenter, samt värdering av uppskjuten skattefordran, bygger på styrelsens bedömningar. Bedömningarna ses över varje år.</p>` : ''}
+<h3>Not ${i.k3 ? 3 : 2} Medelantalet anställda</h3>
 <p>Medelantalet anställda under räkenskapsåret har uppgått till ${esc(i.employees)}.</p>
+${i.k3 ? k3NotesHtml(i.k3) : ''}
 
 <h2>Underskrifter</h2>
 <p>${esc(i.place || i.company.city)} den ______________</p>
@@ -230,4 +239,31 @@ export function simplifiedClosingHtml(o: { owner: string; company: { name: strin
 <h2>Balansräkning per ${esc(o.fyEnd)}</h2><table><tbody>${rows(o.balance)}</tbody></table>
 <p>${esc(o.company.city)} den ______________</p>
 <p><br>______________________________<br>${esc(o.owner)}</p>`.trim();
+}
+
+
+function k3CashFlowHtml(k: NonNullable<AnnualReportInput['k3']>) {
+  const r = (l: { label: string; amount: number }) => l.amount ? `<tr><td>${esc(l.label)}</td><td style="text-align:right">${kr(l.amount)}</td></tr>` : '';
+  const t = (label: string, v: number) => `<tr><td><b>${esc(label)}</b></td><td style="text-align:right"><b>${kr(v)}</b></td></tr>`;
+  const c = k.cashflow;
+  return `<h2>Kassaflödesanalys</h2><table><tbody>
+<tr><td colspan="2"><b>Den löpande verksamheten</b></td></tr>${c.operating.map(r).join('')}${t('Kassaflöde före förändring av rörelsekapital', c.beforeWorkingCapital)}
+${c.workingCapital.map(r).join('')}${t('Kassaflöde från den löpande verksamheten', c.operatingTotal)}
+<tr><td colspan="2"><b>Investeringsverksamheten</b></td></tr>${c.investing.map(r).join('')}${t('Kassaflöde från investeringsverksamheten', c.investingTotal)}
+<tr><td colspan="2"><b>Finansieringsverksamheten</b></td></tr>${c.financing.map(r).join('')}${t('Kassaflöde från finansieringsverksamheten', c.financingTotal)}
+${t('Årets kassaflöde', c.change)}<tr><td>Likvida medel vid årets början</td><td style="text-align:right">${kr(k.opening)}</td></tr>${t('Likvida medel vid årets slut', k.closing)}
+</tbody></table>`;
+}
+
+function k3NotesHtml(k: NonNullable<AnnualReportInput['k3']>) {
+  let n = 4;
+  const parts: string[] = [];
+  if (k.components.length) parts.push(`<h3>Not ${n++} Materiella anläggningstillgångar</h3><table><thead><tr><th>Tillgång/komponent</th><th style="text-align:right">Anskaffningsvärde</th><th style="text-align:right">Ack. avskrivningar</th><th style="text-align:right">Redovisat värde</th><th style="text-align:right">Nyttjandeperiod</th></tr></thead><tbody>
+${k.components.map((c) => `<tr><td>${esc(c.name)}</td><td style="text-align:right">${kr(c.cost)}</td><td style="text-align:right">${kr(-c.booked)}</td><td style="text-align:right">${kr(c.cost - c.booked)}</td><td style="text-align:right">${Math.round(c.life_months / 12)} år</td></tr>`).join('')}</tbody></table>`);
+  parts.push(`<h3>Not ${n++} Uppskjuten skatt</h3>${k.deferred.rows.length ? `<table><thead><tr><th>Temporär skillnad</th><th style="text-align:right">Skillnad</th><th style="text-align:right">Uppskjuten skatt</th></tr></thead><tbody>
+${k.deferred.rows.map((d) => `<tr><td>${esc(d.label)}</td><td style="text-align:right">${kr(d.amount)}</td><td style="text-align:right">${kr(d.tax)}</td></tr>`).join('')}</tbody></table>
+<p>Uppskjuten skatteskuld ${kr(k.deferred.liability)} kr, uppskjuten skattefordran ${kr(k.deferred.asset)} kr.</p>` : '<p>Det finns inga temporära skillnader.</p>'}
+${k.untaxed ? `<p>I obeskattade reserver ingår uppskjuten skatt med ${kr(Math.round(k.untaxed * 0.206))} kr.</p>` : ''}`);
+  parts.push(`<h3>Not ${n++} Ställda säkerheter och eventualförpliktelser</h3><p>Inga, utöver vad som framgår av balansräkningen.</p>`);
+  return parts.join('\n');
 }

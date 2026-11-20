@@ -28,7 +28,7 @@ export async function GET(req: Request) {
     if (flow.purpose === 'login') {
       const id = await userByPnr(verified.pnr);
       if (!id) return to(origin, '/login', { error: 'Inget konto är kopplat till ditt BankID. Logga in med e-post och koppla BankID under Mitt konto.' });
-      await createSession(id);
+      await createSession(id, { method: 'bankid', mfa: true });
       await audit(sql, { companyId: null, userId: id, action: 'login_bankid', entity: 'user', entityId: id }).catch(() => {});
       return to(origin, '/', {});
     }

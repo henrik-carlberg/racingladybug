@@ -1,7 +1,7 @@
 'use server';
 import { sql } from '@/lib/db';
 import { attempt, done, str } from '@/lib/server/action';
-import { createSession, destroySession, hashPassword, verifyPassword, sha256 } from '@/lib/server/auth';
+import { createSession, destroySession, hashPassword, logLogin, verifyPassword, sha256 } from '@/lib/server/auth';
 import { audit } from '@/lib/server/audit';
 import { signupOpen } from '@/lib/billing';
 import { completeLogin, startLogin } from '@/lib/server/mfa';
@@ -21,6 +21,7 @@ export async function login(fd: FormData) {
     const [u] = await sql<{ id: number; password_hash: string }[]>`SELECT id, password_hash FROM users WHERE email = ${email}`;
     const ok = await verifyPassword(str(fd, 'password'), u?.password_hash ?? DUMMY_HASH);
     if (!u || !ok) {
+      await logLogin({ userId: u?.id ?? null, email, method: 'password', success: false, reason: u ? 'Fel lösenord' : 'Okänt konto' });
       await hit(`login:${email}`, L.loginFailEmail.max, L.loginFailEmail.window);
       await hit(`loginip:${ip}`, L.loginFailIp.max, L.loginFailIp.window);
       throw new Error('Fel e-post eller lösenord');
@@ -64,7 +65,7 @@ export async function register(fd: FormData) {
       INSERT INTO users (email, name, password_hash) VALUES (${str(fd, 'email').toLowerCase()}, ${str(fd, 'name')}, ${await hashPassword(pw)})
       RETURNING id`;
     await audit(sql, { companyId: null, userId: u.id, action: 'register', entity: 'user', entityId: u.id });
-    await createSession(u.id);
+    await createSession(u.id, { method: 'register' });
   });
   done('/');
 }

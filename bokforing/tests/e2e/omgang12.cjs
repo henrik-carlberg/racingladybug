@@ -264,6 +264,7 @@ const finServer = http.createServer((req, res) => {
   log('mellanhavanden stäms av åt båda håll och elimineringsunderlaget visar den koncerninterna försäljningen');
 
   const addCh = async (kind, f) => {
+    await owner.goto(B + '/koncerninternt');
     await owner.selectOption('select[name=target_company_id]', { label: 'Firma Test' });
     await owner.selectOption('select[name=kind]', kind);
     for (const [k, v] of Object.entries(f)) await owner.fill(`form:has(select[name=kind]) input[name=${k}]`, v);
@@ -272,10 +273,12 @@ const finServer = http.createServer((req, res) => {
   };
   await addCh('management_fee', { amount: '1000' });
   await addCh('interest', { principal: '1200000', rate_pct: '5' });
+  await owner.goto(B + '/koncerninternt');
   await owner.click('button:has-text("Fakturera förfallna månader nu")');
   await owner.locator('text=2 koncernfakturor är skapade och speglade hos mottagarna').waitFor();
   t = await text(owner);
   assert(/Firma Test.*8[\s ]750,00 8[\s ]750,00.*Stämmer/.test(t), 'mellanhavanden efter avgifter (2 500 + 1 250 + 5 000): ' + t.slice(0, 1500));
+  await owner.goto(B + '/koncerninternt');
   await owner.click('button:has-text("Fakturera förfallna månader nu")');
   await owner.locator('text=0 koncernfakturor är skapade').waitFor();
   log('management fee och koncernränta faktureras varje månad och speglas hos mottagaren – en gång per månad');

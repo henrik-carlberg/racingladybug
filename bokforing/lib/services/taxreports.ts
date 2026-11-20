@@ -119,9 +119,16 @@ export async function annualReport(companyId: number, fyId: number): Promise<{ h
       data, figures: keyFigures(years[0]),
     };
   }
-  const input = {
+  const [fw] = await sql<{ f: string }[]>`SELECT accounting_framework AS f FROM companies WHERE id = ${companyId}`;
+  let k3: AnnualReportInput['k3'];
+  if (fw?.f === 'K3') {
+    const { k3Extras } = await import('./k3');
+    const x = await k3Extras(companyId, fyId);
+    k3 = { ...x, untaxed: -[...years[0].closing].filter(([n]) => n >= 2100 && n <= 2199).reduce((s, [, v]) => s + v, 0) };
+  }
+  const input: AnnualReportInput = {
     company: c, years, activity: data.activity ?? '', events: data.events ?? '', dividend: data.dividend ?? 0,
-    board, employees: await averageEmployees(companyId, fy), place: data.place ?? c.city,
+    board, employees: await averageEmployees(companyId, fy), place: data.place ?? c.city, k3,
   };
   return { html: annualReportHtml(input), data: { ...data, board }, figures: keyFigures(years[0]), input };
 }

@@ -21,7 +21,7 @@ export async function passkeyLoginOptions(): Promise<Result<{ options: Awaited<R
 export async function passkeyLogin(response: AuthenticationResponseJSON): Promise<Result> {
   try {
     const userId = await verifyAuthentication(response);
-    await createSession(userId);
+    await createSession(userId, { method: 'passkey', mfa: true });
     return { ok: true };
   } catch (e) { return fail(e); }
 }

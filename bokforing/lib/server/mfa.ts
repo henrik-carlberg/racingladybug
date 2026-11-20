@@ -9,7 +9,7 @@ const COOKIE = 'mfa';
 /** Efter rätt lösenord: logga in direkt, eller kräv engångskod om tvåstegsverifiering är på. Returnerar sökvägen att gå vidare till. */
 export async function startLogin(userId: number, next = '/'): Promise<string> {
   const [u] = await sql<{ on: boolean }[]>`SELECT totp_enabled_at IS NOT NULL AS on FROM users WHERE id = ${userId}`;
-  if (!u?.on) { await createSession(userId); return next; }
+  if (!u?.on) { await createSession(userId, { method: 'password' }); return next; }
   const token = newToken();
   await sql`DELETE FROM mfa_challenges WHERE expires_at < now()`;
   await sql`INSERT INTO mfa_challenges (id, user_id, expires_at) VALUES (${sha256(token)}, ${userId}, now() + interval '10 minutes')`;
@@ -45,6 +45,6 @@ export async function completeLogin(code: string): Promise<{ ok: boolean; backup
   if (!ok) return { ok: false };
   await sql`DELETE FROM mfa_challenges WHERE id = ${c.id}`;
   (await cookies()).delete(COOKIE);
-  await createSession(c.user_id);
+  await createSession(c.user_id, { method: 'totp', mfa: true });
   return { ok: true, backupUsed };
 }

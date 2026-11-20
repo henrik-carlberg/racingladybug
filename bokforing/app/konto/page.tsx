@@ -47,6 +47,7 @@ export default async function Account({ searchParams }: { searchParams: SP }) {
       <p className="muted">{user.name} · {user.email}</p>
       <Flash searchParams={searchParams} />
 
+      <p className="small"><Link href="/konto/sessioner">Mina sessioner och inloggningar</Link> – se var du är inloggad och logga ut andra enheter.</p>
       <h2>Passkeys</h2>
       <p className="muted small">Med en passkey loggar du in med Face ID, Touch ID, Windows Hello eller en säkerhetsnyckel i stället för lösenord.
         Den är knuten till den här webbplatsen och kan inte nätfiskas. Synkade passkeys (iCloud-nyckelring, Google Lösenordshanteraren m.fl.) fungerar på alla dina enheter.</p>
