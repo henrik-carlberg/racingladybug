@@ -1,4 +1,5 @@
 'use server';
+import { redirect } from 'next/navigation';
 import { unstable_rethrow } from 'next/navigation';
 import { attempt, amount, done, fileFrom, str } from '@/lib/server/action';
 import { requireCompany } from '@/lib/server/auth';
@@ -47,7 +48,9 @@ export async function uploadAttachment(cid: number, vid: number, fd: FormData) {
 
 /** Beskriv med egna ord → AI föreslår en verifikation som öppnas i formuläret */
 export async function aiVoucher(cid: number, fd: FormData) {
-  const actor = userActor(await requireCompany(cid, { perm: 'ledger' }));
+  const ctx = await requireCompany(cid, { perm: 'ledger' });
+  if (!ctx.aiAccess) redirect(`/c/${cid}/verifikationer/ny?error=${encodeURIComponent('Du har inte tillgång till AI-kontering')}`);
+  const actor = userActor(ctx);
   let id = 0;
   await attempt(`/c/${cid}/verifikationer/ny`, async () => { await limit(`ai-voucher:${cid}`, 60, 3600); id = await suggestVoucher(actor, str(fd, 'text')); });
   done(`/c/${cid}/verifikationer/ny?ai=${id}`);

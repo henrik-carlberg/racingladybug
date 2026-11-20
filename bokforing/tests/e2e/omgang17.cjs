@@ -291,6 +291,23 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(pr.status() === 200 && pr.headers()['content-type'] === 'application/pdf' && body.slice(0, 5).toString() === '%PDF-' && body.toString('latin1').includes('Bokslutsp'), 'PDF');
   log('bokslutspärm: specifikation per balanskonto mot huvudboken, avstämning blockeras vid differens, signatur och PDF till revisor och bank');
 
+  // ================= AI-tillgång per användare =================
+  const att = await login(browser, 'attest1.omg4@example.com', 'attestlosen11');
+  await att.goto(`${BASE}/c/1/assistent`);
+  assert(await att.locator('.no-ai-access').count(), 'konsulten utan tillgång ser spärren');
+  await owner.goto(`${BASE}/c/1/assistent`);
+  assert(!(await owner.locator('.no-ai-access').count()), 'ägaren har alltid tillgång');
+  await owner.goto(`${BASE}/c/1/installningar`);
+  const annaRow = owner.locator('tr:has-text("attest1.omg4@example.com")');
+  await annaRow.locator('.ai-access button:has-text("Ge tillgång")').click();
+  await owner.locator('text=Användaren har nu tillgång till assistenten').waitFor();
+  await att.goto(`${BASE}/c/1/assistent`);
+  assert(!(await att.locator('.no-ai-access').count()), 'konsulten har tillgång efter att ägaren gett den');
+  await owner.goto(`${BASE}/c/1/installningar`);
+  await owner.locator('tr:has-text("attest1.omg4@example.com") .ai-access button:has-text("Ta bort tillgång")').click();
+  await owner.locator('text=inte längre tillgång').waitFor();
+  log('assistenten och AI-funktionerna: ägaren alltid, övriga användare bara när ägaren ger dem tillgång');
+
   //@@NEXT@@
   await browser.close(); mailServer.close();
   console.log('Omgång 17: alla steg gick igenom');

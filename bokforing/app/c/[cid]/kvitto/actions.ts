@@ -35,8 +35,9 @@ export type ReadState = { guess?: import('@/lib/receipts').ReceiptGuess; error?:
 
 /** Läser av kvittobilden med Claude och föreslår fälten (sparar ingenting) */
 export async function readReceipt(cid: number, fd: FormData): Promise<ReadState> {
-  const { company } = await requireCompany(cid);
+  const { company, aiAccess } = await requireCompany(cid);
   const { extractReceipt, invoiceAiEnabled, ExtractionError } = await import('@/lib/services/invoice-ai');
+  if (!aiAccess) return { error: 'Du har inte tillgång till automatisk avläsning' };
   const { limit } = await import('@/lib/server/ratelimit');
   if (!invoiceAiEnabled()) return { error: 'Automatisk avläsning är inte påslagen' };
   try {

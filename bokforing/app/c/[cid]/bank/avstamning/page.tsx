@@ -19,7 +19,7 @@ const TYPE_LABEL: Record<string, string> = { invoice: 'Kundfaktura', supplier_in
 
 export default async function Reconcile({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company, role } = await requireCompany(cid, { perm: 'ledger' });
+  const { company, role, aiAccess: ctxAi } = await requireCompany(cid, { perm: 'ledger' });
   const sp = await searchParams;
   const status = String(sp.status ?? 'unmatched');
   const accountId = sp.account_id ? Number(sp.account_id) : undefined;
@@ -37,7 +37,7 @@ export default async function Reconcile({ params, searchParams }: { params: Prom
     WHERE q.company_id = ${company.id} AND q.entity = 'bank_transaction' AND q.entity_id IN ${sql(ids)} GROUP BY q.entity_id` : []).map((r) => [r.id, r]));
   const aiMap = new Map((ids.length ? await sql<{ id: number; s: AiBankSuggestion }[]>`SELECT id, ai_suggestion AS s FROM bank_transactions WHERE company_id = ${company.id} AND id IN ${sql(ids)} AND ai_suggestion IS NOT NULL` : []).map((r) => [r.id, r.s]));
   const unknown = rows.filter((r) => r.status === 'unmatched' && !(r.suggestions ?? []).length && !r.accountSuggestion && !aiMap.has(r.id)).map((r) => r.id);
-  const ai = aiEnabled();
+  const ai = aiEnabled() && ctxAi;
   const withAccount = rows.filter((r) => r.accountSuggestion && !(r.suggestions ?? []).some((x) => x.score >= 80)).length;
   const ruleLink = (t: (typeof rows)[number], account?: number | null) => `${b}/bank/regler?${new URLSearchParams({ pattern: learnKey(t), direction: t.amount < 0 ? 'out' : 'in',
     ...(account ? { account: String(account) } : {}), description: t.counterparty || t.description, back: `${b}/bank/avstamning` }).toString()}`;

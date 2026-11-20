@@ -30,10 +30,10 @@ export default async function Receipt({ params, searchParams }: { params: Promis
   return (
     <div style={{ maxWidth: 820 }}>
       <h1>Nytt kvitto eller utlägg</h1>
-      <p className="muted">{invoiceAiEnabled() ? 'Fota kvittot – appen läser av datum, belopp och moms och föreslår vad det gäller. Kontrollera och bokför.' : 'Fota kvittot, välj vad det gäller – appen väljer konto och moms.'} Fakturor från leverantörer med betalning senare registrerar du under <Link href={`/c/${company.id}/leverantorsfakturor/ny`}>Leverantörsfakturor</Link>.</p>
+      <p className="muted">{invoiceAiEnabled() && ctx.aiAccess ? 'Fota kvittot – appen läser av datum, belopp och moms och föreslår vad det gäller. Kontrollera och bokför.' : 'Fota kvittot, välj vad det gäller – appen väljer konto och moms.'} Fakturor från leverantörer med betalning senare registrerar du under <Link href={`/c/${company.id}/leverantorsfakturor/ny`}>Leverantörsfakturor</Link>.</p>
       <Flash searchParams={searchParams} />
       <UseSharedFile input="file" />
-      <ReceiptForm card={card ? { tx: Number(sp.tx), total: (-card.amount / 100).toFixed(2).replace('.', ','), date: card.date, text: card.text } : undefined} action={saveReceipt.bind(null, company.id)} read={invoiceAiEnabled() ? readReceipt.bind(null, company.id) : undefined} today={today()} companyType={company.company_type} accountNames={names} learned={await learnedCodings<ReceiptCoding>(company.id, 'receipt')} period={await companyPeriod(company.id)} />
+      <ReceiptForm card={card ? { tx: Number(sp.tx), total: (-card.amount / 100).toFixed(2).replace('.', ','), date: card.date, text: card.text } : undefined} action={saveReceipt.bind(null, company.id)} read={invoiceAiEnabled() && ctx.aiAccess ? readReceipt.bind(null, company.id) : undefined} today={today()} companyType={company.company_type} accountNames={names} learned={await learnedCodings<ReceiptCoding>(company.id, 'receipt')} period={await companyPeriod(company.id)} />
       {recent.length > 0 && (
         <>
           <h2>Senaste kvitton</h2>

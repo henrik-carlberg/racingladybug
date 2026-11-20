@@ -141,7 +141,7 @@ async function enforceCompanyAccess(companyId: number, c: { require_mfa: boolean
   redirect(`/?error=${encodeURIComponent(b.msg)}`);
 }
 
-export interface Ctx { user: User; company: Company; role: Role; billing: Access; employeeId: number | null; permissions: Permission[] | null; can: (p: Permission) => boolean }
+export interface Ctx { user: User; company: Company; role: Role; billing: Access; employeeId: number | null; permissions: Permission[] | null; can: (p: Permission) => boolean; aiAccess: boolean }
 
 /** Åtkomst enligt abonnemanget (alltid öppet om betalning inte är påslagen) */
 export async function companyAccess(companyId: number): Promise<Access> {
@@ -185,16 +185,17 @@ export async function requireCompany(companyId: number | string, opts: { owner?:
   const id = Number(companyId);
   if (!Number.isInteger(id)) notFound();
   // Medlemskap i bolaget, eller åtkomst via en redovisningsbyrå som bolaget har gett behörighet (roll redovisningskonsult)
-  const rows = await sql<(Company & { role: Role; employee_id: number | null; permissions: Permission[] | null })[]>`
+  const rows = await sql<(Company & { role: Role; employee_id: number | null; permissions: Permission[] | null; ai_access: boolean | null })[]>`
     SELECT c.*, to_char(c.locked_until, 'YYYY-MM-DD') AS locked_until,
       COALESCE((SELECT m.role FROM memberships m WHERE m.company_id = c.id AND m.user_id = ${user.id}),
         (SELECT 'accountant' FROM firm_clients fc JOIN firm_members fm ON fm.firm_id = fc.firm_id WHERE fc.company_id = c.id AND fm.user_id = ${user.id} LIMIT 1)) AS role,
       (SELECT e.id FROM employees e WHERE e.company_id = c.id AND e.user_id = ${user.id} LIMIT 1) AS employee_id,
-      (SELECT m.permissions FROM memberships m WHERE m.company_id = c.id AND m.user_id = ${user.id}) AS permissions
+      (SELECT m.permissions FROM memberships m WHERE m.company_id = c.id AND m.user_id = ${user.id}) AS permissions,
+      (SELECT m.ai_access FROM memberships m WHERE m.company_id = c.id AND m.user_id = ${user.id}) AS ai_access
     FROM companies c WHERE c.id = ${id}`;
   const row = rows[0];
   if (!row || !row.role) notFound();
-  const { role, employee_id, permissions, ...company } = row;
+  const { role, employee_id, permissions, ai_access, ...company } = row;
   await enforceCompanyAccess(id, row as unknown as { require_mfa: boolean; ip_allowlist: string[] });
   if (role === 'employee' && !opts.employee) redirect(`/c/${id}/mitt`);
   if (opts.owner && role !== 'owner') throw new Error('Endast ägare får göra detta');
@@ -213,5 +214,7 @@ export async function requireCompany(companyId: number | string, opts: { owner?:
 
   const billing = await companyAccess(id);
   if (billing.state === 'locked' && !opts.allowLocked) redirect(`/c/${id}/abonnemang`);
-  return { user, company: company as Company, role, billing, employeeId: employee_id, permissions, can: (p: Permission) => hasPermission(role, permissions, p) };
+  // AI-funktioner (kostar per anrop): ägaren alltid, andra användare bara om ägaren har gett dem tillgång
+  const aiAccess = role === 'owner' || (!!ai_access && role !== 'auditor' && role !== 'employee');
+  return { user, company: company as Company, role, billing, employeeId: employee_id, permissions, can: (p: Permission) => hasPermission(role, permissions, p), aiAccess };
 }
