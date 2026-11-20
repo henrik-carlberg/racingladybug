@@ -18,3 +18,31 @@ describe('Inventarier i bokslutet', () => {
     expect(p.proposals.find((x) => x.kind === 'overavskrivning')?.amount).toBe(2000000);
   });
 });
+
+import { adjustment, adjustmentLines, deductionShare, parseVatNumber, proportionLines } from '@/lib/vat-advanced';
+describe('Moms på djupet', () => {
+  it('avdragsandel avrundas uppåt', () => {
+    expect(deductionShare(6000000, 4000000)).toBe(60);
+    expect(deductionShare(6010000, 3990000)).toBe(61);
+    expect(deductionShare(0, 0)).toBe(100);
+  });
+  it('proportionering av gemensam ingående moms', () => {
+    const r = proportionLines([{ vat: 250000, costs: [{ account: 5010, amount: 1000000 }] }, { vat: 25000, costs: [{ account: 6110, amount: 100000 }] },
+      { vat: 50000, costs: [{ account: 5010, amount: 100000 }, { account: 4010, amount: 100000 }] }], [5010], 60);
+    expect(r.commonVat).toBe(275000);
+    expect(r.lines).toEqual([{ account: 5010, amount: 110000 }, { account: 2641, amount: -110000 }]);
+  });
+  it('jämkning av fastighet och inventarie', () => {
+    const f = { vat: 20000000, kind: 'fastighet' as const, completedYear: 2025, origPct: 100 };
+    expect(adjustment(f, 2026, 60).amount).toBe(-800000);
+    expect(adjustment(f, 2026, 95).amount).toBe(0);
+    expect(adjustment(f, 2035, 50).amount).toBe(0);
+    expect(adjustment({ ...f, kind: 'inventarie', origPct: 50 }, 2027, 80).amount).toBe(1200000);
+    expect(adjustmentLines(-800000)).toEqual([{ account: 7999, amount: 800000 }, { account: 2641, amount: -800000 }]);
+  });
+  it('momsregistreringsnummer', () => {
+    expect(parseVatNumber('de 123 456 789')).toEqual({ country: 'DE', number: '123456789', full: 'DE123456789' });
+    expect(parseVatNumber('GR123456789')?.country).toBe('EL');
+    expect(parseVatNumber('US123')).toBeNull();
+  });
+});

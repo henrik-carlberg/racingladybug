@@ -21,6 +21,12 @@ async function login(browser, email, password) {
   return p;
 }
 
+const viesServer = http.createServer((req, res) => {
+  const m = /\/ms\/([A-Z]{2})\/vat\/([0-9A-Z]+)/.exec(req.url || '');
+  const ok = m && m[1] === 'DE' && m[2] === '123456789';
+  res.writeHead(200, { 'content-type': 'application/json' });
+  res.end(JSON.stringify({ isValid: !!ok, name: ok ? 'EU KUND GMBH' : '---', address: ok ? 'Berlin' : '---', userError: ok ? 'VALID' : 'INVALID' }));
+}).listen(3320);
 const mailServer = http.createServer((req, res) => { req.resume(); req.on('end', () => { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"id":"m1"}'); }); }).listen(3303);
 
 const luhn = (s) => { let sum = 0; for (let i = 0; i < s.length; i++) { let v = Number(s[s.length - 1 - i]); if (i % 2 === 1) { v *= 2; if (v > 9) v -= 9; } sum += v; } return sum % 10 === 0; };
@@ -88,7 +94,53 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await owner.locator('.reserve-now').innerText()) === '30000,00', 'reserven efter återföring');
   log('överavskrivningar: 30-regeln, 20-regeln och restvärdesmetoden jämförs; reserv över bokfört minus lägsta skattemässiga värde återförs');
 
+  // ================= Del 2: moms på djupet =================
+  const VM = await newCompany('Blandad Verksamhet AB', 559800000);
+  await owner.goto(VM + '/rapporter/moms/avancerat');
+  await owner.fill('input[name=pct]', '60'); await owner.fill('input[name=accounts]', '5010');
+  await owner.click('form:has(input[name=accounts]) button:has-text("Spara")');
+  await owner.locator('text=Inställningarna för blandad verksamhet är sparade').waitFor();
+  await voucher(VM, 'Lokalhyra (gemensam)', [[5010, 10000], [2641, 2500], [1930, -12500]]);
+  await voucher(VM, 'Förbrukningsmaterial', [[6110, 1000], [2641, 250], [1930, -1250]]);
+  await owner.goto(VM + `/rapporter/moms/avancerat?from=${YEAR}-01-01&to=${day(0)}`);
+  assert(nb(await owner.locator('.common-vat').innerText()) === '2500,00' && nb(await owner.locator('.non-deductible').innerText()) === '1000,00', 'proportionering: ' + await owner.locator('.grid').innerText());
+  await owner.click('button:has-text("Bokför proportionering")');
+  await owner.locator('text=är förd till kostnad').waitFor();
+  await owner.goto(VM + `/rapporter/moms/avancerat?from=${YEAR}-01-01&to=${day(0)}`);
+  await owner.click('button:has-text("Bokför proportionering")').catch(() => {});
+  await owner.goto(VM + '/rapporter/huvudbok?account=5010');
+  assert(nb(await text(owner)).includes('1000,00') && (await text(owner)).includes('Proportionering'), 'gemensam moms till kostnad');
+  log('blandad verksamhet: gemensam ingående moms proportioneras (60 %) och ej avdragsgill del förs till kostnaden, en gång per period');
+
+  await owner.goto(VM + '/rapporter/moms/avancerat#jamkning');
+  const jf = owner.locator('form:has(input[name=vat_amount])');
+  await jf.locator('input[name=description]').fill('Ombyggnad av lokalen'); await jf.locator('input[name=completed_on]').fill(`${YEAR - 1}-03-01`);
+  await jf.locator('input[name=vat_amount]').fill('200000'); await jf.locator('input[name=orig_pct]').fill('100');
+  await jf.locator('button:has-text("Registrera")').click();
+  await owner.locator('text=Investeringen är registrerad').waitFor();
+  await owner.locator('.investment input[name=new_pct]').fill('95');
+  await owner.click('.investment button:has-text("Jämka")');
+  await owner.locator('text=mindre än 10 procentenheter').waitFor();
+  await owner.goto(VM + '/rapporter/moms/avancerat#jamkning');
+  await owner.locator('.investment input[name=new_pct]').fill('60');
+  await owner.click('.investment button:has-text("Jämka")');
+  await owner.locator('text=Jämkningen är bokförd: återbetalning 8').waitFor();
+  log('jämkning av fastighet: 40 procentenheter lägre momspliktig användning ger återbetalning av 1/10 × 40 % av momsen');
+
+  await owner.goto(VM + '/kunder');
+  await owner.fill('input[name=name]', 'EU Kund GmbH'); await owner.fill('input[name=vat_number]', 'DE123456789'); await owner.fill('input[name=country]', 'DE');
+  await owner.click('button:has-text("Spara kund")');
+  await owner.locator('text=Kunden är sparad').waitFor();
+  await owner.goto(VM + '/kunder');
+  await owner.click('a:has-text("EU Kund GmbH")');
+  await owner.waitForURL(/kunder\/\d+/);
+  assert((await owner.locator('.vies-status').innerText()).includes('inte kontrollerat'), 'okontrollerat');
+  await owner.click('button:has-text("Kontrollera mot VIES")');
+  await owner.locator('text=DE123456789 är giltigt i VIES (EU KUND GMBH)').waitFor();
+  assert((await owner.locator('.vies-status').innerText()).includes('Giltigt enligt VIES'), 'giltigt');
+  log('momsregistreringsnummer kontrolleras mot EU:s VIES och resultatet sparas på kunden');
+
   //@@NEXT@@
-  await browser.close(); mailServer.close();
+  await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 18: alla steg gick igenom');
 })().catch((e) => { console.error(e); process.exit(1); });

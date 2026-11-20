@@ -4,7 +4,7 @@ import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
 import { Flash, type SP } from '@/components/ui';
 import { CustomerFields, type CustomerRow } from '@/components/CustomerFields';
-import { saveCustomer, portal } from '../actions';
+import { saveCustomer, portal, viesCheck } from '../actions';
 import { requestOrigin } from '@/lib/server/origin';
 import { apEnabled } from '@/lib/server/peppol-ap';
 import { lookupCustomer } from '../../peppol/actions';
@@ -16,7 +16,7 @@ export default async function Customer({ params, searchParams }: { params: Promi
   const { company } = await requireCompany(cid, { perm: 'invoicing' });
   const [c] = await sql<CustomerRow[]>`SELECT * FROM customers WHERE id = ${Number(kid)} AND company_id = ${company.id}`;
   if (!c) notFound();
-  const [{ token }] = await sql<{ token: string | null }[]>`SELECT portal_token AS token FROM customers WHERE id = ${c.id}`;
+  const [{ token, vies_valid, vies_name, vies_at }] = await sql<{ token: string | null; vies_valid: boolean | null; vies_name: string; vies_at: string | null }[]>`SELECT portal_token AS token, vies_valid, vies_name, to_char(vies_checked_at,'YYYY-MM-DD') AS vies_at FROM customers WHERE id = ${c.id}`;
   const origin = await requestOrigin();
   return (
     <>
@@ -27,6 +27,8 @@ export default async function Customer({ params, searchParams }: { params: Promi
         <div><button>Spara</button></div>
       </form>
       {apEnabled() && <form action={lookupCustomer.bind(null, company.id, c.id)} className="actions"><button className="secondary">Slå upp i Peppol</button><span className="small muted">Kontrollerar om kunden kan ta emot e-faktura och sparar Peppol-ID:t.</span></form>}
+      {c.vat_number && <form action={viesCheck.bind(null, company.id, c.id)} className="actions vies"><button className="secondary">Kontrollera mot VIES</button>
+        <span className="small muted vies-status">{vies_at ? (vies_valid ? `✓ Giltigt enligt VIES ${vies_at}${vies_name ? ` – ${vies_name}` : ''}` : `⚠ Inte giltigt enligt VIES ${vies_at}`) : 'Momsregistreringsnumret är inte kontrollerat. Omvänd betalningsskyldighet inom EU kräver ett giltigt nummer.'}</span></form>}
       <h2>Kundportal</h2>
       <div className="card stack small">
         <p style={{ margin: 0 }}>En hemlig länk där kunden ser alla sina fakturor, betalar med kort (om kortbetalning är påslagen), godkänner offerter och uppdaterar sina kontaktuppgifter.</p>
