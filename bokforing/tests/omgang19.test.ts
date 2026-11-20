@@ -21,3 +21,18 @@ describe('Kundförluster', () => {
     expect(reserveProposal([], '2026-12-31', 150000).lines).toEqual([{ account: 6352, amount: -150000 }, { account: 1519, amount: 150000 }]);
   });
 });
+
+import { controlBalance, deadlines, distribution, equityFromBalances, parseAdjustments, warning } from '@/lib/capital-control';
+describe('Kontrollbalansräkning', () => {
+  it('eget kapital, obeskattade reserver efter skatt och kapitalbrist', () => {
+    const b = new Map([[2081, -2500000], [2091, 1000000], [2110, -500000], [5010, 1000000], [1930, 1000000]]);
+    const e = equityFromBalances(b);
+    expect(e).toMatchObject({ shareCapital: 2500000, equity: 500000, untaxed: 500000, result: -1000000 });
+    const c = controlBalance({ ...e, adjustments: [{ label: 'Övervärde', amount: 300000 }] });
+    expect(c).toMatchObject({ reserves: 397000, equity: 1197000, half: 1250000, deficit: true, restored: false });
+    expect(warning(b)).not.toBeNull();
+    expect(deadlines('2026-03-31').second).toBe('2026-11-30');
+    expect(parseAdjustments('Fastighet; 150 000\nLager: -20000,50')).toEqual([{ label: 'Fastighet', amount: 15000000 }, { label: 'Lager', amount: -2000050 }]);
+    expect(distribution(1000001, [{ name: 'A', pct: 60 }, { name: 'B', pct: 40 }]).map((x) => x.amount)).toEqual([600001, 400000]);
+  });
+});

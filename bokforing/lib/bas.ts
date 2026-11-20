@@ -30,6 +30,7 @@ const ACCOUNTS: Acc[] = [
   [2019, 'Årets resultat', 'EF'],
   [2081, 'Aktiekapital', 'AB'],
   [2091, 'Balanserad vinst eller förlust', 'AB'],
+  [2093, 'Erhållna aktieägartillskott', 'AB'],
   [2098, 'Vinst eller förlust från föregående år', 'AB'],
   [2099, 'Årets resultat', 'AB'],
   [2110, 'Periodiseringsfonder', 'AB'],

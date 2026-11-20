@@ -123,6 +123,58 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await owner.locator('.bd-current').innerText()) === '4000,00' && !(await owner.locator('button:has-text("Bokför reserven")').count()), 'reserven bokförd en gång');
   log('befarade kundförluster: förfallen faktura reserveras exklusive moms på 1519/6352 i bokslutet');
 
+  // ================= Del 2: kontrollbalansräkning =================
+  const KB = await newCompany('Kapitalbrist AB', 559400000);
+  await voucher(KB, 'Aktiekapital inbetalt', [[1930, 25000], [2081, -25000]], `${YEAR}-01-02`);
+  await voucher(KB, 'Stora förluster', [[5010, 20000], [1930, -20000]], `${YEAR}-02-01`);
+  await owner.goto(KB + '/bokslut');
+  await owner.locator(`tr:has-text("${YEAR}-01-01") a:has-text("Öppna")`).first().click();
+  await owner.waitForURL(/bokslut\/\d+/);
+  await owner.goto(owner.url().split('?')[0] + '/kontroller');
+  assert((await owner.$$eval('.qc-finding', (els) => els.map((e) => e.getAttribute('data-key')))).includes('capital:deficit'), 'kapitalbrist bland kontrollerna');
+  await owner.goto(KB + '/kontrollbalans');
+  assert(await owner.locator('.cb-warning').count() === 1 && nb(await owner.locator('.cb-equity').innerText()) === '5000,00', 'varning om kapitalbrist');
+  await owner.fill('.cb-draw textarea[name=adjustments]', 'Övervärde inventarier enligt värdering; 3000');
+  await owner.fill('.cb-draw input[name=audited_by]', 'Revisor Rut');
+  await owner.click('.cb-draw button:has-text("Upprätta")');
+  await owner.locator('text=visar kapitalbrist: eget kapital 8 000,00 kr understiger halva aktiekapitalet (12 500,00 kr)').waitFor();
+  await owner.selectOption('.cb-open select[name=outcome]', 'continue');
+  await owner.click('button:has-text("Registrera stämman")');
+  await owner.locator('text=Första kontrollstämman är registrerad').waitFor();
+  const second = await owner.locator('.cb-deadline').innerText();
+  const exp = new Date(); exp.setMonth(exp.getMonth() + 8);
+  assert(second.slice(0, 7) === exp.toISOString().slice(0, 7), 'andra stämman inom åtta månader: ' + second);
+  await owner.selectOption('.cb-open select[name=outcome]', 'restored');
+  await owner.click('button:has-text("Registrera stämman")');
+  await owner.locator('text=Upprätta först en ny kontrollbalansräkning').waitFor();
+  log('kapitalbrist: varning, kontrollbalansräkning med verkliga värden, första kontrollstämman och frist för den andra');
+
+  await voucher(KB, 'Ovillkorat aktieägartillskott', [[1930, 20000], [2093, -20000]]);
+  await owner.goto(KB + '/kontrollbalans');
+  await owner.click('.cb-draw button:has-text("Upprätta")');
+  await owner.locator('text=visar eget kapital 25 000,00 kr – ingen kapitalbrist').waitFor();
+  await owner.selectOption('.cb-open select[name=outcome]', 'restored');
+  await owner.click('button:has-text("Registrera stämman")');
+  await owner.locator('text=kapitalet är återställt').waitFor();
+  assert(!(await owner.locator('.cb-open').count()) && (await owner.locator('.cb-sheet').count()) === 2, 'två kontrollbalansräkningar, inget öppet ärende');
+  log('aktieägartillskott återställer kapitalet och andra kontrollstämman avslutar ärendet');
+
+  await owner.click('summary:has-text("Frivillig likvidation")');
+  await owner.fill('input[name=liquidator]', 'Lisa Likvidator');
+  await owner.click('button:has-text("Registrera likvidationsbeslut")');
+  await owner.locator('text=Likvidationsbeslutet är registrerat').waitFor();
+  await owner.selectOption('.cb-liquidation select[name=step]', 'final_report_on');
+  await owner.click('.cb-liquidation button:has-text("Registrera")');
+  await owner.locator('text=Kallelse på okända borgenärer ska ha kungjorts').waitFor();
+  await owner.selectOption('.cb-liquidation select[name=step]', 'creditor_notice_on');
+  await owner.click('.cb-liquidation button:has-text("Registrera")');
+  await owner.locator('text=Steget är registrerat').waitFor();
+  await owner.selectOption('.cb-liquidation select[name=step]', 'final_report_on');
+  await owner.click('.cb-liquidation button:has-text("Registrera")');
+  await owner.locator('text=Skifte kan ske tidigast').waitFor();
+  assert(nb(await owner.locator('.cb-net').innerText()) === '25000,00', 'att skifta');
+  log('likvidation: skifte först sex månader efter kallelsen på okända borgenärer, slutredovisning med nettotillgångar');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 19: alla steg gick igenom');

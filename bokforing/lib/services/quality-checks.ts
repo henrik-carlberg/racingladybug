@@ -26,6 +26,10 @@ export async function yearChecks(companyId: number, fyId: number) {
   const b = `/c/${companyId}`;
   const findings = qualityChecks({ end: f.end_date, balances, year, lastMovement: last, names }).map((x) => ({ ...x,
     href: x.key.startsWith('vat:') ? `${b}/rapporter/moms` : x.account ? `${b}/rapporter/huvudbok?account=${x.account}&from=${f.start_date}&to=${f.end_date}` : `${b}/rapporter` }));
+  const { capitalWarning } = await import('./capital-control');
+  const cw = await capitalWarning(companyId, f.end_date);
+  if (cw) findings.unshift({ key: 'capital:deficit', level: 'error', title: 'Eget kapital understiger halva aktiekapitalet', detail: `Bokfört eget kapital ${(cw.equity / 100).toLocaleString('sv-SE')} kr, aktiekapital ${(cw.shareCapital / 100).toLocaleString('sv-SE')} kr`,
+    action: 'Styrelsen ska genast upprätta en kontrollbalansräkning (aktiebolagslagen 25 kap.) och kalla till kontrollstämma om kapitalbristen kvarstår.', href: `${b}/kontrollbalans` });
   for (const i of await checkIntegrity(companyId)) if (i.severity === 'error')
     findings.unshift({ key: `integrity:${i.key}`, level: 'error', title: i.title, detail: i.detail, action: 'Rätta verifikationen innan bokslutet – bokföringen måste vara hel.', href: i.href ?? `${b}/verifikationer` });
   const acks = await sql<{ key: string; note: string; by: string | null; at: string }[]>`SELECT a.key, a.note, u.name AS by, to_char(a.acked_at,'YYYY-MM-DD') AS at
