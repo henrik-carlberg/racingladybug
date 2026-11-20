@@ -6,6 +6,7 @@ import { PasskeyLogin } from '@/components/Passkeys';
 import { signupOpen } from '@/lib/billing';
 import { bankidEnabled } from '@/lib/services/bankid';
 import { bankidLogin } from '../bankid-actions';
+import { ssoLogin } from '../sso-actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +26,13 @@ export default async function Login({ searchParams }: { searchParams: SP }) {
         <label>Lösenord<input name="password" type="password" required autoComplete="current-password" /></label>
         <button>Logga in</button>
       </form>
+      <details className="card sso">
+        <summary>Logga in med SSO (Microsoft Entra ID, Google Workspace)</summary>
+        <form action={ssoLogin} className="stack" style={{ marginTop: 8 }}>
+          <label>Jobbmejl<input name="email" type="email" required autoComplete="username" /></label>
+          <button className="secondary">Fortsätt till företagets inloggning</button>
+        </form>
+      </details>
       {(count === 0 || signupOpen()) && <p className="muted">Ny här? <Link href="/register">Skapa konto och prova gratis</Link></p>}
     </div>
   );

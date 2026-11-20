@@ -22,6 +22,37 @@ async function login(browser, email, password) {
 
 const mailServer = http.createServer((req, res) => { req.resume(); req.on('end', () => { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"id":"m1"}'); }); }).listen(3303);
 
+// Identitetsleverantör (OIDC) för företagsinloggning
+const crypto = require('node:crypto');
+const { privateKey: idpKey, publicKey: idpPub } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+const idpJwk = { ...idpPub.export({ format: 'jwk' }), kid: 'k1', alg: 'RS256', use: 'sig' };
+const IDP = 'http://localhost:3317';
+const idp = { codes: {}, amr: ['pwd', 'mfa'] };
+const b64u = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+const idpServer = http.createServer((req, res) => {
+  let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => {
+    const u = new URL(req.url, IDP);
+    const send = (c, j) => { res.writeHead(c, { 'content-type': 'application/json' }); res.end(JSON.stringify(j)); };
+    if (u.pathname === '/.well-known/openid-configuration') return send(200, { issuer: IDP, authorization_endpoint: `${IDP}/authorize`, token_endpoint: `${IDP}/token`, jwks_uri: `${IDP}/jwks` });
+    if (u.pathname === '/jwks') return send(200, { keys: [idpJwk] });
+    if (u.pathname === '/authorize') {
+      const code = crypto.randomBytes(8).toString('hex');
+      idp.codes[code] = { nonce: u.searchParams.get('nonce'), email: u.searchParams.get('login_hint'), client: u.searchParams.get('client_id'), challenge: u.searchParams.get('code_challenge') };
+      res.writeHead(302, { location: `${u.searchParams.get('redirect_uri')}?code=${code}&state=${encodeURIComponent(u.searchParams.get('state'))}` }); return res.end();
+    }
+    if (u.pathname === '/token' && req.method === 'POST') {
+      if (req.headers.authorization !== 'Basic ' + Buffer.from('bok-sso:sso-secret').toString('base64')) return send(401, { error: 'invalid_client' });
+      const p = new URLSearchParams(b); const c = idp.codes[p.get('code')]; delete idp.codes[p.get('code')];
+      if (!c || crypto.createHash('sha256').update(p.get('code_verifier') || '').digest('base64url') !== c.challenge) return send(400, { error: 'invalid_grant' });
+      const now = Math.floor(Date.now() / 1000);
+      const head = b64u({ alg: 'RS256', kid: 'k1', typ: 'JWT' }), body = b64u({ iss: IDP, aud: c.client, sub: 'u-' + c.email, email: c.email, email_verified: true, nonce: c.nonce, iat: now, exp: now + 300, amr: idp.amr });
+      const sig = crypto.sign('RSA-SHA256', Buffer.from(`${head}.${body}`), idpKey).toString('base64url');
+      return send(200, { access_token: 'at', token_type: 'Bearer', id_token: `${head}.${body}.${sig}` });
+    }
+    send(404, {});
+  });
+}).listen(3317);
+
 (async () => {
   const browser = await chromium.launch();
   const owner = await login(browser, 'agare@example.com', 'hemligtlosen1');
@@ -321,7 +352,110 @@ const mailServer = http.createServer((req, res) => { req.resume(); req.on('end',
   assert((await owner.locator(`tr.rec-row:has-text("${day(0).slice(0, 7)}") .rec-status`).innerText()) === 'Stämmer', 'stämmer');
   log('avstämning per månad mot Tullverkets besked och mot ruta 50/60 i bokföringen');
 
+  // ================= Del 5: företagsinloggning och åtkomstskydd =================
+  const S = B + '/installningar/inloggning';
+  const saveSso = async (page, enforce) => {
+    await page.goto(S);
+    await page.selectOption('select[name=provider]', 'oidc');
+    await page.fill('input[name=issuer]', IDP); await page.fill('input[name=client_id]', 'bok-sso');
+    if (await page.locator('.sso-status').count() === 0) await page.fill('input[name=client_secret]', 'sso-secret');
+    await page.fill('input[name=domains]', 'example.com');
+    if (enforce) await page.check('input[name=enforce]'); else await page.uncheck('input[name=enforce]');
+    await page.click('button:has-text("Koppla företagsinloggning"), form:has(input[name=client_id]) button:has-text("Spara")');
+  };
+  await saveSso(owner, false);
+  await owner.locator('text=Företagsinloggningen är sparad och leverantören svarar').waitFor();
+  assert((await owner.locator('.redirect-uri').innerText()).endsWith('/api/sso/callback'), 'omdirigeringsadress');
+  await saveSso(owner, true);
+  await owner.locator('.flash.error, .flash:has-text("Logga in med SSO en gång")').first().waitFor();
+  await owner.goto(S);
+  await owner.click('button:has-text("Kräv tvåstegsverifiering")');
+  await owner.locator('.flash.error, .flash:has-text("Logga in med tvåstegsverifiering")').first().waitFor();
+  log('SSO kopplas med leverantörens konfiguration – SSO- och tvåstegskrav går inte att slå på så att ägaren stänger ute sig själv');
+
+  const sso = await (await browser.newContext()).newPage();
+  sso.setDefaultTimeout(20000);
+  await sso.goto(BASE + '/login');
+  await sso.click('summary:has-text("Logga in med SSO")');
+  await sso.fill('details.sso input[name=email]', 'agare@example.com');
+  await sso.click('button:has-text("Fortsätt till företagets inloggning")');
+  await sso.waitForURL(BASE + '/c/1');
+  await sso.goto(BASE + '/login');
+  await sso.click('summary:has-text("Logga in med SSO")');
+  await sso.fill('details.sso input[name=email]', 'okand@example.com');
+  await sso.click('button:has-text("Fortsätt till företagets inloggning")');
+  await sso.locator('text=Det finns ingen företagsinloggning för e-postadressen').waitFor();
+  log('inloggning via bolagets identitetsleverantör (OIDC med PKCE) – bara befintliga användare i bolaget');
+
+  await sso.goto(S);
+  await sso.click('button:has-text("Kräv tvåstegsverifiering")');
+  await sso.locator('text=Alla måste nu använda tvåstegsverifiering i bolaget').waitFor();
+  await owner.goto(B);
+  await owner.waitForURL(/\/konto/);
+  assert((await text(owner)).includes('Bolaget kräver tvåstegsverifiering'), 'tvåstegskrav');
+  log('krav på tvåstegsverifiering per bolag: inloggning med bara lösenord skickas till kontot för att slå på den');
+
+  await saveSso(sso, true);
+  await sso.locator('text=Företagsinloggningen är sparad').waitFor();
+  const kons = await (await browser.newContext()).newPage();
+  kons.setDefaultTimeout(20000);
+  await kons.goto(BASE + '/login');
+  await kons.fill('form:has(input[name=password]) input[name=email]', 'konsult@example.com'); await kons.fill('input[name=password]', 'fel-lösenord');
+  await kons.click('form button:has-text("Logga in")');
+  await kons.locator('text=Fel e-post eller lösenord').waitFor();
+  await kons.fill('form:has(input[name=password]) input[name=email]', 'konsult@example.com'); await kons.fill('input[name=password]', 'konsultlosen1');
+  await kons.click('form button:has-text("Logga in")');
+  await kons.waitForURL(BASE + '/');
+  await kons.goto(B);
+  await kons.waitForURL(/\/\?error=/);
+  assert((await text(kons)).includes('Bolaget kräver att du loggar in med företagets inloggning (SSO)'), 'SSO-krav: ' + (await text(kons)).slice(0, 500));
+  log('krav på SSO för bolagets domäner – lösenordsinloggning släpps inte in i bolaget');
+
+  await sso.goto(S);
+  t = await text(sso);
+  assert(t.includes('Aktiva sessioner') && /konsult@example\.com/.test(t) && /Misslyckad \(Fel lösenord\)/.test(t) && /Agare|Ägare/.test(t), 'sessioner/logg: ' + t.slice(-3000));
+  assert((await sso.locator('tr.session:has-text("SSO") .muted:has-text("Den här")').count()) === 1, 'egen session');
+  await sso.locator('tr.session:has-text("konsult@example.com") button:has-text("Logga ut")').first().click();
+  await sso.locator('text=Sessionen är utloggad från bolaget').waitFor();
+  await kons.goto(B);
+  await kons.waitForURL(/\/\?error=/);
+  assert((await text(kons)).includes('Du har loggats ut från bolaget'), 'utloggad');
+  log('aktiva sessioner per bolag med fjärrutloggning och inloggningslogg med misslyckade försök');
+
+  await sso.setExtraHTTPHeaders({ 'x-real-ip': '203.0.113.10' });
+  await sso.goto(S);
+  await sso.fill('textarea[name=ip_allowlist]', '198.51.100.0/24');
+  await sso.click('button:has-text("Spara IP-begränsning")');
+  await sso.locator('text=Din nuvarande adress (203.0.113.10) finns inte med').waitFor();
+  await sso.fill('textarea[name=ip_allowlist]', '203.0.113.0/24\n198.51.100.0/24');
+  await sso.click('button:has-text("Spara IP-begränsning")');
+  await sso.locator('text=IP-begränsningen är sparad').waitFor();
+  await sso.setExtraHTTPHeaders({ 'x-real-ip': '192.0.2.50' });
+  await sso.goto(B);
+  await sso.waitForURL(/\/\?error=/);
+  assert((await text(sso)).includes('Bolaget tillåter bara inloggning från vissa nätverk'), 'IP-spärr');
+  await sso.setExtraHTTPHeaders({ 'x-real-ip': '198.51.100.7' });
+  await sso.goto(S);
+  await sso.fill('textarea[name=ip_allowlist]', '');
+  await sso.click('button:has-text("Spara IP-begränsning")');
+  await sso.locator('text=IP-begränsningen är sparad').waitFor();
+  log('IP-begränsning per bolag med skydd mot att stänga ute sig själv');
+
+  await sso.goto(BASE + '/konto/sessioner');
+  const before = await sso.locator('tr.my-session').count();
+  assert(before >= 2 && (await sso.locator('tr.my-session:has-text("Den här enheten")').count()) === 1, 'mina sessioner');
+  await sso.locator('tr.my-session button:has-text("Logga ut")').first().click();
+  await sso.locator('text=Sessionen är utloggad').waitFor();
+  assert((await sso.locator('tr.my-session').count()) === before - 1, 'en session mindre');
+  log('mina sessioner: se var kontot är inloggat och logga ut andra enheter');
+
+  await sso.goto(S);
+  await sso.click('button:has-text("Sluta kräva")');
+  await sso.locator('text=Tvåstegsverifiering krävs inte längre').waitFor();
+  await sso.click('button:has-text("Ta bort företagsinloggningen")');
+  await sso.locator('text=Företagsinloggningen är borttagen').waitFor();
+
   //@@NEXT@@
-  await browser.close(); mailServer.close();
+  await browser.close(); mailServer.close(); idpServer.close();
   console.log('Omgång 13: alla steg gick igenom');
 })().catch((e) => { console.error(e); process.exit(1); });

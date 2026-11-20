@@ -131,3 +131,44 @@ describe('Import och tull', () => {
     expect(reconcile({ decisions: 100, booked: 100, statement: 90 })).toMatchObject({ ok: false, diffStatement: -10 });
   });
 });
+
+import { amrHasMfa, deviceLabel, domainAllowed, emailFrom, ipAllowed, issuerFor, parseCidrs, parseDomains } from '@/lib/sso';
+describe('Företagsinloggning', () => {
+  it('utfärdare', () => {
+    expect(issuerFor('google', '')).toBe('https://accounts.google.com');
+    expect(issuerFor('entra', '11111111-2222-3333-4444-555555555555')).toBe('https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/v2.0');
+    expect(() => issuerFor('entra', 'contoso')).toThrow();
+    expect(issuerFor('oidc', 'https://idp.example.com/')).toBe('https://idp.example.com');
+    expect(() => issuerFor('oidc', 'http://idp.example.com')).toThrow();
+    expect(() => issuerFor('oidc', 'https://127.0.0.1')).toThrow();
+    expect(() => issuerFor('oidc', 'https://localhost')).toThrow();
+    expect(issuerFor('oidc', 'http://localhost:3317', true)).toBe('http://localhost:3317');
+  });
+  it('domäner och e-post', () => {
+    expect(parseDomains('Exempel.se, @dotter.exempel.se')).toEqual(['exempel.se', 'dotter.exempel.se']);
+    expect(() => parseDomains('gmail.com')).toThrow();
+    expect(() => parseDomains('inte en domän')).toThrow();
+    expect(emailFrom({ email: 'A@Exempel.se' }, 'google')).toBe('a@exempel.se');
+    expect(emailFrom({ email: 'a@exempel.se', email_verified: false }, 'google')).toBeNull();
+    expect(emailFrom({ preferred_username: 'b@exempel.se' }, 'entra')).toBe('b@exempel.se');
+    expect(domainAllowed('a@exempel.se', ['exempel.se'], { hd: 'exempel.se' }, 'google')).toBe(true);
+    expect(domainAllowed('a@exempel.se', ['exempel.se'], {}, 'google')).toBe(false);
+    expect(domainAllowed('a@annan.se', ['exempel.se'], {}, 'oidc')).toBe(false);
+    expect(amrHasMfa({ amr: ['pwd', 'mfa'] })).toBe(true);
+    expect(amrHasMfa({ amr: ['pwd'] })).toBe(false);
+  });
+  it('IP-begränsning', () => {
+    const l = parseCidrs('203.0.113.10\n198.51.100.0/24, 2001:db8::/32');
+    expect(ipAllowed('203.0.113.10', l)).toBe(true);
+    expect(ipAllowed('203.0.113.11', l)).toBe(false);
+    expect(ipAllowed('198.51.100.77', l)).toBe(true);
+    expect(ipAllowed('::ffff:198.51.100.1', l)).toBe(true);
+    expect(ipAllowed('2001:db8:1::5', l)).toBe(true);
+    expect(ipAllowed('2001:db9::1', l)).toBe(false);
+    expect(ipAllowed('okänd', l)).toBe(false);
+    expect(ipAllowed('1.2.3.4', [])).toBe(true);
+    expect(() => parseCidrs('10.0.0.0/4')).toThrow();
+    expect(() => parseCidrs('999.1.1.1')).toThrow();
+    expect(deviceLabel('Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 Chrome/120 Safari/537.36')).toBe('Chrome på Windows');
+  });
+});
