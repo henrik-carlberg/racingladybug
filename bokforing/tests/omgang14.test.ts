@@ -102,3 +102,31 @@ describe('Provisioner', () => {
     expect(selfInvoiceVat(100000, true)).toBe(25000);
   });
 });
+
+import { bicValid, chargeBearer, foreignPain001Xml, foreignPaymentError, ibanValid, rfValid } from '@/lib/foreign-pay';
+describe('Utlandsbetalningar', () => {
+  it('IBAN, BIC och RF-referens', () => {
+    expect(ibanValid('DE89 3704 0044 0532 0130 00')).toBe(true);
+    expect(ibanValid('GB82WEST12345698765432')).toBe(true);
+    expect(ibanValid('DE89370400440532013001')).toBe(false);
+    expect(bicValid('COBADEFFXXX')).toBe(true);
+    expect(bicValid('COBA DE')).toBe(false);
+    expect(rfValid('RF18 5390 0754 7034')).toBe(true);
+    expect(rfValid('RF19539007547034')).toBe(false);
+  });
+  it('avgiftsval och fil', () => {
+    expect(chargeBearer('EUR', 'DE89370400440532013000', 'OUR')).toBe('SLEV');
+    expect(chargeBearer('USD', 'GB82WEST12345698765432', 'OUR')).toBe('OUR');
+    const p = { id: 'UF1', name: 'Müller GmbH', country: 'DE', iban: 'DE89370400440532013000', bic: '', currency: 'EUR', amount: 123450, date: '2026-12-01', reference: 'RF18539007547034', chargeBearer: 'SLEV' as const, invoiceNumber: '9' };
+    expect(foreignPaymentError(p)).toBeNull();
+    expect(foreignPaymentError({ ...p, currency: 'USD', chargeBearer: 'SHA' })).toContain('BIC krävs');
+    const xml = foreignPain001Xml({ messageId: 'UB1', created: '2026-11-20T10:00:00', debtor: { name: 'Test & Co', orgnr: '556000-0000' }, sekAccount: { currency: 'SEK', iban: 'SE4550000000058398257466', bic: 'ESSESESS' },
+      accounts: [{ currency: 'EUR', iban: 'SE7280000810340009783242', bic: 'SWEDSESS' }], payments: [p] });
+    expect(xml).toContain('<InstdAmt Ccy="EUR">1234.50</InstdAmt>');
+    expect(xml).toContain('<ChrgBr>SLEV</ChrgBr>');
+    expect(xml).toContain('<SvcLvl><Cd>SEPA</Cd></SvcLvl>');
+    expect(xml).toContain('<IBAN>SE7280000810340009783242</IBAN></Id><Ccy>EUR</Ccy>');
+    expect(xml).toContain('<Issr>ISO</Issr></Tp><Ref>RF18539007547034</Ref>');
+    expect(xml).toContain('Test &amp; Co');
+  });
+});

@@ -326,6 +326,73 @@ const creditServer = http.createServer((req, res) => {
   assert(t.includes(`SF-${P}`) && t.includes('625,00'), 'självfaktura med moms: ' + t.slice(0, 1500));
   log('anställds provision läggs på lönespecen och agenten får en självfaktura med moms');
 
+  // ================= Del 5: utlandsbetalningar och valutakonton =================
+  await owner.goto(B + '/leverantorer');
+  await owner.fill('form:has(button:has-text("Spara leverantör")) input[name=name]', 'Müller GmbH');
+  await owner.click('button:has-text("Spara leverantör")');
+  await owner.waitForLoadState('networkidle');
+  await owner.goto(B + '/utlandsbetalningar');
+  const sf = owner.locator('form:has(button:has-text("Spara")):has(input[name=iban])');
+  await sf.locator('select[name=supplier_id]').selectOption({ label: 'Müller GmbH' });
+  await sf.locator('input[name=iban]').fill('DE89 3704 0044 0532 0130 01');
+  await sf.locator('button').click();
+  await owner.locator('.flash.error, .flash:has-text("Ogiltigt IBAN")').first().waitFor();
+  await owner.goto(B + '/utlandsbetalningar');
+  await sf.locator('select[name=supplier_id]').selectOption({ label: 'Müller GmbH' });
+  await sf.locator('input[name=iban]').fill('DE89 3704 0044 0532 0130 00');
+  await sf.locator('button').click();
+  await owner.locator('text=Uppgifterna för utlandsbetalning är sparade').waitFor();
+  assert((await owner.locator('tr.fsupplier:has-text("Müller GmbH")').innerText()).includes('DE89 3704 0044 0532 0130 00'), 'IBAN sparat');
+  log('leverantörens IBAN kontrolleras (mod 97) och sparas – första gången utan godkännande');
+
+  await owner.goto(B + '/leverantorsfakturor/ny');
+  await owner.selectOption('select[name=supplier_id]', { label: 'Müller GmbH' });
+  await owner.fill('input[name=invoice_number]', 'DE-2026-77');
+  await owner.fill('input[name=invoice_date]', day(2)); await owner.fill('input[name=due_date]', day(-10));
+  await owner.selectOption('select[name=currency]', 'EUR');
+  await owner.fill('input[name=total_currency]', '300'); await owner.fill('input[name=total]', '3450');
+  await owner.fill('input[name=account_0]', '4010'); await owner.fill('input[name=amount_0]', '3450');
+  await owner.click('button:has-text("Registrera och bokför")');
+  await owner.waitForURL(/leverantorsfakturor\/\d+\?ok/);
+  const siUrl = owner.url().split('?')[0];
+  const att = await login(browser, 'attest1.omg4@example.com', 'attestlosen11');
+  await att.goto(siUrl);
+  await att.click('button:has-text("Attestera")');
+  await att.locator('text=attesterad').first().waitFor();
+  await owner.goto(B + '/utlandsbetalningar');
+  t = await text(owner);
+  assert(/Müller GmbH DE-2026-77 .* 300,00 EUR 3[\s ]450,00 DE89/.test(t), 'att betala: ' + t.slice(0, 1500));
+  await owner.click('button:has-text("Skapa betalfil")');
+  await owner.locator('text=Betalfilen med 1 betalningar är skapad').waitFor();
+  const href = await owner.locator('a.download-batch').getAttribute('href');
+  const xml = await (await owner.context().request.get(BASE + href)).text();
+  assert(xml.includes('<InstdAmt Ccy="EUR">300.00</InstdAmt>') && xml.includes('<ChrgBr>SLEV</ChrgBr>') && xml.includes('<IBAN>DE89370400440532013000</IBAN>') && xml.includes('<Cd>SEPA</Cd>') && xml.includes('<IBAN>SE4550000000058398257466</IBAN></Id><Ccy>SEK</Ccy>'), 'pain.001 i euro: ' + xml.slice(0, 1500));
+  assert((await owner.locator('tr.payable').count()) === 0 && (await owner.locator('tr.fpayment.sent').count()) === 1, 'skickad');
+  log('betalfil pain.001 i euro: SEPA med delade avgifter, leverantörens IBAN och debitering från kronkontot');
+
+  const fp = owner.locator('tr.fpayment.sent');
+  await fp.locator('input[name=paid_sek]').fill('3500'); await fp.locator('input[name=fee]').fill('25');
+  await fp.locator('button:has-text("Avräkna")').click();
+  await owner.locator('text=Avräkningen är bokförd med kursdifferens och avgift').waitFor();
+  assert(nb(await owner.locator('tr.fpayment .settled').innerText()).includes('3500,00+avgift25,00·kursdiff50,00'), 'avräkning');
+  await owner.goto(B + '/rapporter/huvudbok?account=7960');
+  assert((await text(owner)).includes('DE-2026-77') , 'kursförlust');
+  await owner.goto(B + '/rapporter/huvudbok?account=6570');
+  assert((await text(owner)).includes('Bankavgift utlandsbetalning (EUR)'), 'bankavgift');
+  await owner.goto(siUrl);
+  assert((await text(owner)).includes('Betald'), 'fakturan är betald');
+  log('bankens avräkning: dragna kronor reglerar skulden med kursförlust och avgiften bokförs på 6570');
+
+  await owner.goto(B + '/utlandsbetalningar');
+  await sf.locator('select[name=supplier_id]').selectOption({ label: 'Müller GmbH' });
+  await sf.locator('input[name=iban]').fill('GB82 WEST 1234 5698 7654 32');
+  await sf.locator('input[name=bic]').fill('NWBKGB2L');
+  await sf.locator('button').click();
+  await owner.locator('text=gäller när en annan behörig person har godkänt').waitFor();
+  t = await text(owner);
+  assert(t.includes('Nya bankuppgifter väntar på godkännande') && t.includes('DE89 3704'), 'nytt IBAN väntar: ' + t.slice(-1500));
+  log('ett ändrat IBAN eller BIC gäller först när en annan behörig person har godkänt det');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); creditServer.close();
   console.log('Omgång 14: alla steg gick igenom');

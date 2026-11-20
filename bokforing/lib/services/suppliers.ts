@@ -66,13 +66,13 @@ export async function updateSupplier(actor: Actor, id: number, input: Record<str
   const f = readSupplier(input, true);
   return sql.begin(async (tx) => {
     // Nya bankuppgifter gäller först när en annan behörig person har godkänt dem (skydd mot bedrägerier)
-    const [cur] = await tx<{ name: string; bankgiro: string; plusgiro: string; bank_account: string }[]>`SELECT name, bankgiro, plusgiro, bank_account FROM suppliers WHERE id = ${id} AND company_id = ${actor.companyId} FOR UPDATE`;
+    const [cur] = await tx<{ name: string; bankgiro: string; plusgiro: string; bank_account: string; iban: string; bic: string }[]>`SELECT name, bankgiro, plusgiro, bank_account, iban, bic FROM suppliers WHERE id = ${id} AND company_id = ${actor.companyId} FOR UPDATE`;
     if (!cur) throw new NotFoundError('Leverantören');
     const changed = bankChanges(cur, f as never);
     let pending = false;
     if (Object.keys(changed).length) {
       for (const k of BANK_FIELDS) delete f[k];
-      await requestBankChange(tx, actor, id, cur.name, { bankgiro: cur.bankgiro, plusgiro: cur.plusgiro, bank_account: cur.bank_account }, changed);
+      await requestBankChange(tx, actor, id, cur.name, { bankgiro: cur.bankgiro, plusgiro: cur.plusgiro, bank_account: cur.bank_account, iban: cur.iban, bic: cur.bic }, changed);
       pending = true;
     }
     const r = Object.keys(f).length
