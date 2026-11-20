@@ -198,6 +198,12 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await text(owner)).includes('13333,33'), 'förlustreserv: ' + (await text(owner)).slice(0, 1000));
   await owner.goto(B + '/rapporter/huvudbok?account=1620');
   assert(nb(await text(owner)).includes('3333,33'), 'bara förändringen bokförs');
+  // Ingen bokning före en tidigare bokning
+  await owner.goto(B + '/successiv?date=2020-01-01');
+  if (await owner.locator('button:has-text("Bokför per"):not([disabled])').count()) {
+    await owner.click('button:has-text("Bokför per")');
+    await owner.locator('text=Det finns redan en bokning per').waitFor();
+  }
   log('befarad förlust reserveras direkt (4995/2290) och varje bokslut bokför bara förändringen');
 
   // ================= Del 4: abonnemangsintäkter =================
