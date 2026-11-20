@@ -28,16 +28,16 @@ export function parseTaxAccount(text: string): TaxRow[] {
 }
 
 /** Föreslaget motkonto mot 1630. 'bank' = betalning till/från banken som stäms av via bankavstämningen. */
-export function suggestAccount(text: string, companyType: 'AB' | 'EF'): number | 'bank' | null {
+export function suggestAccount(text: string, companyType: 'AB' | 'EF' | 'HB' | 'KB'): number | 'bank' | null {
   const t = text.toLowerCase();
   if (/inbetalning|utbetalning|återbetalning till/.test(t)) return 'bank';
   if (/moms/.test(t)) return 2650;
   if (/arbetsgivaravgift/.test(t)) return 2731;
   if (/avdragen skatt|källskatt|skatteavdrag/.test(t)) return 2710;
-  if (/preliminärskatt|prel\. ?skatt|debiterad prel/.test(t)) return companyType === 'AB' ? 2518 : 2012;
+  if (/preliminärskatt|prel\. ?skatt|debiterad prel/.test(t)) return companyType === 'AB' ? 2518 : companyType === 'EF' ? 2012 : null;
   if (/intäktsränta/.test(t)) return 8314;
   if (/kostnadsränta/.test(t)) return 8423;
   if (/förseningsavgift|avgift/.test(t)) return 6992;
-  if (/slutlig skatt|kvarskatt/.test(t)) return companyType === 'AB' ? 2518 : 2012;
+  if (/slutlig skatt|kvarskatt/.test(t)) return companyType === 'AB' ? 2518 : companyType === 'EF' ? 2012 : null;
   return null;
 }

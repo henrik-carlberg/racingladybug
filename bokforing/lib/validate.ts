@@ -45,7 +45,7 @@ export function normalizeOrgNumber(input: string): string | null {
 }
 
 /** 12-siffrigt ID för AGI: organisationsnummer med prefix 16, eller personnummer för enskild firma */
-export function agiId(orgnr: string, companyType: 'AB' | 'EF', ownerPersonalNumber?: string): string {
+export function agiId(orgnr: string, companyType: 'AB' | 'EF' | 'HB' | 'KB', ownerPersonalNumber?: string): string {
   if (companyType === 'EF' && ownerPersonalNumber) return ownerPersonalNumber;
   return '16' + orgnr.replace(/\D/g, '').slice(-10);
 }

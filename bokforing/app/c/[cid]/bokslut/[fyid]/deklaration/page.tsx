@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { requireCompany } from '@/lib/server/auth';
 import { NotFoundError } from '@/lib/errors';
 import { taxForms } from '@/lib/services/taxreports';
@@ -13,6 +13,8 @@ export const dynamic = 'force-dynamic';
 export default async function TaxReturn({ params }: { params: Promise<{ cid: string; fyid: string }> }) {
   const { cid, fyid } = await params;
   const { company } = await requireCompany(cid, { perm: 'ledger' });
+  // Handels- och kommanditbolag: INK4 och delägarnas N3B finns under Delägare
+  if (company.company_type === 'HB' || company.company_type === 'KB') redirect(`/c/${company.id}/delagare?fy=${encodeURIComponent(fyid)}`);
   const f = await taxForms(company.id, Number(fyid)).catch((e) => { if (e instanceof NotFoundError) notFound(); throw e; });
   const b = `/c/${company.id}/bokslut/${f.fy.id}`;
   const unmapped = f.type === 'AB' ? f.ink2.unmapped : f.ne.unmapped;

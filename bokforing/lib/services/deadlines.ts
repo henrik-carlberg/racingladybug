@@ -10,7 +10,7 @@ export interface DeadlineStatus extends Deadline { status: 'done' | 'overdue' | 
 /** Deadlines för bolaget med status. Förberedelser som appen ser visas via deadlinePrep. */
 export async function companyDeadlines(companyId: number, opts: { from?: string; to?: string } = {}): Promise<DeadlineStatus[]> {
   const t = today();
-  const [c] = await sql<{ company_type: 'AB' | 'EF'; vat_period: 'month' | 'quarter' | 'year'; f_skatt: boolean; prelskatt_from: string | null; setup: Record<string, unknown>; created: string }[]>`
+  const [c] = await sql<{ company_type: 'AB' | 'EF' | 'HB' | 'KB'; vat_period: 'month' | 'quarter' | 'year'; f_skatt: boolean; prelskatt_from: string | null; setup: Record<string, unknown>; created: string }[]>`
     SELECT company_type, vat_period, f_skatt, prelskatt_from, setup, to_char(created_at,'YYYY-MM-DD') AS created FROM companies WHERE id = ${companyId}`;
   const fys = await sql<{ id: number; start: string; end: string; closed: boolean }[]>`
     SELECT id, to_char(start_date,'YYYY-MM-DD') AS start, to_char(end_date,'YYYY-MM-DD') AS end, closed FROM fiscal_years WHERE company_id = ${companyId} ORDER BY start_date`;

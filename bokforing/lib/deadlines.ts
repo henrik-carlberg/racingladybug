@@ -45,7 +45,7 @@ function twelfth(y: number, m: number): string {
   return nextWorkingDay(iso(y, m, m === 1 || m === 8 ? 17 : 12));
 }
 
-export type DeadlineKind = 'vat' | 'agi' | 'prelskatt' | 'ink2' | 'ink1' | 'arsstamma' | 'arsredovisning' | 'bokslut';
+export type DeadlineKind = 'vat' | 'agi' | 'prelskatt' | 'ink2' | 'ink1' | 'ink4' | 'arsstamma' | 'arsredovisning' | 'bokslut';
 
 export interface Deadline {
   key: string; // unik per bolag, t.ex. vat:2026-04-01:2026-06-30
@@ -58,7 +58,7 @@ export interface Deadline {
 }
 
 export interface DeadlineInput {
-  companyType: 'AB' | 'EF';
+  companyType: 'AB' | 'EF' | 'HB' | 'KB';
   vatPeriod: 'month' | 'quarter' | 'year';
   fiscalYears: { start: string; end: string }[];
   hasEmployees: boolean;
@@ -82,7 +82,7 @@ export function ink2Due(fyEnd: string): string {
 }
 
 /** Årlig momsdeklaration utan EU-handel, elektroniskt */
-export function yearlyVatDue(type: 'AB' | 'EF', fyEnd: string): string {
+export function yearlyVatDue(type: 'AB' | 'EF' | 'HB' | 'KB', fyEnd: string): string {
   const y = Number(fyEnd.slice(0, 4)), m = Number(fyEnd.slice(5, 7));
   if (type === 'EF') return nextWorkingDay(iso(y + 1, 5, 12));
   if (m <= 4) return nextWorkingDay(iso(y, 12, 12));
@@ -133,7 +133,7 @@ export function computeDeadlines(o: DeadlineInput): Deadline[] {
   }
 
   // Debiterad preliminärskatt (F-skatt) – varje månad
-  if (o.fSkatt) {
+  if (o.fSkatt && o.companyType !== 'HB' && o.companyType !== 'KB') {
     for (let y = fromY; y <= toY; y++) for (let m = 1; m <= 12; m++) {
       if (o.fSkattFrom && `${y}-${pad(m)}` < o.fSkattFrom) continue;
       out.push({ key: `prel:${y}-${pad(m)}`, kind: 'prelskatt', title: `Preliminärskatt ${MONTHS[m - 1]} ${y}`, due: twelfth(y, m),
@@ -156,6 +156,11 @@ export function computeDeadlines(o: DeadlineInput): Deadline[] {
     } else {
       out.push({ key: `bokslut:${f.end}`, kind: 'bokslut', title: `Årsbokslut ${year} klart`, due: plus(6), periodStart: f.start, periodEnd: f.end,
         help: 'Årsbokslutet (förenklat om omsättningen normalt är högst 3 Mkr) ska vara upprättat inom sex månader (BFL 6:7).' });
+      if (o.companyType === 'HB' || o.companyType === 'KB') {
+        out.push({ key: `ink4:${f.end}`, kind: 'ink4', title: `Inkomstdeklaration 4 för ${year}`, due: nextWorkingDay(iso(y + 1, 5, 2)), periodStart: f.start, periodEnd: f.end,
+          help: 'Bolaget lämnar INK4 med räkenskapsschema (INK4R) och skattemässiga justeringar (INK4S). Delägarna redovisar sin andel på N3B i sina egna deklarationer.' });
+        continue;
+      }
       out.push({ key: `ink1:${f.end}`, kind: 'ink1', title: `Inkomstdeklaration 1 med NE-bilaga för ${year}`, due: nextWorkingDay(iso(y + 1, 5, 2)), periodStart: f.start, periodEnd: f.end,
         help: 'Deklarera näringsverksamheten på NE-bilagan i din privata deklaration. Med redovisningskonsult kan byråanstånd ge mer tid.' });
     }

@@ -294,7 +294,7 @@ export async function buildAgiForRun(actor: Actor, runId: number): Promise<{ fil
   const [run] = await sql<{ period: string; status: string }[]>`SELECT period, status FROM payroll_runs WHERE id = ${runId} AND company_id = ${actor.companyId}`;
   if (!run) throw new NotFoundError('Lönekörningen');
   if (run.status !== 'booked') throw new ConflictError('Lönekörningen måste bokföras innan AGI kan skapas');
-  const [company] = await sql<{ orgnr: string; company_type: 'AB' | 'EF'; phone: string }[]>`SELECT orgnr, company_type, phone FROM companies WHERE id = ${actor.companyId}`;
+  const [company] = await sql<{ orgnr: string; company_type: 'AB' | 'EF' | 'HB' | 'KB'; phone: string }[]>`SELECT orgnr, company_type, phone FROM companies WHERE id = ${actor.companyId}`;
   if (!company.phone) throw new ValidationError('Ange telefonnummer under Inställningar – det krävs som kontaktuppgift i AGI');
   const [user] = await sql<{ name: string; email: string }[]>`SELECT name, email FROM users WHERE id = ${actor.userId}`;
   const slips = await sql<{ personal_number: string; gross: number; benefits: number; tax: number; fee: number }[]>`

@@ -281,6 +281,9 @@ export async function bookInvoice(actor: Actor, invoiceId: number): Promise<Invo
     // Faktura till ett koncernbolag blir en leverantörsfaktura hos mottagaren
     const { mirrorInvoice } = await import('./intercompany');
     await mirrorInvoice(actor.companyId, invoiceId).catch((e) => console.error('koncernfaktura', e instanceof Error ? e.message : e));
+    // Faktura med tjänsteperiod (t.ex. årsabonnemang) periodiseras via förutbetalda intäkter
+    const { deferIfNeeded } = await import('./revenue');
+    await deferIfNeeded(actor, invoiceId).catch((e) => console.error('periodisering', e instanceof Error ? e.message : e));
     return out;
   });
 }
@@ -407,6 +410,11 @@ export async function creditInvoice(actor: Actor, invoiceId: number, input: Reco
     await auditBy(tx, actor, 'credit', 'invoice', invoiceId, { credit_invoice: no });
     const out = await fetchInvoice(tx, actor.companyId, creditId);
     await emit(tx, actor.companyId, 'invoice.credited', out);
+    return out;
+  }).then(async (out) => {
+    // Periodiserad faktura: återstående förutbetalda intäkter förs tillbaka
+    const { cancelForCredit } = await import('./revenue');
+    await cancelForCredit(actor, invoiceId, (out as { invoice_date: string }).invoice_date).catch((e) => console.error('periodisering kreditering', e instanceof Error ? e.message : e));
     return out;
   });
 }

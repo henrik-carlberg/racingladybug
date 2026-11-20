@@ -32,6 +32,7 @@ export function buildNav(o: {
       { path: '/tid', label: '⏱ Tidrapportering' },
       { path: '/uppdrag', label: 'Uppdrag & timbanker' },
       { path: '/tid/belaggning', label: 'Beläggning' },
+      { path: '/successiv', label: 'Fastprisuppdrag', perm: 'ledger', hint: 'Successiv vinstavräkning med färdigställandegrad och förlustreserv' },
     ]) },
     { id: 'kop', label: t('Köpa och betala'), icon: 'inbox', items: items([
       { path: '/leverantorsfakturor/inkorg', label: 'Inkorg för fakturor', perm: 'purchasing', hint: 'Fakturor som kommit in via e-post och Peppol' },
@@ -74,6 +75,7 @@ export function buildNav(o: {
       { path: '/rapporter/panel', label: 'Instrumentpanel', hint: 'Diagram och nyckeltal' },
       { path: '/rapporter/manad', label: 'Månadsrapport' },
       { path: '/nyckeltal', label: 'Nyckeltal', perm: 'ledger', hint: 'För vd, ekonomi och styrelse' },
+      { path: '/intaktsplan', label: 'Återkommande intäkter', perm: 'ledger', hint: 'Periodiserade abonnemang, MRR, ARR och churn' },
       { path: '/rapporter/egna', label: 'Egna rapporter', perm: 'ledger', hint: 'Bygg och dela egna rapporter' },
       { path: '/koncerninternt', label: 'Koncerninterna flöden', perm: 'ledger', hint: 'Speglade fakturor, mellanhavanden och koncernavgifter' },
       { path: '/klimat', label: 'Klimatbokföring', perm: 'ledger', hint: 'Utsläpp ur bokföringen per scope' },
@@ -83,6 +85,7 @@ export function buildNav(o: {
       { path: '/rapporter/eu', label: 'EU-handel' },
       { path: '/rapporter/huvudbok', label: 'Huvudbok' },
       { path: '/rapporter/dimensioner', label: 'Resultat per dimension' },
+      { path: '/kostnadsfordelning', label: 'Kostnadsfördelning', perm: 'ledger', hint: 'Fördelningsnycklar, interna debiteringar och täckningsbidrag per avdelning' },
       { path: '/rapporter/export', label: 'Export (SIE)' },
       { path: '/rapporter/utskick', label: 'Schemalagda rapporter', perm: 'ledger', hint: 'Resultat och balans som Excel varje månad' },
     ]) },

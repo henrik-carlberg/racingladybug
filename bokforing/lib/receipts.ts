@@ -47,7 +47,7 @@ export const RECEIPT_CATEGORIES: ReceiptCategory[] = [
 export type PaidWith = 'company' | 'private';
 
 /** Konto som krediteras: företagets bankkonto, eller skuld till ägaren (AB) / egen insättning (EF) vid privat utlägg */
-export function paymentAccount(paidWith: PaidWith, companyType: 'AB' | 'EF'): number {
+export function paymentAccount(paidWith: PaidWith, companyType: 'AB' | 'EF' | 'HB' | 'KB'): number {
   if (paidWith === 'company') return 1930;
   return companyType === 'AB' ? 2893 : 2018;
 }
@@ -58,7 +58,7 @@ export interface ReceiptInput {
   vatRate: 0 | 6 | 12 | 25;
   persons?: number; // representation
   paidWith: PaidWith;
-  companyType: 'AB' | 'EF';
+  companyType: 'AB' | 'EF' | 'HB' | 'KB';
   description?: string;
 }
 

@@ -11,7 +11,7 @@ import type { Actor } from './actor';
 export async function importTaxAccount(actor: Actor, text: string) {
   const rows = parseTaxAccount(text);
   if (!rows.length) throw new ValidationError('Inga transaktioner hittades i filen');
-  const [c] = await sql<{ company_type: 'AB' | 'EF' }[]>`SELECT company_type FROM companies WHERE id = ${actor.companyId}`;
+  const [c] = await sql<{ company_type: 'AB' | 'EF' | 'HB' | 'KB' }[]>`SELECT company_type FROM companies WHERE id = ${actor.companyId}`;
   let added = 0;
   const seen = new Map<string, number>();
   for (const r of rows) {
@@ -28,7 +28,7 @@ export async function importTaxAccount(actor: Actor, text: string) {
 }
 
 export async function listTaxAccount(companyId: number) {
-  const [c] = await sql<{ company_type: 'AB' | 'EF' }[]>`SELECT company_type FROM companies WHERE id = ${companyId}`;
+  const [c] = await sql<{ company_type: 'AB' | 'EF' | 'HB' | 'KB' }[]>`SELECT company_type FROM companies WHERE id = ${companyId}`;
   const rows = await sql<{ id: number; date: string; text: string; amount: number; balance: number | null; status: string; voucher_id: number | null }[]>`
     SELECT id, to_char(date,'YYYY-MM-DD') AS date, text, amount, balance, status, voucher_id FROM tax_account_entries
     WHERE company_id = ${companyId} ORDER BY date DESC, seq DESC, id DESC LIMIT 500`;

@@ -9,7 +9,7 @@ export function OpeningBalanceForm({ action, accounts, years, companyType }: {
   action: (s: State, fd: FormData) => Promise<State>;
   accounts: Acc[];
   years: { id: number; label: string }[];
-  companyType: 'AB' | 'EF';
+  companyType: 'AB' | 'EF' | 'HB' | 'KB';
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const [values, setValues] = useState<Record<number, string>>({});
