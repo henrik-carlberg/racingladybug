@@ -26,8 +26,11 @@ export async function recomputeSlip(tx: Tx, slipId: number): Promise<PayslipCalc
     SELECT p.items, e.pension_percent, e.pension_plan, a.fora_insurance_percent AS fora, e.personal_number, e.tax_mode, e.tax_table, e.tax_column, e.tax_percent, e.fee_override,
       to_char(r.payment_date,'YYYY-MM-DD') AS payment_date, e.first_name || ' ' || e.last_name AS name
     FROM payslips p JOIN employees e ON e.id = p.employee_id JOIN payroll_runs r ON r.id = p.run_id LEFT JOIN collective_agreements a ON a.id = e.agreement_id WHERE p.id = ${slipId}`;
+  const [sp] = await tx<{ kind: 'expert' | 'sink'; valid_from: string; valid_to: string }[]>`SELECT t.kind, to_char(t.valid_from,'YYYY-MM-DD') AS valid_from, to_char(t.valid_to,'YYYY-MM-DD') AS valid_to
+    FROM employee_special_tax t JOIN payslips p ON p.employee_id = t.employee_id WHERE p.id = ${slipId}`;
+  const special = sp && s.payment_date >= sp.valid_from && s.payment_date <= sp.valid_to ? sp.kind : null;
   let rows: TaxTableRow[] = [];
-  if (s.tax_mode === 'table') {
+  if (s.tax_mode === 'table' && special !== 'sink') {
     if (!s.tax_table) throw new Error(`${s.name}: skattetabell saknas på den anställda`);
     const year = Number(s.payment_date.slice(0, 4));
     rows = await tx<TaxTableRow[]>`SELECT income_from, income_to, kind, columns FROM tax_table_rows WHERE year = ${year} AND table_no = ${s.tax_table}`;
@@ -39,6 +42,7 @@ export async function recomputeSlip(tx: Tx, slipId: number): Promise<PayslipCalc
     birthYearFromPersonalNumber(s.personal_number),
     s.payment_date,
     s.fee_override != null ? Number(s.fee_override) : null,
+    special,
   );
   // Pensionsgrundande lön är lönen före löneväxling; den växlade lönen blir premie med uppräkning
   const year = Number(s.payment_date.slice(0, 4));
@@ -48,7 +52,8 @@ export async function recomputeSlip(tx: Tx, slipId: number): Promise<PayslipCalc
   const pen = { premium, slp: Math.round((premium * SLP_RATE) / 100) };
   const insurance = s.pension_plan === 'saf_lo' && s.fora ? Math.round((c.grossCash * Number(s.fora)) / 100) : 0;
   await tx`UPDATE payslips SET pension = ${pen.premium}, pension_tax = ${pen.slp}, insurance = ${insurance}, gross_cash = ${c.grossCash}, benefits = ${c.benefits}, tax = ${c.tax}, net_deductions = ${c.netDeductions},
-    reimbursements = ${c.reimbursements}, net_pay = ${c.netPay}, employer_fee_rate = ${c.employerFeeRate}, employer_fee = ${c.employerFee}
+    reimbursements = ${c.reimbursements}, net_pay = ${c.netPay}, employer_fee_rate = ${c.employerFeeRate}, employer_fee = ${c.employerFee},
+    tax_kind = ${c.taxKind}, tax_exempt_cash = ${c.exemptCash}, tax_exempt_benefits = ${c.exemptBenefits}
     WHERE id = ${slipId}`;
   return c;
 }

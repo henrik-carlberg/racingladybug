@@ -14,3 +14,28 @@ describe('Ränteavdragsbegränsning', () => {
     expect(old[1]).toMatchObject({ expired: 450000000, savedOut: 0 });
   });
 });
+
+import { calculatePayslip } from '@/lib/payroll';
+import { buildAgiXml } from '@/lib/agi';
+import { validate } from '@/lib/special-tax';
+describe('Expertskatt och SINK', () => {
+  const items = [{ type: 'salary' as const, code: 'monthly', description: 'Lön', amount: 4000000 }, { type: 'benefit' as const, code: 'car', description: 'Bil', amount: 400000 }];
+  it('expertskatt: en fjärdedel skattefri, även för avgifterna', () => {
+    const c = calculatePayslip(items, { mode: 'percent', percent: 30 }, 1985, '2026-11-25', null, 'expert');
+    expect(c).toMatchObject({ taxKind: 'expert', exemptCash: 1000000, exemptBenefits: 100000, taxable: 3300000 });
+    expect(c.employerFee).toBe(Math.round(3300000 * 0.3142));
+  });
+  it('SINK: 25 % i hela kronor och ruta 274', () => {
+    const c = calculatePayslip(items, { mode: 'table', rows: [] }, 1985, '2026-11-25', null, 'sink');
+    expect(c).toMatchObject({ taxKind: 'sink', tax: 1100000, taxable: 4400000 });
+    const xml = buildAgiXml({ period: '2026-11', employer: { agId: '165560000000', contactName: 'A', contactPhone: '1', contactEmail: 'a@b.se' }, totalEmployerFees: 0, totalTax: 1100000,
+      individuals: [{ personalNumber: '198112189876', specNumber: 1, grossCash: 4000000, benefits: 400000, tax: 0, sinkTax: 1100000 }] });
+    expect(xml).toContain('<agd:AvdrSkattSINK faltkod="274">11000</agd:AvdrSkattSINK>');
+    expect(xml).not.toContain('faltkod="001"');
+  });
+  it('giltighet', () => {
+    expect(validate('expert', '2026-01-01', '2030-12-31')).toBeNull();
+    expect(validate('expert', '2026-01-01', '2031-01-01')).toMatch(/högst 5 år/);
+    expect(validate('sink', '2026-01-01', '2027-01-31')).toMatch(/ett inkomstår/);
+  });
+});

@@ -106,6 +106,10 @@ export interface PayslipCalc {
   employerFee: number;
   employerFeeRate: number;
   feeRule: string;
+  /** normal, expertskatt (25 % skattefritt) eller SINK (25 % särskild inkomstskatt) */
+  taxKind: 'normal' | 'expert' | 'sink';
+  exemptCash: number;
+  exemptBenefits: number;
 }
 
 export interface TaxSetup {
@@ -121,16 +125,20 @@ export function calculatePayslip(
   birthYear: number,
   paymentDate: string,
   feeOverride?: number | null,
+  special?: 'expert' | 'sink' | null,
 ): PayslipCalc {
   const by = (t: PayItemType) => items.filter((i) => i.type === t).reduce((s, i) => s + i.amount, 0);
   const grossCash = by('salary');
   const benefits = by('benefit');
   const netDeductions = by('net_deduction');
   const reimbursements = by('reimbursement');
-  const taxable = grossCash + benefits;
+  let taxable = grossCash + benefits;
+  let exemptCash = 0, exemptBenefits = 0;
+  if (special === 'expert') { exemptCash = Math.round(grossCash * 0.25); exemptBenefits = Math.round(benefits * 0.25); taxable -= exemptCash + exemptBenefits; }
 
   let taxAmount: number;
-  if (tax.mode === 'percent') taxAmount = taxFromPercent(taxable, tax.percent ?? 30);
+  if (special === 'sink') taxAmount = Math.floor((taxable * 25) / 10000) * 100;
+  else if (tax.mode === 'percent') taxAmount = taxFromPercent(taxable, tax.percent ?? 30);
   else {
     if (!tax.rows || tax.rows.length === 0) throw new Error('Skattetabell saknas – hämta skattetabeller under Lön → Skattetabeller');
     taxAmount = taxFromTable(taxable, tax.rows, tax.column ?? 1);
@@ -150,6 +158,9 @@ export function calculatePayslip(
     employerFee: fee.fee,
     employerFeeRate: fee.effectiveRate,
     feeRule: fee.rule,
+    taxKind: special ?? 'normal',
+    exemptCash,
+    exemptBenefits,
   };
 }
 

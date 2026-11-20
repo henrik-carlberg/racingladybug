@@ -102,6 +102,48 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(await il(YEAR, 'il-used') === '4500000,00' && await il(YEAR, 'il-saved') === '0,00', 'sparat räntenetto används inom EBITDA-utrymmet');
   log('ränteavdragsbegränsning: 30 % av skattemässig EBITDA, förenklingsregeln 5 mkr och sparat negativt räntenetto som används när det finns utrymme');
 
+  // ================= Del 2: expertskatt och SINK =================
+  const SK = await newCompany('Internationella AB', 559020000);
+  await owner.goto(SK + '/installningar');
+  await owner.fill('input[name=phone]', '08-123456');
+  await owner.click('form:has(input[name=phone]) button:has-text("Spara")');
+  await owner.waitForURL(/ok=/);
+  const emp = async (first, last, pn) => {
+    await owner.goto(SK + '/lon/anstallda');
+    await owner.fill('input[name=first_name]', first); await owner.fill('input[name=last_name]', last);
+    await owner.fill('input[name=personal_number]', pn); await owner.fill('input[name=monthly_salary]', '40000'); await owner.fill('input[name=tax_table]', '32');
+    await owner.click('form:has(input[name=first_name]) button:has-text("Spara")');
+    await owner.waitForURL(/ok=/);
+  };
+  await emp('Eva', 'Expert', '19811218-9876');
+  await emp('Sam', 'Sink', '19' + orgnrFor('790315123'));
+  const decide = async (name, kind, from, to) => {
+    await owner.goto(SK + '/lon/sarskild-skatt');
+    const r = owner.locator(`.st-row[data-name="${name}"]`);
+    await r.locator('select[name=kind]').selectOption(kind); await r.locator('input[name=decision]').fill('FSN 123');
+    await r.locator('input[name=valid_from]').fill(from); await r.locator('input[name=valid_to]').fill(to);
+    await r.locator('button:has-text("Spara")').click();
+    await owner.locator('.flash').first().waitFor();
+    return owner.locator('.flash').first().innerText();
+  };
+  assert((await decide('Eva Expert', 'expert', `${YEAR}-01-01`, `${YEAR + 6}-01-01`)).includes('högst 5 år'), 'expertskatt längst fem år');
+  await decide('Eva Expert', 'expert', `${YEAR}-01-01`, `${YEAR + 4}-12-31`);
+  await decide('Sam Sink', 'sink', `${YEAR}-01-01`, `${YEAR}-12-31`);
+  await owner.goto(SK + '/lon');
+  await owner.fill('input[name=period]', `${YEAR}-${String(MONTH).padStart(2, '0')}`);
+  await owner.fill('input[name=payment_date]', day(0));
+  await owner.click('button:has-text("Ny lönekörning")');
+  await owner.waitForURL(/lon\/\d+\?ok/);
+  const runUrl = owner.url().split('?')[0];
+  await owner.click('button:has-text("Bokför lönekörning")');
+  await owner.locator('text=Lönekörningen är bokförd').waitFor();
+  const xml = await (await owner.context().request.get(runUrl + '/agi')).text();
+  const iu = (pn) => xml.split('<agd:IU>').find((b) => b.includes(pn)) || '';
+  const eva = iu('198112189876'), sam = iu('19' + orgnrFor('790315123').replace('-', ''));
+  assert(eva.includes('faltkod="011">30000<') && eva.includes('faltkod="001"'), 'expertskatt: 75 % redovisas: ' + eva.slice(0, 900));
+  assert(sam.includes('faltkod="274">10000<') && !sam.includes('faltkod="001"'), 'SINK 25 % i ruta 274: ' + sam.slice(0, 900));
+  log('expertskatt redovisar 75 % av lönen i AGI och SINK ger 25 % särskild inkomstskatt i ruta 274; beslut längre än fem år nekas');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 21: alla steg gick igenom');

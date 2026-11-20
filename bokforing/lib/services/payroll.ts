@@ -297,8 +297,10 @@ export async function buildAgiForRun(actor: Actor, runId: number): Promise<{ fil
   const [company] = await sql<{ orgnr: string; company_type: 'AB' | 'EF' | 'HB' | 'KB'; phone: string }[]>`SELECT orgnr, company_type, phone FROM companies WHERE id = ${actor.companyId}`;
   if (!company.phone) throw new ValidationError('Ange telefonnummer under Inställningar – det krävs som kontaktuppgift i AGI');
   const [user] = await sql<{ name: string; email: string }[]>`SELECT name, email FROM users WHERE id = ${actor.userId}`;
-  const slips = await sql<{ personal_number: string; gross: number; benefits: number; tax: number; fee: number }[]>`
-    SELECT e.personal_number, SUM(p.gross_cash)::bigint AS gross, SUM(p.benefits)::bigint AS benefits, SUM(p.tax)::bigint AS tax, SUM(p.employer_fee)::bigint AS fee
+  // Expertskatt: den skattefria fjärdedelen redovisas inte; SINK-skatt redovisas i egen ruta
+  const slips = await sql<{ personal_number: string; gross: number; benefits: number; tax: number; sink: number; fee: number }[]>`
+    SELECT e.personal_number, SUM(p.gross_cash - p.tax_exempt_cash)::bigint AS gross, SUM(p.benefits - p.tax_exempt_benefits)::bigint AS benefits,
+      SUM(p.tax) FILTER (WHERE p.tax_kind <> 'sink')::bigint AS tax, SUM(p.tax) FILTER (WHERE p.tax_kind = 'sink')::bigint AS sink, SUM(p.employer_fee)::bigint AS fee
     FROM payslips p JOIN employees e ON e.id = p.employee_id JOIN payroll_runs r ON r.id = p.run_id
     WHERE r.company_id = ${actor.companyId} AND r.period = ${run.period} AND r.status = 'booked'
     GROUP BY e.personal_number ORDER BY e.personal_number`;
@@ -308,9 +310,9 @@ export async function buildAgiForRun(actor: Actor, runId: number): Promise<{ fil
   const xml = buildAgiXml({
     period: run.period,
     employer: { agId: agiId(company.orgnr, company.company_type, ownerPnr), contactName: user.name, contactPhone: company.phone, contactEmail: user.email },
-    individuals: slips.map((s) => ({ personalNumber: s.personal_number, specNumber: 1, grossCash: s.gross, benefits: s.benefits, tax: s.tax })),
-    totalEmployerFees: slips.reduce((a, s) => a + s.fee, 0),
-    totalTax: slips.reduce((a, s) => a + s.tax, 0),
+    individuals: slips.map((s) => ({ personalNumber: s.personal_number, specNumber: 1, grossCash: Number(s.gross), benefits: Number(s.benefits), tax: Number(s.tax ?? 0), sinkTax: Number(s.sink ?? 0) })),
+    totalEmployerFees: slips.reduce((a, s) => a + Number(s.fee), 0),
+    totalTax: slips.reduce((a, s) => a + Number(s.tax ?? 0) + Number(s.sink ?? 0), 0),
     programName: 'Bokforing',
   });
   return { filename: `AGI_${run.period}.xml`, xml };
