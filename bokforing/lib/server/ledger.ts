@@ -109,6 +109,12 @@ export async function reverseVoucher(tx: Tx, actor: Actor, voucherId: number, da
   // Verifikationer som hör till en underreskontra (insatser, återbäring, stiftelsebidrag, innehållna belopp) rättas där –
   // en fristående rättelse skulle göra reskontran och bokföringen osams
   if (orig.source_type && SUBLEDGER_SOURCES.has(orig.source_type)) throw new BookkeepingError('Verifikationen hör till en reskontra (t.ex. kundförluster, insatser, bidrag eller innehållna belopp) och rättas där, inte här');
+  // En momsavräkning som redan har rättats får inte makuleras – då skulle rättelsen räknas en gång till vid nästa avräkning
+  if (orig.source_type === 'vat') {
+    const [c] = await tx`SELECT 1 FROM vat_declarations d JOIN vouchers v ON v.id = ${voucherId}
+      WHERE d.company_id = ${companyId} AND d.kind = 'correction' AND d.period_to = v.date LIMIT 1`;
+    if (c) throw new BookkeepingError('Momsavräkningen för perioden har rättats och kan inte makuleras – gör en ny rättelse i momsrapporten i stället');
+  }
   // En rättelse av en reskontraverifikation får inte heller makuleras fristående (då blir reskontran och bokföringen osams)
   if (orig.source_type === 'reversal') {
     const [o] = await tx<{ source_type: string | null }[]>`SELECT o.source_type FROM vouchers v JOIN vouchers o ON o.id = v.corrects_id WHERE v.id = ${voucherId}`;

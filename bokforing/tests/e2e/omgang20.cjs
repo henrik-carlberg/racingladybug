@@ -102,6 +102,12 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(t.includes('250,00') && t.includes('100,00'), '2650 med avräkning och rättelse');
   await owner.goto(MK + '/inlamning');
   assert((await text(owner)).includes('rattelse1') || (await text(owner)).includes(':r1'), 'ny deklaration förberedd');
+  await owner.goto(`${MK}/rapporter/moms?${JAN}`);
+  const settleHref = await owner.locator('p:has-text("Momsen för perioden är avräknad") a').getAttribute('href');
+  await owner.goto(BASE + settleHref);
+  if (await owner.locator('input[name=reason]').count()) await owner.fill('input[name=reason]', 'Test');
+  await owner.click('button:has-text("Bokför rättelse")');
+  await owner.locator('text=har rättats och kan inte makuleras').waitFor();
   log('rättelse av momsdeklaration: sen verifikation i deklarerad period ger differens per ruta, rättelse till 2650 och ny deklaration' + (warned ? ', varning i formuläret' : ''));
 
   // ================= Del 2: tillverkning =================

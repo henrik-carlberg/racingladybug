@@ -14,12 +14,13 @@ const num = (m: Map<number, number | bigint>): AccountSums => new Map([...m].map
 
 /** Det som senast deklarerades för perioden: ögonblicksbilden, eller för äldre avräkningar saldona när avräkningen gjordes */
 async function declared(companyId: number, from: string, to: string) {
+  // Avräkningen för exakt den här perioden måste finnas och inte vara makulerad – annars är perioden inte deklarerad
+  const [v] = await sql<{ created_at: Date }[]>`SELECT created_at FROM vouchers v WHERE company_id = ${companyId} AND source_type = 'vat' AND date = ${to}
+    AND description LIKE ${`Momsavräkning ${from} – ${to}%`} AND NOT EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = v.id) ORDER BY id DESC LIMIT 1`;
+  if (!v) return null;
   const [d] = await sql<{ sums: Record<string, number>; kind: string; n: number }[]>`SELECT sums, kind, (SELECT count(*)::int FROM vat_declarations x WHERE x.company_id = ${companyId} AND x.period_from = ${from} AND x.period_to = ${to} AND x.kind = 'correction') AS n
     FROM vat_declarations WHERE company_id = ${companyId} AND period_from = ${from} AND period_to = ${to} ORDER BY id DESC LIMIT 1`;
   if (d) return { sums: toMap(d.sums), corrections: d.n };
-  const [v] = await sql<{ created_at: Date }[]>`SELECT created_at FROM vouchers v WHERE company_id = ${companyId} AND source_type = 'vat' AND date BETWEEN ${from} AND ${to}
-    AND NOT EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = v.id) ORDER BY id DESC LIMIT 1`;
-  if (!v) return null;
   const rows = await sql<{ account: number; b: number }[]>`SELECT l.account_number AS account, SUM(l.debit - l.credit)::float8 AS b FROM voucher_lines l JOIN vouchers x ON x.id = l.voucher_id
     WHERE x.company_id = ${companyId} AND x.date BETWEEN ${from} AND ${to} AND x.created_at <= ${v.created_at} AND COALESCE(x.source_type, '') NOT IN ('vat', 'vat_correction', 'opening_balance')
       AND NOT (x.source_type = 'reversal' AND EXISTS (SELECT 1 FROM vouchers o WHERE o.id = x.corrects_id AND o.source_type IN ('vat', 'vat_correction'))) GROUP BY l.account_number`;
