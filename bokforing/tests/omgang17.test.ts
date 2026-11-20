@@ -77,3 +77,30 @@ describe('Hotell och restaurang', () => {
     expect(representationLines({ food: 11200, drinks: 0, persons: 4 }).deductible).toBe(1200);
   });
 });
+
+import { classifyShift, easter, hoursForPayroll, mergeHours, minutesBetween, storhelger } from '@/lib/time-flow';
+describe('Tid till lön och faktura', () => {
+  it('storhelger och påsk', () => {
+    expect(easter(2026).toISOString().slice(0, 10)).toBe('2026-04-05');
+    const s = storhelger(2026);
+    expect(s.has('2026-04-03') && s.has('2026-06-19') && s.has('2026-12-24')).toBe(true);
+  });
+  it('arbetspass delas i OB-perioder, även över midnatt', () => {
+    expect(minutesBetween('23:00', '00:00')).toBe(60);
+    expect(classifyShift('2026-10-28', '16:00', '23:00')).toEqual({ normal: 120, ob_evening: 240, ob_night: 60, ob_weekend: 0, ob_holiday: 0 });
+    expect(classifyShift('2026-10-31', '10:00', '20:00').ob_weekend).toBe(600);
+    expect(classifyShift('2026-12-24', '08:00', '12:00').ob_holiday).toBe(240);
+    // Fredag kväll till lördag morgon
+    const f = classifyShift('2026-10-30', '21:00', '02:00');
+    expect(f).toMatchObject({ ob_evening: 60, ob_night: 120, ob_weekend: 120 });
+  });
+  it('timmar till lönen: OB, övertid över 8 h per dag och restid', () => {
+    const h = hoursForPayroll([
+      { date: '2026-10-28', minutes: 420, start_time: '16:00', end_time: '23:00', kind: 'work' },
+      { date: '2026-10-28', minutes: 60, start_time: '23:00', end_time: '00:00', kind: 'travel' },
+      { date: '2026-10-31', minutes: 600, start_time: '10:00', end_time: '20:00', kind: 'work' },
+    ]);
+    expect(h).toEqual({ worked: 17, ob_evening: 4, ob_night: 1, ob_weekend: 10, ot_simple: 2, travel: 1 });
+    expect(mergeHours({ ob_evening: 1.5 }, { ob_evening: 4, worked: 17 })).toEqual({ ob_evening: 5.5 });
+  });
+});

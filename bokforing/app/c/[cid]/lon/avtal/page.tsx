@@ -21,6 +21,7 @@ function Fields({ a }: { a?: Agreement }) {
       <fieldset className="row"><legend>Övertid: timersättning = månadslön / delare</legend>
         <label>Enkel övertid<input name="overtime_simple_divisor" inputMode="numeric" defaultValue={a?.overtime_simple_divisor ?? 94} /></label>
         <label>Kvalificerad övertid<input name="overtime_qualified_divisor" inputMode="numeric" defaultValue={a?.overtime_qualified_divisor ?? 72} /></label>
+        <label>Restid (månadslön / delare)<input name="travel_divisor" inputMode="numeric" defaultValue={a?.travel_divisor ?? 240} /></label>
       </fieldset>
       <fieldset className="row"><legend>Beredskap kr per timme</legend>
         <label>Vardag<input name="oncall_weekday" inputMode="decimal" defaultValue={k(a?.oncall_weekday ?? 0)} /></label>

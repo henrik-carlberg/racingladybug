@@ -11,7 +11,7 @@ export async function addTime(cid: number, week: string, fd: FormData) {
   const actor = userActor(await requireCompany(cid, { employee: true }));
   await attempt(back(cid, week), () => createTimeEntry(actor, {
     activity_id: str(fd, 'activity_id'), date: str(fd, 'date'), hours: str(fd, 'hours'), description: str(fd, 'description'),
-    billable: fd.get('billable') === 'on',
+    billable: fd.get('billable') === 'on', start_time: str(fd, 'start_time'), end_time: str(fd, 'end_time'), kind: str(fd, 'kind'),
   }));
   done(back(cid, week), 'Tiden är sparad');
 }

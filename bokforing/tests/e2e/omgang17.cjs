@@ -166,6 +166,105 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(t.includes('avdragsgillmoms94,29krav220,00'), 'moms med tak 300 kr/person: ' + t);
   log('representation med mat och vin: ej avdragsgill kostnad, moms avdragsgill på högst 300 kr per person fördelat på momssatserna');
 
+  // ================= Del 4: tid till lön och faktura =================
+  const pnr = (base) => { let sum = 0; [...base.slice(2)].forEach((c, i) => { let d = Number(c) * (i % 2 === 0 ? 2 : 1); sum += d > 9 ? d - 9 : d; }); return `${base.slice(0, 8)}-${base.slice(8)}${(10 - (sum % 10)) % 10}`; };
+  await owner.goto(MO + '/lon/avtal');
+  const af = owner.locator('form:has(button:has-text("Lägg till avtal"))');
+  await af.locator('input[name=name]').fill('Hotell- och restaurangavtalet');
+  await af.locator('input[name=ob_evening]').fill('25'); await af.locator('input[name=ob_night]').fill('50'); await af.locator('input[name=ob_weekend]').fill('60');
+  await af.locator('input[name=travel_divisor]').fill('200');
+  await af.locator('button:has-text("Lägg till avtal")').click();
+  await owner.waitForURL(/ok=/);
+  await owner.goto(MO + '/lon/anstallda');
+  const ef = owner.locator('form:has(input[name=first_name])');
+  await ef.locator('input[name=first_name]').fill('Tina'); await ef.locator('input[name=last_name]').fill('Tidrapport');
+  await ef.locator('input[name=personal_number]').fill(pnr('19900101123')); await ef.locator('input[name=monthly_salary]').fill('30000');
+  await ef.locator('input[name=tax_table]').fill('32');
+  await ef.locator('select[name=agreement_id]').selectOption({ label: 'Hotell- och restaurangavtalet' });
+  await ef.locator('button:has-text("Spara")').click();
+  await owner.waitForURL(/ok=/);
+  await owner.goto(MO + '/installningar');
+  const tinaMail = `tina${Date.now() % 100000}@example.com`;
+  await owner.fill('form:has(button:has-text("Skapa inbjudan")) input[name=email]', tinaMail);
+  await owner.selectOption('select[name=role]', 'employee');
+  await owner.selectOption('select[name=employee_id]', { label: 'Tina Tidrapport' });
+  await owner.click('button:has-text("Skapa inbjudan")');
+  const tlink = (await owner.locator('.flash.ok code').textContent({ timeout: 10000 })).trim();
+  const tina = await (await browser.newContext()).newPage();
+  tina.setDefaultTimeout(20000);
+  await tina.goto(tlink);
+  await tina.fill('input[name=name]', 'Tina Tidrapport'); await tina.fill('input[name=password]', 'tinaslosen123');
+  await tina.click('button:has-text("Acceptera")');
+  await tina.waitForURL(BASE + '/');
+  // Uppdrag med timpris
+  await owner.goto(MO + '/kunder');
+  await owner.fill('input[name=name]', 'Konferenskund AB');
+  await owner.click('button:has-text("Spara kund")');
+  await owner.locator('text=Kunden är sparad').waitFor();
+  await owner.goto(MO + '/uppdrag');
+  await owner.fill('input[name=name]', 'Konferens'); await owner.selectOption('select[name=billing]', 'hourly');
+  await owner.fill('input[name=hourly_rate]', '500'); await owner.fill('textarea[name=activities]', 'Servering');
+  await owner.click('button:has-text("Skapa uppdrag")');
+  await owner.waitForURL(/uppdrag\/\d+/);
+  const PU = owner.url().split('?')[0];
+  // Förra månaden: sista onsdagen och sista lördagen
+  const now = new Date(); const pm = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0));
+  const last = (wd) => { const d = new Date(pm); while (d.getUTCDay() !== wd) d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); };
+  const wed = last(3), sat = last(6), period = pm.toISOString().slice(0, 7);
+  const logTime = async (d, start, end, kind, desc) => {
+    await tina.goto(`${MO}/tid?week=${d}`);
+    await tina.fill('input[name=date]', d);
+    await tina.selectOption('select[name=activity_id]', { label: 'Konferens – Servering' });
+    await tina.fill('input[name=start_time]', start); await tina.fill('input[name=end_time]', end);
+    await tina.selectOption('select[name=kind]', kind);
+    await tina.fill('input[name=description]', desc);
+    if (kind === 'travel') await tina.uncheck('input[name=billable]');
+    await tina.click('button:has-text("Spara tid")');
+    await tina.locator('text=Tiden är sparad').waitFor();
+  };
+  await logTime(wed, '16:00', '23:00', 'work', 'Middagsservering');
+  await logTime(wed, '23:00', '00:00', 'travel', 'Resa hem från konferensen');
+  await logTime(sat, '10:00', '20:00', 'work', 'Konferensdag');
+  log('tid med klockslag och restid rapporteras av den anställda');
+
+  await owner.goto(MO + '/tid/attest');
+  await owner.click('button:has-text("Kräv attest innan fakturering")');
+  await owner.locator('text=Attest krävs nu').waitFor();
+  await owner.goto(PU);
+  await owner.fill('input[name=to]', day(0));
+  await owner.click('button:has-text("Skapa fakturaunderlag")');
+  await owner.locator('.flash.error').first().waitFor();
+  await owner.goto(MO + `/tid/attest?from=${period}-01&to=${day(0)}`);
+  await owner.locator('tr.time-person:has-text("Tina Tidrapport") button:has-text("Attestera")').click();
+  await owner.locator('text=3 tidrader är attesterade').waitFor();
+  t = (await owner.locator('tr.time-person:has-text("Tina Tidrapport") .hours').innerText()).replace(/\s+/g, ' ');
+  assert(t.includes('OB kväll 4 h') && t.includes('OB natt 1 h') && t.includes('OB helg 10 h') && t.includes('Enkel övertid 2 h') && t.includes('Restid 1 h'), 'klassning: ' + t);
+  log('attesterad tid klassas: OB kväll 18–22, natt 22–06, helg, övertid över 8 h per dag och restid');
+
+  await owner.goto(PU);
+  await owner.fill('input[name=to]', day(0));
+  await owner.click('button:has-text("Skapa fakturaunderlag")');
+  await owner.locator('text=Fakturaunderlaget är skapat').waitFor();
+  assert(nb(await text(owner)).includes('8500,00'), 'fakturan: 17 h arbete à 500 kr (restiden debiteras inte): ' + (await text(owner)).slice(0, 800));
+  await owner.goto(MO + '/lon');
+  await owner.fill('input[name=period]', period); await owner.fill('input[name=payment_date]', `${period}-25`);
+  await owner.click('button:has-text("Ny lönekörning")');
+  await owner.waitForURL(/lon\/\d+\?ok/);
+  const RUN = owner.url().split('?')[0];
+  await owner.goto(MO + `/tid/attest?from=${period}-01&to=${day(0)}`);
+  await owner.selectOption('select[name=run_id]', { label: period });
+  await owner.click('button:has-text("För attesterad tid till lönespecarna")');
+  await owner.locator('text=3 tidrader är förda till lönekörningen').waitFor();
+  await owner.goto(RUN);
+  t = (await owner.$$eval('main input', (els) => els.map((e) => e.value).join(' | '))).replace(/\s+/g, ' ');
+  assert(nb(await text(owner)).includes('Bruttolön31538,30'), 'bruttolön 30 000 + 100 + 50 + 600 + 638,30 + 150');
+  assert(t.includes('OB kväll 4 h à 25,00 kr') && t.includes('OB helg 10 h à 60,00 kr') && t.includes('Enkel övertid 2 h') && t.includes('Restid 1 h à 150,00 kr'), 'lönespec: ' + t.slice(0, 2500));
+  await owner.goto(MO + `/tid/attest?from=${period}-01&to=${day(0)}`);
+  await owner.selectOption('select[name=run_id]', { label: period });
+  await owner.click('button:has-text("För attesterad tid till lönespecarna")');
+  await owner.locator('text=ingen attesterad tid').waitFor();
+  log('samma attesterade tid blir kundfaktura och lönerader (OB, övertid, restid) enligt kollektivavtalet – en gång');
+
   //@@NEXT@@
   await browser.close(); mailServer.close();
   console.log('Omgång 17: alla steg gick igenom');

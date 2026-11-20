@@ -59,7 +59,10 @@ export default async function TimePage({ params, searchParams }: { params: Promi
                 ))}
               </select>
             </label>
-            <label>Tid<input name="hours" placeholder="1,5 eller 1:30" required inputMode="decimal" autoComplete="off" /></label>
+            <label>Tid<input name="hours" placeholder="1,5 eller 1:30" inputMode="decimal" autoComplete="off" /></label>
+            <label style={{ flex: '0 0 110px' }}>Start<input type="time" name="start_time" /></label>
+            <label style={{ flex: '0 0 110px' }}>Slut<input type="time" name="end_time" /></label>
+            <label style={{ flex: '0 0 130px' }}>Typ<select name="kind"><option value="work">Arbete</option><option value="travel">Restid</option></select></label>
           </div>
           <div className="row">
             <label style={{ flex: '3 1 260px' }}>Vad gjorde du? (syns på fakturans tidsspecifikation)<input name="description" /></label>

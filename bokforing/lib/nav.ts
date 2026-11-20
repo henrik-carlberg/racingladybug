@@ -31,6 +31,7 @@ export function buildNav(o: {
       { path: '/fastighet', label: 'Fastighet och uthyrning', perm: 'ledger', hint: 'Lokaler, hyresavier med index, moms per lokal och depositioner' },
       { path: '/autogiro', label: 'Autogiro', perm: 'invoicing', hint: 'Dra betalningen från kundens konto' },
       { path: '/tid', label: '⏱ Tidrapportering' },
+      { path: '/tid/attest', label: 'Attest av tid', perm: 'payroll', hint: 'Attesterad tid till lön (OB, övertid, restid) och faktura' },
       { path: '/uppdrag', label: 'Uppdrag & timbanker' },
       { path: '/tid/belaggning', label: 'Beläggning' },
       { path: '/successiv', label: 'Fastprisuppdrag', perm: 'ledger', hint: 'Successiv vinstavräkning med färdigställandegrad och förlustreserv' },

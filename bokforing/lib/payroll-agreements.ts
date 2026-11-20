@@ -27,10 +27,11 @@ export interface AgreementRules {
   overtime_simple_divisor: number; overtime_qualified_divisor: number;           // månadslön / delare = timersättning
   oncall_weekday: number; oncall_weekend: number;                                 // öre per timme
   vacation_supplement: number;                                                    // semestertillägg % av månadslönen per dag (lag 0,43, ofta 0,8)
+  travel_divisor?: number;                                                        // restidsersättning: månadslön / delare per timme (0 = ingen)
 }
 export const HOUR_FIELDS = [
   ['ob_evening', 'OB kväll'], ['ob_night', 'OB natt'], ['ob_weekend', 'OB helg'], ['ob_holiday', 'OB storhelg'],
-  ['ot_simple', 'Enkel övertid'], ['ot_qualified', 'Kvalificerad övertid'], ['oncall_weekday', 'Beredskap vardag'], ['oncall_weekend', 'Beredskap helg'],
+  ['ot_simple', 'Enkel övertid'], ['ot_qualified', 'Kvalificerad övertid'], ['oncall_weekday', 'Beredskap vardag'], ['oncall_weekend', 'Beredskap helg'], ['travel', 'Restid'],
 ] as const;
 export type HourKey = (typeof HOUR_FIELDS)[number][0];
 export type Hours = Partial<Record<HourKey, number>>;
@@ -55,6 +56,7 @@ export function agreementItems(r: AgreementRules, hours: Hours, monthly: number)
   }
   add('Beredskap vardag', hours.oncall_weekday, r.oncall_weekday);
   add('Beredskap helg', hours.oncall_weekend, r.oncall_weekend);
+  if (monthly > 0 && (r.travel_divisor ?? 0) > 0) add('Restid', hours.travel, Math.round(monthly / r.travel_divisor!));
   return out;
 }
 
