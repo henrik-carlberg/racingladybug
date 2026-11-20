@@ -25,3 +25,12 @@ export async function portal(cid: number, kid: number, rotate: boolean) {
   await attempt(`/c/${cid}/kunder/${kid}`, () => portalLink(actor, kid, rotate));
   done(`/c/${cid}/kunder/${kid}`, rotate ? 'Kundportalen har fått en ny länk' : 'Länken till kundportalen är klar');
 }
+
+export async function viesCheck(cid: number, kid: number) {
+  const { userActor } = await import('@/lib/services/actor');
+  const actor = userActor(await requireCompany(cid, { perm: 'invoicing' }));
+  const { viesCheck: check } = await import('@/lib/services/vat-advanced');
+  let msg = '';
+  await attempt(`/c/${cid}/kunder/${kid}`, async () => { const r = await check(actor, kid); msg = r.valid ? `${r.number} är giltigt i VIES${r.name ? ` (${r.name})` : ''}` : `${r.number} är INTE giltigt enligt VIES – fakturera med svensk moms tills numret är rättat`; });
+  done(`/c/${cid}/kunder/${kid}`, msg);
+}

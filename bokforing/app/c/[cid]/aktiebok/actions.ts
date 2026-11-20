@@ -16,9 +16,15 @@ export async function init(cid: number, fd: FormData) {
 }
 export async function transfer(cid: number, fd: FormData) {
   const actor = await owner(cid);
-  await attempt(back(cid), () => svc.transferShares(actor, { from: str(fd, 'from'), shares: str(fd, 'shares'), date: str(fd, 'date'), to_name: str(fd, 'to_name'), to_id: str(fd, 'to_id'),
-    to_address: str(fd, 'to_address'), share_class: str(fd, 'share_class'), price: str(fd, 'price') ? amount(fd, 'price', 'Pris') : undefined }));
-  done(back(cid), 'Överlåtelsen är införd i aktieboken');
+  let msg = 'Överlåtelsen är införd i aktieboken';
+  await attempt(back(cid), async () => {
+    const tax = await svc.transferShares(actor, { from: str(fd, 'from'), shares: str(fd, 'shares'), date: str(fd, 'date'), to_name: str(fd, 'to_name'), to_id: str(fd, 'to_id'),
+      to_address: str(fd, 'to_address'), share_class: str(fd, 'share_class'), kind: str(fd, 'kind'), price: str(fd, 'price') ? amount(fd, 'price', 'Pris') : undefined });
+    const k = (o: number) => (o / 100).toLocaleString('sv-SE', { minimumFractionDigits: 2 });
+    if (tax) msg += tax.asSale ? ` – säljarens omkostnadsbelopp för aktierna ${k(tax.movedCost)} kr, kapitalvinst ${k(tax.gain)} kr (K10/K4)${tax.note ? `. ${tax.note}` : ''}`
+      : ` – mottagaren övertar omkostnadsbelopp ${k(tax.movedCost)} kr och sparat utdelningsutrymme ${k(tax.movedSaved)} kr`;
+  });
+  done(back(cid), msg);
 }
 export async function decide(cid: number, fd: FormData) {
   const actor = await owner(cid);

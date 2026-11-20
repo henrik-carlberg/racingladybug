@@ -1,4 +1,5 @@
 import 'server-only';
+import { transferTax, TRANSFER_LABEL, type TransferKind } from '@/lib/ownership-change';
 import { sql, type Tx } from '@/lib/db';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import { auditBy } from '@/lib/server/audit';
@@ -89,6 +90,10 @@ export async function transferShares(actor: Actor, input: Record<string, unknown
     if (!mine.length) throw new NotFoundError('Säljaren');
     if (keyOf(toName, toId) === from) throw new ValidationError('Köparen och säljaren är samma');
     const t = take(mine.map((r) => ({ from: r.from_no, to: r.to_no })), n);
+    // Omkostnadsbeloppet gäller ägarens alla aktier, så andelen räknas på innehavet i båda aktieslagen
+    const other = (await tx<{ holder_name: string; holder_id: string; n: number }[]>`SELECT holder_name, holder_id, (to_no - from_no + 1)::int AS n FROM share_holdings
+      WHERE company_id = ${actor.companyId} AND share_class <> ${cls}`).filter((r) => keyOf(r.holder_name, r.holder_id) === from).reduce((s, r) => s + r.n, 0);
+    const sellerShares = mine.reduce((s, r) => s + r.to_no - r.from_no + 1, 0) + other;
     await tx`DELETE FROM share_holdings WHERE id IN ${tx(mine.map((r) => r.id))}`;
     const seller = mine[0];
     // Säljarens kvarvarande aktier behåller sitt ursprungliga förvärvsdatum
@@ -97,10 +102,32 @@ export async function transferShares(actor: Actor, input: Record<string, unknown
       VALUES (${actor.companyId}, ${seller.holder_name}, ${seller.holder_id}, ${seller.address}, ${cls}, ${r.from}, ${r.to}, ${acquired(r)})`;
     for (const r of t.taken) await tx`INSERT INTO share_holdings (company_id, holder_name, holder_id, address, share_class, from_no, to_no, acquired_on)
       VALUES (${actor.companyId}, ${toName}, ${toId}, ${toAddress}, ${cls}, ${r.from}, ${r.to}, ${d})`;
-    const price = input.price ? ` för ${kr(ore(input, 'price', 'Pris'))} kr` : '';
-    await event(tx, actor, 'transfer', d, `${seller.holder_name} överlät ${n} ${cls}-aktier (nr ${fmtRanges(t.taken)}) till ${toName}${price}`, { from: seller.holder_name, to: toName, shares: n, ranges: t.taken });
+    const priceOre = input.price ? ore(input, 'price', 'Pris') : 0;
+    const price = priceOre ? ` för ${kr(priceOre)} kr` : '';
+    const kind = (['sale', 'gift', 'inheritance'].includes(str(input, 'kind')) ? str(input, 'kind') : priceOre ? 'sale' : 'gift') as TransferKind;
+    // Omkostnadsbelopp och sparat utdelningsutrymme (K10) följer med enligt överlåtelsens typ
+    const digits = (s: string) => s.replace(/\D/g, '').slice(-10);
+    const [so] = await tx<{ id: number; cost: number; saved: number }[]>`SELECT id, cost_basis::float8 AS cost, saved_space::float8 AS saved FROM company_owners
+      WHERE company_id = ${actor.companyId} AND right(regexp_replace(personal_number, '\\D', '', 'g'), 10) = ${digits(seller.holder_id)} AND ${digits(seller.holder_id).length === 10} LIMIT 1`;
+    let tax: ReturnType<typeof transferTax> | null = null;
+    if (so) {
+      tax = transferTax({ kind, price: priceOre, sellerShares, shares: n, sellerCost: so.cost, sellerSaved: so.saved });
+      await tx`UPDATE company_owners SET cost_basis = ${tax.sellerCostAfter}, saved_space = ${tax.sellerSavedAfter} WHERE id = ${so.id}`;
+      if (digits(toId).length === 10) {
+        const [bo] = await tx<{ id: number }[]>`SELECT id FROM company_owners WHERE company_id = ${actor.companyId} AND right(regexp_replace(personal_number, '\\D', '', 'g'), 10) = ${digits(toId)} LIMIT 1`;
+        if (bo) await tx`UPDATE company_owners SET cost_basis = cost_basis + ${tax.buyerCost}, saved_space = saved_space + ${tax.buyerSaved} WHERE id = ${bo.id}`;
+        else await tx`INSERT INTO company_owners ${tx({ company_id: actor.companyId, name: toName, personal_number: toId, share_pct: 0.001, cost_basis: tax.buyerCost, saved_space: tax.buyerSaved })}`;
+      }
+    }
+    await event(tx, actor, 'transfer', d, `${seller.holder_name} överlät ${n} ${cls}-aktier (nr ${fmtRanges(t.taken)}) till ${toName} genom ${TRANSFER_LABEL[kind].toLowerCase()}${price}`,
+      { from: seller.holder_name, to: toName, shares: n, ranges: t.taken, kind, price: priceOre, ...(tax ? { moved_cost: tax.movedCost, moved_saved: tax.movedSaved, gain: tax.gain, as_sale: tax.asSale } : {}) });
     await syncOwners(tx, actor.companyId);
+    // Säljare som inte har några aktier kvar tas bort ur K10-registret om det inte finns historik på dem (aktieboken behåller händelsen)
+    if (so && !t.left.length && !other) await tx`DELETE FROM company_owners o WHERE o.id = ${so.id}
+      AND NOT EXISTS (SELECT 1 FROM dividend_payout_lines l WHERE l.owner_id = o.id) AND NOT EXISTS (SELECT 1 FROM k10_history k WHERE k.owner_id = o.id)
+      AND NOT EXISTS (SELECT 1 FROM shareholder_contributions c WHERE c.owner_id = o.id)`;
     await auditBy(tx, actor, 'share_transfer', 'company', actor.companyId, { shares: n });
+    return tax;
   });
 }
 

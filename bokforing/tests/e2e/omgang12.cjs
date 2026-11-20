@@ -61,7 +61,7 @@ const finServer = http.createServer((req, res) => {
   await owner.click('button:has-text("För in överlåtelsen")');
   await owner.locator('text=Överlåtelsen är införd i aktieboken').waitFor();
   t = await text(owner);
-  assert(/Ägare Testsson.*101–600.*500.*50 %/.test(t) && /Investerare Ida.*1–100.*100.*10 %/.test(t) && t.includes('Ägare Testsson överlät 100 B-aktier (nr 1–100) till Investerare Ida för 50 000,00 kr'), 'överlåtelse: ' + t.slice(0, 2000));
+  assert(/Ägare Testsson.*101–600.*500.*50 %/.test(t) && /Investerare Ida.*1–100.*100.*10 %/.test(t) && t.includes('Ägare Testsson överlät 100 B-aktier (nr 1–100) till Investerare Ida genom försäljning för 50 000,00 kr'), 'överlåtelse: ' + t.slice(0, 2000));
   await owner.goto(B + '/agare');
   assert(/Ägare Testsson · 50 %/.test(await text(owner)), 'K10-ägarnas andel följer aktieboken: ' + (await text(owner)).slice(0, 1200));
   log('överlåtelse flyttar aktienummer till köparen och ägarandelen för K10 uppdateras');

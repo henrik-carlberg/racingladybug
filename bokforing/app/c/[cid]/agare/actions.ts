@@ -53,3 +53,9 @@ export async function insuranceValue(cid: number, id: number, fd: FormData) {
   await attempt(`${base(cid)}#kapitalforsakring`, async () => { w = (await ch.registerValue(actor, id, { value: str(fd, 'value'), date: str(fd, 'date'), writedown: fd.get('writedown') === 'on' ? 'on' : '' })).writedown; });
   done(`${base(cid)}#kapitalforsakring`, w ? 'Värdet är registrerat och nedskrivningen bokförd' : 'Värdet är registrerat');
 }
+export async function contribution(cid: number, fd: FormData) {
+  const actor = await actorFor(cid);
+  let r = { kind: '', amount: 0 };
+  await attempt(`${base(cid)}#tillskott`, async () => { r = await ch.contribution(actor, Object.fromEntries([...fd.entries()].filter(([, v]) => typeof v === 'string'))); });
+  done(`${base(cid)}#tillskott`, r.kind === 'ovillkorat' ? 'Det ovillkorade aktieägartillskottet är bokfört (2093) och ägarens omkostnadsbelopp har ökat' : 'Det villkorade aktieägartillskottet är bokfört (2093)');
+}

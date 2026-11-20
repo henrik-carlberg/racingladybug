@@ -69,7 +69,8 @@ export async function appropriations(companyId: number, fyId: number, userId: nu
   const assets = (await listAssets(companyId, 'active')).filter((a) => ['maskiner', 'inventarier', 'bilar', 'datorer'].includes(a.category) && a.acquired_on <= fy.end_date);
   const inventories: Inventories = {
     bookStart: sumOf(ib, invAcc), overStart: -(ib.get(2150) ?? 0),
-    acquisitions: Math.max(0, sumOf(per, (n) => invAcc(n) && n % 10 !== 9)), disposals: 0,
+    acquisitions: Math.max(0, sumOf(per, (n) => invAcc(n) && n % 10 !== 9)), disposals: Math.max(0, -sumOf(per, (n) => invAcc(n) && n % 10 !== 9)),
+    bookEnd: sumOf(ib, invAcc) + sumOf(per, invAcc), reserveNow: -((ib.get(2150) ?? 0) + (per.get(2150) ?? 0)),
     bookedDepreciation: sumOf(per, (n) => n >= 7831 && n <= 7835),
     byYear: assets.length ? assets.map((a) => ({ yearsHeld: year - Number(a.acquired_on.slice(0, 4)) + 1, cost: Number(a.cost) })) : undefined,
   };

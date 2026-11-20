@@ -5,10 +5,11 @@ import { NotFoundError } from '@/lib/errors';
 import { Flash, type SP } from '@/components/ui';
 import { kr } from '@/lib/format';
 import { appropriations } from '@/lib/services/tax-planning';
+import { depreciationMethods } from '@/lib/tax-planning';
 import { appropriate } from '../../../skatt/actions';
 
 export const dynamic = 'force-dynamic';
-const NAME: Record<string, string> = { koncernbidrag: 'Koncernbidrag', overavskrivning: 'Överavskrivningar', periodiseringsfond: 'Periodiseringsfond', aterforing: 'Återföring av periodiseringsfond' };
+const NAME: Record<string, string> = { koncernbidrag: 'Koncernbidrag', overavskrivning: 'Överavskrivningar', periodiseringsfond: 'Periodiseringsfond', aterforing: 'Återföring av periodiseringsfond', aterforing_overavskrivning: 'Återföring av överavskrivningar' };
 
 export default async function Appropriations({ params, searchParams }: { params: Promise<{ cid: string; fyid: string }>; searchParams: SP }) {
   const { cid, fyid } = await params;
@@ -17,6 +18,7 @@ export default async function Appropriations({ params, searchParams }: { params:
   const a = await appropriations(id, Number(fyid), ctx.user.id).catch((e) => { if (e instanceof NotFoundError) notFound(); throw e; });
   const fy = a.status.fy;
   const open = a.proposals.filter((p) => !a.booked.some((b) => b.kind === p.kind));
+  const dm = depreciationMethods(a.inventories);
   return (
     <div style={{ maxWidth: 900 }}>
       <h1>Bokslutsdispositioner {fy.start_date.slice(0, 4)}</h1>
@@ -39,6 +41,15 @@ export default async function Appropriations({ params, searchParams }: { params:
           {!fy.closed && <form action={appropriate.bind(null, id, fy.id, p.kind)}><button>Bokför {NAME[p.kind].toLowerCase()}</button></form>}
         </div>
       ))}
+      {dm.base > 0 && (
+        <section className="card depreciation-methods">
+          <h2 style={{ marginTop: 0, fontSize: '1.05rem' }}>Inventariernas skattemässiga värde</h2>
+          <table className="dep-methods"><thead><tr><th>Metod</th><th className="num">Största avskrivning</th><th className="num">Skattemässigt värde</th></tr></thead>
+            <tbody>{dm.rows.map((r) => <tr key={r.rule} className="dep-row"><td>{r.rule}</td><td className="num">{kr(r.depreciation)}</td><td className="num">{kr(r.taxValue)}</td></tr>)}</tbody></table>
+          <p className="small" style={{ margin: '.4rem 0 0' }}>Avskrivningsunderlag {kr(dm.base)} kr. Bokfört värde {kr(dm.bookEnd ?? 0)} kr, lägsta skattemässiga värde {kr(dm.lowest)} kr – överavskrivningarna får vara högst <b className="max-reserve">{kr(dm.maxReserve ?? 0)}</b> kr. Bokfört på 2150: <b className="reserve-now">{kr(dm.reserve)}</b> kr.
+            {dm.reversal > 0 ? ' Reserven är för stor och måste återföras.' : ''} Restvärdesmetoden gäller bara om inventarierna inte skrivs av räkenskapsenligt.</p>
+        </section>
+      )}
       {a.booked.length > 0 && (
         <>
           <h2>Bokförda</h2>
