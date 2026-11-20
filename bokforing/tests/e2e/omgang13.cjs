@@ -213,6 +213,54 @@ const mailServer = http.createServer((req, res) => { req.resume(); req.on('end',
   assert(t.includes('Kv. Eken 1: Tak') && t.includes('Kv. Eken 1: Installationer'), 'anläggningsregistret: ' + t.slice(0, 1500));
   log('byggnaden delas upp i komponenter med egen nyttjandeperiod i anläggningsregistret, marken skrivs inte av');
 
+  // ================= Del 3: K3 och kassaflödesanalys =================
+  await owner.goto(B + '/bokslut');
+  await owner.locator(`tr:has-text("${YEAR}-01-01") a:has-text("Öppna")`).click();
+  await owner.waitForURL(/\/bokslut\/\d+$/);
+  const FY = owner.url().replace(/.*\/bokslut\//, '');
+  await owner.goto(`${B}/bokslut/${FY}/kassaflode`);
+  t = await text(owner);
+  assert(t.includes('Den löpande verksamheten') && t.includes('Investeringsverksamheten') && t.includes('Finansieringsverksamheten') && (await owner.locator('.cf-check').innerText()) === 'Stämmer', 'kassaflöde: ' + t.slice(0, 2500));
+  assert((await owner.locator('table.cashflow thead th').count()) === 14, 'tolv månader + året');
+  log('kassaflödesanalys enligt indirekt metod per månad och för året – stäms av mot likvida medel');
+
+  await owner.goto(`${B}/bokslut/${FY}/k3`);
+  t = await text(owner);
+  assert((await owner.locator('.framework').innerText()) === 'K2' && t.includes('Jämförelsetalen räknas om') && t.includes('Komponentavskrivning') && t.includes('Uppskjuten skatt'), 'förklaring: ' + t.slice(0, 2000));
+  await owner.click('button:has-text("Byt till K3")');
+  await owner.locator('.flash.error, .flash:has-text("Bekräfta")').first().waitFor();
+  await owner.check('input[name=confirm]');
+  await owner.click('button:has-text("Byt till K3")');
+  await owner.locator('text=Bolaget tillämpar nu K3').waitFor();
+  log('byte K2 → K3 med förklaring av vad som ändras för just det här bolaget och krav på bekräftelse');
+
+  for (const [l, a] of [['Byggnad: bokfört över skattemässigt värde', '100000'], ['Underskottsavdrag', '-50000']]) {
+    await owner.goto(`${B}/bokslut/${FY}/k3`);
+    await owner.fill('input[name=label]', l); await owner.fill('form:has(input[name=label]) input[name=amount]', a);
+    await owner.click('form:has(input[name=label]) button:has-text("Lägg till")');
+    await owner.locator('text=Den temporära skillnaden är sparad').waitFor();
+  }
+  await owner.goto(`${B}/bokslut/${FY}/k3`);
+  const nb = (s) => s.replace(/[\s\u00a0\u202f]/g, '');
+  assert(nb(await owner.locator('.dt-liability').innerText()) === '20600,00' && nb(await owner.locator('.dt-asset').innerText()) === '10300,00', 'uppskjuten skatt');
+  await owner.click('button:has-text("Bokför uppskjuten skatt")');
+  await owner.locator('text=Den uppskjutna skatten är bokförd').waitFor();
+  assert((await owner.locator('button:has-text("Bokför uppskjuten skatt")').count()) === 0, 'redan bokförd');
+  await owner.goto(B + '/rapporter/huvudbok?account=8940');
+  t = await text(owner);
+  assert(t.includes('Uppskjuten skatt') && t.includes('10 300,00'), 'huvudbok 8940: ' + t.slice(0, 1200));
+  log('uppskjuten skatt på temporära skillnader bokförs mot 2240/1370/8940 – bara förändringen');
+
+  await owner.goto(`${B}/bokslut/${FY}/arsredovisning`);
+  t = await text(owner);
+  assert(t.includes('BFNAR 2012:1') && t.includes('Kassaflödesanalys') && t.includes('Kassaflöde från den löpande verksamheten') && t.includes('Uppskjuten skatt') && t.includes('Kv. Eken 1: Tak') && t.includes('Viktiga uppskattningar och bedömningar'), 'K3-årsredovisning: ' + t.slice(0, 3000));
+  assert((await owner.locator('a:has-text("Ladda ner iXBRL")').count()) === 0, 'iXBRL dold för K3');
+  log('årsredovisning enligt K3 med kassaflödesanalys, komponenter, uppskjuten skatt och utökade noter');
+
+  await owner.goto(`${B}/bokslut/${FY}/k3`);
+  await owner.click('button:has-text("Byt tillbaka till K2")');
+  await owner.locator('text=Bolaget tillämpar nu K2').waitFor();
+
   //@@NEXT@@
   await browser.close(); mailServer.close();
   console.log('Omgång 13: alla steg gick igenom');

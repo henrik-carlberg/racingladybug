@@ -58,3 +58,47 @@ describe('Fastighet', () => {
     expect(() => splitComponents(100, 0, [{ name: 'x', pct: 90, years: 10 }])).toThrow();
   });
 });
+
+import { cashFlow, deferredTax, deferredTaxEntry, k3Changes } from '@/lib/cashflow';
+describe('Kassaflödesanalys och K3', () => {
+  it('indirekt metod stämmer mot likvida medel', () => {
+    // Försäljning 100 000 på kredit (1510/3010), kund betalar 60 000, avskrivning 10 000, lån 50 000, investering 80 000, skatt 5 000 betald
+    const v: [number, number][][] = [
+      [[1510, 12500000], [3010, -10000000], [2610, -2500000]],
+      [[1930, 6000000], [1510, -6000000]],
+      [[7832, 1000000], [1229, -1000000]],
+      [[1930, 5000000], [2350, -5000000]],
+      [[1220, 8000000], [1930, -8000000]],
+      [[8910, 500000], [2510, -500000]], [[2510, 500000], [1930, -500000]],
+      [[2091, 2000000], [2898, -2000000]], [[2898, 2000000], [1930, -2000000]],
+    ];
+    const m = new Map<number, number>();
+    for (const vv of v) for (const [a, x] of vv) m.set(a, (m.get(a) ?? 0) + x);
+    const c = cashFlow(m);
+    expect(c.cashChange).toBe(500000);
+    expect(c.change).toBe(c.cashChange);
+    expect(c.operating.find((l) => l.key === 'result')!.amount).toBe(9000000);
+    expect(c.operating.find((l) => l.key === 'depreciation')!.amount).toBe(1000000);
+    expect(c.operating.find((l) => l.key === 'tax')!.amount).toBe(-500000);
+    expect(c.workingCapital.find((l) => l.key === 'receivables')!.amount).toBe(-6500000);
+    expect(c.workingCapital.find((l) => l.key === 'liabilities')!.amount).toBe(2500000);
+    expect(c.investingTotal).toBe(-8000000);
+    expect(c.financing.find((l) => l.key === 'loans')!.amount).toBe(5000000);
+    expect(c.financing.find((l) => l.key === 'equity')!.amount).toBe(-2000000);
+  });
+  it('realisationsvinst flyttas till investeringsverksamheten', () => {
+    // Inventarie (anskaffning 50 000, ack avskr 30 000) säljs för 25 000: vinst 5 000
+    const m = new Map([[1930, 2500000], [1229, 3000000], [1220, -5000000], [3973, -500000]]);
+    const c = cashFlow(m);
+    expect(c.operating.find((l) => l.key === 'gains')!.amount).toBe(-500000);
+    expect(c.investingTotal).toBe(2500000);
+    expect(c.change).toBe(2500000);
+  });
+  it('uppskjuten skatt', () => {
+    const d = deferredTax([{ label: 'Byggnad', amount: 10000000 }, { label: 'Underskott', amount: -5000000 }]);
+    expect(d).toMatchObject({ liability: 2060000, asset: 1030000, net: 1030000 });
+    expect(deferredTaxEntry(d, { liability: 0, asset: 0 })).toEqual([{ account: 2240, amount: -2060000 }, { account: 1370, amount: 1030000 }, { account: 8940, amount: 1030000 }]);
+    expect(deferredTaxEntry(d, { liability: 2060000, asset: 1030000 })).toEqual([]);
+    expect(k3Changes({ buildingsWithoutComponents: 2, untaxedReserves: 1, hasCashFlow: true, larger: false }).map((c) => c.title)).toContain('Komponentavskrivning');
+  });
+});
