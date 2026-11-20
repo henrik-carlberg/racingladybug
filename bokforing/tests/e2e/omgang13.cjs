@@ -261,6 +261,66 @@ const mailServer = http.createServer((req, res) => { req.resume(); req.on('end',
   await owner.click('button:has-text("Byt tillbaka till K2")');
   await owner.locator('text=Bolaget tillämpar nu K2').waitFor();
 
+  // ================= Del 4: import och tull =================
+  const M = `${B}/m/lager`;
+  await owner.goto(M + '/artiklar');
+  await owner.fill('input[name=sku]', 'T-100'); await owner.fill('input[name=name]', 'Importsko');
+  await owner.fill('input[name=purchase_price]', '300'); await owner.fill('input[name=sales_price]', '799');
+  await owner.selectOption('select[name=supplier_id]', { index: 1 });
+  await owner.fill('input[name=opening_qty]', '0');
+  await owner.click('button:has-text("Lägg upp artikel")');
+  await owner.locator('text=Artikeln är upplagd').waitFor();
+  await owner.goto(M + '/inkop');
+  await owner.selectOption('select[name=product_0]', await owner.locator('select[name=product_0] option:has-text("T-100 ")').first().getAttribute('value'));
+  await owner.fill('input[name=qty_0]', '100'); await owner.fill('input[name=price_0]', '300');
+  await owner.click('button:has-text("Skapa inköpsorder")');
+  await owner.locator('text=Inköpsordern är skapad').waitFor();
+  await owner.click('button:has-text("Markera som skickad")');
+  await owner.locator('text=markerad som skickad').waitFor();
+  await owner.click('button:has-text("Registrera inleverans")');
+  await owner.locator('text=Inleveransen är registrerad').waitFor();
+
+  await owner.goto(B + '/tull');
+  await owner.fill('input[name=decision_no]', 'TV-2026-0001');
+  await owner.fill('form:has(input[name=decision_no]) input[name=date]', day(0));
+  await owner.fill('input[name=description]', 'Skor från Kina');
+  await owner.fill('input[name=customs_value]', '30000'); await owner.fill('input[name=duty]', '3600'); await owner.fill('input[name=freight_sweden]', '1400');
+  await owner.fill('input[name=vat_stated]', '8750'); await owner.fill('input[name=freight_alloc]', '1400');
+  const poOpt = await owner.locator('form:has(input[name=decision_no]) select[name=po_id] option').nth(1).getAttribute('value');
+  await owner.selectOption('form:has(input[name=decision_no]) select[name=po_id]', poOpt);
+  await owner.click('button:has-text("Bokför beslutet")');
+  await owner.locator('text=Beslutet är bokfört: underlag 35 000,00 kr i ruta 50 och importmoms 8 750,00 kr').waitFor();
+  t = await text(owner);
+  assert(!t.includes('avviker från beslutet') && /TV-2026-0001 Skor från Kina.* 30[\s ]000,00 3[\s ]600,00 35[\s ]000,00 8[\s ]750,00/.test(t), 'beslut: ' + t.slice(0, 2500));
+  await owner.locator('tr.decision a:has-text("TV-2026-0001")').click();
+  await owner.waitForURL(/\/verifikationer\/\d+/);
+  t = await text(owner);
+  assert(['4545', '4549', '2615', '2645', '5720', '2895'].every((a) => t.includes(a)), 'verifikation: ' + t.slice(0, 1500));
+  await owner.goto(`${B}/rapporter/moms?from=${day(0).slice(0, 7)}-01&to=${day(0)}`);
+  t = await text(owner);
+  assert(/50 Beskattningsunderlag vid import 35[\s\u00a0]000 /.test(t) && /60 Utgående moms 25 % på import i ruta 50 8[\s\u00a0]750 /.test(t), 'momsrapport: ' + t.slice(0, 2500));
+  log('Tullverkets beslut bokförs: underlag i ruta 50, importmoms i ruta 60 och avdrag i ruta 48, tull som skuld till Tullverket');
+
+  await owner.goto(B + '/tull');
+  await owner.click('tr.decision:has-text("TV-2026-0001") button:has-text("Fördela på varorna")');
+  await owner.locator('text=5 000,00 kr i tull och frakt är fördelat på 1 artiklar, varav 5 000,00 kr till lagervärdet').waitFor();
+  t = await text(owner);
+  assert(/T-100 Importsko 100 5[\s ]000,00 300,00 350,00/.test(t), 'landed cost: ' + t.slice(-2000));
+  assert((await owner.locator('tr.decision:has-text("TV-2026-0001") button:has-text("Fördela på varorna")').count()) === 0 && (await owner.locator('tr.decision .allocated').count()) === 1, 'fördelas bara en gång');
+  log('tull och frakt fördelas på inköpsorderns varor – snittpriset och lagervärdet blir landed cost');
+
+  await owner.fill('form:has(button:has-text("Spara besked")) input[name=month]', day(0).slice(0, 7));
+  await owner.fill('form:has(button:has-text("Spara besked")) input[name=amount]', '3500');
+  await owner.click('button:has-text("Spara besked")');
+  await owner.locator('text=Tullverkets besked är sparat').waitFor();
+  assert((await owner.locator(`tr.rec-row:has-text("${day(0).slice(0, 7)}") .rec-status`).innerText()).startsWith('Avviker'), 'avvikelse');
+  await owner.fill('form:has(button:has-text("Spara besked")) input[name=amount]', '3600');
+  await owner.click('button:has-text("Spara besked")');
+  await owner.waitForLoadState('networkidle');
+  await owner.goto(B + '/tull');
+  assert((await owner.locator(`tr.rec-row:has-text("${day(0).slice(0, 7)}") .rec-status`).innerText()) === 'Stämmer', 'stämmer');
+  log('avstämning per månad mot Tullverkets besked och mot ruta 50/60 i bokföringen');
+
   //@@NEXT@@
   await browser.close(); mailServer.close();
   console.log('Omgång 13: alla steg gick igenom');

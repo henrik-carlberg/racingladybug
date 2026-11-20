@@ -102,3 +102,32 @@ describe('Kassaflödesanalys och K3', () => {
     expect(k3Changes({ buildingsWithoutComponents: 2, untaxedReserves: 1, hasCashFlow: true, larger: false }).map((c) => c.title)).toContain('Komponentavskrivning');
   });
 });
+
+import { allocate, decisionLines, importVat, landedAverage, reconcile } from '@/lib/customs';
+import { vatReport } from '@/lib/vat';
+describe('Import och tull', () => {
+  it('underlag och moms enligt beslutet, rutorna 50/60/48', () => {
+    const d = { customsValue: 10000000, duty: 1200000, fees: 50000, freightSweden: 250000, vatRate: 25 as const };
+    expect(importVat(d)).toEqual({ base: 11500000, vat: 2875000 });
+    const lines = decisionLines(d);
+    expect(lines.reduce((s, l) => s + l.amount, 0)).toBe(0);
+    const r = vatReport(new Map(lines.map((l) => [l.account, l.amount])));
+    const box = (b: string) => r.boxes.find((x) => x.box === b)?.amount;
+    expect([box('50'), box('60'), box('48'), box('30')]).toEqual([11500000, 2875000, 2875000, 0]);
+    expect(r.toPay).toBe(0);
+    expect(decisionLines(d, false).find((l) => l.account === 2645)).toBeUndefined();
+  });
+  it('omvänd moms 12 % hamnar i ruta 31, inte 11', () => {
+    const r = vatReport(new Map([[2624, -12000], [2645, 12000]]));
+    expect(r.boxes.find((x) => x.box === '31')?.amount).toBe(12000);
+    expect(r.boxes.find((x) => x.box === '11')?.amount).toBe(0);
+  });
+  it('fördelning på varor och nytt snittpris', () => {
+    const a = allocate([{ id: 1, qty: 100, value: 3000000 }, { id: 2, qty: 50, value: 1000000 }], 1250000);
+    expect(a.map((x) => x.allocated)).toEqual([937500, 312500]);
+    expect(a[0].unitExtra).toBe(9375);
+    expect(landedAverage({ onHand: 100, avgCost: 30000, received: 100, allocated: 937500 })).toEqual({ avgCost: 39375, toInventory: 937500 });
+    expect(landedAverage({ onHand: 40, avgCost: 30000, received: 100, allocated: 1000000 })).toEqual({ avgCost: 40000, toInventory: 400000 });
+    expect(reconcile({ decisions: 100, booked: 100, statement: 90 })).toMatchObject({ ok: false, diffStatement: -10 });
+  });
+});
