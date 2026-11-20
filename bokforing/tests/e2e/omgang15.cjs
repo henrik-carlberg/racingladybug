@@ -103,6 +103,54 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert((await text(owner)).includes('Inkomstdeklaration 4'), 'INK4 i deadlines');
   log('bokslut: resultatet fördelas på delägarnas 20x9, årsbokslut med kapitalkonton och INK4 bland deadlines');
 
+  // ================= Del 2: skatteplanering för enskild firma =================
+  await owner.goto(BASE + '/');
+  await owner.fill('input[name=name]', 'Planeringsfirman');
+  await owner.selectOption('select[name=company_type]', 'EF');
+  const pn = orgnrFor('800101' + String(100 + (Date.now() % 800)).padStart(3, '0'));
+  await owner.fill('input[name=orgnr]', `19${pn}`);
+  await owner.fill('input[name=fy_start]', `${YEAR - 1}-01-01`); await owner.fill('input[name=fy_end]', `${YEAR - 1}-12-31`);
+  await owner.click('button:has-text("Skapa bolag")');
+  await owner.waitForURL(/kom-igang/);
+  const E = owner.url().replace(/\/kom-igang.*/, '');
+  await owner.goto(E + '/kunder');
+  await owner.fill('input[name=name]', 'EF-kund AB');
+  await owner.click('form button:has-text("Spara")');
+  await owner.locator('text=Kunden är sparad').waitFor();
+  await owner.goto(E + '/fakturor/ny');
+  await owner.selectOption('select[name=customer_id]', { label: 'EF-kund AB' });
+  await owner.fill('input[name=invoice_date]', `${YEAR - 1}-05-01`);
+  const er = owner.locator('tbody tr').first();
+  await er.locator('td:nth-child(1) input').fill('Uppdrag'); await er.locator('td:nth-child(2) input').fill('1');
+  await er.locator('td:nth-child(3) input').fill('st'); await er.locator('td:nth-child(4) input').fill('1200000');
+  await owner.click('button:has-text("Spara utkast")');
+  await owner.waitForURL(/fakturor\/\d+\?ok/);
+  await owner.click('button:has-text("Bokför faktura")');
+  await owner.locator('text=klar att skicka').first().waitFor();
+  await owner.goto(E + '/bokslut');
+  await owner.locator(`tr:has-text("${YEAR - 1}-01-01") a:has-text("Öppna")`).click();
+  await owner.waitForURL(/\/bokslut\/\d+$/);
+  const efy = owner.url();
+  await owner.click('a:has-text("Skatteplanering NE")');
+  await owner.waitForURL(/ne-planering/);
+  await owner.fill('input[name=slr_pct]', '2'); await owner.fill('input[name=municipal_pct]', '32'); await owner.fill('input[name=brytpunkt]', '640000');
+  await owner.click('button:has-text("Spara satser")');
+  await owner.locator('text=Årets satser är sparade').waitFor();
+  const cellv = async (c) => nb(await owner.locator(`tr.${c} td`).nth(2).innerText());
+  assert((await cellv('ef-pfond')) === '346600,00' && (await cellv('ef-interest')) === '0,00' && (await cellv('ef-expansion')) === '0,00', 'förslag: ' + (await text(owner)).slice(0, 2000));
+  assert(Number(nb(await owner.locator('.ef-saving').innerText()).replace(',', '.')) > 100000, 'besparing');
+  log('NE-planering: periodiseringsfond (högst 30 %) och expansionsfond föreslås så att inkomsten hamnar vid brytpunkten');
+
+  await owner.fill('form:has(button:has-text("Bokför avsättningarna")) input[name=pfond]', '400000');
+  await owner.click('button:has-text("Bokför avsättningarna")');
+  await owner.locator('.flash.error, .flash:has-text("Periodiseringsfonden får vara högst")').first().waitFor();
+  await owner.goto(efy + '/ne-planering');
+  await owner.click('button:has-text("Bokför avsättningarna")');
+  await owner.locator('.ef-booked').waitFor();
+  await owner.goto(E + `/rapporter/huvudbok?account=8811&from=${YEAR - 1}-01-01&to=${YEAR - 1}-12-31`);
+  assert(nb(await text(owner)).includes('346600,00'), 'periodiseringsfonden bokförd');
+  log('avsättningen bokförs inom gränsen (8811 mot 212x) och kan inte överstiga det tillåtna');
+
   //@@NEXT@@
   await browser.close(); mailServer.close();
   console.log('Omgång 15: alla steg gick igenom');

@@ -29,3 +29,31 @@ describe('Handels- och kommanditbolag', () => {
     expect(n3b({ result: 900000, nonDeductible: 100000, taxFree: 0, partners: [P(1, 50), P(2, 50)] })[0].surplus).toBe(500000);
   });
 });
+
+import { activeTax, evaluate, fundLines, interestAllocation, propose } from '@/lib/ef-tax';
+describe('Skatteplanering enskild firma', () => {
+  const base = { result: 120000000, nonDeductible: 0, capitalStart: 100000000, capitalEnd: 150000000, expansionExisting: 0, slrPct: 2, municipalPct: 32, brytpunkt: 64000000 };
+  it('räntefördelning', () => {
+    expect(interestAllocation(100000000, 2)).toMatchObject({ kind: 'positive', max: 8000000 });
+    expect(interestAllocation(4000000, 2).kind).toBe('none');
+    expect(interestAllocation(-100000000, 2)).toMatchObject({ kind: 'negative', max: 3000000, mandatory: true });
+  });
+  it('egenavgifter och skatt', () => {
+    const t = activeTax(100000000, base);
+    expect(t.deduction).toBe(25000000);
+    expect(t.taxable).toBe(75000000);
+    expect(t.fees).toBe(Math.round(75000000 * 0.2897));
+    expect(t.tax).toBe(24000000 + 2200000);
+  });
+  it('förslaget sänker skatten och håller sig inom gränserna', () => {
+    const p = propose(base);
+    expect(p.plan.interest).toBe(8000000);
+    expect(p.plan.pfond).toBeLessThanOrEqual(p.pfondMax);
+    expect(p.pfondMax).toBe(Math.floor(((120000000 - 8000000) * 0.3) / 10000) * 10000);
+    expect(p.saving).toBeGreaterThan(0);
+    expect(p.plan.total).toBeLessThan(p.base.total);
+    expect(p.plan.active - Math.round(p.plan.active * 0.25)).toBeLessThanOrEqual(64000000 + 10000);
+    expect(evaluate(base, { interest: 999999999, pfond: 0, expansion: 0 }).interest).toBe(8000000);
+    expect(fundLines({ year: 2026, pfond: 100, expansion: 50 })).toEqual([{ account: 8811, amount: 100 }, { account: 2126, amount: -100 }, { account: 2010, amount: 50 }, { account: 2050, amount: -50 }]);
+  });
+});
