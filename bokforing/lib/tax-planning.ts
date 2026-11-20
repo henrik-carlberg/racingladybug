@@ -40,8 +40,8 @@ export function prelimProposal(o: { type: 'AB' | 'EF' | 'HB' | 'KB'; ytdProfit: 
 }
 
 // ---------- Bokslutsdispositioner ----------
-export interface Inventories { bookStart: number; overStart: number; acquisitions: number; disposals: number; bookedDepreciation: number; byYear?: { yearsHeld: number; cost: number }[] }
-export interface Proposal { kind: 'koncernbidrag' | 'overavskrivning' | 'periodiseringsfond' | 'aterforing'; title: string; amount: number; taxEffect: number; explanation: string; lines: { account: number; amount: number }[]; required?: boolean }
+export interface Inventories { bookStart: number; overStart: number; acquisitions: number; disposals: number; bookedDepreciation: number; byYear?: { yearsHeld: number; cost: number }[]; bookEnd?: number; reserveNow?: number }
+export interface Proposal { kind: 'koncernbidrag' | 'overavskrivning' | 'periodiseringsfond' | 'aterforing' | 'aterforing_overavskrivning'; title: string; amount: number; taxEffect: number; explanation: string; lines: { account: number; amount: number }[]; required?: boolean }
 
 /** Största tillåtna skattemässiga avskrivning på inventarier: huvudregeln (30-regeln) och kompletteringsregeln (20-regeln), det förmånligaste */
 export function maxDepreciation(inv: Inventories) {
@@ -51,6 +51,32 @@ export function maxDepreciation(inv: Inventories) {
   const rest20 = inv.byYear ? inv.byYear.reduce((s, y) => s + Math.round(y.cost * Math.max(0, 1 - 0.2 * Math.min(5, y.yearsHeld))), 0) : Infinity;
   const rest = Math.min(rest30, rest20);
   return { base, taxStart, max: Math.max(0, base - rest), rule: rest20 < rest30 ? '20-regeln' : '30-regeln' as '20-regeln' | '30-regeln' };
+}
+
+/**
+ * Inventariernas skattemässiga värde enligt de tre metoderna. Räkenskapsenlig avskrivning (30- och 20-regeln) kräver att
+ * överavskrivningen bokförs (2150); restvärdesmetoden (25 %) används när bokföringen inte följer räkenskapsenlig avskrivning.
+ * Reserven får som mest vara bokfört värde minus lägsta skattemässiga värde – överskjutande del ska återföras.
+ */
+export function depreciationMethods(inv: Inventories) {
+  const m = maxDepreciation(inv);
+  const rest30 = Math.round(m.base * 0.7);
+  const rest20 = inv.byYear ? inv.byYear.reduce((s, y) => s + Math.round(y.cost * Math.max(0, 1 - 0.2 * Math.min(5, y.yearsHeld))), 0) : null;
+  const restResidual = Math.round(m.base * 0.75);
+  const lowest = rest20 == null ? rest30 : Math.min(rest30, rest20);
+  const bookEnd = inv.bookEnd ?? null;
+  const maxReserve = bookEnd == null ? null : Math.max(0, bookEnd - lowest);
+  const reserve = inv.reserveNow ?? 0;
+  return {
+    base: m.base,
+    rows: [
+      { rule: '30-regeln (räkenskapsenlig)', depreciation: m.base - rest30, taxValue: rest30 },
+      ...(rest20 == null ? [] : [{ rule: '20-regeln (kompletteringsregeln)', depreciation: m.base - rest20, taxValue: rest20 }]),
+      { rule: 'Restvärdesmetoden (25 %)', depreciation: m.base - restResidual, taxValue: restResidual },
+    ],
+    lowest, bookEnd, maxReserve, reserve, reversal: maxReserve == null ? 0 : Math.max(0, reserve - maxReserve),
+    room: maxReserve == null ? null : Math.max(0, maxReserve - reserve),
+  };
 }
 
 export function yearEndProposals(o: {
@@ -77,10 +103,21 @@ export function yearEndProposals(o: {
       lines: [{ account: 8830, amount }, { account: 2860, amount: -amount }] });
     taxable -= amount;
   }
+  // Överavskrivningar som överstiger det tillåtna måste återföras (t.ex. efter försäljning av inventarier)
+  if (o.inventories && o.inventories.bookEnd != null) {
+    const d = depreciationMethods(o.inventories);
+    if (d.reversal > 0) {
+      out.push({ kind: 'aterforing_overavskrivning', title: 'Återför överavskrivningar', amount: d.reversal, taxEffect: -Math.round(d.reversal * rate), required: true,
+        explanation: `Ackumulerade överavskrivningar (${krs(d.reserve)}) får inte vara större än skillnaden mellan inventariernas bokförda värde (${krs(d.bookEnd ?? 0)}) och lägsta skattemässiga värde (${krs(d.lowest)}). Överskottet ${krs(d.reversal)} återförs och blir skattepliktigt.`,
+        lines: [{ account: 2150, amount: d.reversal }, { account: 8853, amount: -d.reversal }] });
+      taxable += d.reversal;
+    }
+  }
   // Överavskrivningar
   if (o.inventories && taxable > 0) {
     const m = maxDepreciation(o.inventories);
-    const extra = Math.min(taxable, m.max - o.inventories.bookedDepreciation);
+    const room = o.inventories.bookEnd != null ? depreciationMethods(o.inventories).room ?? Infinity : Infinity;
+    const extra = Math.min(taxable, m.max - o.inventories.bookedDepreciation, room);
     if (extra > 10000) {
       out.push({ kind: 'overavskrivning', title: 'Överavskrivningar på inventarier', amount: extra, taxEffect: Math.round(extra * rate),
         explanation: `Enligt ${m.rule} får inventarierna skrivas av med upp till ${krs(m.max)} i deklarationen i år, men bokförd avskrivning enligt plan är ${krs(o.inventories.bookedDepreciation)}. `

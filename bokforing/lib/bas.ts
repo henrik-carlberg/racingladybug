@@ -126,6 +126,7 @@ const ACCOUNTS: Acc[] = [
   [8410, 'Räntekostnader för långfristiga skulder'],
   [8423, 'Räntekostnader för skatter och avgifter'],
   [8811, 'Avsättning till periodiseringsfond', 'AB'],
+  [8853, 'Förändring av överavskrivningar, inventarier', 'AB'],
   [8910, 'Skatt som belastar årets resultat', 'AB'],
   [8999, 'Årets resultat'],
 ];
