@@ -23,6 +23,7 @@ async function fy(companyId: number, fyId: number): Promise<FiscalYear> {
 export interface YearStatus {
   fy: FiscalYear;
   companyType: 'AB' | 'EF';
+  association: boolean;
   resultBeforeTax: number; // öre, vinst positiv
   taxBooked: number;
   nonDeductible: number;
@@ -40,7 +41,7 @@ export interface YearStatus {
 
 export async function yearStatus(companyId: number, fyId: number): Promise<YearStatus> {
   const y = await fy(companyId, fyId);
-  const [c] = await sql<{ company_type: 'AB' | 'EF'; accounting_method: 'invoice' | 'cash' }[]>`SELECT company_type, accounting_method FROM companies WHERE id = ${companyId}`;
+  const [c] = await sql<{ company_type: 'AB' | 'EF'; accounting_method: 'invoice' | 'cash'; org_form: string | null }[]>`SELECT company_type, accounting_method, org_form FROM companies WHERE id = ${companyId}`;
   const sums = await accountSums(companyId, y.start_date, y.end_date);
   let pl = 0, tax = 0, nonDed = 0;
   for (const [n, v] of sums) {
@@ -61,7 +62,7 @@ export async function yearStatus(companyId: number, fyId: number): Promise<YearS
       (SELECT count(*) FROM supplier_invoices WHERE company_id = ${companyId} AND status = 'booked' AND invoice_date <= ${y.end_date})::int AS si,
       NOT EXISTS (SELECT 1 FROM vouchers WHERE company_id = ${companyId} AND source_type = 'vat' AND date = ${y.end_date}) AS vat`;
   return {
-    fy: y, companyType: c.company_type, resultBeforeTax, taxBooked: tax, nonDeductible: nonDed, suggestedTax,
+    fy: y, companyType: c.company_type, association: c.org_form === 'ideell', resultBeforeTax, taxBooked: tax, nonDeductible: nonDed, suggestedTax,
     resultAfterTax: resultBeforeTax - tax, resultBooked: (sums.get(8999) ?? 0) !== 0,
     unreconciledBank: o.bank, draftInvoices: o.drafts, unpaidSupplierInvoicesWithoutApproval: o.si, vatUnsettled: o.vat,
     accountingMethod: c.accounting_method, cashOpenInvoices: o.cash,
@@ -99,7 +100,7 @@ export async function closeYear(actor: Actor, fyId: number) {
   if (s.fy.closed) throw new ConflictError('Räkenskapsåret är redan stängt');
   if (s.resultBooked) throw new ConflictError('Årets resultat är redan bokfört');
   if (s.cashOpenInvoices) throw new ConflictError('Bokför först de obetalda fakturorna per bokslutsdagen (steg 1)');
-  const equity = s.companyType === 'AB' ? 2099 : 2019;
+  const equity = s.association ? 2069 : s.companyType === 'AB' ? 2099 : 2019;
   const res = s.resultAfterTax; // vinst positiv
   return sql.begin(async (tx) => {
     let voucherId: number | null = null;
@@ -129,13 +130,18 @@ export async function closeYear(actor: Actor, fyId: number) {
  */
 export async function carryForward(actor: Actor, fyId: number, input: Record<string, unknown>) {
   const y = await fy(actor.companyId, fyId);
-  const [c] = await sql<{ company_type: 'AB' | 'EF' }[]>`SELECT company_type FROM companies WHERE id = ${actor.companyId}`;
+  const [c] = await sql<{ company_type: 'AB' | 'EF'; org_form: string | null }[]>`SELECT company_type, org_form FROM companies WHERE id = ${actor.companyId}`;
   const done = await sql`SELECT 1 FROM vouchers WHERE company_id = ${actor.companyId} AND fiscal_year_id = ${fyId} AND source_type = 'carry_forward'
     AND NOT EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = vouchers.id)`;
   if (done.length) throw new ConflictError('Förra årets resultat är redan överfört');
   const ib = await openingBalances(actor.companyId, y.start_date);
   const entries: { account: number; amount: number }[] = [];
-  if (c.company_type === 'AB') {
+  if (c.org_form === 'ideell') {
+    // Förening: årets resultat (2069) balanseras i ny räkning enligt årsmötets beslut
+    const v = ib.get(2069) ?? 0;
+    if (!v) throw new ValidationError('Det finns inget resultat på 2069 att balansera');
+    entries.push({ account: 2069, amount: -v }, { account: 2068, amount: v });
+  } else if (c.company_type === 'AB') {
     const result = -(ib.get(2099) ?? 0) - (ib.get(2098) ?? 0); // vinst positiv
     if (result === 0) throw new ValidationError('Det finns inget resultat på 2098/2099 att disponera');
     const dividend = optInt(input, 'dividend', 'Utdelning') ?? 0;
@@ -153,7 +159,7 @@ export async function carryForward(actor: Actor, fyId: number, input: Record<str
     entries.push({ account: 2010, amount: total });
   }
   return sql.begin((tx) => createVoucher(tx, {
-    actor, date: y.start_date, description: c.company_type === 'AB' ? 'Resultatdisposition enligt årsstämma' : 'Överföring till eget kapital',
+    actor, date: y.start_date, description: c.org_form === 'ideell' ? 'Resultatdisposition enligt årsmöte' : c.company_type === 'AB' ? 'Resultatdisposition enligt årsstämma' : 'Överföring till eget kapital',
     lines: fromSigned(entries), sourceType: 'carry_forward',
   }));
 }
