@@ -53,6 +53,8 @@ export interface AnnualReportInput {
   board: { name: string; role: string }[];
   employees: number; // medelantal anställda
   place: string;
+  /** Bostadsrättsförening: nyckeltal enligt BFNAR 2023:1 och fond för yttre underhåll */
+  brf?: { rows: { label: string; value: number }[]; fund: { opening: number; closing: number } };
   /** K3 (BFNAR 2012:1): kassaflödesanalys och utökade noter */
   k3?: { cashflow: CashFlow; opening: number; closing: number; deferred: { rows: { label: string; amount: number; tax: number }[]; liability: number; asset: number }; components: { name: string; cost: number; life_months: number; booked: number }[]; untaxed: number };
 }
@@ -109,6 +111,8 @@ export function annualReportHtml(i: AnnualReportInput): string {
 <tr><td>Soliditet (%)</td>${years.map((y) => `<td style="text-align:right">${keyFigures(y).solidity.toString().replace('.', ',')}</td>`).join('')}</tr>
 </tbody></table>
 <p><small>Soliditet: justerat eget kapital (eget kapital + 79,4 % av obeskattade reserver) i procent av balansomslutningen.</small></p>
+${i.brf ? `<h3>Nyckeltal för bostadsrättsföreningen</h3><table><tbody>${i.brf.rows.map((r) => `<tr><td>${esc(r.label)}</td><td style="text-align:right">${r.value.toLocaleString('sv-SE')}</td></tr>`).join('')}</tbody></table>
+<h3>Fond för yttre underhåll</h3><p>Vid årets början ${kr(i.brf.fund.opening)} kr, vid årets slut ${kr(i.brf.fund.closing)} kr.</p>` : ''}
 <h3>Förändringar i eget kapital</h3>
 <table><thead><tr><th></th><th style="text-align:right">Aktiekapital</th><th style="text-align:right">Balanserat resultat</th><th style="text-align:right">Årets resultat</th><th style="text-align:right">Totalt</th></tr></thead><tbody>
 <tr><td>Belopp vid årets ingång</td><td style="text-align:right">${kr(ibShare)}</td><td style="text-align:right">${kr(ibRetained)}</td><td style="text-align:right">${kr(ibYear)}</td><td style="text-align:right">${kr(ibShare + ibRetained + ibYear)}</td></tr>
@@ -161,7 +165,7 @@ ${bal('Kortfristiga placeringar', [[1800, 1899]])}
 ${bal('Kassa och bank', [[1900, 1999]])}
 ${row('Summa tillgångar', k.totalAssets, kp?.totalAssets ?? null, { bold: true })}
 <tr><td colspan="3"><b>Eget kapital och skulder</b></td></tr>
-${row('Aktiekapital', e.shareCap, prev ? equityParts(prev).shareCap : null)}
+${row(i.brf ? 'Insatser, upplåtelseavgifter och fond för yttre underhåll' : 'Aktiekapital', e.shareCap, prev ? equityParts(prev).shareCap : null)}
 ${row('Balanserat resultat', e.retained, prev ? equityParts(prev).retained : null)}
 ${row('Årets resultat', e.thisYear, kp?.result ?? null)}
 ${row('Summa eget kapital', e.shareCap + e.retained + e.thisYear, prev ? equityParts(prev).shareCap + equityParts(prev).retained + (kp?.result ?? 0) : null, { bold: true })}
