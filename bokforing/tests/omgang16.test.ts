@@ -114,3 +114,30 @@ describe('Bidrag', () => {
       .toEqual({ costs: 10000000, earned: 4000000, toRequest: 1000000, budgetUsedPct: 50, remainingGrant: 0 });
   });
 });
+
+import { ledgerEvidence, materialitySuggestion, musSample } from '@/lib/audit-work';
+describe('Stickprov för revision', () => {
+  it('beloppsviktat urval: nyckelposter alltid, övriga systematiskt efter belopp', () => {
+    const items = [{ id: 1, amount: 500000 }, { id: 2, amount: 10000 }, { id: 3, amount: 90000 }, { id: 4, amount: 95000 }, { id: 5, amount: 1000 }, { id: 6, amount: 99000 }];
+    const r = musSample(items, 100000, 3);
+    expect(r.filter((x) => x.key).map((x) => x.id)).toEqual([1]);
+    const rest = r.filter((x) => !x.key);
+    // 295 000 kr utanför nyckelposterna med intervall 100 000 ger 2–3 urval
+    expect(rest.length).toBeGreaterThanOrEqual(2);
+    expect(rest.length).toBeLessThanOrEqual(3);
+    expect(musSample(items, 100000, 3)).toEqual(r);
+    expect(() => musSample(items, 0)).toThrow();
+  });
+  it('förslag till väsentlighet', () => {
+    const s = materialitySuggestion({ revenue: 1000000000, profit: 50000000, assets: 400000000 });
+    expect(s.options.map((o) => o.amount)).toEqual([10000000, 2500000, 4000000]);
+    expect(s).toMatchObject({ amount: 2500000, performance: 1870000, trivial: 120000 });
+    expect(s.recommended?.basis).toBe('Resultat före skatt');
+    expect(materialitySuggestion({ revenue: 1000000000, profit: -100, assets: 0 }).recommended?.basis).toBe('Omsättning');
+  });
+  it('efterföljande betalning som underlag', () => {
+    expect(ledgerEvidence({ open: 100, paidAfter: 100, paidAfterDate: '2027-01-15', due: '2026-12-20' }, '2026-12-31').status).toBe('paid');
+    expect(ledgerEvidence({ open: 100, paidAfter: 0, paidAfterDate: null, due: '2026-08-01' }, '2026-12-31').text).toContain('osäker');
+    expect(ledgerEvidence({ open: 100, paidAfter: 40, paidAfterDate: '2027-01-02', due: '2026-12-01' }, '2026-12-31').status).toBe('partly');
+  });
+});

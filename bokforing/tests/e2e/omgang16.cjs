@@ -356,6 +356,63 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   await owner.locator('text=Återbetalningen är bokförd').waitFor();
   log('sannolik återbetalning: intäkten förs tillbaka, utbetalt blir skuld (2976) och betalas tillbaka');
 
+  // ================= Del 5: stickprov för bokslutsrevision =================
+  const B1 = `${BASE}/c/1`;
+  const rev = await login(browser, 'revisor.omg4@example.com', 'granskarlosen1');
+  await rev.goto(B1 + '/revision');
+  // Granskningen av året kan redan vara startad (omgång 9) – öppna den, annars starta den
+  const existing = rev.locator(`a:text-is("${YEAR}-01-01 – ${YEAR}-12-31")`);
+  if (await existing.count()) await existing.click();
+  else { await rev.selectOption('select[name=fy]', { label: `${YEAR}-01-01 – ${YEAR}-12-31` }); await rev.click('button:has-text("Starta granskning")'); }
+  await rev.waitForURL(/revision\/\d+/);
+  const RU = rev.url().split('?')[0].split('#')[0];
+  const okMsg = async (part) => rev.waitForURL((u) => decodeURIComponent(u.href.replace(/\+/g, ' ')).includes(part));
+  assert(await rev.locator('.materiality-suggestion').count(), 'förslag till väsentlighet visas');
+  t = await rev.locator('.materiality-suggestion').innerText();
+  assert(t.includes('av omsättning') && t.includes('genomförandeväsentlighet'), 'riktmärken: ' + t);
+  await rev.click('.materiality-suggestion button:has-text("Använd förslaget")');
+  await okMsg('Väsentligheten är sparad');
+  assert(await rev.locator('.materiality .perf').count(), 'genomförandeväsentlighet sparad');
+  log('väsentlighet föreslås ur omsättning, resultat och balansomslutning, med genomförandeväsentlighet och obetydlighetsgräns');
+
+  await rev.goto(RU);
+  await rev.selectOption('form.new-sample select[name=method]', 'mus');
+  await rev.click('button:has-text("Lägg till i stickprovet")');
+  await okMsg('verifikationer lades till');
+  assert((await text(rev)).includes('Beloppsviktat urval') || (await text(rev)).includes('Nyckelpost'), 'MUS-urval');
+  log('beloppsviktat urval (MUS) av verifikationer med genomförandeväsentligheten som intervall');
+
+  await rev.goto(RU);
+  await rev.selectOption('form.ledger-sample select[name=kind]', 'customer');
+  await rev.selectOption('form.ledger-sample select[name=method]', 'largest');
+  await rev.fill('form.ledger-sample input[name=count]', '3');
+  await rev.click('button:has-text("Lägg till ur reskontran")');
+  await okMsg('kundfakturor lades till i stickprovet');
+  await rev.goto(RU);
+  await rev.selectOption('form.ledger-sample select[name=kind]', 'supplier');
+  await rev.selectOption('form.ledger-sample select[name=method]', 'largest');
+  await rev.fill('form.ledger-sample input[name=count]', '2');
+  await rev.click('button:has-text("Lägg till ur reskontran")');
+  await okMsg('leverantörsfakturor lades till i stickprovet');
+  await rev.goto(RU);
+  const lrows = rev.locator('table.ledger-samples tr.ledger-row');
+  assert((await rev.locator('tr.ledger-row.customer').count()) >= 1 && (await rev.locator('tr.ledger-row.supplier').count()) >= 1, 'stickprov ur båda reskontrorna');
+  assert(((await lrows.first().locator('.evidence').innerText()) || '').length > 5, 'underlag om efterföljande betalning');
+  const lid = await lrows.first().getAttribute('id');
+  await lrows.first().locator('input[value=remark]').check();
+  await lrows.first().locator('input[name=comment]').fill('Saldobekräftelse saknas');
+  await lrows.first().locator('button:has-text("Spara")').click();
+  await rev.locator(`#${lid} .badge:has-text("Anmärkning")`).waitFor();
+  await rev.locator('table.ledger-samples tr.ledger-row').nth(1).locator('input[value=ok]').check();
+  await rev.locator('table.ledger-samples tr.ledger-row').nth(1).locator('button:has-text("Spara")').click();
+  await rev.locator('table.ledger-samples tr.ledger-row').nth(1).locator('.badge:has-text("Utan anmärkning")').waitFor();
+  await rev.click('button:has-text("Skicka anmärkningar till bolaget")');
+  await okMsg('anmärkningar är skickade');
+  await owner.goto(RU);
+  t = await text(owner);
+  assert(t.includes('Anmärkningar på reskontran') && t.includes('Saldobekräftelse saknas') && !(await owner.locator('form.ledger-sample').count()), 'bolaget ser anmärkningen men kan inte ta stickprov');
+  log('stickprov ur kund- och leverantörsreskontran per balansdagen med efterföljande betalningar som underlag, avbockning och anmärkning till bolaget');
+
   //@@NEXT@@
   await browser.close(); mailServer.close();
   console.log('Omgång 16: alla steg gick igenom');
