@@ -5,6 +5,11 @@ type Acc = [number, string, ('AB' | 'EF' | 'HB' | 'KB')?];
 
 const ACCOUNTS: Acc[] = [
   // 1 Tillgångar
+  [1110, 'Byggnader'],
+  [1119, 'Ackumulerade avskrivningar på byggnader'],
+  [1130, 'Mark'],
+  [1150, 'Markanläggningar'],
+  [1159, 'Ackumulerade avskrivningar på markanläggningar'],
   [1220, 'Inventarier och verktyg'],
   [1229, 'Ackumulerade avskrivningar på inventarier och verktyg'],
   [1250, 'Datorer'],
@@ -121,6 +126,7 @@ const ACCOUNTS: Acc[] = [
   [7530, 'Särskild löneskatt'],
   [7631, 'Personalrepresentation, avdragsgill'],
   [7690, 'Övriga personalkostnader'],
+  [7820, 'Avskrivningar på byggnader och markanläggningar'],
   [7832, 'Avskrivningar på inventarier och verktyg'],
   [7833, 'Avskrivningar på datorer'],
   // 8 Finansiella poster och bokslutsdispositioner

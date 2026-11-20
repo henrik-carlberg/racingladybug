@@ -2,7 +2,7 @@
 import { vatRateOf } from './coding-memory';
 
 export interface Check { level: 'error' | 'warn' | 'info'; text: string }
-export interface Period { lockedUntil: string | null; fiscalYears: { start: string; end: string; closed: boolean }[] }
+export interface Period { lockedUntil: string | null; fiscalYears: { start: string; end: string; closed: boolean }[]; vatDeclared?: { from: string; to: string }[] }
 export interface SupplierHistory { count: number; median: number; numbers: string[]; recent: { date: string; total: number }[] }
 
 const krs = (o: number) => (o / 100).toLocaleString('sv-SE', { maximumFractionDigits: 0 }) + ' kr';
@@ -22,6 +22,8 @@ export function dateChecks(date: string, p: Period, today: string): Check[] {
   const fy = p.fiscalYears.find((f) => date >= f.start && date <= f.end);
   if (!fy) out.push({ level: 'error', text: 'Det finns inget räkenskapsår för datumet. Lägg upp det under Inställningar eller kontrollera datumet.' });
   else if (fy.closed) out.push({ level: 'error', text: `Räkenskapsåret ${fy.start} – ${fy.end} är avslutat.` });
+  const vp = p.vatDeclared?.find((x) => date >= x.from && date <= x.to);
+  if (vp && !(p.lockedUntil && date <= p.lockedUntil)) out.push({ level: 'warn', text: `Momsen för ${vp.from} – ${vp.to} är redan deklarerad. Påverkar verifikationen momsen behöver deklarationen rättas (Momsrapporten visar rättelsen).` });
   if (date > addDays(today, 30)) out.push({ level: 'warn', text: 'Datumet ligger mer än en månad fram i tiden. Stämmer det?' });
   else if (date < addDays(today, -365)) out.push({ level: 'warn', text: 'Datumet är mer än ett år gammalt. Stämmer det?' });
   return out;

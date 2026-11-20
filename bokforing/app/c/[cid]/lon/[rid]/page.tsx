@@ -54,6 +54,7 @@ export default async function Run({ params, searchParams }: { params: Promise<{ 
           {!draft && <a className="btn" href={`${b}/lon/${run.id}/agi`}>Ladda ner AGI-fil</a>}
           {!draft && <form action={prepareAgi.bind(null, company.id, run.id)}><button className="secondary">Förbered AGI för inlämning</button></form>}
           <Link className="btn secondary" href={`${b}/lon/${run.id}/pension`}>Pension och försäkringar</Link>
+          <Link className="btn secondary" href={`${b}/lon/${run.id}/fou`}>Forskningsavdrag</Link>
           <Link className="btn secondary" href={`${b}/lon`}>Tillbaka</Link>
         </div>
       </div>

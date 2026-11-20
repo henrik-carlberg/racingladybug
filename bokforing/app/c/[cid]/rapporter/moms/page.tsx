@@ -5,7 +5,8 @@ import { vatReport } from '@/lib/vat';
 import { vatChecks } from '@/lib/services/tax-planning';
 import { Flash, type SP } from '@/components/ui';
 import { kr, monthEnd, today } from '@/lib/format';
-import { settleVat } from './actions';
+import { correctVat, settleVat } from './actions';
+import { correctionStatus } from '@/lib/services/vat-correction';
 import { prepareVat } from '../../inlamning/actions';
 import { Help } from '@/components/Help';
 
@@ -32,6 +33,7 @@ export default async function Vat({ params, searchParams }: { params: Promise<{ 
   const sums = await accountSums(company.id, from, to, { excludeVatSettlements: true });
   const { boxes, toPay } = vatReport(sums);
   const checks = await vatChecks(company.id, from, to);
+  const corr = await correctionStatus(company.id, from, to);
   const [settled] = await sql<{ id: number; label: string }[]>`
     SELECT v.id, v.series || v.number AS label FROM vouchers v WHERE v.company_id = ${company.id} AND v.source_type = 'vat'
       AND v.date BETWEEN ${from} AND ${to} AND NOT EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = v.id)`;
@@ -68,6 +70,21 @@ export default async function Vat({ params, searchParams }: { params: Promise<{ 
         <button className="secondary">Förbered momsdeklaration för inlämning</button>
         <span className="muted small">Skapar en eSKD-fil för Skatteverket som du kan lämna in direkt eller via e-tjänsten.</span>
       </form>
+      {corr && (corr.needed ? (
+        <section className="card stack vat-correction">
+          <h2 style={{ margin: 0, fontSize: '1.05rem' }}>Perioden är deklarerad – bokföringen har ändrats sedan dess</h2>
+          <table><thead><tr><th>Ruta</th><th>Beskrivning</th><th className="num">Deklarerat</th><th className="num">Nu</th><th className="num">Skillnad</th></tr></thead>
+            <tbody>{corr.rows.map((r) => <tr key={r.box} className="corr-row" data-box={r.box}><td>{r.box}</td><td>{r.label}</td><td className="num">{kr(r.declared)}</td><td className="num">{kr(r.current)}</td><td className="num">{kr(r.diff)}</td></tr>)}</tbody></table>
+          <p style={{ margin: 0 }}>{corr.toPayDiff >= 0 ? <>Rättelsen ger <b className="corr-diff">{kr(corr.toPayDiff)}</b> kr mer att betala.</> : <>Rättelsen ger <b className="corr-diff">{kr(-corr.toPayDiff)}</b> kr tillbaka.</>}
+            {corr.daysLate > 0 && corr.toPayDiff > 0 ? ` Momsen förföll ${corr.due} – Skatteverket debiterar kostnadsränta från förfallodagen (${corr.daysLate} dagar hittills).` : corr.toPayDiff < 0 ? ' Du får intäktsränta på det som betalats för mycket.' : ''}</p>
+          <form action={correctVat.bind(null, company.id)} className="row">
+            <input type="hidden" name="from" value={from} /><input type="hidden" name="to" value={to} />
+            <label>Bokför rättelsen per<input type="date" name="date" defaultValue={today()} /></label>
+            <div style={{ flex: '0 0 auto' }}><button>Bokför rättelse och förbered ny deklaration</button></div>
+          </form>
+          <p className="small muted" style={{ margin: 0 }}>En rättelse lämnas som en ny, fullständig momsdeklaration för perioden. Ändringen förs från momskontona till 2650 med dagens datum så att låsta perioder inte påverkas.</p>
+        </section>
+      ) : <p className="small muted vat-declared">Perioden är deklarerad{corr.corrections ? ` och rättad ${corr.corrections} gång${corr.corrections > 1 ? 'er' : ''}` : ''} – bokföringen stämmer med deklarationen.</p>)}
       {settled ? <p className="muted">Momsen för perioden är avräknad i <a href={`/c/${company.id}/verifikationer/${settled.id}`}>{settled.label}</a>.</p> : (
         <form action={settleVat.bind(null, company.id)} className="card actions">
           <input type="hidden" name="from" value={from} /><input type="hidden" name="to" value={to} />

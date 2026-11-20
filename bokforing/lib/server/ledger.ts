@@ -99,7 +99,7 @@ export async function voucherLines(db: Tx | typeof sql, voucherId: number): Prom
 }
 
 /** Rättelseverifikation (BFL 5 kap 5 §): ny verifikation med omvända belopp som hänvisar till originalet. */
-const SUBLEDGER_SOURCES = new Set(['bad_debt_undo', 'security_undo', 'provision', 'conversion', 'bad_debt', 'bad_debt_recovery', 'security_trade', 'security_valuation', 'coop_insats', 'coop_refund', 'foundation_grant', 'retention', 'retention_release', 'capital_insurance', 'shareholder_contribution']);
+const SUBLEDGER_SOURCES = new Set(['fou_deduction', 'property_tax', 'production', 'vat_correction', 'bad_debt_undo', 'security_undo', 'provision', 'conversion', 'bad_debt', 'bad_debt_recovery', 'security_trade', 'security_valuation', 'coop_insats', 'coop_refund', 'foundation_grant', 'retention', 'retention_release', 'capital_insurance', 'shareholder_contribution']);
 
 export async function reverseVoucher(tx: Tx, actor: Actor, voucherId: number, date: string, reason: string) {
   const companyId = actor.companyId;
@@ -109,6 +109,12 @@ export async function reverseVoucher(tx: Tx, actor: Actor, voucherId: number, da
   // Verifikationer som hör till en underreskontra (insatser, återbäring, stiftelsebidrag, innehållna belopp) rättas där –
   // en fristående rättelse skulle göra reskontran och bokföringen osams
   if (orig.source_type && SUBLEDGER_SOURCES.has(orig.source_type)) throw new BookkeepingError('Verifikationen hör till en reskontra (t.ex. kundförluster, insatser, bidrag eller innehållna belopp) och rättas där, inte här');
+  // En momsavräkning som redan har rättats får inte makuleras – då skulle rättelsen räknas en gång till vid nästa avräkning
+  if (orig.source_type === 'vat') {
+    const [c] = await tx`SELECT 1 FROM vat_declarations d JOIN vouchers v ON v.id = ${voucherId}
+      WHERE d.company_id = ${companyId} AND d.kind = 'correction' AND d.period_to = v.date LIMIT 1`;
+    if (c) throw new BookkeepingError('Momsavräkningen för perioden har rättats och kan inte makuleras – gör en ny rättelse i momsrapporten i stället');
+  }
   // En rättelse av en reskontraverifikation får inte heller makuleras fristående (då blir reskontran och bokföringen osams)
   if (orig.source_type === 'reversal') {
     const [o] = await tx<{ source_type: string | null }[]>`SELECT o.source_type FROM vouchers v JOIN vouchers o ON o.id = v.corrects_id WHERE v.id = ${voucherId}`;
@@ -132,8 +138,8 @@ export async function accountSums(companyId: number, from: string, to: string, o
     FROM voucher_lines l JOIN vouchers v ON v.id = l.voucher_id
     WHERE v.company_id = ${companyId} AND v.date BETWEEN ${from} AND ${to}
       AND v.source_type IS DISTINCT FROM 'opening_balance'
-      ${opts.excludeVatSettlements ? sql`AND v.source_type IS DISTINCT FROM 'vat'
-        AND NOT (v.source_type = 'reversal' AND EXISTS (SELECT 1 FROM vouchers o WHERE o.id = v.corrects_id AND o.source_type = 'vat'))` : sql``}
+      ${opts.excludeVatSettlements ? sql`AND COALESCE(v.source_type, '') NOT IN ('vat', 'vat_correction')
+        AND NOT (v.source_type = 'reversal' AND EXISTS (SELECT 1 FROM vouchers o WHERE o.id = v.corrects_id AND o.source_type IN ('vat', 'vat_correction')))` : sql``}
     GROUP BY l.account_number`;
   return new Map(rows.map((r) => [r.account_number, r.balance]));
 }

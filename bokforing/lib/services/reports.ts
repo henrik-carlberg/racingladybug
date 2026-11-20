@@ -24,10 +24,14 @@ export async function settleVat(actor: Actor, from: string, to: string) {
   if (!from || !to || to < from) throw new ValidationError('Ange giltig period');
   const report = await getVatReport(actor.companyId, from, to);
   if (report.settlement_voucher_id) throw new ConflictError('Det finns redan en momsavräkning för perioden');
-  const lines = vatSettlementLines(await accountSums(actor.companyId, from, to, { excludeVatSettlements: true }));
+  const sums = await accountSums(actor.companyId, from, to, { excludeVatSettlements: true });
+  const lines = vatSettlementLines(sums);
   if (lines.length === 0) throw new ValidationError('Inga momstransaktioner i perioden');
   return sql.begin(async (tx) => {
     const v = await createVoucher(tx, { actor, date: to, description: `Momsavräkning ${from} – ${to}`, lines, sourceType: 'vat' });
+    // Ögonblicksbild av det som deklareras – grunden för en senare rättelse
+    await tx`INSERT INTO vat_declarations ${tx({ company_id: actor.companyId, period_from: from, period_to: to, kind: 'original', sums: tx.json(Object.fromEntries([...sums].map(([k, x]) => [String(k), Number(x)])) as never) as never,
+      to_pay: report.to_pay, voucher_id: v.id, created_by: actor.userId })}`;
     await auditBy(tx, actor, 'settle', 'vat', v.id, { from, to });
     const out = { ...report, settlement_voucher_id: v.id };
     await emit(tx, actor.companyId, 'vat.settled', out);

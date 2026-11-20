@@ -164,3 +164,41 @@ export async function obsolete(cid: number, pid: number, fd: FormData) {
   await attempt(`${base(cid)}/varde`, () => svc.setObsolete(actor, pid, { obsolete_pct: str(fd, 'obsolete_pct') }));
   done(`${base(cid)}/varde`, 'Inkuransen är sparad');
 }
+
+// ---------- Tillverkning ----------
+const mbase = (cid: number) => `${base(cid)}/tillverkning`;
+const form = (fd: FormData) => Object.fromEntries([...fd.entries()].map(([k, v]) => [k, String(v)]));
+export async function saveBom(cid: number, fd: FormData) {
+  const actor = await ctx(cid);
+  const m = await import('./manufacturing');
+  await attempt(mbase(cid), () => m.saveBom(actor, form(fd)));
+  done(mbase(cid), 'Stycklistan är sparad');
+}
+export async function createProduction(cid: number, fd: FormData) {
+  const actor = await ctx(cid);
+  const m = await import('./manufacturing');
+  await attempt(mbase(cid), () => m.createOrder(actor, form(fd)));
+  done(mbase(cid), 'Tillverkningsordern är skapad');
+}
+export async function startProduction(cid: number, id: number, fd: FormData) {
+  const actor = await ledgerCtx(cid);
+  const m = await import('./manufacturing');
+  const { kr } = await import('@/lib/format');
+  let material = 0;
+  await attempt(mbase(cid), async () => { material = await m.start(actor, id, form(fd)); });
+  done(mbase(cid), `Ordern är startad – material ${kr(material)} kr är fört till produkter i arbete`);
+}
+export async function completeProduction(cid: number, id: number, fd: FormData) {
+  const actor = await ledgerCtx(cid);
+  const m = await import('./manufacturing');
+  const { kr } = await import('@/lib/format');
+  let r = { total: 0, perUnit: 0 };
+  await attempt(mbase(cid), async () => { r = await m.complete(actor, id, form(fd)); });
+  done(mbase(cid), `Ordern är färdig: självkostnad ${kr(r.total)} kr (${kr(Math.round(r.perUnit))} kr per st) är förd till lagret`);
+}
+export async function cancelProduction(cid: number, id: number) {
+  const actor = await ctx(cid);
+  const m = await import('./manufacturing');
+  await attempt(mbase(cid), () => m.cancel(actor, id));
+  done(mbase(cid), 'Ordern är makulerad');
+}
