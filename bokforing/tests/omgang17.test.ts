@@ -54,3 +54,26 @@ describe('Fåmansföretag och 3:12', () => {
     expect(insuranceWritedown(1000, 1200)).toBe(0);
   });
 });
+
+import { mealBenefit, representationLines, restaurantZLines } from '@/lib/restaurant';
+describe('Hotell och restaurang', () => {
+  const sum = (l: { amount: number }[]) => l.reduce((s, x) => s + x.amount, 0);
+  it('dagskassa med mat 12 %, alkohol 25 % och kortdricks', () => {
+    const z = restaurantZLines({ food: 1120000, alcohol: 250000, tips: 30000, payments: { card: 1000000, cash: 400000 } });
+    expect(sum(z.lines)).toBe(0);
+    expect(z.lines).toContainEqual({ account: 2897, amount: -30000, description: 'Kortdricks till personalen' });
+    expect(z.lines).toContainEqual({ account: 2621, amount: -120000 });
+    expect(z.lines).toContainEqual({ account: 2611, amount: -50000 });
+    expect(() => restaurantZLines({ food: 1000, alcohol: 0, tips: 0, payments: { card: 900 } })).toThrow();
+  });
+  it('personalmat: förmånsvärde, skattepliktigt och uttagsmoms', () => {
+    expect(mealBenefit({ breakfasts: 0, lunches: 10, dinners: 0, paid: 30000 }, { breakfast: 6500, lunch: 13000, dinner: 13000 })).toEqual({ value: 130000, taxable: 100000, vat: 13929 });
+  });
+  it('representation med blandad moms och tak 300 kr per person', () => {
+    const r = representationLines({ food: 112000, drinks: 50000, persons: 2 });
+    expect(r.deductible).toBe(9429);
+    expect(r.vat).toBe(22000);
+    expect(sum(r.lines)).toBe(0);
+    expect(representationLines({ food: 11200, drinks: 0, persons: 4 }).deductible).toBe(1200);
+  });
+});

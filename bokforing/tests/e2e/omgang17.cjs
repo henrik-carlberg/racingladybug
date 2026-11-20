@@ -122,6 +122,50 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await text(owner)).includes('5000,00'), 'nedskrivning 8270');
   log('kapitalförsäkring: premier på 1385, avkastningsskatt beräknad och nedskrivning vid bestående värdenedgång');
 
+  // ================= Del 3: hotell och restaurang =================
+  const R = `${BASE}/c/1`;
+  const zno = 'Z' + (Date.now() % 1000000);
+  await owner.goto(R + '/restaurang');
+  const zf = owner.locator('form:has(button:has-text("Bokför dagskassan"))');
+  await zf.locator('input[name=z_number]').fill(zno);
+  await zf.locator('input[name=food]').fill('11200'); await zf.locator('input[name=alcohol]').fill('2500'); await zf.locator('input[name=tips]').fill('300');
+  await zf.locator('input[name=pay_card]').fill('9000');
+  await zf.locator('button:has-text("Bokför dagskassan")').click();
+  await owner.locator('text=ska vara försäljningen').waitFor();
+  await owner.goto(R + '/restaurang');
+  const before = Number(nb(await owner.locator('.tips-liability').innerText()).replace(',', '.'));
+  await zf.locator('input[name=z_number]').fill(zno);
+  await zf.locator('input[name=food]').fill('11200'); await zf.locator('input[name=alcohol]').fill('2500'); await zf.locator('input[name=tips]').fill('300');
+  await zf.locator('input[name=pay_card]').fill('10000'); await zf.locator('input[name=pay_cash]').fill('4000');
+  await zf.locator('button:has-text("Bokför dagskassan")').click();
+  await owner.locator('text=Dagskassan är bokförd').waitFor();
+  await owner.goto(R + '/restaurang');
+  assert(Math.abs(Number(nb(await owner.locator('.tips-liability').innerText()).replace(',', '.')) - before - 300) < 0.01, 'dricks som skuld 2897');
+  assert((await owner.locator('table.z-reports').innerText()).includes(zno), 'Z-rapporten listas');
+  log('restaurangkassa: mat 12 %, alkohol 25 % och kortdricks som skuld till personalen – betalningarna ska gå ihop');
+
+  const mf = owner.locator('form:has(button:has-text("Registrera"))').filter({ has: owner.locator('input[name=lunches]') });
+  await mf.locator('input[name=lunches]').fill('10'); await mf.locator('input[name=paid]').fill('300');
+  await mf.locator('input[name=v_lunch]').fill('130');
+  await mf.locator('button:has-text("Registrera")').click();
+  await owner.locator('text=Personalmaten är registrerad').waitFor();
+  t = nb(await owner.locator('.flash').first().innerText());
+  assert(t.includes('förmånsvärde1300,00') && t.includes('skattepliktigt1000,00'), 'kostförmån: ' + t);
+  await owner.click('button:has-text("Bokför uttagsmoms")');
+  await owner.locator('text=är bokförd för').waitFor();
+  assert(nb(await owner.locator('.flash').first().innerText()).includes('139,29'), 'uttagsmoms 12/112 av 1 300');
+  log('personalmat: kostförmån enligt schablon minus egen betalning till lönen, uttagsmoms 12 % bokförd per månad');
+
+  await owner.goto(R + '/restaurang#representation');
+  const rf = owner.locator('form:has(button:has-text("Bokför representation"))');
+  await rf.locator('input[name=food]').fill('1120'); await rf.locator('input[name=drinks]').fill('500'); await rf.locator('input[name=persons]').fill('2');
+  await rf.locator('input[name=purpose]').fill('Förhandling med leverantör, två deltagare');
+  await rf.locator('button:has-text("Bokför representation")').click();
+  await owner.locator('text=Representationen är bokförd').waitFor();
+  t = nb(await owner.locator('.flash').first().innerText());
+  assert(t.includes('avdragsgillmoms94,29krav220,00'), 'moms med tak 300 kr/person: ' + t);
+  log('representation med mat och vin: ej avdragsgill kostnad, moms avdragsgill på högst 300 kr per person fördelat på momssatserna');
+
   //@@NEXT@@
   await browser.close(); mailServer.close();
   console.log('Omgång 17: alla steg gick igenom');
