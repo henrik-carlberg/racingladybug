@@ -62,7 +62,7 @@ export async function yearStatus(companyId: number, fyId: number): Promise<YearS
       (SELECT count(*) FROM supplier_invoices WHERE company_id = ${companyId} AND status = 'booked' AND invoice_date <= ${y.end_date})::int AS si,
       NOT EXISTS (SELECT 1 FROM vouchers WHERE company_id = ${companyId} AND source_type = 'vat' AND date = ${y.end_date}) AS vat`;
   return {
-    fy: y, companyType: c.company_type, association: c.org_form === 'ideell' || c.org_form === 'brf', resultBeforeTax, taxBooked: tax, nonDeductible: nonDed, suggestedTax,
+    fy: y, companyType: c.company_type, association: c.org_form === 'ideell' || c.org_form === 'brf' || c.org_form === 'stiftelse', resultBeforeTax, taxBooked: tax, nonDeductible: nonDed, suggestedTax,
     resultAfterTax: resultBeforeTax - tax, resultBooked: (sums.get(8999) ?? 0) !== 0,
     unreconciledBank: o.bank, draftInvoices: o.drafts, unpaidSupplierInvoicesWithoutApproval: o.si, vatUnsettled: o.vat,
     accountingMethod: c.accounting_method, cashOpenInvoices: o.cash,
@@ -151,7 +151,7 @@ export async function carryForward(actor: Actor, fyId: number, input: Record<str
     const { carryLines } = await import('@/lib/partnership');
     entries.push(...carryLines(ib, await listPartners(sql, actor.companyId)));
     if (!entries.length) throw new ValidationError('Det finns inget att föra över till delägarnas kapitalkonton');
-  } else if (c.org_form === 'ideell' || c.org_form === 'brf') {
+  } else if (c.org_form === 'ideell' || c.org_form === 'brf' || c.org_form === 'stiftelse') {
     // Förening: årets resultat (2069) balanseras i ny räkning enligt årsmötets beslut
     const v = ib.get(2069) ?? 0;
     if (!v) throw new ValidationError('Det finns inget resultat på 2069 att balansera');
@@ -174,7 +174,7 @@ export async function carryForward(actor: Actor, fyId: number, input: Record<str
     entries.push({ account: 2010, amount: total });
   }
   return sql.begin((tx) => createVoucher(tx, {
-    actor, date: y.start_date, description: c.company_type === 'HB' || c.company_type === 'KB' ? 'Överföring till delägarnas kapitalkonton' : c.org_form === 'ideell' || c.org_form === 'brf' ? (c.org_form === 'brf' ? 'Resultatdisposition enligt föreningsstämma' : 'Resultatdisposition enligt årsmöte') : c.company_type === 'AB' ? 'Resultatdisposition enligt årsstämma' : 'Överföring till eget kapital',
+    actor, date: y.start_date, description: c.company_type === 'HB' || c.company_type === 'KB' ? 'Överföring till delägarnas kapitalkonton' : c.org_form === 'stiftelse' ? 'Årets resultat förs till balanserat kapital' : c.org_form === 'ideell' || c.org_form === 'brf' ? (c.org_form === 'brf' ? 'Resultatdisposition enligt föreningsstämma' : 'Resultatdisposition enligt årsmöte') : c.org_form === 'ek' ? 'Resultatdisposition enligt föreningsstämma' : c.company_type === 'AB' ? 'Resultatdisposition enligt årsstämma' : 'Överföring till eget kapital',
     lines: fromSigned(entries), sourceType: 'carry_forward',
   }));
 }

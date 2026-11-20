@@ -70,6 +70,7 @@ export function buildNav(o: {
       { path: '/aktiebok', label: 'Aktiebok', perm: 'ledger', hint: 'Aktieägare, överlåtelser, nyemission och styrelseprotokoll' },
       { path: '/brf', label: 'Bostadsrättsförening', perm: 'ledger', hint: 'Lägenhetsförteckning, avgifter efter andelstal, underhållsplan och nyckeltal' },
       { path: '/forening', label: 'Förening', perm: 'ledger', hint: 'Medlemsregister, medlemsavgifter, gåvor och årsmöte' },
+      { path: '/ekforening', label: 'Ekonomisk förening och stiftelse', perm: 'ledger', hint: 'Medlemsinsatser, återbäring, stiftelsens bidrag och fullföljdskrav' },
     ]) },
     { id: 'rapp', label: t('Rapporter'), icon: 'chart', items: items([
       { path: '/rapporter/panel', label: 'Instrumentpanel', hint: 'Diagram och nyckeltal' },
