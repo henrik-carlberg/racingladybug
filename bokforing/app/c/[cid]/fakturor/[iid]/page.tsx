@@ -25,6 +25,7 @@ import { refreshPeppol, sendViaPeppol } from '../../peppol/actions';
 import { listTimeEntries } from '@/lib/services/time';
 import { customerCredit } from '@/lib/services/credit';
 import { creditDecision } from '@/lib/credit';
+import { invoiceRcCheck } from '@/lib/services/construction';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,6 +52,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
   if (!inv) notFound();
   const lines = await loadLines(sql, inv.id);
   const credit = inv.status === 'draft' ? await customerCredit(co.id, inv.customer_id) : null;
+  const rcc = inv.status === 'draft' ? await invoiceRcCheck(co.id, inv.id) : null;
   const creditMsg = credit && (credit.credit_limit != null || credit.risk_class === 'stop')
     ? creditDecision({ limit: credit.credit_limit, open: credit.open, amount: Number(inv.total), risk: credit.risk_class, policy: credit.credit_policy }) : null;
   const [svc] = await sql<{ from: string | null; to: string | null; deferred: number | null }[]>`SELECT to_char(service_from,'YYYY-MM-DD') AS from, to_char(service_to,'YYYY-MM-DD') AS to,
@@ -81,6 +83,12 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
         </div>
         <Flash searchParams={searchParams} />
         {creditMsg && !creditMsg.ok && <div className="card small credit-warning" style={{ borderColor: creditMsg.block ? 'var(--danger)' : 'var(--warn)' }}>{creditMsg.block ? '⛔ Fakturan kan inte bokföras: ' : '⚠️ Kreditvarning: '}{creditMsg.reasons.join(' och ')}.</div>}
+        {rcc && (rcc.rcKind === 'construction' || rcc.warnings > 0) && (
+          <div className="card small rc-check" style={{ borderColor: rcc.warnings ? 'var(--warn)' : undefined }}>
+            <b>Kontroll av omvänd byggmoms per rad</b>{rcc.rcKind === 'construction' ? ' – fakturan har omvänd betalningsskyldighet (ruta 41)' : ''}
+            <ul style={{ margin: '.3rem 0 0' }}>{rcc.lines.map((l, k) => <li key={k} className={`rc-line ${l.status}`}>{l.status === 'warn' ? '⚠️' : '✓'} {l.description}{l.note && <span className="muted"> – {l.note}</span>}</li>)}</ul>
+          </div>
+        )}
         {inv.status === 'draft' && (
           <div className="card actions">
             <Link className="btn secondary" href={`${b}/fakturor/${inv.id}/redigera`}>Redigera</Link>

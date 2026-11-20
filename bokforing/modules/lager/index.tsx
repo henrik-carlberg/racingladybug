@@ -418,6 +418,7 @@ async function Count({ companyId, basePath, searchParams }: ModulePageProps) {
         </table></div>
         <div className="row"><label>Inventeringsdatum<input type="date" name="date" defaultValue={today()} /></label>
           <div style={{ flex: '0 0 auto', alignSelf: 'end' }}><button>Registrera inventering</button></div></div>
+        <label className="check"><input type="checkbox" name="book" defaultChecked /> Bokför inventeringsdifferensen direkt (svinn minskar 1460 mot 4960, överskott tvärtom)</label>
         <p className="small muted" style={{ margin: 0 }}>Fyll bara i de artiklar du har räknat. Skillnader bokas som lagerjusteringar till snittpris. Inventera på bokslutsdagen och bokför sedan lagervärdet.</p>
       </form>
     </>
@@ -426,36 +427,53 @@ async function Count({ companyId, basePath, searchParams }: ModulePageProps) {
 
 async function Value({ companyId, basePath, searchParams }: ModulePageProps) {
   const at = /^\d{4}-\d{2}-\d{2}$/.test(searchParams.datum ?? '') ? searchParams.datum! : today();
-  const use97 = searchParams.r97 === '1';
-  const v = await svc.valuation(companyId, at, use97);
+  const rr = searchParams.regel ?? (searchParams.r97 === '1' ? '97' : 'cost');
+  const rule = rr === 'lvp' || rr === '97' ? rr : 'cost';
+  const v = await svc.valuation(companyId, at, rule);
+  const RULE: Record<string, string> = { cost: 'Anskaffningsvärde', lvp: 'Lägsta värdets princip (med inkurans)', '97': '97 %-regeln (schablon)' };
   return (
     <>
       <h1>Lagervärde och lagerförändring</h1>
       <Nav basePath={basePath} />
       <p className="small">Vid bokslutet ska lagret tas upp till sitt värde i balansräkningen (konto 1460). Inköp kostnadsförs löpande på 4010, och lagerförändringen bokförs mot 4960.
-        Skattemässigt får lagret tas upp till 97 % av anskaffningsvärdet (schablonmetoden, IL 17 kap. 4 §) om ni inte gör avdrag för inkurans på annat sätt.</p>
+        Lagret värderas enligt lägsta värdets princip: det lägsta av anskaffningsvärdet och nettoförsäljningsvärdet, med nedskrivning för inkurans. Alternativt får lagret tas upp till 97 % av anskaffningsvärdet (schablonmetoden, IL 17 kap. 4 §) – då görs inget separat avdrag för inkurans.</p>
+      <form action={a.valuationSettings.bind(null, companyId)} className="card row">
+        <label>Anskaffningsvärde enligt<select name="cost_method" defaultValue={v.method}><option value="avg">Vägt genomsnittspris</option><option value="fifo">FIFO (först in, först ut)</option></select></label>
+        <label>Försäljningskostnader i % av priset<input name="sell_cost_pct" defaultValue={String(v.sellCostPct).replace('.', ',')} inputMode="decimal" style={{ width: 80 }} /></label>
+        <div style={{ flex: '0 0 auto', alignSelf: 'end' }}><button className="secondary">Spara metod</button></div>
+      </form>
       <form className="row card">
         <label>Per datum<input type="date" name="datum" defaultValue={at} /></label>
-        <label className="check" style={{ alignSelf: 'end' }}><input type="checkbox" name="r97" value="1" defaultChecked={use97} /> Använd 97 %-regeln</label>
+        <label>Värde att bokföra<select name="regel" defaultValue={rule}>{Object.entries(RULE).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
         <div style={{ flex: '0 0 auto', alignSelf: 'end' }}><button className="secondary">Räkna</button></div>
       </form>
       <div className="grid">
-        <div className="card stat"><div className="label">Anskaffningsvärde (snittpris)</div><div className="value">{kr(v.cost)}</div></div>
-        <div className="card stat"><div className="label">Värde att bokföra</div><div className="value">{kr(v.book)}</div></div>
-        <div className="card stat"><div className="label">Bokfört på 1460 per {at}</div><div className="value">{kr(v.booked)}</div></div>
-        <div className="card stat"><div className="label">Lagerförändring att bokföra</div><div className="value">{kr(v.change)}</div></div>
+        <div className="card stat"><div className="label">Anskaffningsvärde ({v.method === 'fifo' ? 'FIFO' : 'snittpris'})</div><div className="value val-cost">{kr(v.cost)}</div></div>
+        <div className="card stat"><div className="label">Lägsta värdets princip</div><div className="value val-lvp">{kr(v.lvp)}</div></div>
+        <div className="card stat"><div className="label">97 % av anskaffningsvärdet</div><div className="value val-97">{kr(v.r97)}</div></div>
+        <div className="card stat"><div className="label">Bokfört på 1460 per {at}</div><div className="value val-booked">{kr(v.booked)}</div></div>
+        <div className="card stat"><div className="label">Lagerförändring att bokföra</div><div className="value val-change">{kr(v.change)}</div></div>
       </div>
+      <p className="small val-hint">Lägst tillåtna värde: <b>{kr(v.lowestValue)} kr</b> enligt {v.lowest === 'lvp' ? 'lägsta värdets princip – inkuransen är större än 3 %' : '97 %-regeln'}.</p>
+      <div className="table-wrap"><table className="valuation">
+        <thead><tr><th>Art.nr</th><th>Benämning</th><th className="num">Antal</th><th className="num">Anskaffningsvärde</th><th className="num">Nettoförs.värde/st</th><th>Inkurans</th><th className="num">Lägsta värde</th></tr></thead>
+        <tbody>{v.rows.map((r) => (
+          <tr key={r.id} className="val-row"><td>{r.sku}</td><td>{r.name}{r.belowCost && <div className="small" style={{ color: 'var(--warn)' }}>Säljs under anskaffningsvärdet</div>}</td><td className="num">{qty(r.qty)}</td><td className="num">{kr(r.costValue)}</td>
+            <td className="num">{r.nrvUnit == null ? '–' : kr(Math.round(r.nrvUnit))}</td>
+            <td><form action={a.obsolete.bind(null, companyId, r.id)} className="row"><input name="obsolete_pct" aria-label={`Inkurans ${r.sku}`} defaultValue={r.obsoletePct ? String(r.obsoletePct).replace('.', ',') : ''} inputMode="decimal" style={{ width: 60 }} />%<button className="link small">Spara</button></form></td>
+            <td className="num lvp">{kr(r.lvp)}</td></tr>))}</tbody>
+      </table></div>
       <form action={a.bookValuation.bind(null, companyId)} className="card row">
-        <input type="hidden" name="date" value={at} />{use97 && <input type="hidden" name="use97" value="on" />}
+        <input type="hidden" name="date" value={at} /><input type="hidden" name="rule" value={rule} />
         <div><button disabled={v.change === 0}>Bokför lagerförändring {kr(v.change)} kr per {at}</button></div>
-        <span className="small muted" style={{ alignSelf: 'center' }}>Värdet bygger på nuvarande saldon – inventera först om lagret har ändrats sedan bokslutsdagen.</span>
+        <span className="small muted" style={{ alignSelf: 'center' }}>Bokför {RULE[rule].toLowerCase()}: {kr(v.book)} kr. Värdet bygger på lagerrörelserna fram till datumet.</span>
       </form>
       {v.history.length > 0 && (<>
         <h2>Tidigare värderingar</h2>
         <div className="table-wrap"><table>
-          <thead><tr><th>Datum</th><th className="num">Anskaffningsvärde</th><th className="num">Bokfört värde</th><th>Verifikation</th></tr></thead>
+          <thead><tr><th>Datum</th><th>Metod</th><th className="num">Anskaffningsvärde</th><th className="num">Bokfört värde</th><th>Verifikation</th></tr></thead>
           <tbody>{v.history.map((h, i) => (
-            <tr key={i}><td>{h.date}</td><td className="num">{kr(h.cost_value)}</td><td className="num">{kr(h.book_value)}</td>
+            <tr key={i}><td>{h.date}</td><td className="small">{h.method === 'fifo' ? 'FIFO' : 'Snittpris'}, {RULE[h.rule] ?? h.rule}</td><td className="num">{kr(h.cost_value)}</td><td className="num">{kr(h.book_value)}</td>
               <td>{h.voucher_id ? <Link href={`/c/${companyId}/verifikationer/${h.voucher_id}`}>Visa</Link> : '–'}</td></tr>
           ))}</tbody>
         </table></div>

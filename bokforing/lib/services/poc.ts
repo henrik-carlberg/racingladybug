@@ -39,7 +39,9 @@ export async function invoicePart(actor: Actor, id: number, input: Record<string
   if (!c) throw new NotFoundError('Uppdraget');
   if (!c.customer_id) throw new ValidationError('Projektet saknar kund');
   const amount = kr(input.amount, 'beloppet');
-  if (amount > c.value) throw new ValidationError('Delfakturan kan inte vara större än kontraktsvärdet');
+  const { adjustedContracts } = await import('./construction');
+  const value = c.value + (await adjustedContracts(actor.companyId, today()))(id).value;
+  if (amount > value) throw new ValidationError('Delfakturan kan inte vara större än kontraktsvärdet inklusive godkända ÄTA');
   const invId = await sql.begin(async (tx) => {
     const inv = await saveDraftTx(tx, actor, null, { customer_id: c.customer_id, invoice_date: date(input, 'invoice_date', 'Fakturadatum', false) || today(),
       lines: [{ description: str(input, 'description') || `Delfakturering ${c.name}`, quantity: 1, unit: 'st', unit_price: amount, vat_rate: c.vat_rate }] });
@@ -62,7 +64,12 @@ export async function positions(companyId: number, at: string) {
       (SELECT p.loss_provision FROM poc_postings p WHERE p.contract_id = c.id AND p.date <= ${at} AND NOT EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = p.voucher_id) ORDER BY p.date DESC, p.id DESC LIMIT 1)::float8 AS booked_loss,
       (SELECT to_char(MAX(p.date),'YYYY-MM-DD') FROM poc_postings p WHERE p.contract_id = c.id AND NOT EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = p.voucher_id)) AS last
     FROM poc_contracts c WHERE c.company_id = ${companyId} ORDER BY c.id`;
-  return cs.map((c) => {
+  const { adjustedContracts } = await import('./construction');
+  const ata = await adjustedContracts(companyId, at);
+  return cs.map((c0) => {
+    // Godkända ÄTA-arbeten ändrar kontraktsvärdet och den beräknade kostnaden
+    const e = ata(c0.id);
+    const c = { ...c0, base_value: c0.value, value: c0.value + e.value, estimated_cost: Math.max(1, c0.estimated_cost + e.cost), ata_value: e.value, ata_pending: e.pending, ata_pending_count: e.pendingCount };
     const done = c.status === 'done';
     // Avslutat uppdrag: allt är fakturerat och upparbetat – tidigare justeringar förs tillbaka
     const pos = done ? { grade: 1, earned: c.invoiced, wip: 0, expectedLoss: 0, lossProvision: 0, margin: c.invoiced - c.cost }

@@ -10,6 +10,12 @@ async function ctx(cid: number) {
   if (!(await isModuleEnabled(c.company.id, 'lager'))) throw new Error('Lagermodulen är inte aktiverad');
   return userActor(c);
 }
+/** Lagervärdering och inventeringsdifferenser bokförs i huvudboken och kräver därför bokföringsbehörighet */
+async function ledgerCtx(cid: number) {
+  const c = await requireCompany(cid, { perm: 'ledger' });
+  if (!(await isModuleEnabled(c.company.id, 'lager'))) throw new Error('Lagermodulen är inte aktiverad');
+  return userActor(c);
+}
 const base = (cid: number) => `/c/${cid}/m/lager`;
 const ROWS = 8;
 
@@ -54,14 +60,18 @@ export async function transfer(cid: number, pid: number, fd: FormData) {
 }
 
 export async function count(cid: number, fd: FormData) {
-  const actor = await ctx(cid);
-  let n = 0;
+  const c = await requireCompany(cid, { perm: 'purchasing' });
+  if (!(await isModuleEnabled(c.company.id, 'lager'))) throw new Error('Lagermodulen är inte aktiverad');
+  const actor = userActor(c);
+  const mayBook = c.can('ledger');
+  let n = 0, val = 0, booked = false;
   const wid = str(fd, 'warehouse_id');
   await attempt(`${base(cid)}/inventering?lager=${wid}`, async () => {
     const counts = fd.getAll('product_id').map(String).map((p) => ({ product_id: p, counted: str(fd, `counted_${p}`) }));
-    n = (await svc.applyCount(actor, { warehouse_id: wid, date: str(fd, 'date'), counts })).changed;
+    const r = await svc.applyCount(actor, { warehouse_id: wid, date: str(fd, 'date'), counts, book: mayBook && fd.get('book') === 'on' });
+    n = r.changed; val = r.value; booked = !!r.voucherId;
   });
-  done(`${base(cid)}/inventering?lager=${wid}`, `Inventeringen är registrerad – ${n} artiklar justerade`);
+  done(`${base(cid)}/inventering?lager=${wid}`, `Inventeringen är registrerad – ${n} artiklar justerade${booked ? `, differensen ${(val / 100).toLocaleString('sv-SE', { minimumFractionDigits: 2 })} kr är bokförd mot 1460/4960` : ''}`);
 }
 
 export async function createPO(cid: number, fd: FormData) {
@@ -140,7 +150,17 @@ export async function cancelSO(cid: number, id: number) {
 }
 
 export async function bookValuation(cid: number, fd: FormData) {
-  const actor = await ctx(cid);
-  await attempt(`${base(cid)}/varde`, () => svc.bookValuation(actor, { date: str(fd, 'date'), use97: fd.get('use97') === 'on' }));
+  const actor = await ledgerCtx(cid);
+  await attempt(`${base(cid)}/varde`, () => svc.bookValuation(actor, { date: str(fd, 'date'), use97: fd.get('use97') === 'on', rule: str(fd, 'rule') }));
   done(`${base(cid)}/varde`, 'Lagervärderingen är bokförd');
+}
+export async function valuationSettings(cid: number, fd: FormData) {
+  const actor = await ledgerCtx(cid);
+  await attempt(`${base(cid)}/varde`, () => svc.saveSettings(actor, { cost_method: str(fd, 'cost_method'), sell_cost_pct: str(fd, 'sell_cost_pct') }));
+  done(`${base(cid)}/varde`, 'Värderingsmetoden är sparad');
+}
+export async function obsolete(cid: number, pid: number, fd: FormData) {
+  const actor = await ledgerCtx(cid);
+  await attempt(`${base(cid)}/varde`, () => svc.setObsolete(actor, pid, { obsolete_pct: str(fd, 'obsolete_pct') }));
+  done(`${base(cid)}/varde`, 'Inkuransen är sparad');
 }

@@ -33,6 +33,7 @@ export function buildNav(o: {
       { path: '/uppdrag', label: 'Uppdrag & timbanker' },
       { path: '/tid/belaggning', label: 'Beläggning' },
       { path: '/successiv', label: 'Fastprisuppdrag', perm: 'ledger', hint: 'Successiv vinstavräkning med färdigställandegrad och förlustreserv' },
+      { path: '/bygg', label: 'Bygg och entreprenad', perm: 'ledger', hint: 'ÄTA-arbeten, innehållna belopp och kontroll av omvänd byggmoms' },
     ]) },
     { id: 'kop', label: t('Köpa och betala'), icon: 'inbox', items: items([
       { path: '/leverantorsfakturor/inkorg', label: 'Inkorg för fakturor', perm: 'purchasing', hint: 'Fakturor som kommit in via e-post och Peppol' },
@@ -70,6 +71,7 @@ export function buildNav(o: {
       { path: '/aktiebok', label: 'Aktiebok', perm: 'ledger', hint: 'Aktieägare, överlåtelser, nyemission och styrelseprotokoll' },
       { path: '/brf', label: 'Bostadsrättsförening', perm: 'ledger', hint: 'Lägenhetsförteckning, avgifter efter andelstal, underhållsplan och nyckeltal' },
       { path: '/forening', label: 'Förening', perm: 'ledger', hint: 'Medlemsregister, medlemsavgifter, gåvor och årsmöte' },
+      { path: '/ekforening', label: 'Ekonomisk förening och stiftelse', perm: 'ledger', hint: 'Medlemsinsatser, återbäring, stiftelsens bidrag och fullföljdskrav' },
     ]) },
     { id: 'rapp', label: t('Rapporter'), icon: 'chart', items: items([
       { path: '/rapporter/panel', label: 'Instrumentpanel', hint: 'Diagram och nyckeltal' },
@@ -96,6 +98,7 @@ export function buildNav(o: {
       { path: '/revision', label: 'Revision', perm: 'ledger', hint: 'Revisorns stickprov och anmärkningar' },
       { path: '/anlaggningar', label: 'Anläggningsregister' },
       { path: '/periodiseringar', label: 'Periodiseringar' },
+      { path: '/bidrag', label: 'Bidrag', perm: 'ledger', hint: 'Offentliga bidrag periodiserade mot kostnaderna, återbetalningsrisk och rapport' },
       { path: '/konton', label: 'Kontoplan' },
       { path: '/arshjul', label: 'Årshjul', hint: 'Allt som återkommer under året, per modul' },
       { path: '/deadlines', label: 'Deadlines', hint: 'Moms, AGI och deklarationer' },

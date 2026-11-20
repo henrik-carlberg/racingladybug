@@ -26,7 +26,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ cid: st
   try {
     switch (op) {
       case 'start': back = `${base}/${(await svc.engagementFor(ctx, Number(g('fy')), true)).engagement!.id}`; break;
-      case 'materiality': await svc.setMateriality(ctx, eid, parseAmount(g('materiality') || '0') ?? NaN); msg = 'Väsentlighetsbeloppet är sparat'; break;
+      case 'materiality': {
+        const opt = (k: string) => (g(k) ? parseAmount(g(k)) ?? NaN : null);
+        await svc.setMateriality(ctx, eid, parseAmount(g('materiality') || '0') ?? NaN, { performance: opt('performance'), trivial: opt('trivial'), basis: g('basis') });
+        msg = 'Väsentligheten är sparad'; break;
+      }
+      case 'ledger_sample': {
+        const kind = g('kind') === 'supplier' ? 'supplier' : 'customer';
+        const m = g('method') === 'largest' ? 'largest' : g('method') === 'random' ? 'random' : 'mus';
+        const r = await svc.addLedgerSample(ctx, eid, { kind, method: m, count: num('count') });
+        msg = `${r.added} ${kind === 'customer' ? 'kundfakturor' : 'leverantörsfakturor'} lades till i stickprovet (av ${r.population} öppna poster)`; hash = '#reskontra'; break;
+      }
+      case 'ledger_review': await svc.reviewLedgerSample(ctx, eid, Number(g('sample')), g('status') as 'ok', g('comment')); hash = `#l${g('sample')}`; break;
       case 'sample': { const n = await svc.addSample(ctx, eid, { method: g('method') as SampleMethod, count: num('count'), from: num('from'), to: num('to'), userId: num('user_id') }); msg = `${n} verifikationer lades till i stickprovet`; break; }
       case 'review': await svc.reviewSample(ctx, eid, Number(g('sample')), g('status') as 'ok', g('comment')); hash = `#s${g('sample')}`; break;
       case 'checkpoint': await svc.reviewCheckpoint(ctx, eid, g('key'), g('status') as 'ok', g('comment')); hash = `#k-${g('key')}`; break;

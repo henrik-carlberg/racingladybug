@@ -99,11 +99,16 @@ export async function voucherLines(db: Tx | typeof sql, voucherId: number): Prom
 }
 
 /** Rättelseverifikation (BFL 5 kap 5 §): ny verifikation med omvända belopp som hänvisar till originalet. */
+const SUBLEDGER_SOURCES = new Set(['coop_insats', 'coop_refund', 'foundation_grant', 'retention', 'retention_release']);
+
 export async function reverseVoucher(tx: Tx, actor: Actor, voucherId: number, date: string, reason: string) {
   const companyId = actor.companyId;
-  const [orig] = await tx<{ id: number; series: string; number: number; description: string }[]>`
-    SELECT id, series, number, description FROM vouchers WHERE id = ${voucherId} AND company_id = ${companyId}`;
+  const [orig] = await tx<{ id: number; series: string; number: number; description: string; source_type: string | null }[]>`
+    SELECT id, series, number, description, source_type FROM vouchers WHERE id = ${voucherId} AND company_id = ${companyId}`;
   if (!orig) throw new BookkeepingError('Verifikationen finns inte');
+  // Verifikationer som hör till en underreskontra (insatser, återbäring, stiftelsebidrag, innehållna belopp) rättas där –
+  // en fristående rättelse skulle göra reskontran och bokföringen osams
+  if (orig.source_type && SUBLEDGER_SOURCES.has(orig.source_type)) throw new BookkeepingError('Verifikationen hör till en reskontra (insatser, återbäring, bidrag eller innehållna belopp) och kan inte makuleras här');
   const already = await tx`SELECT 1 FROM vouchers WHERE corrects_id = ${voucherId} AND source_type = 'reversal'`;
   if (already.length) throw new BookkeepingError('Verifikationen är redan makulerad med en rättelse');
   const lines = reverseLines(await voucherLines(tx, voucherId));

@@ -13,8 +13,9 @@ export default async function Ledger({ params, searchParams }: { params: Promise
   const sp = await searchParams;
   const years = await fiscalYears(company.id);
   const fy = years.find((y) => y.start_date <= today() && today() <= y.end_date) ?? years[0];
-  const from = String(sp.from ?? fy?.start_date ?? today());
-  const to = String(sp.to ?? fy?.end_date ?? today());
+  const isoDate = (v: unknown) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v)) ? v : null);
+  const from = isoDate(sp.from) ?? fy?.start_date ?? today();
+  const to = isoDate(sp.to) ?? fy?.end_date ?? today();
   const accFilter = String(sp.account ?? '');
   const rows = await sql<{ account_number: number; voucher_id: number; label: string; date: string; text: string; debit: number; credit: number }[]>`
     SELECT l.account_number, v.id AS voucher_id, v.series || v.number AS label, to_char(v.date,'YYYY-MM-DD') AS date,
