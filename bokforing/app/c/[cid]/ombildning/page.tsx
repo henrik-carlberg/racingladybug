@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { requireCompany } from '@/lib/server/auth';
+import { allowedCompanies, requireCompany } from '@/lib/server/auth';
 import { EmptyState, Flash, type SP } from '@/components/ui';
 import { kr, today } from '@/lib/format';
 import { preview, targets } from '@/lib/services/conversion';
@@ -16,7 +16,7 @@ export default async function Conversion({ params, searchParams }: { params: Pro
   const sp = await searchParams;
   const at = /^\d{4}-\d{2}-\d{2}$/.test(String(sp.date)) ? String(sp.date) : today();
   const p = await preview(co.id, at);
-  const abs = ctx.role === 'owner' ? await targets(ctx.user.id, co.id) : [];
+  const abs = ctx.role === 'owner' ? await allowedCompanies(await targets(ctx.user.id, co.id)) : [];
   const s = p.split;
   return (
     <div style={{ maxWidth: 900 }}>

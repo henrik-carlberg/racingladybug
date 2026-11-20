@@ -210,16 +210,20 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   await ib.locator('.valuation button:has-text("Värdera")').click();
   await owner.locator('text=Nedskrivning 7 537,50 kr är bokförd').waitFor();
   assert(nb(await owner.locator('details.security[data-name="Investor B"] .sec-row-book').innerText()) === '30000,00', 'bokfört värde efter LVP');
+  t = await secTrade('Investor B', 'sell', '150', '30000', '', `${YEAR}-12-31`);
+  assert(t.includes('anskaffningsvärde37537,50kr') && t.includes('vinst0,00kr'), 'försäljning efter nedskrivning räknas mot bokfört värde: ' + t);
+  await owner.goto(VP + '/rapporter/huvudbok?account=1819');
+  assert(nb(await text(owner)).includes('7537,50'), 'nedskrivningen återförs vid försäljningen');
   log('aktier som kortfristig placering: genomsnittsmetoden vid försäljning (vinst 2 487,50 kr) och nedskrivning till lägsta värdets princip');
 
   await addSec('Dotterbolaget AB', 'unlisted', 'fixed');
   await secTrade('Dotterbolaget AB', 'buy', '1000', '50000', '', `${YEAR}-01-05`);
   await secTrade('Dotterbolaget AB', 'dividend', '', '10000', '', `${YEAR}-05-01`);
-  assert(nb(await owner.locator('.sec-exempt').innerText()) === '10000,00' && nb(await owner.locator('.sec-nondeductible').innerText()) === '7537,50', 'skatt: ' + await owner.locator('.tax-summary').innerText());
-  assert(nb(await owner.locator('.sec-tax').innerText()).match(/^[-−]2462,50$/), 'skattejustering');
+  assert(nb(await owner.locator('.sec-exempt').innerText()) === '10000,00' && nb(await owner.locator('.sec-nondeductible').innerText()) === '5050,00', 'skatt: ' + await owner.locator('.tax-summary').innerText());
+  assert(nb(await owner.locator('.sec-tax').innerText()).match(/^[-−]4950,00$/), 'skattejustering');
   await owner.goto(VP + '/rapporter/huvudbok?account=8210');
   assert(nb(await text(owner)).includes('10000,00'), 'utdelning på 8210');
-  log('näringsbetingade andelar: skattefri utdelning, nedskrivning av kapitalplacering ej avdragsgill – justering −2 462,50 kr');
+  log('näringsbetingade andelar: skattefri utdelning, förlust på delägarrätter mot anskaffningsvärdet kvittas inte – justering −4 950,00 kr');
 
   await owner.goto(VP + '/vardepapper');
   await owner.locator('details.security[data-name="Dotterbolaget AB"] summary').click();

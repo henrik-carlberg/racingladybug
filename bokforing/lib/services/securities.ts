@@ -54,9 +54,9 @@ async function security(tx: Tx | typeof sql, companyId: number, id: number, lock
   if (!s) throw new NotFoundError('Innehavet');
   return s;
 }
-async function trades(tx: Tx | typeof sql, securityId: number, until?: string): Promise<(Trade & { id: number; gain: number | null; voucher_id: number | null })[]> {
-  return (await tx<{ id: number; kind: Trade['kind']; date: string; quantity: number; amount: number; fee: number; gain: number | null; voucher_id: number | null }[]>`
-    SELECT id, kind, to_char(date,'YYYY-MM-DD') AS date, quantity::float8 AS quantity, amount::float8 AS amount, fee::float8 AS fee, gain::float8 AS gain, voucher_id
+async function trades(tx: Tx | typeof sql, securityId: number, until?: string): Promise<(Trade & { id: number; gain: number | null; cost: number | null; voucher_id: number | null })[]> {
+  return (await tx<{ id: number; kind: Trade['kind']; date: string; quantity: number; amount: number; fee: number; gain: number | null; cost: number | null; voucher_id: number | null }[]>`
+    SELECT id, kind, to_char(date,'YYYY-MM-DD') AS date, quantity::float8 AS quantity, amount::float8 AS amount, fee::float8 AS fee, gain::float8 AS gain, cost::float8 AS cost, voucher_id
     FROM security_trades WHERE security_id = ${securityId} ${until ? tx`AND date <= ${until}` : tx``} ORDER BY date, id`).map((t) => ({ ...t }));
 }
 
@@ -78,9 +78,17 @@ export async function trade(actor: Actor, securityId: number, input: Record<stri
       quantity = qtyOf(input.quantity);
       // Försäljningen räknas mot innehavet på affärsdagen så att ett senare köp inte ändrar anskaffningsvärdet
       const pos = position(all.filter((t) => t.date <= d));
-      let r;
-      try { r = saleResult(pos, quantity, amount, fee); } catch (e) { throw new ValidationError((e as Error).message); }
       if (all.some((t) => t.kind === 'sell' && t.date > d)) throw new ValidationError('Det finns en senare försäljning – registrera försäljningar i datumordning');
+      const [later] = await tx`SELECT 1 FROM security_valuations WHERE security_id = ${securityId} AND date > ${d}`;
+      if (later) throw new ValidationError('Det finns en värdering efter försäljningsdagen – registrera försäljningen före värderingen');
+      const wd = await currentWritedown(tx, securityId, d);
+      let r;
+      try { r = saleResult(pos, quantity, amount, fee, wd); } catch (e) { throw new ValidationError((e as Error).message); }
+      // Nedskrivningen som hör till de sålda andelarna försvinner ur registret
+      const [pm] = await tx<{ m: number }[]>`SELECT market::float8 AS m FROM security_valuations WHERE security_id = ${securityId} AND date <= ${d} ORDER BY date DESC LIMIT 1`;
+      const marketLeft = Math.round((pm?.m ?? 0) * Math.max(0, pos.quantity - quantity) / pos.quantity);
+      if (r.released) await tx`INSERT INTO security_valuations ${tx({ company_id: actor.companyId, security_id: securityId, date: d, market: marketLeft, writedown: wd - r.released, change: -r.released })}
+        ON CONFLICT (security_id, date) DO UPDATE SET writedown = EXCLUDED.writedown, change = security_valuations.change + EXCLUDED.change`;
       lines = saleLines(acc, r, bank); cost = r.cost; gain = r.gain;
       desc = `Försäljning ${quantity} ${s.name} (${r.gain >= 0 ? 'vinst' : 'förlust'} ${(Math.abs(r.gain) / 100).toFixed(2).replace('.', ',')} kr)`;
     } else { lines = incomeLines(acc, kind, amount, bank); desc = `${kind === 'dividend' ? 'Utdelning' : 'Ränta'} ${s.name}`; }
@@ -101,7 +109,7 @@ export async function undoLast(actor: Actor, securityId: number) {
     if (t.voucher_id) {
       const orig = await tx<{ account: number; debit: number; credit: number }[]>`SELECT account_number AS account, debit::float8 AS debit, credit::float8 AS credit FROM voucher_lines WHERE voucher_id = ${t.voucher_id}`;
       const [{ d }] = await tx<{ d: string }[]>`SELECT to_char(current_date,'YYYY-MM-DD') AS d`;
-      await createVoucher(tx, { actor, date: d, description: 'Rättelse av värdepapperstransaktion', lines: orig.map((l) => ({ account: l.account, debit: l.credit, credit: l.debit })), sourceType: 'reversal', correctsId: t.voucher_id });
+      await createVoucher(tx, { actor, date: d, description: 'Rättelse av värdepapperstransaktion', lines: orig.map((l) => ({ account: l.account, debit: l.credit, credit: l.debit })), sourceType: 'security_undo', sourceId: securityId, correctsId: t.voucher_id });
     }
     await tx`DELETE FROM security_trades WHERE id = ${t.id}`;
     await auditBy(tx, actor, 'security_undo', 'security', securityId, { trade: t.id });
@@ -123,6 +131,10 @@ export async function value(actor: Actor, securityId: number, input: Record<stri
     const acc = accounts(s.kind, s.holding);
     const pos = position(await trades(tx, securityId, d));
     if (!pos.quantity) throw new ValidationError('Innehavet är tomt på värderingsdagen');
+    const [later] = await tx`SELECT 1 FROM security_valuations WHERE security_id = ${securityId} AND date > ${d}`;
+    if (later) throw new ValidationError('Det finns redan en senare värdering – värdera i datumordning');
+    const [sold] = await tx`SELECT 1 FROM security_trades WHERE security_id = ${securityId} AND kind = 'sell' AND date > ${d}`;
+    if (sold) throw new ValidationError('Det finns en försäljning efter värderingsdagen – värdera i datumordning');
     const current = await currentWritedown(tx, securityId, d);
     const w = writedown({ holding: s.holding, cost: pos.cost, market, current, permanent });
     const lines = writedownLines(acc, w.change);
@@ -156,7 +168,7 @@ export async function portfolio(companyId: number, year: number) {
     const startPos = position(ts.filter((t) => t.date < from));
     const [vStart] = await sql<{ market: number }[]>`SELECT market::float8 AS market FROM security_valuations WHERE security_id = ${s.id} AND date = ${`${year - 1}-12-31`}`;
     rows.push({ ...s, label: KIND_LABEL[s.kind], businessRelated: isBusinessRelated(s.kind, s.business_related), ...pos, writedown: wd, book: pos.cost - wd, market: last?.market ?? null, marketDate: last?.date ?? null, trades: ts,
-      year: { dividends: inYear.filter((t) => t.kind === 'dividend' || t.kind === 'interest').reduce((a, t) => a + t.amount, 0), gains: inYear.reduce((a, t) => a + (t.gain ?? 0), 0), writedowns: wy.w,
+      year: { dividends: inYear.filter((t) => t.kind === 'dividend' || t.kind === 'interest').reduce((a, t) => a + t.amount, 0), gains: inYear.filter((t) => t.kind === 'sell').reduce((a, t) => a + (t.amount - t.fee - (t.cost ?? 0)), 0), writedowns: wy.w,
         fundValueStart: startPos.quantity ? vStart?.market ?? startPos.cost : 0 } });
   }
   const tax = taxSummary(rows.map((r) => ({ id: r.id, name: r.name, kind: r.kind, businessRelated: r.businessRelated, ...r.year })));

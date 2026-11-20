@@ -40,15 +40,18 @@ export function buyLines(acc: ReturnType<typeof accounts>, amount: number, fee: 
   return [{ account: acc.asset, amount: amount + fee }, { account: bank, amount: -(amount + fee) }];
 }
 
-export function saleResult(pos: { quantity: number; cost: number }, quantity: number, proceeds: number, fee: number) {
+/** Resultatet räknas mot bokfört värde: den sålda andelen av en tidigare nedskrivning återförs från motkontot */
+export function saleResult(pos: { quantity: number; cost: number }, quantity: number, proceeds: number, fee: number, writedown = 0) {
   if (quantity <= 0 || quantity > pos.quantity + 1e-9) throw new Error(`Det finns bara ${pos.quantity} i innehavet`);
-  const cost = quantity >= pos.quantity - 1e-9 ? pos.cost : Math.round((pos.cost * quantity) / pos.quantity);
-  return { cost, net: proceeds - fee, gain: proceeds - fee - cost };
+  const all = quantity >= pos.quantity - 1e-9;
+  const cost = all ? pos.cost : Math.round((pos.cost * quantity) / pos.quantity);
+  const released = all ? writedown : Math.round((writedown * quantity) / pos.quantity);
+  return { cost, released, net: proceeds - fee, gain: proceeds - fee - (cost - released) };
 }
 
 /** Försäljning: bank mot innehavet till genomsnittligt anskaffningsvärde, vinst eller förlust på resultatkontot */
-export function saleLines(acc: ReturnType<typeof accounts>, r: { cost: number; net: number; gain: number }, bank: number): SignedLine[] {
-  return [{ account: bank, amount: r.net }, { account: acc.asset, amount: -r.cost }, { account: acc.gain, amount: -r.gain }].filter((l) => l.amount);
+export function saleLines(acc: ReturnType<typeof accounts>, r: { cost: number; net: number; gain: number; released?: number }, bank: number): SignedLine[] {
+  return [{ account: bank, amount: r.net }, { account: acc.asset, amount: -r.cost }, { account: acc.contra, amount: r.released ?? 0 }, { account: acc.gain, amount: -r.gain }].filter((l) => l.amount);
 }
 
 export function incomeLines(acc: ReturnType<typeof accounts>, kind: 'dividend' | 'interest', amount: number, bank: number): SignedLine[] {
@@ -67,6 +70,7 @@ export function writedownLines(acc: ReturnType<typeof accounts>, change: number)
   return change ? [{ account: acc.writedown, amount: change }, { account: acc.contra, amount: -change }] : [];
 }
 
+/** gains = skattemässigt resultat vid försäljning (mot anskaffningsvärdet), writedowns = årets nettoförändring av nedskrivningar */
 export interface TaxRow { id: number; name: string; kind: SecurityKind; businessRelated: boolean; dividends: number; gains: number; writedowns: number; fundValueStart: number }
 /** Skattemässiga justeringar för året */
 export function taxSummary(rows: TaxRow[]) {

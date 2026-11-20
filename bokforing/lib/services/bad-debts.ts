@@ -48,7 +48,7 @@ export async function undoWriteOff(actor: Actor, invoiceId: number) {
     if (inv.recovered) throw new ConflictError('Kunden har betalat en del efter bortskrivningen – den kan inte ångras');
     const orig = await tx<{ account: number; debit: number; credit: number }[]>`SELECT account_number AS account, debit::float8 AS debit, credit::float8 AS credit FROM voucher_lines WHERE voucher_id = ${inv.voucher}`;
     const [{ d }] = await tx<{ d: string }[]>`SELECT to_char(current_date,'YYYY-MM-DD') AS d`;
-    await createVoucher(tx, { actor, date: d, description: 'Rättelse: kundförlusten var inte konstaterad', lines: reverseLines(orig.map((l) => ({ account: l.account, debit: l.debit, credit: l.credit }))), sourceType: 'reversal', correctsId: inv.voucher });
+    await createVoucher(tx, { actor, date: d, description: 'Rättelse: kundförlusten var inte konstaterad', lines: reverseLines(orig.map((l) => ({ account: l.account, debit: l.debit, credit: l.credit }))), sourceType: 'bad_debt_undo', sourceId: invoiceId, correctsId: inv.voucher });
     await tx`UPDATE invoices SET status = 'booked', written_off_amount = 0, written_off_voucher_id = NULL, written_off_date = NULL, written_off_reason = '' WHERE id = ${invoiceId}`;
     await auditBy(tx, actor, 'undo_write_off', 'invoice', invoiceId);
   });

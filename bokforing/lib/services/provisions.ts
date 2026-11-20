@@ -1,5 +1,5 @@
 import 'server-only';
-import { sql } from '@/lib/db';
+import { sql, type Tx } from '@/lib/db';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { auditBy } from '@/lib/server/audit';
 import { accountSums, createVoucher } from '@/lib/server/ledger';
@@ -31,22 +31,26 @@ export async function addProvision(actor: Actor, input: Record<string, unknown>)
   return r.id;
 }
 
-async function movements(db: typeof sql, provisionId: number): Promise<Movement[]> {
+async function movements(db: Tx | typeof sql, provisionId: number): Promise<Movement[]> {
   return db<Movement[]>`SELECT kind, to_char(date,'YYYY-MM-DD') AS date, amount::float8 AS amount FROM provision_movements WHERE provision_id = ${provisionId} ORDER BY date, id`;
 }
 
 /** Avsätt, ta i anspråk eller lös upp – ianspråktagande och upplösning får inte överstiga avsättningen */
 export async function move(actor: Actor, provisionId: number, input: Record<string, unknown>) {
+  return sql.begin((tx) => moveTx(tx, actor, provisionId, input));
+}
+
+async function moveTx(tx: Tx, actor: Actor, provisionId: number, input: Record<string, unknown>) {
   const kind = str(input, 'kind') as Movement['kind'];
   if (!['set', 'use', 'release'].includes(kind)) throw new ValidationError('Välj vad som ska bokföras');
   const d = date(input, 'date', 'Datum');
   const amount = kronor(input.amount, 'beloppet');
   const bank = optInt(input, 'bank_account', 'Bankkonto') ?? 1930;
   if (bank < 1900 || bank > 1999) throw new ValidationError('Bankkonto måste vara ett 19xx-konto');
-  return sql.begin(async (tx) => {
+  {
     const [p] = await tx<{ description: string; account: number; cost_account: number }[]>`SELECT description, account, cost_account FROM provisions WHERE id = ${provisionId} AND company_id = ${actor.companyId} FOR UPDATE`;
     if (!p) throw new NotFoundError('Avsättningen');
-    const balance = roll(await movements(tx as unknown as typeof sql, provisionId), '9999-12-31', '9999-12-31').opening;
+    const balance = roll(await movements(tx, provisionId), '9999-12-31', '9999-12-31').opening;
     if (kind !== 'set' && amount > balance) throw new ValidationError(`Avsättningen är bara ${kr(balance)} kr`);
     if (NAMES[p.account]) await tx`INSERT INTO accounts (company_id, number, name) VALUES (${actor.companyId}, ${p.account}, ${NAMES[p.account]}) ON CONFLICT DO NOTHING`;
     const label = { set: 'Avsättning', use: 'Ianspråktagen avsättning', release: 'Upplösning av avsättning' }[kind];
@@ -54,16 +58,20 @@ export async function move(actor: Actor, provisionId: number, input: Record<stri
     await tx`INSERT INTO provision_movements ${tx({ company_id: actor.companyId, provision_id: provisionId, kind, date: d, amount, voucher_id: v.id, created_by: actor.userId })}`;
     await auditBy(tx, actor, 'provision_' + kind, 'provision', provisionId, { amount });
     return amount;
-  });
+  }
 }
 
 /** Garantiavsättningen i bokslutet: ändringen mot nuvarande avsättning bokförs per bokslutsdagen */
 export async function bookWarranty(actor: Actor, fyId: number, provisionId: number, input: Record<string, unknown>) {
   const f = await fy(actor.companyId, fyId);
-  const w = await warrantyFor(actor.companyId, f, provisionId, input.rate_pct);
-  if (!w.change) throw new ValidationError('Avsättningen stämmer redan');
-  await move(actor, provisionId, { kind: w.change > 0 ? 'set' : 'release', date: f.end_date, amount: (Math.abs(w.change) / 100).toFixed(2) });
-  return w;
+  return sql.begin(async (tx) => {
+    // Låset gör att två samtidiga beräkningar inte bokför samma ändring två gånger; ändringen räknas om efter låset
+    await tx`SELECT pg_advisory_xact_lock(109001, ${provisionId})`;
+    const w = await warrantyFor(actor.companyId, f, provisionId, input.rate_pct);
+    if (!w.change) throw new ValidationError('Avsättningen stämmer redan');
+    await moveTx(tx, actor, provisionId, { kind: w.change > 0 ? 'set' : 'release', date: f.end_date, amount: (Math.abs(w.change) / 100).toFixed(2) });
+    return w;
+  });
 }
 
 async function warrantyFor(companyId: number, f: { start_date: string; end_date: string }, provisionId: number, rate: unknown) {

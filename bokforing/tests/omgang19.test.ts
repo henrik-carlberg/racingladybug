@@ -43,9 +43,14 @@ describe('Värdepapper', () => {
     const p = position([{ kind: 'buy', date: '2026-01-01', quantity: 100, amount: 2000000, fee: 5000 }, { kind: 'buy', date: '2026-02-01', quantity: 100, amount: 3000000, fee: 0 }]);
     expect(p).toMatchObject({ quantity: 200, cost: 5005000 });
     const r = saleResult(p, 50, 1500000, 0);
-    expect(r).toEqual({ cost: 1251250, net: 1500000, gain: 248750 });
+    expect(r).toEqual({ cost: 1251250, released: 0, net: 1500000, gain: 248750 });
     expect(saleLines(accounts('listed', 'current'), r, 1930)).toEqual([{ account: 1930, amount: 1500000 }, { account: 1810, amount: -1251250 }, { account: 8350, amount: -248750 }]);
     expect(() => saleResult(p, 201, 1, 0)).toThrow();
+    // Tidigare nedskrivning återförs vid försäljningen – förlusten räknas inte två gånger
+    const w = saleResult({ quantity: 10, cost: 10000 }, 10, 7000, 0, 3000);
+    expect(w).toEqual({ cost: 10000, released: 3000, net: 7000, gain: 0 });
+    expect(saleLines(accounts('listed', 'current'), w, 1930)).toEqual([{ account: 1930, amount: 7000 }, { account: 1810, amount: -10000 }, { account: 1819, amount: 3000 }]);
+    expect(saleResult({ quantity: 10, cost: 10000 }, 5, 4000, 0, 3000)).toMatchObject({ cost: 5000, released: 1500, gain: 500 });
     expect(writedown({ holding: 'current', cost: 3753750, market: 3000000, current: 0, permanent: false })).toEqual({ target: 753750, change: 753750 });
     expect(writedown({ holding: 'fixed', cost: 100, market: 50, current: 0, permanent: false }).target).toBe(0);
     expect(writedown({ holding: 'current', cost: 100, market: 200, current: 30, permanent: false }).change).toBe(-30);

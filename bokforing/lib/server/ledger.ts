@@ -99,7 +99,7 @@ export async function voucherLines(db: Tx | typeof sql, voucherId: number): Prom
 }
 
 /** Rättelseverifikation (BFL 5 kap 5 §): ny verifikation med omvända belopp som hänvisar till originalet. */
-const SUBLEDGER_SOURCES = new Set(['provision', 'conversion', 'bad_debt', 'bad_debt_recovery', 'security_trade', 'security_valuation', 'coop_insats', 'coop_refund', 'foundation_grant', 'retention', 'retention_release', 'capital_insurance', 'shareholder_contribution']);
+const SUBLEDGER_SOURCES = new Set(['bad_debt_undo', 'security_undo', 'provision', 'conversion', 'bad_debt', 'bad_debt_recovery', 'security_trade', 'security_valuation', 'coop_insats', 'coop_refund', 'foundation_grant', 'retention', 'retention_release', 'capital_insurance', 'shareholder_contribution']);
 
 export async function reverseVoucher(tx: Tx, actor: Actor, voucherId: number, date: string, reason: string) {
   const companyId = actor.companyId;
@@ -109,6 +109,11 @@ export async function reverseVoucher(tx: Tx, actor: Actor, voucherId: number, da
   // Verifikationer som hör till en underreskontra (insatser, återbäring, stiftelsebidrag, innehållna belopp) rättas där –
   // en fristående rättelse skulle göra reskontran och bokföringen osams
   if (orig.source_type && SUBLEDGER_SOURCES.has(orig.source_type)) throw new BookkeepingError('Verifikationen hör till en reskontra (t.ex. kundförluster, insatser, bidrag eller innehållna belopp) och rättas där, inte här');
+  // En rättelse av en reskontraverifikation får inte heller makuleras fristående (då blir reskontran och bokföringen osams)
+  if (orig.source_type === 'reversal') {
+    const [o] = await tx<{ source_type: string | null }[]>`SELECT o.source_type FROM vouchers v JOIN vouchers o ON o.id = v.corrects_id WHERE v.id = ${voucherId}`;
+    if (o?.source_type && SUBLEDGER_SOURCES.has(o.source_type)) throw new BookkeepingError('Rättelsen hör till en reskontra och kan inte makuleras här');
+  }
   const already = await tx`SELECT 1 FROM vouchers WHERE corrects_id = ${voucherId} AND source_type = 'reversal'`;
   if (already.length) throw new BookkeepingError('Verifikationen är redan makulerad med en rättelse');
   const lines = reverseLines(await voucherLines(tx, voucherId));
