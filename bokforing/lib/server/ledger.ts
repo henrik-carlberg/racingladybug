@@ -99,7 +99,7 @@ export async function voucherLines(db: Tx | typeof sql, voucherId: number): Prom
 }
 
 /** Rättelseverifikation (BFL 5 kap 5 §): ny verifikation med omvända belopp som hänvisar till originalet. */
-const SUBLEDGER_SOURCES = new Set(['bad_debt_undo', 'security_undo', 'provision', 'conversion', 'bad_debt', 'bad_debt_recovery', 'security_trade', 'security_valuation', 'coop_insats', 'coop_refund', 'foundation_grant', 'retention', 'retention_release', 'capital_insurance', 'shareholder_contribution']);
+const SUBLEDGER_SOURCES = new Set(['vat_correction', 'bad_debt_undo', 'security_undo', 'provision', 'conversion', 'bad_debt', 'bad_debt_recovery', 'security_trade', 'security_valuation', 'coop_insats', 'coop_refund', 'foundation_grant', 'retention', 'retention_release', 'capital_insurance', 'shareholder_contribution']);
 
 export async function reverseVoucher(tx: Tx, actor: Actor, voucherId: number, date: string, reason: string) {
   const companyId = actor.companyId;
@@ -132,8 +132,8 @@ export async function accountSums(companyId: number, from: string, to: string, o
     FROM voucher_lines l JOIN vouchers v ON v.id = l.voucher_id
     WHERE v.company_id = ${companyId} AND v.date BETWEEN ${from} AND ${to}
       AND v.source_type IS DISTINCT FROM 'opening_balance'
-      ${opts.excludeVatSettlements ? sql`AND v.source_type IS DISTINCT FROM 'vat'
-        AND NOT (v.source_type = 'reversal' AND EXISTS (SELECT 1 FROM vouchers o WHERE o.id = v.corrects_id AND o.source_type = 'vat'))` : sql``}
+      ${opts.excludeVatSettlements ? sql`AND COALESCE(v.source_type, '') NOT IN ('vat', 'vat_correction')
+        AND NOT (v.source_type = 'reversal' AND EXISTS (SELECT 1 FROM vouchers o WHERE o.id = v.corrects_id AND o.source_type IN ('vat', 'vat_correction')))` : sql``}
     GROUP BY l.account_number`;
   return new Map(rows.map((r) => [r.account_number, r.balance]));
 }

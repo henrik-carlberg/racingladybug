@@ -7,7 +7,8 @@ export async function companyPeriod(companyId: number): Promise<Period> {
   const [c] = await sql<{ locked: string | null }[]>`SELECT to_char(locked_until,'YYYY-MM-DD') AS locked FROM companies WHERE id = ${companyId}`;
   const fys = await sql<{ start: string; end: string; closed: boolean }[]>`
     SELECT to_char(start_date,'YYYY-MM-DD') AS start, to_char(end_date,'YYYY-MM-DD') AS "end", closed FROM fiscal_years WHERE company_id = ${companyId} ORDER BY start_date`;
-  return { lockedUntil: c?.locked ?? null, fiscalYears: [...fys] };
+  const { declaredPeriods } = await import('./vat-correction');
+  return { lockedUntil: c?.locked ?? null, fiscalYears: [...fys], vatDeclared: await declaredPeriods(companyId) };
 }
 
 /** Per leverantör: antal fakturor, medianbelopp, senaste fakturanumren och belopp de senaste månaderna */
