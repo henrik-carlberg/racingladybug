@@ -132,6 +132,87 @@ const mailServer = http.createServer((req, res) => { req.resume(); req.on('end',
   await owner.click('button:has-text("Stäng av föreningsläget")');
   await owner.locator('text=Föreningsläget är av').waitFor();
 
+  // ================= Del 2: fastighet och uthyrning =================
+  await owner.goto(B + '/fastighet');
+  await owner.fill('form:has(button:has-text("Lägg upp fastighet")) input[name=name]', 'Kv. Eken 1');
+  await owner.fill('input[name=designation]', 'Staden Eken 1:1');
+  await owner.click('button:has-text("Lägg upp fastighet")');
+  await owner.locator('text=Fastigheten är upplagd').waitFor();
+  const addP = async (name, kind, area, vat) => {
+    await owner.goto(B + '/fastighet');
+    const f = owner.locator('form:has(button:has-text("Lägg till lokal"))');
+    await f.locator('input[name=name]').fill(name); await f.locator('select[name=kind]').selectOption(kind); await f.locator('input[name=area]').fill(area);
+    if (vat) { await f.locator('input[name=vat_liable]').check(); await f.locator('input[name=vat_from]').fill(`${YEAR}-01-01`); }
+    await f.locator('button').click();
+    await owner.locator('text=Lokalen är upplagd').waitFor();
+  };
+  await addP('Lokal A', 'lokal', '300', true);
+  await addP('Lägenhet 1', 'bostad', '100', false);
+  for (const [y, v] of [['2024', '400'], [String(YEAR - 1), '420']]) {
+    await owner.goto(B + '/fastighet');
+    await owner.fill('form:has(input[name=value]) input[name=year]', y); await owner.fill('input[name=value]', v);
+    await owner.click('form:has(input[name=value]) button:has-text("Spara")');
+    await owner.locator('text=Indexet är sparat').waitFor();
+  }
+  const addL = async (premiseLabel, rent, billing, idxYear, dep) => {
+    await owner.goto(B + '/fastighet');
+    await owner.selectOption('select[name=premise_id]', { label: premiseLabel });
+    await owner.selectOption('select[name=customer_id]', { index: 0 });
+    await owner.fill('form:has(input[name=base_rent]) input[name=start_date]', `${YEAR}-01-01`);
+    await owner.fill('input[name=base_rent]', rent); await owner.selectOption('select[name=billing]', billing);
+    if (idxYear) await owner.fill('input[name=index_year]', idxYear);
+    if (dep) await owner.fill('input[name=deposit]', dep);
+    await owner.click('button:has-text("Lägg upp avtalet")');
+    await owner.locator('text=Hyresavtalet är upplagt').waitFor();
+  };
+  await addL('Kv. Eken 1: Lokal A', '120000', 'quarter', '2024', '30000');
+  await addL('Kv. Eken 1: Lägenhet 1', '96000', 'month', '', '');
+  await owner.goto(B + '/fastighet');
+  await addL('Kv. Eken 1: Lokal A', '1000', 'month', '', '').catch(() => {});
+  t = await text(owner);
+  assert(t.includes('Lokalen är redan uthyrd'), 'dubbel uthyrning ska stoppas: ' + t.slice(0, 500));
+  await owner.goto(B + '/fastighet');
+  t = await text(owner);
+  assert((await owner.locator('tr.lease:has-text("Lokal A") .lease-rent').innerText()).replace(/[\s ]/g, '').startsWith('126000,00') && (await owner.locator('.deductible').innerText()).replace(/[\s ]/g, '') === '75%', 'indexhyra/avdragsrätt: ' + t.slice(0, 2000));
+  log('fastighet med lokaler, frivillig skattskyldighet per lokal, indexuppräknad hyra och avdragsrätt efter momspliktig yta');
+
+  await owner.fill('input[name=month]', `${YEAR}-10`);
+  await owner.click('button:has-text("Skapa hyresavier")');
+  await owner.locator('text=2 hyresavier är skapade och bokförda').waitFor();
+  t = await text(owner);
+  assert(new RegExp(`${YEAR}-Q4 .* 31[\\s ]500,00 39[\\s ]375,00`).test(t) && new RegExp(`${YEAR}-10 .* 8[\\s ]000,00 8[\\s ]000,00`).test(t), 'avier: ' + t.slice(-1500));
+  await owner.fill('input[name=month]', `${YEAR}-10`);
+  await owner.click('button:has-text("Skapa hyresavier")');
+  await owner.locator('.flash.error, .flash:has-text("inga hyror att avisera")').first().waitFor();
+  await owner.fill('input[name=month]', `${YEAR}-11`);
+  await owner.click('button:has-text("Skapa hyresavier")');
+  await owner.locator('text=1 hyresavier är skapade och bokförda').waitFor();
+  log('hyresavier per kvartal och månad med OCR: lokalen med moms 25 % på 3913, bostaden momsfri på 3911 – kvartalsavtal bara i kvartalets första månad');
+
+  await owner.click('tr.lease:has-text("Lokal A") button:has-text("Mottagen")');
+  await owner.locator('text=Depositionen är bokförd som skuld').waitFor();
+  assert((await owner.locator('.deposit-held').innerText()).replace(/[\s ]/g, '').startsWith('30000,00'), 'innestående');
+  await owner.fill('input[name=retained]', '5000');
+  await owner.click('button:has-text("Återbetala")');
+  await owner.locator('text=Återbetalningen av depositionen är bokförd').waitFor();
+  await owner.goto(B + '/rapporter/huvudbok?account=2891');
+  t = await text(owner);
+  assert(t.includes('Deposition') && t.includes('Återbetald deposition') && t.includes('30 000,00'), 'huvudbok 2891: ' + t.slice(0, 1500));
+  log('deposition bokförs som skuld på 2891 och återbetalas med kvarhållen del som intäkt');
+
+  await owner.goto(B + '/fastighet');
+  await owner.locator('summary:has-text("Komponentavskrivning")').click();
+  await owner.fill('form:has(button:has-text("Lägg upp komponenterna")) input[name=cost]', '10000000');
+  await owner.fill('form:has(button:has-text("Lägg upp komponenterna")) input[name=land]', '2000000');
+  await owner.click('button:has-text("Lägg upp komponenterna")');
+  await owner.locator('text=5 komponenter är upplagda i anläggningsregistret – avskrivning 147 200 kr per år').waitFor();
+  t = await text(owner);
+  assert(/Stomme och grund 4[\s ]000[\s ]000,00 100 40[\s ]000,00/.test(t), 'komponenter: ' + t.slice(0, 3000));
+  await owner.goto(B + '/anlaggningar');
+  t = await text(owner);
+  assert(t.includes('Kv. Eken 1: Tak') && t.includes('Kv. Eken 1: Installationer'), 'anläggningsregistret: ' + t.slice(0, 1500));
+  log('byggnaden delas upp i komponenter med egen nyttjandeperiod i anläggningsregistret, marken skrivs inte av');
+
   //@@NEXT@@
   await browser.close(); mailServer.close();
   console.log('Omgång 13: alla steg gick igenom');

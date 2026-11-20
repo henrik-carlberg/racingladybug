@@ -29,3 +29,32 @@ describe('Föreningar', () => {
     expect(auditReportHtml({ org: 'IK', orgnr: '', year: 2026, auditors: ['Anna'], remarks: '' })).toContain('ansvarsfrihet');
   });
 });
+
+import { billingPeriod, deductibleShare, depositReturnLines, indexedRent, periodRent, splitComponents, DEFAULT_COMPONENTS } from '@/lib/property';
+describe('Fastighet', () => {
+  it('perioder för avier', () => {
+    expect(billingPeriod('month', '2026-02')).toMatchObject({ key: '2026-02', from: '2026-02-01', to: '2026-02-28', months: 1 });
+    expect(billingPeriod('quarter', '2026-04')).toMatchObject({ key: '2026-Q2', from: '2026-04-01', to: '2026-06-30', months: 3 });
+    expect(billingPeriod('quarter', '2026-05')).toBeNull();
+  });
+  it('indexuppräkning och periodhyra', () => {
+    expect(indexedRent({ baseRent: 12000000, baseIndex: 400, index: 420, share: 100 })).toBe(12600000);
+    expect(indexedRent({ baseRent: 12000000, baseIndex: 400, index: 420, share: 75 })).toBe(12450000);
+    expect(indexedRent({ baseRent: 12000000, baseIndex: 400, index: 390, share: 100 })).toBe(12000000);
+    expect(indexedRent({ baseRent: 12000000, baseIndex: null, index: 420, share: 100 })).toBe(12000000);
+    expect(periodRent(12600000, 3)).toBe(3150000);
+  });
+  it('avdragsrätt efter momspliktig yta', () => {
+    expect(deductibleShare([{ area: 300, vatLiable: true, let: true }, { area: 100, vatLiable: false, let: true }, { area: 500, vatLiable: true, let: false }])).toBe(75);
+  });
+  it('deposition och komponenter', () => {
+    expect(depositReturnLines({ deposit: 3000000, retained: 500000, bank: 1930 })).toEqual([{ account: 2891, amount: 3000000 }, { account: 1930, amount: -2500000 }, { account: 3990, amount: -500000 }]);
+    expect(() => depositReturnLines({ deposit: 100, retained: 200, bank: 1930 })).toThrow();
+    const s = splitComponents(1000000000, 200000000, DEFAULT_COMPONENTS);
+    expect(s.building).toBe(800000000);
+    expect(s.components.reduce((a, c) => a + c.cost, 0)).toBe(800000000);
+    expect(s.components[0]).toMatchObject({ cost: 400000000, lifeMonths: 1200 });
+    expect(s.yearlyDepreciation).toBe(4000000 + 1600000 + 1920000 + 4000000 + 3200000);
+    expect(() => splitComponents(100, 0, [{ name: 'x', pct: 90, years: 10 }])).toThrow();
+  });
+});
