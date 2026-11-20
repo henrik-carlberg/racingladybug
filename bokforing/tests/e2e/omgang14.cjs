@@ -8,6 +8,7 @@ const text = async (page) => { await page.waitForLoadState('networkidle').catch(
 const iso = (d) => d.toISOString().slice(0, 10);
 const day = (n) => iso(new Date(Date.now() - n * 864e5));
 const YEAR = new Date().getFullYear();
+const MONTH = new Date().getMonth() + 1;
 
 async function login(browser, email, password) {
   const p = await (await browser.newContext()).newPage();
@@ -180,6 +181,64 @@ const creditServer = http.createServer((req, res) => {
   await owner.locator('tr.credit-row:has-text("Risk AB") button:has-text("Sluta bevaka")').click();
   await owner.locator('text=Bevakningen är avslutad').waitFor();
   log('bevakning: konkurs hos kunden hämtas om från upplysningstjänsten och ger riskklass Stoppa kredit');
+
+  // ================= Del 3: leasing =================
+  const addLease = async (f) => {
+    await owner.goto(B + '/leasing');
+    const form = owner.locator('form:has(button:has-text("Lägg upp avtalet"))');
+    await form.locator('input[name=name]').fill(f.name); await form.locator('select[name=kind]').selectOption(f.kind);
+    await form.locator('input[name=start_date]').fill(f.start); await form.locator('input[name=months]').fill(String(f.months));
+    await form.locator('input[name=fee]').fill(f.fee);
+    if (f.rate) await form.locator('input[name=rate_pct]').fill(f.rate);
+    if (f.life) await form.locator('input[name=life_months]').fill(f.life);
+    if (f.treatment) await form.locator('select[name=treatment]').selectOption(f.treatment);
+    await form.locator('button').click();
+    await owner.locator(`text=${f.treatment === 'financial' ? 'tillgång och leasingskuld är bokförda' : 'Leasingavtalet är upplagt'}`).waitFor();
+  };
+  await addLease({ name: 'Volvo XC60 ABC123', kind: 'car', start: `${YEAR}-01-15`, months: 36, fee: '4000' });
+  assert((await owner.locator('select[name=treatment] option').count()) === 1, 'finansiell leasing bara enligt K3');
+  await addLease({ name: 'Grävmaskin', kind: 'machine', start: `${YEAR}-01-10`, months: 48, fee: '10000', life: '60' });
+  assert((await owner.locator('tr.lease-row:has-text("Grävmaskin") .treatment').innerText()).includes('Kan vara finansiell: löptiden är 80 %'), 'klassningsförslag');
+  await owner.fill('input[name=upto]', `${YEAR}-${String(MONTH).padStart(2, '0')}`);
+  await owner.click('button:has-text("Bokför förfallna avgifter")');
+  await owner.locator(`text=${2 * MONTH} leasingavgifter är bokförda`).waitFor();
+  await owner.goto(B + '/leasing');
+  await owner.click('button:has-text("Bokför förfallna avgifter")');
+  await owner.locator('text=0 leasingavgifter är bokförda').waitFor();
+  assert((await owner.locator('tr.lease-row:has-text("Volvo") .booked').innerText()) === `${MONTH} av 36`, 'bokförda');
+  assert(nb(await owner.locator('.lease-cost').innerText()) === nb(((4500 + 10000) * MONTH).toLocaleString('sv-SE') + ',00'), 'årets kostnad');
+  const left = (months, start) => { let w1 = 0, w5 = 0; for (let n = 1; n <= months; n++) { const ahead = (start - 1 + n - 1) - (MONTH - 1); if (ahead <= 0) continue; if (ahead <= 12) w1++; else if (ahead <= 60) w5++; } return [w1, w5]; };
+  const [c1, c5] = left(36, 1), [g1, g5] = left(48, 1);
+  assert(nb(await owner.locator('.lease-within1').innerText()) === nb((c1 * 4000 + g1 * 10000).toLocaleString('sv-SE') + ',00') && nb(await owner.locator('.lease-1to5').innerText()) === nb((c5 * 4000 + g5 * 10000).toLocaleString('sv-SE') + ',00'), 'förfallotider');
+  await owner.goto(B + '/rapporter/huvudbok?account=5615');
+  t = await text(owner);
+  assert(t.includes('Leasingavgift Volvo XC60') && t.includes('4 500,00'), 'personbil: halva momsen blir kostnad: ' + t.slice(0, 1200));
+  log('operationell leasing bokförs varje månad (personbil med halv moms), klassningsförslag enligt K3 och framtida avgifter per förfallotid');
+
+  await owner.goto(B + '/bokslut');
+  await owner.locator(`tr:has-text("${YEAR}-01-01") a:has-text("Öppna")`).click();
+  await owner.waitForURL(/\/bokslut\/\d+$/);
+  const FY = owner.url().replace(/.*\/bokslut\//, '');
+  await owner.goto(`${B}/bokslut/${FY}/k3`);
+  await owner.check('input[name=confirm]'); await owner.click('button:has-text("Byt till K3")');
+  await owner.locator('text=Bolaget tillämpar nu K3').waitFor();
+  await addLease({ name: 'Svarv CNC', kind: 'machine', start: `${YEAR}-01-05`, months: 24, fee: '20000', rate: '6', treatment: 'financial' });
+  t = await text(owner);
+  assert(/Svarv CNC.*Finansiell.*i anläggningsregistret/.test(t), 'finansiell: ' + t.slice(0, 2000));
+  await owner.click('button:has-text("Bokför förfallna avgifter")');
+  await owner.locator(`text=${MONTH} leasingavgifter är bokförda`).waitFor();
+  await owner.goto(B + '/rapporter/huvudbok?account=2355');
+  t = await text(owner);
+  assert(t.includes('Finansiell leasing: Svarv CNC') && t.includes('Leasingavgift Svarv CNC'), 'leasingskuld: ' + t.slice(0, 1500));
+  await owner.goto(B + '/anlaggningar');
+  assert((await text(owner)).includes('Leasad: Svarv CNC'), 'tillgång i registret');
+  await owner.goto(`${B}/bokslut/${FY}/arsredovisning`);
+  t = await text(owner);
+  assert(t.includes('Leasingavtal') && t.includes('Inom ett år') && t.includes('Senare än ett år men inom fem år'), 'not i årsredovisningen');
+  await owner.goto(`${B}/bokslut/${FY}/k3`);
+  await owner.click('button:has-text("Byt tillbaka till K2")');
+  await owner.locator('text=Bolaget tillämpar nu K2').waitFor();
+  log('finansiell leasing enligt K3: tillgång i anläggningsregistret, leasingskuld som amorteras med ränta och not i årsredovisningen');
 
   //@@NEXT@@
   await browser.close(); mailServer.close(); creditServer.close();

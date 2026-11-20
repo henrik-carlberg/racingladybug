@@ -129,9 +129,11 @@ export async function annualReport(companyId: number, fyId: number): Promise<{ h
   let brf: AnnualReportInput['brf'];
   const [of] = await sql<{ f: string | null }[]>`SELECT org_form AS f FROM companies WHERE id = ${companyId}`;
   if (of?.f === 'brf') { const { keyFigures: brfKeys } = await import('./brf'); brf = await brfKeys(companyId, Number(fy.end_date.slice(0, 4))); }
+  const { leasingNote } = await import('./leasing');
+  const leasing = await leasingNote(companyId, fy.end_date);
   const input: AnnualReportInput = {
     company: c, years, activity: data.activity ?? '', events: data.events ?? '', dividend: data.dividend ?? 0,
-    board, employees: await averageEmployees(companyId, fy), place: data.place ?? c.city, k3, brf,
+    board, employees: await averageEmployees(companyId, fy), place: data.place ?? c.city, k3, brf, leasing: leasing.total ? leasing : undefined,
   };
   return { html: annualReportHtml(input), data: { ...data, board }, figures: keyFigures(years[0]), input };
 }

@@ -48,6 +48,7 @@ export function buildNav(o: {
       { path: '/bank/regler', label: 'Konteringsregler', perm: 'ledger' },
       { path: '/kort', label: 'Företagskort', perm: 'ledger', hint: 'Kortköp som saknar kvitto' },
       { path: '/skattekonto', label: 'Skattekontot', perm: 'ledger' },
+      { path: '/leasing', label: 'Leasing', perm: 'ledger', hint: 'Leasade bilar, maskiner och lokaler med automatisk bokföring' },
       { path: '/finansiering', label: 'Lån och finansiering', perm: 'ledger', hint: 'Amorteringsplaner, krediter och factoring' },
       { path: '/skatt', label: 'Skatteplanering', perm: 'ledger', hint: 'Prognos för skattekontot, preliminärskatt och bokslutsdispositioner' },
     ]) },

@@ -48,3 +48,34 @@ describe('Kreditkontroll', () => {
     expect(onTimeFactor('high')).toBeLessThan(onTimeFactor('low'));
   });
 });
+
+import { financialPaymentLines, maturity, operationalLines, presentValue, schedule, suggestClass } from '@/lib/leasing';
+describe('Leasing', () => {
+  it('operationell: personbil halva momsen', () => {
+    const l = operationalLines({ fee: 400000, vatRate: 25, kind: 'car', bank: 1930 });
+    expect(l).toEqual([{ account: 5615, amount: 450000 }, { account: 2641, amount: 50000 }, { account: 1930, amount: -500000 }]);
+    expect(operationalLines({ fee: 100000, vatRate: 25, kind: 'machine', bank: 1930 })).toEqual([{ account: 5220, amount: 100000 }, { account: 2641, amount: 25000 }, { account: 1930, amount: -125000 }]);
+  });
+  it('nuvärde, betalningsplan och klassning', () => {
+    expect(presentValue({ fee: 100000, months: 12, ratePct: 0, residual: 0 })).toBe(1200000);
+    const pv = presentValue({ fee: 200000, months: 36, ratePct: 6, residual: 1000000 });
+    const s = schedule({ fee: 200000, months: 36, ratePct: 6, residual: 1000000, start: '2026-01-15' });
+    expect(s).toHaveLength(36);
+    expect(s.reduce((t, r) => t + r.amortization, 0)).toBe(pv);
+    expect(s[35].balance).toBe(0);
+    expect(s[0].interest).toBeGreaterThan(s[34].interest);
+    expect(s[35].fee).toBe(1200000);
+    expect(suggestClass({ months: 48, lifeMonths: 60, pv, fairValue: null, transfer: false }).financial).toBe(true);
+    expect(suggestClass({ months: 36, lifeMonths: 120, pv: 100, fairValue: 1000, transfer: false }).financial).toBe(false);
+    const p = financialPaymentLines(s[0], { vatRate: 25, kind: 'machine', bank: 1930, fee: 200000 });
+    expect(p.reduce((t, x) => t + x.amount, 0)).toBe(0);
+  });
+  it('förfallotider', () => {
+    const m = maturity([{ fee: 100000, residual: 500000, start: '2026-01-01', months: 72 }], '2026-12-31');
+    expect(m.within1).toBe(1200000);
+    expect(m.oneTo5).toBe(4800000 + 500000);
+    expect(m.over5).toBe(0);
+    expect(m.total).toBe(6500000);
+    expect(maturity([{ fee: 100000, residual: 0, start: '2026-01-01', months: 120 }], '2026-06-30').over5).toBe(100000 * (114 - 60));
+  });
+});
