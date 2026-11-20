@@ -14,10 +14,19 @@ for (const f of ['.env.local', '.env']) {
     }
   }
 }
-const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
+// Migrera samma databas som appen använder (DATABASE_URL). DATABASE_URL_UNPOOLED kan peka på en annan gren/databas;
+// den migreras bara om den uttryckligen pekar på samma databas (samma värd utan -pooler och samma databasnamn).
+const url = process.env.DATABASE_URL;
 if (!url) { console.error('DATABASE_URL saknas'); process.exit(1); }
+const where = (u) => { try { const x = new URL(u); return `${x.hostname.replace(/^([^.]{4})[^.]*/, '$1…')}/${x.pathname.slice(1)}`; } catch { return 'okänd'; } };
+const unpooled = process.env.DATABASE_URL_UNPOOLED;
+const sameDb = (a, b) => { try { const x = new URL(a), y = new URL(b); return x.hostname.replace('-pooler', '') === y.hostname.replace('-pooler', '') && x.pathname === y.pathname; } catch { return false; } };
+// Direktanslutning (utan pooler) om den går till samma databas, annars den poolade (prepare av – krävs för pgbouncer)
+const target = unpooled && sameDb(url, unpooled) ? unpooled : url;
+if (unpooled && !sameDb(url, unpooled)) console.warn(`Varning: DATABASE_URL_UNPOOLED (${where(unpooled)}) pekar inte på samma databas som DATABASE_URL (${where(url)}) – migrerar DATABASE_URL`);
+console.log(`Migrerar ${where(target)}`);
 
-const sql = postgres(url, { max: 1, onnotice: () => {} });
+const sql = postgres(target, { max: 1, prepare: false, onnotice: () => {} });
 await sql`CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`;
 const done = new Set((await sql`SELECT name FROM schema_migrations`).map((r) => r.name));
 // Kärnans migreringar först, därefter varje moduls egna (modules/<id>/migrations/*.sql)
@@ -29,6 +38,7 @@ if (fs.existsSync(modulesDir)) {
     if (fs.existsSync(d)) sources.push({ prefix: `${m}/`, dir: d });
   }
 }
+let applied = 0;
 for (const { prefix, dir } of sources) {
   for (const file of fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) {
     const name = prefix + file;
@@ -38,6 +48,9 @@ for (const { prefix, dir } of sources) {
       await tx`INSERT INTO schema_migrations (name) VALUES (${name})`;
     });
     console.log('Migrerade', name);
+    applied++;
   }
 }
+const [{ n }] = await sql`SELECT count(*)::int AS n FROM schema_migrations`;
+console.log(applied ? `${applied} nya migreringar, ${n} totalt` : `Databasen är aktuell (${n} migreringar)`);
 await sql.end();
