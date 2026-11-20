@@ -10,6 +10,7 @@ const ACCOUNTS: Acc[] = [
   [1130, 'Mark'],
   [1150, 'Markanläggningar'],
   [1159, 'Ackumulerade avskrivningar på markanläggningar'],
+  [1311, 'Andelar i koncernföretag', 'AB'],
   [1220, 'Inventarier och verktyg'],
   [1229, 'Ackumulerade avskrivningar på inventarier och verktyg'],
   [1250, 'Datorer'],

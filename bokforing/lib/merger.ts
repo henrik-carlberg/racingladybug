@@ -16,8 +16,8 @@ export function takeover(subBalances: Map<number, number>, shareValue: number) {
  * Moderbolaget: dotterbolagets poster in, aktierna i dotterbolaget ut. En positiv fusionsdifferens (vinster i dotterbolaget efter förvärvet)
  * förs till eget kapital; en negativ förs mot eget kapital eller som goodwill om den motsvaras av ett övervärde.
  */
-export function parentLines(t: ReturnType<typeof takeover>, treatment: Treatment): SignedLine[] {
-  const l: SignedLine[] = [...t.items, { account: SHARES, amount: -t.shareValue }];
+export function parentLines(t: ReturnType<typeof takeover>, treatment: Treatment, sharesAccount = SHARES): SignedLine[] {
+  const l: SignedLine[] = [...t.items, { account: sharesAccount, amount: -t.shareValue }];
   if (t.difference > 0) l.push({ account: RETAINED, amount: -t.difference });
   else if (t.difference < 0) l.push({ account: treatment === 'goodwill' ? GOODWILL : RETAINED, amount: -t.difference });
   return l.filter((x) => x.amount);

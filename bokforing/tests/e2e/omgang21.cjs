@@ -177,6 +177,7 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   await gl.locator('input[name=ownership]').fill('100'); await gl.locator('input[name=acquisition_cost]').fill('50000');
   await gl.locator('button:has-text("Koppla som dotterbolag")').click();
   await owner.locator('text=Koncernuppgifterna är sparade').waitFor();
+  await voucher(MO, 'Köp av aktierna i dotterbolaget', [[1311, 50000], [1930, -50000]], `${YEAR}-01-02`);
   await voucher(DO, 'Aktiekapital', [[1930, 50000], [2081, -50000]], `${YEAR}-01-02`);
   await voucher(DO, 'Vinst i dotterbolaget', [[1930, 30000], [3001, -30000]], `${YEAR}-02-01`);
   await owner.goto(MO + '/fusion');
@@ -191,6 +192,8 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await text(owner)).includes('30000,00'), 'fusionsdifferens till eget kapital');
   await owner.goto(MO + '/rapporter/huvudbok?account=1930');
   assert(nb(await text(owner)).includes('80000,00'), 'banken tas över');
+  await owner.goto(MO + '/rapporter/huvudbok?account=1311');
+  assert(nb(await text(owner)).includes('50000,00'), 'aktierna förs bort från 1311');
   log('fusion: helägt dotterbolag går upp i moderbolaget med fusionsplan och registrering, fusionsdifferens 30 000 kr mot eget kapital');
 
   // ================= Del 5: högkostnadsskydd för sjuklön =================

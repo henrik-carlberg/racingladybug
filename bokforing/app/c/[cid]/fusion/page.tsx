@@ -28,6 +28,7 @@ export default async function Merger({ params, searchParams }: { params: Promise
             ? <p className="merger-done" style={{ margin: 0 }}>Fusionen registrerades {r.merger.registered_on}. Nettotillgångar {kr(r.merger.net_assets ?? 0)} kr mot aktiernas bokförda värde {kr(r.merger.share_value ?? 0)} kr – fusionsdifferens {kr(r.merger.difference ?? 0)} kr ({r.merger.treatment === 'goodwill' ? 'goodwill' : 'eget kapital'}).
                 Dotterbolagets sista räkenskapsår slutar på registreringsdagen.</p>
             : <>
+              {r.acquisition_cost == null && <p className="small mg-missing" style={{ margin: 0 }}>⚠️ Ange aktiernas anskaffningsvärde för dotterbolaget under <Link href={`/koncern`}>Koncern</Link> först.</p>}
               {r.preview && <table className="small"><tbody>
                 <tr><td>Dotterbolagets tillgångar minus skulder och obeskattade reserver per {t}</td><td className="num mg-net">{kr(r.preview.net)}</td></tr>
                 <tr><td>Aktiernas bokförda värde i moderbolaget</td><td className="num">{kr(r.preview.shareValue)}</td></tr>
@@ -36,6 +37,7 @@ export default async function Merger({ params, searchParams }: { params: Promise
                 : <form action={completeMerger.bind(null, ctx.company.id, r.id)} className="row">
                   <span className="small">Fusionsplan {r.merger.plan_date}.</span>
                   <label>Bolagsverket registrerade fusionen<input type="date" name="registered_on" defaultValue={t} required /></label>
+                  <label>Aktierna bokförda på konto<input name="shares_account" defaultValue="1311" style={{ width: '5rem' }} /></label>
                   <label>Negativ fusionsdifferens<select name="treatment"><option value="equity">Mot eget kapital</option><option value="goodwill">Som goodwill (övervärde)</option></select></label>
                   <div style={{ flex: '0 0 auto' }}><button>Bokför fusionen i båda bolagen</button></div>
                 </form>}
