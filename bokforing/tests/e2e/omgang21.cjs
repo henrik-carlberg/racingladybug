@@ -193,6 +193,29 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await text(owner)).includes('80000,00'), 'banken tas över');
   log('fusion: helägt dotterbolag går upp i moderbolaget med fusionsplan och registrering, fusionsdifferens 30 000 kr mot eget kapital');
 
+  // ================= Del 5: högkostnadsskydd för sjuklön =================
+  await owner.goto(SK + '/lon');
+  await owner.fill('input[name=period]', `${YEAR}-01`);
+  await owner.fill('input[name=payment_date]', `${YEAR}-01-25`);
+  await owner.click('button:has-text("Ny lönekörning")');
+  await owner.waitForURL(/lon\/\d+\?ok/);
+  const slipForm = owner.locator('form:has(input[name=desc_1])').first();
+  await slipForm.locator('input[name=desc_1]').fill('Sjuklön 80 % 10 dagar');
+  await slipForm.locator('input[name=amount_1]').fill('20000');
+  await slipForm.locator('button:has-text("Spara och räkna om")').click();
+  await owner.waitForLoadState('networkidle');
+  await owner.click('button:has-text("Bokför lönekörning")');
+  await owner.locator('text=Lönekörningen är bokförd').waitFor();
+  await owner.goto(`${SK}/lon/hogkostnadsskydd?year=${YEAR}`);
+  const amount = Number(nb(await owner.locator('.sp-amount').innerText()).replace(',', '.'));
+  assert(amount > 0 && (await owner.locator('.sp-months tbody tr').count()) === 2, 'ersättning beräknad: ' + await owner.locator('main').innerText());
+  await owner.click('button:has-text("Bokför fordran på Försäkringskassan")');
+  await owner.locator('.sp-booked').waitFor();
+  assert(await owner.locator('.sp-booked').count() === 1 && !(await owner.locator('button:has-text("Bokför fordran")').count()), 'bokförd en gång');
+  await owner.goto(SK + '/rapporter/huvudbok?account=1689');
+  assert(nb(await text(owner)).includes(amount.toFixed(2).replace('.', ',')), 'fordran på 1689');
+  log(`högkostnadsskydd: sjuklönekostnadens andel av lönekostnaden ger ersättning ${amount.toFixed(2)} kr, bokförd som fordran på Försäkringskassan`);
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 21: alla steg gick igenom');

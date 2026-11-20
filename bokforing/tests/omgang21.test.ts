@@ -69,3 +69,16 @@ describe('Fusion av helägt dotterbolag', () => {
     expect(parentLines(neg, 'equity').reduce((s, l) => s + l.amount, 0)).toBe(0);
   });
 });
+
+import { claimLines, compensation, sickPayOf } from '@/lib/sick-pay';
+describe('Högkostnadsskydd för sjuklön', () => {
+  it('ersättning i trappsteg och sjuklön från lönespecen', () => {
+    expect(compensation(500000, 100000000)).toMatchObject({ amount: 0 });
+    const c = compensation(3000000, 100000000);
+    expect(c.rows.map((r) => [r.base, r.amount])).toEqual([[400000, 100000], [400000, 200000], [1000000, 750000], [500000, 500000]]);
+    expect(c.amount).toBe(1550000);
+    expect(compensation(1e12, 1e12).amount).toBe(25000000);
+    expect(sickPayOf([{ description: 'Sjuklön 80 % 5 dagar', amount: 800000 }, { description: 'Karensavdrag', amount: -150000 }, { description: 'Sjukavdrag 5 dagar', amount: -1000000 }, { description: 'Månadslön', amount: 4000000 }])).toBe(650000);
+    expect(claimLines(100)).toEqual([{ account: 1689, amount: 100 }, { account: 3990, amount: -100 }]);
+  });
+});
