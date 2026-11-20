@@ -151,6 +151,55 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await text(owner)).includes('346600,00'), 'periodiseringsfonden bokförd');
   log('avsättningen bokförs inom gränsen (8811 mot 212x) och kan inte överstiga det tillåtna');
 
+  // ================= Del 3: successiv vinstavräkning =================
+  const B = `${BASE}/c/1`;
+  await owner.goto(B + '/uppdrag');
+  await owner.fill('form:has(button:has-text("Skapa uppdrag")) input[name=name]', 'Ombyggnad fastpris');
+  await owner.selectOption('form:has(button:has-text("Skapa uppdrag")) select[name=customer_id]', { index: 1 });
+  await owner.selectOption('form:has(button:has-text("Skapa uppdrag")) select[name=billing]', 'fixed');
+  await owner.click('button:has-text("Skapa uppdrag")');
+  await owner.waitForLoadState('networkidle');
+  await owner.goto(B + '/leverantorsfakturor/ny');
+  await owner.selectOption('select[name=supplier_id]', { label: 'Kontorsvaror Norden AB' });
+  await owner.fill('input[name=invoice_number]', 'BYGG-1'); await owner.fill('input[name=invoice_date]', day(5)); await owner.fill('input[name=due_date]', day(-20));
+  await owner.fill('input[name=total]', '50000');
+  await owner.click('button:has-text("25 % moms")');
+  await owner.selectOption('select[name=project_id]', { label: 'Ombyggnad fastpris' });
+  await owner.click('button:has-text("Registrera och bokför")');
+  await owner.waitForURL(/leverantorsfakturor\/\d+\?ok/);
+  await owner.goto(B + '/successiv');
+  await owner.selectOption('form:has(button:has-text("Lägg upp uppdrag")) select[name=project_id]', { label: 'Ombyggnad fastpris' });
+  await owner.fill('form:has(button:has-text("Lägg upp uppdrag")) input[name=value]', '100000');
+  await owner.fill('form:has(button:has-text("Lägg upp uppdrag")) input[name=estimated_cost]', '80000');
+  await owner.click('button:has-text("Lägg upp uppdrag")');
+  await owner.locator('text=Fastprisuppdraget är upplagt').waitFor();
+  const prow = owner.locator('tr.poc-row:has-text("Ombyggnad fastpris")');
+  assert(nb(await prow.locator('.grade').innerText()) === '50%' && nb(await prow.locator('.earned').innerText()) === '50000,00', 'färdigställandegrad: ' + await prow.innerText());
+  await prow.locator('input[name=amount]').fill('30000');
+  await prow.locator('button:has-text("Fakturera")').click();
+  await owner.locator('text=Delfakturan är skapad och bokförd').waitFor();
+  await owner.goto(B + '/successiv');
+  assert(nb(await owner.locator('tr.poc-row:has-text("Ombyggnad fastpris") .wip').innerText()).startsWith('20000,00tillgång'), 'upparbetat ej fakturerat');
+  await owner.click('button:has-text("Bokför per")');
+  await owner.locator('text=Bokslutsjusteringen är bokförd').waitFor();
+  await owner.goto(B + '/rapporter/huvudbok?account=1620');
+  assert(nb(await text(owner)).includes('20000,00') && (await text(owner)).includes('Successiv vinstavräkning'), '1620');
+  log('fastprisuppdrag: färdigställandegrad ur projektets kostnader, delfakturering och upparbetad men ej fakturerad intäkt på 1620');
+
+  await owner.goto(B + '/successiv');
+  await owner.locator('tr.poc-row:has-text("Ombyggnad fastpris") input[name=estimated_cost]').fill('120000');
+  await owner.locator('tr.poc-row:has-text("Ombyggnad fastpris") button:has-text("Spara")').click();
+  await owner.locator('text=Uppdraget är uppdaterat').waitFor();
+  t = await text(owner);
+  assert(t.includes('Befarad förlust 20 000,00') || nb(t).includes('Befaradförlust20000,00'), 'befarad förlust');
+  await owner.click('button:has-text("Bokför per")');
+  await owner.locator('text=Bokslutsjusteringen är bokförd').waitFor();
+  await owner.goto(B + '/rapporter/huvudbok?account=2290');
+  assert(nb(await text(owner)).includes('13333,33'), 'förlustreserv: ' + (await text(owner)).slice(0, 1000));
+  await owner.goto(B + '/rapporter/huvudbok?account=1620');
+  assert(nb(await text(owner)).includes('3333,33'), 'bara förändringen bokförs');
+  log('befarad förlust reserveras direkt (4995/2290) och varje bokslut bokför bara förändringen');
+
   //@@NEXT@@
   await browser.close(); mailServer.close();
   console.log('Omgång 15: alla steg gick igenom');

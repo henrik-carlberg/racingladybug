@@ -32,6 +32,7 @@ export function buildNav(o: {
       { path: '/tid', label: '⏱ Tidrapportering' },
       { path: '/uppdrag', label: 'Uppdrag & timbanker' },
       { path: '/tid/belaggning', label: 'Beläggning' },
+      { path: '/successiv', label: 'Fastprisuppdrag', perm: 'ledger', hint: 'Successiv vinstavräkning med färdigställandegrad och förlustreserv' },
     ]) },
     { id: 'kop', label: t('Köpa och betala'), icon: 'inbox', items: items([
       { path: '/leverantorsfakturor/inkorg', label: 'Inkorg för fakturor', perm: 'purchasing', hint: 'Fakturor som kommit in via e-post och Peppol' },

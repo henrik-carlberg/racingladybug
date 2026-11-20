@@ -57,3 +57,24 @@ describe('Skatteplanering enskild firma', () => {
     expect(fundLines({ year: 2026, pfond: 100, expansion: 50 })).toEqual([{ account: 8811, amount: 100 }, { account: 2126, amount: -100 }, { account: 2010, amount: 50 }, { account: 2050, amount: -50 }]);
   });
 });
+
+import { adjustmentLines, completion, position } from '@/lib/poc';
+describe('Successiv vinstavräkning', () => {
+  it('färdigställandegrad och position', () => {
+    const c = { value: 100000000, estimatedCost: 80000000 };
+    expect(completion(c, { cost: 40000000, invoiced: 0 })).toBe(0.5);
+    expect(position(c, { cost: 40000000, invoiced: 30000000 })).toMatchObject({ earned: 50000000, wip: 20000000, lossProvision: 0, margin: 10000000 });
+    expect(position(c, { cost: 40000000, invoiced: 70000000 }).wip).toBe(-20000000);
+    const loss = position({ value: 100000000, estimatedCost: 120000000 }, { cost: 60000000, invoiced: 0 });
+    expect(loss).toMatchObject({ expectedLoss: 20000000, lossProvision: 10000000 });
+  });
+  it('bokar bara förändringen, även byte av sida', () => {
+    const a = adjustmentLines({ wip: 20000000, lossProvision: 0 }, { wip: 0, lossProvision: 0 });
+    expect(a).toEqual([{ account: 1620, amount: 20000000 }, { account: 3795, amount: -20000000 }]);
+    const b = adjustmentLines({ wip: -5000000, lossProvision: 0 }, { wip: 20000000, lossProvision: 0 });
+    expect(b.reduce((s, l) => s + l.amount, 0)).toBe(0);
+    expect(b).toContainEqual({ account: 1620, amount: -20000000 });
+    expect(b).toContainEqual({ account: 2450, amount: -5000000 });
+    expect(adjustmentLines({ wip: 1, lossProvision: 0 }, { wip: 1, lossProvision: 0 })).toEqual([]);
+  });
+});
