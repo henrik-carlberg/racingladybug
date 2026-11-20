@@ -237,6 +237,44 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   await owner.locator('text=Det finns inga avslutade månader att bokföra').waitFor();
   log('faktura med tjänsteperiod periodiseras automatiskt när den bokförs (2970), med MRR, ARR och förutbetalt kvar');
 
+  // ================= Del 5: kostnadsfördelning och internfakturering =================
+  const P = new Date().toISOString().slice(0, 7);
+  await owner.goto(B + '/leverantorsfakturor/ny');
+  await owner.selectOption('select[name=supplier_id]', { label: 'Kontorsvaror Norden AB' });
+  await owner.fill('input[name=invoice_number]', 'HYRA-1'); await owner.fill('input[name=invoice_date]', day(0)); await owner.fill('input[name=due_date]', day(-20));
+  await owner.fill('input[name=total]', '16000');
+  await owner.fill('input[name=account_0]', '5010'); await owner.fill('input[name=amount_0]', '16000');
+  await owner.click('button:has-text("Registrera och bokför")');
+  await owner.waitForURL(/leverantorsfakturor\/\d+\?ok/);
+  await owner.goto(B + '/kostnadsfordelning');
+  const kf = owner.locator('form:has(button:has-text("Spara fördelningsnyckel"))');
+  await kf.locator('input[name=name]').fill('Lokalkostnad'); await kf.locator('input[name=basis]').fill('kvm');
+  await kf.locator('input[name=account_from]').fill('5010'); await kf.locator('input[name=account_to]').fill('5010');
+  await kf.locator('input[name=weight_1]').fill('120'); await kf.locator('input[name=weight_2]').fill('40');
+  await kf.locator('button').click();
+  await owner.locator('text=Fördelningsnyckeln är sparad').waitFor();
+  const cf = owner.locator('form:has(input[name=description])');
+  await cf.locator('select[name=from_cost_center_id]').selectOption('1'); await cf.locator('select[name=to_cost_center_id]').selectOption('2');
+  await cf.locator('input[name=description]').fill('Lagerhantering åt webben'); await cf.locator('input[name=amount]').fill('2000'); await cf.locator('input[name=recurring]').check();
+  await cf.locator('button').click();
+  await owner.locator('text=Interndebiteringen är sparad').waitFor();
+  log('fördelningsnyckel (lokalkostnad efter kvm) och återkommande intern debitering mellan avdelningar');
+
+  await owner.goto(B + `/kostnadsfordelning?period=${P}`);
+  await owner.click(`button:has-text("Bokför ${P}")`);
+  await owner.locator('text=fördelningar och debiteringar är bokförda').waitFor();
+  const num = (s) => Number(nb(s).replace(',', '.').replace('−', '-'));
+  const dept = async (name, c) => num(await owner.locator(`tr.dept-row:has(td:text-is("${name === 'Butiken' ? '10 Butiken' : '20 Webbutiken'}")) .${c}`).innerText());
+  const a10 = await dept('Butiken', 'allocated'), a20 = await dept('Webbutiken', 'allocated');
+  assert(a10 > 0 && a20 > 0 && Math.abs(a10 - 3 * a20) < 1 && a10 + a20 >= 16000, `fördelat 75/25: ${a10} / ${a20}`);
+  assert((await dept('Butiken', 'internal')) === -2000 && (await dept('Webbutiken', 'internal')) === 2000, 'interndebitering');
+  t = await text(owner);
+  assert(t.includes('Täckningsbidrag') && t.includes('TB %'), 'TB-kolumner');
+  await owner.goto(B + `/kostnadsfordelning?period=${P}`);
+  await owner.click(`button:has-text("Bokför ${P}")`);
+  await owner.locator('text=0 fördelningar och debiteringar är bokförda').waitFor();
+  log('månadens fördelning och interndebitering bokförs en gång – resultat och täckningsbidrag per avdelning efter fördelning');
+
   //@@NEXT@@
   await browser.close(); mailServer.close();
   console.log('Omgång 15: alla steg gick igenom');

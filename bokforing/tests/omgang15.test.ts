@@ -101,3 +101,19 @@ describe('Abonnemangsintäkter', () => {
     expect(metrics(m, '2026-02', '2026-01')).toMatchObject({ mrr: 1700, arr: 20400, prev: 1500, added: 200, expansion: 500, churned: 500, churnedCustomers: 1, newCustomers: 1, nrr: 100, churnRate: 33.3 });
   });
 });
+
+import { allocate, allocationLines, departmentResult, internalLines } from '@/lib/allocation';
+describe('Kostnadsfördelning', () => {
+  it('fördelning efter nyckel', () => {
+    expect(allocate(1000001, [{ id: 1, weight: 120 }, { id: 2, weight: 80 }])).toEqual([{ id: 1, amount: 600001 }, { id: 2, amount: 400000 }]);
+    expect(() => allocate(1, [])).toThrow();
+    const l = allocationLines([{ account: 5010, amount: 2000000 }], null, [{ id: 1, weight: 3 }, { id: 2, weight: 1 }]);
+    expect(l).toEqual([{ account: 5010, amount: -2000000, costCenterId: null }, { account: 5010, amount: 1500000, costCenterId: 1 }, { account: 5010, amount: 500000, costCenterId: 2 }]);
+    expect(internalLines({ from: 1, to: 2, amount: 100 }).reduce((s, x) => s + x.amount, 0)).toBe(0);
+  });
+  it('täckningsbidrag och resultat per avdelning', () => {
+    const r = departmentResult([{ account: 3001, amount: 1000000, allocated: false }, { account: 4010, amount: -400000, allocated: false },
+      { account: 5010, amount: -100000, allocated: false }, { account: 5010, amount: -150000, allocated: true }, { account: 6999, amount: -50000, allocated: false }]);
+    expect(r).toMatchObject({ revenue: 1000000, variable: 400000, contribution: 600000, tbPct: 60, other: 100000, internal: 50000, allocated: 150000, result: 300000 });
+  });
+});

@@ -85,6 +85,7 @@ export function buildNav(o: {
       { path: '/rapporter/eu', label: 'EU-handel' },
       { path: '/rapporter/huvudbok', label: 'Huvudbok' },
       { path: '/rapporter/dimensioner', label: 'Resultat per dimension' },
+      { path: '/kostnadsfordelning', label: 'Kostnadsfördelning', perm: 'ledger', hint: 'Fördelningsnycklar, interna debiteringar och täckningsbidrag per avdelning' },
       { path: '/rapporter/export', label: 'Export (SIE)' },
       { path: '/rapporter/utskick', label: 'Schemalagda rapporter', perm: 'ledger', hint: 'Resultat och balans som Excel varje månad' },
     ]) },
