@@ -128,3 +128,28 @@ export async function insurances(companyId: number, year: number) {
   }
   return out;
 }
+
+// ---------- Aktieägartillskott ----------
+/** Aktieägartillskott: bank mot 2093. Ovillkorat ökar ägarens omkostnadsbelopp; villkorat är en fordran som kan återbetalas ur fritt eget kapital. */
+export async function contribution(actor: Actor, input: Record<string, unknown>) {
+  const ownerId = Number(input.owner_id);
+  const [o] = await sql<{ id: number; name: string }[]>`SELECT id, name FROM company_owners WHERE id = ${ownerId} AND company_id = ${actor.companyId}`;
+  if (!o) throw new NotFoundError('Ägaren');
+  const kind = str(input, 'kind') === 'villkorat' ? 'villkorat' : 'ovillkorat';
+  const amount = kronor(input.amount, 'beloppet');
+  const d = date(input, 'date', 'Datum', false) || today();
+  const bank = optInt(input, 'bank_account', 'Bankkonto') ?? 1930;
+  if (bank < 1900 || bank > 1999) throw new ValidationError('Bankkontot ska vara 19xx');
+  return sql.begin(async (tx) => {
+    await tx`INSERT INTO accounts (company_id, number, name) VALUES (${actor.companyId}, 2093, 'Erhållna aktieägartillskott') ON CONFLICT DO NOTHING`;
+    const v = await createVoucher(tx, { actor, date: d, description: `${kind === 'ovillkorat' ? 'Ovillkorat' : 'Villkorat'} aktieägartillskott från ${o.name}`, lines: fromSigned([{ account: bank, amount }, { account: 2093, amount: -amount }]), sourceType: 'shareholder_contribution', sourceId: o.id, series: 'B' });
+    await tx`INSERT INTO shareholder_contributions ${tx({ company_id: actor.companyId, owner_id: o.id, kind, amount, date: d, voucher_id: v.id })}`;
+    if (kind === 'ovillkorat') await tx`UPDATE company_owners SET cost_basis = cost_basis + ${amount} WHERE id = ${o.id}`;
+    await auditBy(tx, actor, 'contribution', 'company_owner', o.id, { kind, amount });
+    return { kind, amount };
+  });
+}
+export async function contributions(companyId: number) {
+  return sql<{ name: string; kind: string; amount: number; date: string }[]>`SELECT o.name, c.kind, c.amount::float8 AS amount, to_char(c.date,'YYYY-MM-DD') AS date
+    FROM shareholder_contributions c JOIN company_owners o ON o.id = c.owner_id WHERE c.company_id = ${companyId} ORDER BY c.date DESC, c.id DESC`;
+}

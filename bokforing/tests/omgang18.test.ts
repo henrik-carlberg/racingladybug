@@ -46,3 +46,16 @@ describe('Moms på djupet', () => {
     expect(parseVatNumber('US123')).toBeNull();
   });
 });
+
+import { contributionLines, transferTax } from '@/lib/ownership-change';
+describe('Ägarbyte och generationsskifte', () => {
+  it('försäljning: kapitalvinst och nytt omkostnadsbelopp', () => {
+    const t = transferTax({ kind: 'sale', price: 50000000, sellerShares: 1000, shares: 400, sellerCost: 2500000, sellerSaved: 10000000 });
+    expect(t).toMatchObject({ asSale: true, movedCost: 1000000, buyerCost: 50000000, buyerSaved: 0, gain: 49000000, sellerCostAfter: 1500000, sellerSavedAfter: 6000000 });
+  });
+  it('gåva: omkostnadsbelopp och sparat utrymme följer med; gåva med för hög ersättning blir försäljning', () => {
+    expect(transferTax({ kind: 'gift', price: 0, sellerShares: 1000, shares: 500, sellerCost: 2500000, sellerSaved: 10000000 })).toMatchObject({ asSale: false, buyerCost: 1250000, buyerSaved: 5000000, gain: 0 });
+    expect(transferTax({ kind: 'gift', price: 2000000, sellerShares: 1000, shares: 500, sellerCost: 2500000, sellerSaved: 0 }).asSale).toBe(true);
+    expect(contributionLines(100)).toEqual([{ account: 1930, amount: 100 }, { account: 2093, amount: -100 }]);
+  });
+});

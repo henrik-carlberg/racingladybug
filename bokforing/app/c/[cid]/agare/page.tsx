@@ -8,8 +8,8 @@ import { PayoutCalculator } from '@/components/PayoutCalculator';
 import { kr, today } from '@/lib/format';
 import { defaultParams, stateThresholdFor } from '@/lib/k10';
 import { dividendStatus, ku31, listOwners } from '@/lib/services/owners';
-import { createInsurance, decide, insuranceValue, pay, premium, removeOwner, saveK10, saveOwner } from './actions';
-import { insurances, k10Year } from '@/lib/services/closely-held';
+import { contribution, createInsurance, decide, insuranceValue, pay, premium, removeOwner, saveK10, saveOwner } from './actions';
+import { contributions, insurances, k10Year } from '@/lib/services/closely-held';
 import { dividendPlan } from '@/lib/closely-held';
 import { parseAmount } from '@/lib/money';
 
@@ -34,6 +34,7 @@ export default async function Owners({ params, searchParams }: { params: Promise
   const planTotal = parseAmount(String(sp.plan ?? '')) ?? 0;
   const plan = dividendPlan(planTotal, results.map(({ o, r }) => ({ id: o.id, name: o.name, share: o.share_pct, limit: r.limit })));
   const ins = await insurances(company.id, year);
+  const contribs = await contributions(company.id);
   const status = await dividendStatus(company.id);
   const ku = await ku31(company.id, year);
   const [res] = await sql<{ v: number }[]>`
@@ -102,6 +103,15 @@ export default async function Owners({ params, searchParams }: { params: Promise
           <tbody>{plan.rows.map((p) => <tr key={p.id} className="plan-row"><td>{p.name}</td><td className="num">{String(p.share).replace('.', ',')} %</td><td className="num">{kr(p.amount)}</td><td className="num">{kr(p.within)}</td><td className="num above">{kr(p.above)}</td><td className="num">{kr(p.tax)}</td></tr>)}</tbody></table>}
       </>}
       {owners.length > 0 && <p className="small muted">Inkomstbasbelopp {params0.ibb.toLocaleString('sv-SE')} kr, statslåneränta {String(params0.slr).replace('.', ',')} %. Kontrollera beloppen mot Skatteverkets K10-blankett för inkomståret innan du deklarerar.</p>}
+
+      <h2 id="tillskott">Aktieägartillskott</h2>
+      <p className="small muted">Ett ovillkorat tillskott kan inte krävas tillbaka och ökar ägarens omkostnadsbelopp för aktierna. Ett villkorat tillskott kan återbetalas ur fritt eget kapital efter beslut på bolagsstämma. Båda bokförs på 2093.</p>
+      {owners.length > 0 && <form action={contribution.bind(null, company.id)} className="card row">
+        <label>Ägare<select name="owner_id">{owners.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
+        <label>Typ<select name="kind"><option value="ovillkorat">Ovillkorat</option><option value="villkorat">Villkorat</option></select></label>
+        <label>Belopp (kr)<input name="amount" inputMode="decimal" required style={{ width: 120 }} /></label><label>Datum<input type="date" name="date" defaultValue={today()} /></label>
+        <button className="secondary">Bokför tillskott</button></form>}
+      {contribs.length > 0 && <table className="small contributions"><tbody>{contribs.map((c, i) => <tr key={i}><td>{c.date}</td><td>{c.name}</td><td>{c.kind}</td><td className="num">{kr(c.amount)}</td></tr>)}</tbody></table>}
 
       <h2 id="kapitalforsakring">Kapitalförsäkring</h2>
       <p className="small muted">Bolagsägd kapitalförsäkring (t.ex. pantsatt för en pensionsutfästelse till ägaren) tas upp på 1385 till anskaffningsvärdet. Premierna är inte avdragsgilla. Försäkringsbolaget betalar avkastningsskatten (30 % av kapitalunderlaget × statslåneräntan + 1 procentenhet, lägst 1,25 %) och tar den ur försäkringen. Bestående värdenedgång under bokfört värde skrivs ned.</p>

@@ -140,6 +140,52 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert((await owner.locator('.vies-status').innerText()).includes('Giltigt enligt VIES'), 'giltigt');
   log('momsregistreringsnummer kontrolleras mot EU:s VIES och resultatet sparas på kunden');
 
+  // ================= Del 3: ägarbyte och generationsskifte =================
+  const pnr = (base) => { let sum = 0; [...base.slice(2)].forEach((c, i) => { let d = Number(c) * (i % 2 === 0 ? 2 : 1); sum += d > 9 ? d - 9 : d; }); return `${base.slice(0, 8)}-${base.slice(8)}${(10 - (sum % 10)) % 10}`; };
+  const P1 = pnr('19600101123'), P2 = pnr('19900101567'), P3 = pnr('19850505432');
+  const GS = await newCompany('Generationsskifte AB', 559900000);
+  await owner.goto(GS + '/agare');
+  let of = owner.locator('form:has(button:has-text("Lägg till ägare"))');
+  await of.locator('input[name=name]').fill('Pappa Grundare'); await of.locator('input[name=personal_number]').fill(P1);
+  await of.locator('input[name=share_pct]').fill('100'); await of.locator('input[name=cost_basis]').fill('25000'); await of.locator('input[name=saved_space]').fill('50000');
+  await of.locator('button:has-text("Lägg till ägare")').click();
+  await owner.locator('text=Ägaren är sparad').waitFor();
+  await owner.goto(GS + '/aktiebok');
+  await owner.fill('input[name=share_capital]', '25000'); await owner.fill('input[name=date]', `${YEAR}-01-01`);
+  await owner.fill('input[name=name_0]', 'Pappa Grundare'); await owner.fill('input[name=id_0]', P1); await owner.fill('input[name=shares_0]', '1000');
+  await owner.click('button:has-text("Lägg upp aktieboken")');
+  await owner.locator('text=Aktieboken är upplagd').waitFor();
+  const transfer = async (to, id, n, kind, price) => {
+    await owner.goto(GS + '/aktiebok');
+    const opt = await owner.locator('select[name=from] option:has-text("Pappa Grundare")').first().getAttribute('value');
+    await owner.selectOption('select[name=from]', opt);
+    await owner.fill('form:has(select[name=from]) input[name=shares]', String(n));
+    await owner.fill('input[name=to_name]', to); await owner.fill('input[name=to_id]', id);
+    await owner.selectOption('select[name=kind]', kind);
+    if (price) await owner.fill('form:has(select[name=from]) input[name=price]', price);
+    await owner.click('button:has-text("För in överlåtelsen")');
+    await owner.locator('text=Överlåtelsen är införd i aktieboken').waitFor();
+    return nb(await owner.locator('.flash').first().innerText());
+  };
+  t = await transfer('Dotter Arvtagare', P2, 500, 'gift');
+  assert(t.includes('övertaromkostnadsbelopp12500,00kr') && t.includes('sparatutdelningsutrymme25000,00kr'), 'gåva: ' + t);
+  t = await transfer('Extern Köpare', P3, 100, 'sale', '300000');
+  assert(t.includes('omkostnadsbeloppföraktierna2500,00kr') && t.includes('kapitalvinst297500,00kr'), 'försäljning: ' + t);
+  await owner.goto(GS + '/agare');
+  const costOf = async (n) => nb(await owner.locator(`details:has(summary:has-text("${n}")) input[name=cost_basis]`).inputValue());
+  assert(await costOf('Dotter Arvtagare') === '12500' && await costOf('Extern Köpare') === '300000' && await costOf('Pappa Grundare') === '10000', 'omkostnadsbelopp efter överlåtelser');
+  log('generationsskifte: gåva överför omkostnadsbelopp och sparat utdelningsutrymme, försäljning ger köparen köpeskillingen och säljaren kapitalvinst');
+
+  await owner.selectOption('form:has(button:has-text("Bokför tillskott")) select[name=owner_id]', { label: 'Dotter Arvtagare' });
+  await owner.fill('form:has(button:has-text("Bokför tillskott")) input[name=amount]', '50000');
+  await owner.click('button:has-text("Bokför tillskott")');
+  await owner.locator('text=ovillkorade aktieägartillskottet är bokfört').waitFor();
+  await owner.goto(GS + '/agare');
+  assert(await costOf('Dotter Arvtagare') === '62500', 'ovillkorat tillskott ökar omkostnadsbeloppet');
+  await owner.goto(GS + '/rapporter/huvudbok?account=2093');
+  assert(nb(await text(owner)).includes('50000,00'), '2093');
+  log('ovillkorat aktieägartillskott bokförs på 2093 och ökar ägarens omkostnadsbelopp');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 18: alla steg gick igenom');

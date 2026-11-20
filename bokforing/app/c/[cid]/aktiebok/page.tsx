@@ -63,7 +63,9 @@ export default async function ShareRegister({ params, searchParams }: { params: 
               <label>Datum<input type="date" name="date" defaultValue={today()} /></label>
             </div>
             <div className="row"><label style={{ flex: '2 1 200px' }}>Köpare<input name="to_name" required /></label><label>Person-/orgnr<input name="to_id" /></label>
-              <label style={{ flex: '2 1 200px' }}>Adress<input name="to_address" /></label><label>Pris totalt (kr, valfritt)<input name="price" inputMode="decimal" /></label></div>
+              <label style={{ flex: '2 1 200px' }}>Adress<input name="to_address" /></label><label>Typ<select name="kind"><option value="sale">Försäljning</option><option value="gift">Gåva</option><option value="inheritance">Arv</option></select></label>
+              <label>Pris totalt (kr)<input name="price" inputMode="decimal" /></label></div>
+            <p className="small muted" style={{ margin: 0 }}>Vid försäljning blir köpeskillingen köparens omkostnadsbelopp. Vid gåva och arv tar mottagaren över omkostnadsbeloppet och det sparade utdelningsutrymmet (K10) för aktierna.</p>
             <div><button className="secondary">För in överlåtelsen</button></div>
             <p className="small muted" style={{ margin: 0 }}>Säljarens lägsta aktienummer överlåts. Kontrollera hembud, förköp och samtyckesförbehåll i bolagsordningen.</p>
           </form>
