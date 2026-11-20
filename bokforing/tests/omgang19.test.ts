@@ -74,3 +74,18 @@ describe('Ombildning från enskild firma', () => {
     expect(() => abLines(split(new Map([[1930, 100], [2440, -200]])), 'debt')).toThrow();
   });
 });
+
+import { commitmentNote, movementLines, roll, warrantyProposal } from '@/lib/provisions';
+describe('Avsättningar och åtaganden', () => {
+  it('rörelser, garantiavsättning och noter', () => {
+    expect(movementLines('set', { provision: 2220, cost: 6900, amount: 100 })).toEqual([{ account: 6900, amount: 100 }, { account: 2220, amount: -100 }]);
+    expect(movementLines('use', { provision: 2220, cost: 6900, amount: 40, bank: 1930 })).toEqual([{ account: 2220, amount: 40 }, { account: 1930, amount: -40 }]);
+    const r = roll([{ kind: 'set', date: '2025-12-31', amount: 1000 }, { kind: 'use', date: '2026-03-01', amount: 300 }, { kind: 'set', date: '2026-12-31', amount: 500 }, { kind: 'release', date: '2026-12-31', amount: 100 }], '2026-01-01', '2026-12-31');
+    expect(r).toEqual({ opening: 1000, set: 500, used: 300, released: 100, closing: 1100 });
+    expect(warrantyProposal({ sales: 10000000, ratePct: 2, current: 50000, history: [{ sales: 8000000, costs: 80000 }, { sales: 12000000, costs: 120000 }] }))
+      .toEqual({ target: 200000, change: 150000, taxMax: 100000, nonDeductible: 100000 });
+    const n = commitmentNote([{ kind: 'business_mortgage', description: 'Bank', amount: 50000000 }, { kind: 'guarantee', description: 'Borgen', amount: 10000000 }]);
+    expect(n).toMatchObject({ pledgeTotal: 50000000, contingentTotal: 10000000 });
+    expect(n.pledges[0].label).toBe('Företagsinteckningar');
+  });
+});

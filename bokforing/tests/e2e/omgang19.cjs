@@ -262,6 +262,52 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await text(owner)).includes('20000,00'), 'periodiseringsfonden återförs');
   log('ombildning: tillgångar och skulder till bokfört värde till aktiebolaget (skuld 90 000 kr till ägaren), fonder återförs i firmans slutliga NE');
 
+  // ================= Del 5: avsättningar och åtaganden =================
+  const AV = await newCompany('Garantibolaget AB', 559100000);
+  await voucher(AV, 'Försäljning maskiner', [[1930, 125000], [3001, -100000], [2611, -25000]], `${YEAR}-03-01`);
+  await owner.goto(AV + '/bokslut');
+  await owner.locator(`tr:has-text("${YEAR}-01-01") a:has-text("Öppna")`).first().click();
+  await owner.waitForURL(/bokslut\/\d+/);
+  const AVF = owner.url().split('?')[0];
+  await owner.click('a:has-text("Avsättningar och åtaganden")');
+  await owner.waitForURL(/avsattningar/);
+  await owner.fill('.add-provision input[name=description]', 'Garanti på sålda maskiner');
+  await owner.click('button:has-text("Lägg upp avsättning")');
+  await owner.locator('text=Avsättningen är upplagd').waitFor();
+  const prov = owner.locator('details.provision[data-desc="Garanti på sålda maskiner"]');
+  await prov.locator('summary').click();
+  await prov.locator('.warranty input[name=rate_pct]').fill('2');
+  await prov.locator('.warranty button').click();
+  await owner.locator('text=Garantiavsättningen är ökad till 2 000,00 kr').waitFor();
+  assert(((await owner.locator('.warranty-proposal').textContent()) || '').includes('ingen historik för den skattemässiga gränsen'), 'skattegräns utan historik');
+  await owner.goto(AVF + '/avsattningar');
+  await owner.locator('details.provision summary').first().click();
+  await owner.selectOption('details.provision select[name=kind]', 'use');
+  await owner.fill('details.provision input[name=amount]', '500');
+  await owner.click('details.provision button:has-text("Bokför")');
+  await owner.locator('text=500,00 kr är bokfört').waitFor();
+  await owner.locator('details.provision summary').first().click();
+  await owner.selectOption('details.provision select[name=kind]', 'release');
+  await owner.fill('details.provision input[name=amount]', '5000');
+  await owner.click('details.provision button:has-text("Bokför")');
+  await owner.locator('text=Avsättningen är bara 1 500,00 kr').waitFor();
+  assert(nb(await owner.locator('.prov-balance').first().innerText()) === '1500,00', 'saldo efter ianspråktagande');
+  log('garantiavsättning 2 % av försäljningen på 2220, ianspråktagande och spärr mot att lösa upp mer än avsatt');
+
+  for (const [kind, desc, amt] of [['business_mortgage', 'Företagsinteckning hos banken', '500000'], ['guarantee', 'Borgen för dotterbolagets lån', '100000']]) {
+    await owner.goto(AVF + '/avsattningar');
+    await owner.selectOption('.add-commitment select[name=kind]', kind);
+    await owner.fill('.add-commitment input[name=description]', desc);
+    await owner.fill('.add-commitment input[name=amount]', amt);
+    await owner.click('.add-commitment button:has-text("Registrera")');
+    await owner.locator('text=Åtagandet är registrerat').waitFor();
+  }
+  assert(nb(await owner.locator('.com-pledges').innerText()) === '500000,00' && nb(await owner.locator('.com-contingent').innerText()) === '100000,00', 'åtaganden');
+  await owner.goto(AVF + '/arsredovisning');
+  t = await text(owner);
+  assert(t.includes('Avsättningar') && t.includes('Garanti på sålda maskiner') && t.includes('Ställda säkerheter och eventualförpliktelser') && t.includes('Företagsinteckningar') && t.includes('Borgensförbindelser och garantier'), 'noter i årsredovisningen: ' + t.slice(-2500));
+  log('ställda säkerheter och eventualförpliktelser registreras och förs med avsättningarna till noterna i årsredovisningen');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 19: alla steg gick igenom');

@@ -57,6 +57,9 @@ export interface AnnualReportInput {
   poc?: { earned: number; invoiced: number; asset: number; liability: number; loss: number };
   /** Framtida leasingavgifter för operationella avtal per förfallotid */
   leasing?: { within1: number; oneTo5: number; over5: number; total: number; yearCost: number };
+  /** Avsättningar (rörelser under året) och ställda säkerheter/eventualförpliktelser per bokslutsdagen */
+  provisions?: { label: string; description: string; opening: number; set: number; used: number; released: number; closing: number }[];
+  commitments?: { pledges: { label: string; amount: number }[]; contingent: { label: string; amount: number }[]; pledgeTotal: number; contingentTotal: number };
   /** Bostadsrättsförening: nyckeltal enligt BFNAR 2023:1 och fond för yttre underhåll */
   brf?: { rows: { label: string; value: number }[]; fund: { opening: number; closing: number } };
   /** K3 (BFNAR 2012:1): kassaflödesanalys och utökade noter */
@@ -193,7 +196,7 @@ ${i.k3 ? `<p>Årsredovisningen har upprättats i enlighet med årsredovisningsla
 ${i.k3 ? `<h3>Not 2 Viktiga uppskattningar och bedömningar</h3><p>Nyttjandeperioder för materiella anläggningstillgångar och deras komponenter, samt värdering av uppskjuten skattefordran, bygger på styrelsens bedömningar. Bedömningarna ses över varje år.</p>` : ''}
 <h3>Not ${i.k3 ? 3 : 2} Medelantalet anställda</h3>
 <p>Medelantalet anställda under räkenskapsåret har uppgått till ${esc(i.employees)}.</p>
-${i.k3 ? k3NotesHtml(i.k3, i.leasing, i.poc) : extraNotes(3, i.leasing, i.poc).html}
+${i.k3 ? k3NotesHtml(i.k3, i.leasing, i.poc, i) : (() => { const x = extraNotes(3, i.leasing, i.poc, i); return x.html + (i.commitments && (i.commitments.pledgeTotal || i.commitments.contingentTotal) ? '\n' + commitmentNoteHtml(x.next, i.commitments) : ''); })()}
 
 <h2>Underskrifter</h2>
 <p>${esc(i.place || i.company.city)} den ______________</p>
@@ -274,14 +277,29 @@ function pocNoteHtml(n: number, p: NonNullable<AnnualReportInput['poc']>) {
 <tr><td>Upparbetad men ej fakturerad intäkt</td><td style="text-align:right">${kr(p.asset)}</td></tr><tr><td>Fakturerad men ej upparbetad intäkt</td><td style="text-align:right">${kr(p.liability)}</td></tr>${p.loss ? `<tr><td>Avsättning för befarade förluster</td><td style="text-align:right">${kr(p.loss)}</td></tr>` : ''}</tbody></table>`;
 }
 
-function extraNotes(start: number, leasing?: AnnualReportInput['leasing'], poc?: AnnualReportInput['poc']) {
+function provisionsNoteHtml(n: number, rows: NonNullable<AnnualReportInput['provisions']>) {
+  return `<h3>Not ${n} Avsättningar</h3>${rows.map((r) => `<p><b>${esc(r.label)}</b> – ${esc(r.description)}</p><table><tbody>
+<tr><td>Vid årets början</td><td style="text-align:right">${kr(r.opening)}</td></tr><tr><td>Årets avsättningar</td><td style="text-align:right">${kr(r.set)}</td></tr>
+<tr><td>Ianspråktaget under året</td><td style="text-align:right">${kr(-r.used)}</td></tr><tr><td>Återfört under året</td><td style="text-align:right">${kr(-r.released)}</td></tr>
+<tr><td><b>Vid årets slut</b></td><td style="text-align:right"><b>${kr(r.closing)}</b></td></tr></tbody></table>`).join('')}`;
+}
+
+function commitmentNoteHtml(n: number, c: NonNullable<AnnualReportInput['commitments']>) {
+  const rows = (l: { label: string; amount: number }[]) => l.map((r) => `<tr><td>${esc(r.label)}</td><td style="text-align:right">${kr(r.amount)}</td></tr>`).join('');
+  return `<h3>Not ${n} Ställda säkerheter och eventualförpliktelser</h3><table><tbody>
+<tr><td colspan="2"><b>Ställda säkerheter</b></td></tr>${c.pledgeTotal ? rows(c.pledges) : '<tr><td>Inga</td><td></td></tr>'}
+<tr><td colspan="2"><b>Eventualförpliktelser</b></td></tr>${c.contingentTotal ? rows(c.contingent) : '<tr><td>Inga</td><td></td></tr>'}</tbody></table>`;
+}
+
+function extraNotes(start: number, leasing?: AnnualReportInput['leasing'], poc?: AnnualReportInput['poc'], x?: Pick<AnnualReportInput, 'provisions'>) {
   let n = start; const parts: string[] = [];
   if (poc) parts.push(pocNoteHtml(n++, poc));
   if (leasing?.total) parts.push(leasingNoteHtml(n++, leasing));
+  if (x?.provisions?.length) parts.push(provisionsNoteHtml(n++, x.provisions));
   return { html: parts.join('\n'), next: n };
 }
 
-function k3NotesHtml(k: NonNullable<AnnualReportInput['k3']>, leasing?: AnnualReportInput['leasing'], poc?: AnnualReportInput['poc']) {
+function k3NotesHtml(k: NonNullable<AnnualReportInput['k3']>, leasing?: AnnualReportInput['leasing'], poc?: AnnualReportInput['poc'], i?: Pick<AnnualReportInput, 'provisions' | 'commitments'>) {
   let n = 4;
   const parts: string[] = [];
   if (k.components.length) parts.push(`<h3>Not ${n++} Materiella anläggningstillgångar</h3><table><thead><tr><th>Tillgång/komponent</th><th style="text-align:right">Anskaffningsvärde</th><th style="text-align:right">Ack. avskrivningar</th><th style="text-align:right">Redovisat värde</th><th style="text-align:right">Nyttjandeperiod</th></tr></thead><tbody>
@@ -290,8 +308,9 @@ ${k.components.map((c) => `<tr><td>${esc(c.name)}</td><td style="text-align:righ
 ${k.deferred.rows.map((d) => `<tr><td>${esc(d.label)}</td><td style="text-align:right">${kr(d.amount)}</td><td style="text-align:right">${kr(d.tax)}</td></tr>`).join('')}</tbody></table>
 <p>Uppskjuten skatteskuld ${kr(k.deferred.liability)} kr, uppskjuten skattefordran ${kr(k.deferred.asset)} kr.</p>` : '<p>Det finns inga temporära skillnader.</p>'}
 ${k.untaxed ? `<p>I obeskattade reserver ingår uppskjuten skatt med ${kr(Math.round(k.untaxed * 0.206))} kr.</p>` : ''}`);
-  { const x = extraNotes(n, leasing, poc); if (x.html) parts.push(x.html); n = x.next; }
-  parts.push(`<h3>Not ${n++} Ställda säkerheter och eventualförpliktelser</h3><p>Inga, utöver vad som framgår av balansräkningen.</p>`);
+  { const x = extraNotes(n, leasing, poc, i); if (x.html) parts.push(x.html); n = x.next; }
+  parts.push(i?.commitments && (i.commitments.pledgeTotal || i.commitments.contingentTotal) ? commitmentNoteHtml(n++, i.commitments)
+    : `<h3>Not ${n++} Ställda säkerheter och eventualförpliktelser</h3><p>Inga, utöver vad som framgår av balansräkningen.</p>`);
   return parts.join('\n');
 }
 
