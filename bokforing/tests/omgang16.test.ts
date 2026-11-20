@@ -27,3 +27,33 @@ describe('Ekonomisk förening och stiftelse', () => {
     expect(grantLines('pay', 10, 1940)).toEqual([{ account: 2895, amount: 10 }, { account: 1940, amount: -10 }]);
   });
 });
+
+import { ataEffect, rcCheck, retentionAmount, retentionLines, signed } from '@/lib/construction';
+describe('Bygg och entreprenad', () => {
+  it('ÄTA: godkända per datum ändrar kontraktssumman, avgående räknas negativt', () => {
+    const os = [
+      { kind: 'tillagg' as const, amount: 20000, cost: 12000, status: 'approved' as const, decided_on: '2026-03-01' },
+      { kind: 'avgaende' as const, amount: 5000, cost: 3000, status: 'approved' as const, decided_on: '2026-03-02' },
+      { kind: 'andring' as const, amount: 8000, cost: 0, status: 'proposed' as const, decided_on: null },
+      { kind: 'tillagg' as const, amount: 9999, cost: 0, status: 'rejected' as const, decided_on: '2026-03-01' },
+    ];
+    expect(ataEffect(os, '2026-12-31')).toEqual({ value: 15000, cost: 9000, pending: 8000, pendingCount: 1 });
+    expect(ataEffect(os, '2026-03-01').value).toBe(20000);
+    expect(signed('avgaende', 100)).toBe(-100);
+  });
+  it('innehållna belopp', () => {
+    expect(retentionAmount(10500000, 10, 10500000)).toBe(1050000);
+    expect(retentionAmount(1000050, 10, 50000)).toBe(50000);
+    expect(() => retentionAmount(100, 60, 100)).toThrow();
+    expect(retentionLines('customer', 'retain', 5)).toEqual([{ account: 1682, amount: 5 }, { account: 1510, amount: -5 }]);
+    expect(retentionLines('supplier', 'release', 5, 1940)).toEqual([{ account: 2446, amount: 5 }, { account: 1940, amount: -5 }]);
+  });
+  it('omvänd byggmoms kontrolleras per rad', () => {
+    const v = rcCheck({ rcKind: 'construction', customerIsCompany: true, lines: [{ description: 'Takbyte etapp 1' }, { description: 'Konsultation och projektering' }, { description: 'Material' }] });
+    expect(v.map((x) => x.status)).toEqual(['ok', 'warn', 'warn']);
+    expect(rcCheck({ rcKind: 'construction', customerIsCompany: true, lines: [{ description: 'Material' }, { description: 'Frakt' }] })[0].note).toContain('vanlig moms');
+    expect(rcCheck({ rcKind: '', customerIsCompany: true, lines: [{ description: 'Elinstallation kök' }] })[0].status).toBe('warn');
+    expect(rcCheck({ rcKind: '', customerIsCompany: false, lines: [{ description: 'Elinstallation kök' }] })[0].status).toBe('ok');
+    expect(rcCheck({ rcKind: 'construction', customerIsCompany: true, lines: [{ description: 'Byggstädning' }] })[0].status).toBe('ok');
+  });
+});

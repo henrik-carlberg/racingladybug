@@ -129,6 +129,99 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(t.includes('5000,00'), 'ändamålskostnad i fullföljd: ' + t);
   log('stiftelse: ändamål, beviljade och utbetalda bidrag (6993/2895) och fullföljdskravet över fem år');
 
+  // ================= Del 2: bygg och entreprenad =================
+  const G = await newCompany('Byggtest Tak AB', 559300000);
+  await owner.goto(G + '/kunder');
+  await owner.fill('input[name=name]', 'Byggherren AB');
+  await owner.fill('input[name=orgnr]', orgnrFor('556677889'));
+  await owner.check('input[name=construction_rc]');
+  await owner.click('button:has-text("Spara kund")');
+  await owner.locator('text=Kunden är sparad').waitFor();
+  await owner.goto(G + '/leverantorer');
+  await owner.fill('input[name=name]', 'UE Plåt AB');
+  await owner.click('button:has-text("Spara leverantör")');
+  await owner.locator('text=Leverantören är sparad').waitFor();
+  await owner.goto(G + '/uppdrag');
+  await owner.fill('form:has(button:has-text("Skapa uppdrag")) input[name=name]', 'Takbyte fastpris');
+  await owner.selectOption('form:has(button:has-text("Skapa uppdrag")) select[name=customer_id]', { label: 'Byggherren AB' });
+  await owner.selectOption('form:has(button:has-text("Skapa uppdrag")) select[name=billing]', 'fixed');
+  await owner.click('button:has-text("Skapa uppdrag")');
+  await owner.waitForLoadState('networkidle');
+  await owner.goto(G + '/successiv');
+  await owner.selectOption('form:has(button:has-text("Lägg upp uppdrag")) select[name=project_id]', { label: 'Takbyte fastpris' });
+  await owner.fill('form:has(button:has-text("Lägg upp uppdrag")) input[name=value]', '200000');
+  await owner.fill('form:has(button:has-text("Lägg upp uppdrag")) input[name=estimated_cost]', '150000');
+  await owner.click('button:has-text("Lägg upp uppdrag")');
+  await owner.locator('text=Fastprisuppdraget är upplagt').waitFor();
+
+  const ata = async (kind, description, amount, cost) => {
+    await owner.goto(G + '/bygg');
+    const f = owner.locator('.ata-contract:has-text("Takbyte fastpris") form:has(button:has-text("Ny ÄTA"))');
+    await f.locator('select[name=kind]').selectOption(kind);
+    await f.locator('input[name=description]').fill(description);
+    await f.locator('input[name=amount]').fill(amount); await f.locator('input[name=cost]').fill(cost);
+    await f.locator('button:has-text("Ny ÄTA")').click();
+    await owner.locator('text=väntar på beställarens beslut').waitFor();
+  };
+  await ata('tillagg', 'Extra takfönster', '20000', '12000');
+  await ata('avgaende', 'Hängrännor utgår', '5000', '3000');
+  await ata('andring', 'Annan takpanna', '8000', '6000');
+  for (const [d, btn] of [['Extra takfönster', 'Godkänn'], ['Hängrännor utgår', 'Godkänn'], ['Annan takpanna', 'Avslå']]) {
+    await owner.goto(G + '/bygg');
+    await owner.locator(`tr.ata-row:has-text("${d}") button:has-text("${btn}")`).click();
+    await owner.locator(btn === 'Godkänn' ? 'text=ÄTA:n är godkänd' : 'text=ÄTA:n är avslagen').waitFor();
+  }
+  await owner.goto(G + '/bygg');
+  assert(nb(await owner.locator('.ata-total').innerText()) === '215000,00', 'kontraktssumma: ' + await owner.locator('.ata-contract').innerText());
+  assert((await owner.locator('tr.ata-row:has-text("Hängrännor utgår")').innerText()).includes('-5') || nb(await owner.locator('tr.ata-row:has-text("Hängrännor utgår")').innerText()).includes('−5000,00'), 'avgående negativt');
+  await owner.goto(G + '/successiv');
+  t = nb(await owner.locator('tr.poc-row:has-text("Takbyte fastpris")').innerText());
+  assert(t.includes('215000,00'), 'POC använder ÄTA: ' + t);
+  log('ÄTA-register: tillägg, avgående och ändring med beställarens beslut – godkända ändrar kontraktssumman i successiv vinstavräkning');
+
+  await owner.goto(G + '/fakturor/ny');
+  await owner.selectOption('select[name=customer_id]', { label: 'Byggherren AB' });
+  await owner.fill('input[name=invoice_date]', day(1));
+  await owner.click('button:has-text("+ Rad")');
+  const rows = owner.locator('tbody tr');
+  await rows.nth(0).locator('td:nth-child(1) input').fill('Takbyte enligt avtal, etapp 1'); await rows.nth(0).locator('td:nth-child(4) input').fill('100000');
+  await rows.nth(1).locator('td:nth-child(1) input').fill('Konsultation och projektering'); await rows.nth(1).locator('td:nth-child(4) input').fill('5000');
+  await owner.click('button:has-text("Spara utkast")');
+  await owner.waitForURL(/fakturor\/\d+\?ok/);
+  assert((await owner.locator('.rc-check .rc-line.warn').count()) === 1 && (await owner.locator('.rc-check .rc-line.ok').count()) === 1, 'kontroll per rad: ' + await owner.locator('.rc-check').innerText());
+  assert((await owner.locator('.rc-line.warn').innerText()).includes('Konsultation'), 'rätt rad varnas');
+  await owner.click('button:has-text("Bokför faktura")');
+  await owner.locator('text=Fakturan är bokförd').waitFor();
+  log('omvänd byggmoms kontrolleras per rad: byggtjänsten godkänns, konsult/projektering varnas');
+
+  await owner.goto(G + '/bygg');
+  await owner.locator('form:has(button:has-text("Bokför innehållet belopp")):has(select[name=invoice_id]) input[name=pct]').fill('10');
+  await owner.locator('form:has(select[name=invoice_id]) button:has-text("Bokför innehållet belopp")').click();
+  await owner.locator('text=kr är innehållet och bokfört på 1682').waitFor();
+  await owner.goto(G + '/bygg');
+  assert(nb(await owner.locator('.ret-customer').innerText()) === '10500,00', 'utestående hos kund');
+  await owner.goto(G + '/rapporter/huvudbok?account=1682');
+  assert(nb(await text(owner)).includes('10500,00'), '1682');
+  await owner.goto(G + '/bygg');
+  await owner.click('tr.retention-row.customer button:has-text("Kunden har betalat")');
+  await owner.locator('text=Det innehållna beloppet är frisläppt').waitFor();
+  await owner.goto(G + '/bygg');
+  assert(nb(await owner.locator('.ret-customer').innerText()) === '0,00', 'frisläppt');
+
+  await owner.goto(G + '/leverantorsfakturor/ny');
+  await owner.selectOption('select[name=supplier_id]', { label: 'UE Plåt AB' });
+  await owner.fill('input[name=invoice_number]', 'UE-1');
+  await owner.fill('input[name=invoice_date]', day(2)); await owner.fill('input[name=due_date]', day(-20));
+  await owner.fill('input[name=total]', '40000');
+  await owner.fill('input[name=account_0]', '4010'); await owner.fill('input[name=amount_0]', '40000');
+  await owner.click('button:has-text("Registrera och bokför")');
+  await owner.waitForURL(/leverantorsfakturor\/\d+\?ok/);
+  await owner.goto(G + '/bygg');
+  await owner.locator('form:has(select[name=supplier_invoice_id]) input[name=pct]').fill('5');
+  await owner.locator('form:has(select[name=supplier_invoice_id]) button:has-text("Bokför innehållet belopp")').click();
+  await owner.locator('text=kr är innehållet och bokfört på 2446').waitFor(); assert(nb(await owner.locator('.flash').first().innerText()).includes('2000,00'), '5 % av 40 000');
+  log('innehållna belopp: kunden håller inne 10 % (1682) som betalas vid slutbesiktning, vi håller inne 5 % hos underentreprenören (2446)');
+
   //@@NEXT@@
   await browser.close(); mailServer.close();
   console.log('Omgång 16: alla steg gick igenom');
