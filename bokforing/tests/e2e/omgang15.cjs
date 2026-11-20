@@ -200,6 +200,43 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await text(owner)).includes('3333,33'), 'bara förändringen bokförs');
   log('befarad förlust reserveras direkt (4995/2290) och varje bokslut bokför bara förändringen');
 
+  // ================= Del 4: abonnemangsintäkter =================
+  const ym = (n) => { const d = new Date(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() + n); return d.toISOString().slice(0, 7); };
+  const lastOf = (p) => { const [y, m] = p.split('-').map(Number); return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10); };
+  await owner.goto(B + '/kunder');
+  await owner.fill('input[name=name]', 'Abonnent Ett AB');
+  await owner.click('form button:has-text("Spara")');
+  await owner.locator('text=Kunden är sparad').waitFor();
+  await owner.goto(B + '/fakturor/ny');
+  await owner.selectOption('select[name=customer_id]', { label: 'Abonnent Ett AB' });
+  const ar = owner.locator('tbody tr').first();
+  await ar.locator('td:nth-child(1) input').fill('Årsabonnemang'); await ar.locator('td:nth-child(2) input').fill('1');
+  await ar.locator('td:nth-child(3) input').fill('st'); await ar.locator('td:nth-child(4) input').fill('12000');
+  await owner.click('button:has-text("Spara utkast")');
+  await owner.waitForURL(/fakturor\/\d+\?ok/);
+  const subUrl = owner.url().split('?')[0];
+  await owner.fill('form.service-period input[name=service_from]', `${ym(-1)}-01`);
+  await owner.fill('form.service-period input[name=service_to]', lastOf(ym(10)));
+  await owner.click('form.service-period button');
+  await owner.locator('text=Tjänsteperioden är sparad').waitFor();
+  await owner.click('button:has-text("Bokför faktura")');
+  await owner.locator('text=klar att skicka').first().waitFor();
+  await owner.goto(subUrl);
+  t = await text(owner);
+  assert(t.includes('är periodiserat till förutbetalda intäkter (2970)'), 'periodiserad: ' + t.slice(0, 1500));
+  await owner.goto(B + '/intaktsplan');
+  const mrr = Number(nb(await owner.locator('.mrr').innerText()).replace(',', '.'));
+  const arr = Number(nb(await owner.locator('.arr').innerText()).replace(',', '.'));
+  const def = Number(nb(await owner.locator('.deferred-balance').innerText()).replace(',', '.'));
+  assert(mrr > 900 && mrr < 1100 && Math.abs(arr - mrr * 12) < 0.01 && def > 9000 && def < 11000, `MRR ${mrr} ARR ${arr} förutbetalt ${def}`);
+  assert((await owner.locator('tr.rev-customer:has-text("Abonnent Ett AB")').count()) === 1, 'kundrad');
+  await owner.goto(B + '/rapporter/huvudbok?account=2970');
+  assert(nb(await text(owner)).includes(nb(def.toLocaleString('sv-SE', { minimumFractionDigits: 2 }))), 'förutbetalda intäkter på 2970');
+  await owner.goto(B + '/intaktsplan');
+  await owner.click('button:has-text("Bokför periodiserade intäkter")');
+  await owner.locator('text=Det finns inga avslutade månader att bokföra').waitFor();
+  log('faktura med tjänsteperiod periodiseras automatiskt när den bokförs (2970), med MRR, ARR och förutbetalt kvar');
+
   //@@NEXT@@
   await browser.close(); mailServer.close();
   console.log('Omgång 15: alla steg gick igenom');

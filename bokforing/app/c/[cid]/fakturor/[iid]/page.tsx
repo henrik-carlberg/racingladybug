@@ -10,6 +10,7 @@ import { Flash, Status, type SP } from '@/components/ui';
 import { kr, today } from '@/lib/format';
 import type { ReductionType } from '@/lib/rotrut';
 import { bookInvoice, creditInvoice, deleteDraftNow, refreshKivraStatus, registerPayment, sendBest, sendInvoice, sendKivra, settleAdvance } from '../actions';
+import { servicePeriod } from './service-actions';
 import { channelFor, deliveriesFor } from '@/lib/services/kivra';
 import { CHANNEL_LABEL } from '@/lib/kivra';
 const KST: Record<string, string> = { sent: 'Skickad', delivered: 'Levererad till brevlådan', read: 'Öppnad av kunden', failed: 'Misslyckades' };
@@ -52,6 +53,8 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
   const credit = inv.status === 'draft' ? await customerCredit(co.id, inv.customer_id) : null;
   const creditMsg = credit && (credit.credit_limit != null || credit.risk_class === 'stop')
     ? creditDecision({ limit: credit.credit_limit, open: credit.open, amount: Number(inv.total), risk: credit.risk_class, policy: credit.credit_policy }) : null;
+  const [svc] = await sql<{ from: string | null; to: string | null; deferred: number | null }[]>`SELECT to_char(service_from,'YYYY-MM-DD') AS from, to_char(service_to,'YYYY-MM-DD') AS to,
+    (SELECT deferred::float8 FROM invoice_deferrals d WHERE d.invoice_id = invoices.id) AS deferred FROM invoices WHERE id = ${inv.id} AND company_id = ${co.id}`;
   const advances = inv.status === 'draft' && !inv.advance && !inv.reduction_type ? await openAdvances(sql, co.id, inv.customer_id) : [];
   const payments = await sql<{ id: number; date: string; amount: number; voucher_id: number | null }[]>`SELECT id, to_char(date,'YYYY-MM-DD') AS date, amount, voucher_id FROM invoice_payments WHERE invoice_id = ${inv.id} ORDER BY date, id`;
   const [orig] = inv.credit_of_id ? await sql<{ id: number; invoice_number: number }[]>`SELECT id, invoice_number FROM invoices WHERE id = ${inv.credit_of_id}` : [];
@@ -145,6 +148,12 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
             <ul>{payments.map((p) => <li key={p.id}>{p.date}: {kr(p.amount)} {p.voucher_id && <Link href={`${b}/verifikationer/${p.voucher_id}`}>verifikation</Link>}</li>)}</ul>
           </div>
         )}
+        {inv.status !== 'credited' && !inv.credit_of_id && (svc.deferred != null
+          ? <div className="card small service-period">Tjänsteperiod {svc.from} – {svc.to}: {kr(svc.deferred)} är periodiserat till förutbetalda intäkter (2970) och intäktsförs månad för månad. <Link href={`${b}/intaktsplan`}>Intäktsplan</Link></div>
+          : <form action={servicePeriod.bind(null, co.id, inv.id)} className="card row service-period">
+              <span className="small" style={{ flex: '1 1 220px' }}>Tjänsteperiod (t.ex. årsabonnemang) – intäkten fördelas per månad:</span>
+              <label>Från<input type="date" name="service_from" defaultValue={svc.from ?? ''} required /></label><label>Till<input type="date" name="service_to" defaultValue={svc.to ?? ''} required /></label>
+              <button className="secondary">{inv.status === 'draft' ? 'Spara period' : 'Periodisera'}</button></form>)}
         {inv.status === 'booked' && (
           <div className="card stack">
             <form action={registerPayment.bind(null, co.id, inv.id)} className="row">

@@ -78,3 +78,26 @@ describe('Successiv vinstavräkning', () => {
     expect(adjustmentLines({ wip: 1, lossProvision: 0 }, { wip: 1, lossProvision: 0 })).toEqual([]);
   });
 });
+
+import { deferral, metrics, releaseLines, splitByMonth } from '@/lib/revenue';
+describe('Abonnemangsintäkter', () => {
+  it('fördelning per månad efter dagar', () => {
+    const s = splitByMonth(1200000, '2026-01-01', '2026-12-31');
+    expect(s).toHaveLength(12);
+    expect(s.reduce((a, x) => a + x.amount, 0)).toBe(1200000);
+    expect(s[0].amount).toBe(Math.round((1200000 * 31) / 365));
+    expect(splitByMonth(100, '2026-01-15', '2026-02-14').map((x) => x.period)).toEqual(['2026-01', '2026-02']);
+    expect(() => splitByMonth(1, '2026-02-01', '2026-01-01')).toThrow();
+  });
+  it('periodisering vid bokföring och månadsvis återföring', () => {
+    const r = deferral([{ account: 3001, net: 1200000 }], '2026-01-01', '2026-12-31', '2026-01');
+    expect(r.schedules.filter((x) => x.now)).toHaveLength(1);
+    expect(r.deferred).toBe(1200000 - Math.round((1200000 * 31) / 365));
+    expect(r.lines).toEqual([{ account: 3001, amount: r.deferred }, { account: 2970, amount: -r.deferred }]);
+    expect(releaseLines([{ account: 3001, amount: 100 }, { account: 3001, amount: 50 }])).toEqual([{ account: 2970, amount: 150 }, { account: 3001, amount: -150 }]);
+  });
+  it('MRR, churn och nettoretention', () => {
+    const m = new Map([[1, new Map([['2026-01', 1000], ['2026-02', 1500]])], [2, new Map([['2026-01', 500]])], [3, new Map([['2026-02', 200]])]]);
+    expect(metrics(m, '2026-02', '2026-01')).toMatchObject({ mrr: 1700, arr: 20400, prev: 1500, added: 200, expansion: 500, churned: 500, churnedCustomers: 1, newCustomers: 1, nrr: 100, churnRate: 33.3 });
+  });
+});

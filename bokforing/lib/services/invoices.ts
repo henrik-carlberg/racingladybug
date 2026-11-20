@@ -281,6 +281,9 @@ export async function bookInvoice(actor: Actor, invoiceId: number): Promise<Invo
     // Faktura till ett koncernbolag blir en leverantörsfaktura hos mottagaren
     const { mirrorInvoice } = await import('./intercompany');
     await mirrorInvoice(actor.companyId, invoiceId).catch((e) => console.error('koncernfaktura', e instanceof Error ? e.message : e));
+    // Faktura med tjänsteperiod (t.ex. årsabonnemang) periodiseras via förutbetalda intäkter
+    const { deferIfNeeded } = await import('./revenue');
+    await deferIfNeeded(actor, invoiceId).catch((e) => console.error('periodisering', e instanceof Error ? e.message : e));
     return out;
   });
 }
