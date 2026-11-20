@@ -3,6 +3,7 @@ import { requireCompany } from '@/lib/server/auth';
 import { companyDeadlines, deadlinePrep } from '@/lib/services/deadlines';
 import { Flash, type SP } from '@/components/ui';
 import { mark } from './actions';
+import { COMPANY_TYPE_LABEL } from '@/lib/partnership';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,7 +35,7 @@ export default async function Deadlines({ params, searchParams }: { params: Prom
     <div style={{ maxWidth: 900 }}>
       <div className="header"><h1>Deadlines</h1><Link className="btn secondary" href={`/c/${company.id}/arshjul?m=skatt&m=bokslut`}>Visa i årshjulet</Link></div>
       <Flash searchParams={searchParams} />
-      <p className="muted">Anpassat efter {company.company_type === 'AB' ? 'aktiebolag' : 'enskild firma'}, momsredovisning per {company.vat_period === 'month' ? 'månad' : company.vat_period === 'quarter' ? 'kvartal' : 'år'}
+      <p className="muted">Anpassat efter {COMPANY_TYPE_LABEL[company.company_type].toLowerCase()}, momsredovisning per {company.vat_period === 'month' ? 'månad' : company.vat_period === 'quarter' ? 'kvartal' : 'år'}
         {company.f_skatt ? ', F-skatt' : ''}. Datum som infaller på helg flyttas till nästa vardag. Gäller företag med omsättning under 40 Mkr utan EU-handel.
         Bocka av när du har lämnat in – appen kan inte se vad som skickats till myndigheterna.</p>
       <p className="small"><Link href={`/c/${company.id}/deadlines${showDone ? '' : '?visa=alla'}`}>{showDone ? 'Dölj klara' : 'Visa även klara'}</Link></p>

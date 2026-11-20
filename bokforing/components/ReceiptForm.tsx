@@ -17,7 +17,7 @@ export function ReceiptForm({ action, read, today, companyType, accountNames, le
   action: (s: State, fd: FormData) => Promise<State>;
   read?: (fd: FormData) => Promise<{ guess?: ReceiptGuess; error?: string }>;
   today: string;
-  companyType: 'AB' | 'EF';
+  companyType: 'AB' | 'EF' | 'HB' | 'KB';
   accountNames: Record<number, string>;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);

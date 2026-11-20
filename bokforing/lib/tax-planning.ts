@@ -19,7 +19,7 @@ export function taxForecast(balance: number, events: TaxEvent[]) {
  * Årets skattepliktiga resultat räknas upp från hittills (linjärt), skatten jämförs med debiterad F-skatt.
  * AB: 20,6 % bolagsskatt. EF: ungefärlig skatt (egenavgifter ~28,97 % efter schablonavdrag 25 % och 32 % kommunalskatt) – en uppskattning.
  */
-export function prelimProposal(o: { type: 'AB' | 'EF'; ytdProfit: number; nonDeductible: number; monthsElapsed: number; monthsInYear?: number; currentMonthly: number }) {
+export function prelimProposal(o: { type: 'AB' | 'EF' | 'HB' | 'KB'; ytdProfit: number; nonDeductible: number; monthsElapsed: number; monthsInYear?: number; currentMonthly: number }) {
   const months = o.monthsInYear ?? 12;
   const m = Math.min(Math.max(o.monthsElapsed, 1), months);
   const profit = Math.round(((o.ytdProfit + o.nonDeductible) / m) * months);
@@ -54,7 +54,7 @@ export function maxDepreciation(inv: Inventories) {
 }
 
 export function yearEndProposals(o: {
-  type: 'AB' | 'EF'; year: number; resultBeforeAppropriations: number; nonDeductible: number; inventories?: Inventories;
+  type: 'AB' | 'EF' | 'HB' | 'KB'; year: number; resultBeforeAppropriations: number; nonDeductible: number; inventories?: Inventories;
   fonds?: { account: number; year: number; amount: number }[]; group?: { name: string; result: number; ownership: number }[];
 }): { proposals: Proposal[]; taxable: number; taxBefore: number; taxAfter: number } {
   const rate = o.type === 'AB' ? CORPORATE_TAX : 0.5; // EF: ungefärlig marginalskatt + egenavgifter

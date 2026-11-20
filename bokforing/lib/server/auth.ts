@@ -15,7 +15,7 @@ const SESSION_DAYS = 14;
 export type Role = 'owner' | 'accountant' | 'employee' | 'auditor';
 export interface User { id: number; email: string; name: string }
 export interface Company {
-  id: number; name: string; orgnr: string; company_type: 'AB' | 'EF'; vat_period: 'month' | 'quarter' | 'year';
+  id: number; name: string; orgnr: string; company_type: 'AB' | 'EF' | 'HB' | 'KB'; vat_period: 'month' | 'quarter' | 'year';
   address: string; postal_code: string; city: string; email: string; phone: string; vat_number: string;
   bankgiro: string; plusgiro: string; iban: string; require_mfa: boolean; ip_allowlist: string[]; f_skatt: boolean; invoice_terms: number; late_interest: string;
   locked_until: string | null; next_invoice_no: number; attest_threshold: number | null; attest_not_registrant: boolean;

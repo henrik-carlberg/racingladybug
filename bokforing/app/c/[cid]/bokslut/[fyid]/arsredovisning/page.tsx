@@ -24,7 +24,7 @@ export default async function AnnualReport({ params, searchParams }: { params: P
   return (
     <div style={{ maxWidth: 900 }}>
       <div className="header no-print">
-        <h1>{ab ? 'Årsredovisning' : 'Förenklat årsbokslut'}</h1>
+        <h1>{ab ? 'Årsredovisning' : company.company_type === 'HB' || company.company_type === 'KB' ? 'Årsbokslut' : 'Förenklat årsbokslut'}</h1>
         <div className="actions" style={{ margin: 0 }}><PrintButton />{ab && !k3 && <a className="btn secondary" href={`${b}/arsredovisning/ixbrl`} download title="För digital inlämning till Bolagsverket">Ladda ner iXBRL</a>}{ab && <form action={prepareAnnual.bind(null, company.id, Number(fyid))}><button className="secondary">Förbered inlämning till Bolagsverket</button></form>}<Link className="btn secondary" href={b}>Tillbaka</Link></div>
       </div>
       <Flash searchParams={searchParams} />

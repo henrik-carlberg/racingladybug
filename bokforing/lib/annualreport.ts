@@ -279,3 +279,39 @@ ${k.untaxed ? `<p>I obeskattade reserver ingår uppskjuten skatt med ${kr(Math.r
   parts.push(`<h3>Not ${n++} Ställda säkerheter och eventualförpliktelser</h3><p>Inga, utöver vad som framgår av balansräkningen.</p>`);
   return parts.join('\n');
 }
+
+
+/** Årsbokslut för handels- och kommanditbolag: resultat- och balansräkning samt delägarnas kapitalkonton (BFL 6:4) */
+export function partnershipClosingHtml(o: { company: { name: string; orgnr: string; city: string }; type: 'HB' | 'KB'; years: YearFigures[];
+  partners: { name: string; sharePct: number; limited: boolean; opening: number; withdrawals: number; contributions: number; result: number; closing: number }[] }) {
+  const [cur, prev] = o.years;
+  const k = keyFigures(cur);
+  const kp = prev ? keyFigures(prev) : null;
+  const P = (fn: (y: YearFigures) => number) => [fn(cur), prev ? fn(prev) : null] as const;
+  const head = `<tr><th></th><th style="text-align:right">${esc(cur.label)}</th>${prev ? `<th style="text-align:right">${esc(prev.label)}</th>` : ''}</tr>`;
+  const pl = RR.map((r) => { const [c, p] = P((y) => r.sign * sum(y.result, r.ranges)); return c || p ? row(r.label, c, p) : ''; }).join('');
+  const fin = FIN.map((r) => { const [c, p] = P((y) => -sum(y.result, r.ranges)); return c || p ? row(r.label, c, p) : ''; }).join('');
+  const bal = (label: string, ranges: Range[], liab = false) => { const [c, p] = P((y) => (liab ? -1 : 1) * sum(y.closing, ranges)); return c === 0 && !p ? '' : row(label, c, p); };
+  return `
+<h1>Årsbokslut</h1>
+<p>för<br><b>${esc(o.company.name)}</b> (${o.type === 'HB' ? 'handelsbolag' : 'kommanditbolag'})<br>${esc(o.company.orgnr)}</p>
+<p>Räkenskapsåret ${esc(cur.start)} – ${esc(cur.end)}. Belopp i kronor.</p>
+<h2>Resultaträkning</h2>
+<table><tbody>${head}${pl}${row('Rörelseresultat', k.operating, kp?.operating ?? null, { bold: true })}${fin}
+${row('Årets resultat', k.afterFinancial, kp?.afterFinancial ?? null, { bold: true })}</tbody></table>
+<p><small>Bolaget är inte självständigt skattesubjekt – resultatet beskattas hos delägarna.</small></p>
+<h2>Balansräkning</h2>
+<table><tbody>${head}
+${bal('Anläggningstillgångar', [[1000, 1399]])}${bal('Varulager', [[1400, 1499]])}${bal('Kortfristiga fordringar', [[1500, 1899]])}${bal('Kassa och bank', [[1900, 1999]])}
+${row('Summa tillgångar', k.totalAssets, kp?.totalAssets ?? null, { bold: true })}
+${bal('Eget kapital (delägarnas kapitalkonton)', [[2000, 2099]], true)}${bal('Obeskattade reserver', [[2100, 2199]], true)}${bal('Avsättningar', [[2200, 2299]], true)}
+${bal('Långfristiga skulder', [[2300, 2399]], true)}${bal('Kortfristiga skulder', [[2400, 2999]], true)}
+${row('Summa eget kapital och skulder', k.totalAssets, kp?.totalAssets ?? null, { bold: true })}</tbody></table>
+<h2>Delägarnas kapitalkonton</h2>
+<table><thead><tr><th>Delägare</th><th style="text-align:right">Andel</th><th style="text-align:right">Ingående</th><th style="text-align:right">Insättningar</th><th style="text-align:right">Uttag</th><th style="text-align:right">Andel av resultatet</th><th style="text-align:right">Utgående</th></tr></thead><tbody>
+${o.partners.map((p) => `<tr><td>${esc(p.name)}${p.limited ? ' (kommanditdelägare)' : ''}</td><td style="text-align:right">${p.sharePct.toLocaleString('sv-SE')} %</td><td style="text-align:right">${kr(p.opening)}</td><td style="text-align:right">${kr(p.contributions)}</td><td style="text-align:right">${kr(-p.withdrawals)}</td><td style="text-align:right">${kr(p.result)}</td><td style="text-align:right">${kr(p.closing)}</td></tr>`).join('')}
+</tbody></table>
+<h2>Underskrifter</h2>
+<p>${esc(o.company.city)} den ______________</p>
+${o.partners.filter((p) => !p.limited).map((p) => `<p><br>______________________________<br>${esc(p.name)}</p>`).join('')}`.trim();
+}

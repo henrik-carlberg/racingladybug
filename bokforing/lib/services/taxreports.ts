@@ -12,13 +12,13 @@ import { createDocument, sendDocument } from './documents';
 import { str } from './input';
 
 async function company(companyId: number) {
-  const [c] = await sql<{ name: string; orgnr: string; company_type: 'AB' | 'EF'; address: string; postal_code: string; city: string; email: string; phone: string }[]>`
+  const [c] = await sql<{ name: string; orgnr: string; company_type: 'AB' | 'EF' | 'HB' | 'KB'; address: string; postal_code: string; city: string; email: string; phone: string }[]>`
     SELECT name, orgnr, company_type, address, postal_code, city, email, phone FROM companies WHERE id = ${companyId}`;
   return c;
 }
 
 /** Saldon för ett räkenskapsår. Om årets resultat inte är bokfört (8999) läggs det på eget kapital i utgående balans. */
-export async function yearFigures(companyId: number, fy: FiscalYear, type: 'AB' | 'EF'): Promise<YearFigures> {
+export async function yearFigures(companyId: number, fy: FiscalYear, type: 'AB' | 'EF' | 'HB' | 'KB'): Promise<YearFigures> {
   const opening = await openingBalances(companyId, fy.start_date);
   const period = await accountSums(companyId, fy.start_date, fy.end_date);
   const result: Sums = new Map();
@@ -55,6 +55,7 @@ export async function taxForms(companyId: number, fyId: number) {
 /** SRU-filer för filöverföring till Skatteverket. AB: INK2, INK2R, INK2S. EF: NE (bilaga till INK1). */
 export async function sruFiles(companyId: number, fyId: number, userName: string): Promise<{ info: string; blankets: string; period: string }> {
   const c = await company(companyId);
+  if (c.company_type === 'HB' || c.company_type === 'KB') throw new ValidationError('SRU-fil för INK4 skapas inte här – underlaget till INK4 och delägarnas N3B finns under Delägare');
   if (!c.postal_code || !c.city) throw new ValidationError('Fyll i bolagets postnummer och ort under Inställningar – de krävs i SRU-filen');
   const f = await taxForms(companyId, fyId);
   const ownerPnr = c.company_type === 'EF' ? (Number(c.orgnr.slice(0, 2)) > new Date().getFullYear() % 100 ? '19' : '20') + c.orgnr.replace(/\D/g, '') : undefined;
@@ -112,6 +113,12 @@ export async function annualReport(companyId: number, fyId: number): Promise<{ h
   const [members] = await sql<{ names: string[] }[]>`SELECT array_agg(u.name ORDER BY u.name) AS names FROM memberships m JOIN users u ON u.id = m.user_id
     WHERE m.company_id = ${companyId} AND m.role = 'owner'`;
   const board = data.board?.length ? data.board : (members.names ?? []).map((n) => ({ name: n, role: 'Styrelseledamot' }));
+  if (c.company_type === 'HB' || c.company_type === 'KB') {
+    const { overview: partnerOverview } = await import('./partnership');
+    const { partnershipClosingHtml } = await import('@/lib/annualreport');
+    const po = await partnerOverview(companyId, fyId);
+    return { html: partnershipClosingHtml({ company: c, type: c.company_type, years, partners: po.rows }), data, figures: keyFigures(years[0]) };
+  }
   if (c.company_type === 'EF') {
     const ne = neForm(years[0].closing, years[0].result);
     return {

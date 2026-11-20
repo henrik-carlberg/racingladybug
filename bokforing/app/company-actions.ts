@@ -12,7 +12,8 @@ export async function createCompany(fd: FormData) {
   const user = await requireUser();
   let id = 0;
   await attempt('/', async () => {
-    const type = str(fd, 'company_type') === 'EF' ? 'EF' : 'AB';
+    const raw0 = str(fd, 'company_type');
+    const type = raw0 === 'EF' || raw0 === 'HB' || raw0 === 'KB' ? raw0 : 'AB';
     const raw = str(fd, 'orgnr');
     const orgnr = type === 'EF' ? (normalizePersonalNumber(raw)?.slice(2).replace(/^(\d{6})/, '$1-') ?? null) : normalizeOrgNumber(raw);
     if (!orgnr) throw new Error(type === 'EF' ? 'Ogiltigt personnummer' : 'Ogiltigt organisationsnummer');

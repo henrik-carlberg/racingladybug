@@ -1,5 +1,6 @@
 // Systemdokumentation som HTML-sträng (ren logik). Allt som kommer från användare escapas.
 import type { SysDoc } from './services/sysdoc';
+import { COMPANY_TYPE_LABEL } from './partnership';
 
 const e = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const ROLE: Record<string, string> = { owner: 'Ägare', accountant: 'Redovisningskonsult', auditor: 'Revisor', employee: 'Anställd' };
@@ -14,7 +15,7 @@ export function sysdocHtml(d: SysDoc): string {
 <p>${e(c.name)}, ${e(c.orgnr)}. Upprättad automatiskt ${e(d.generated)} (systemversion ${e(d.version)}). Dokumentet beskriver hur bokföringen är organiserad enligt bokföringslagen 5 kap. 11 § och BFNAR 2013:2.</p>
 <h2>1. Företaget och räkenskapsåren</h2>
 ${table([], [
-  ['Bolagsform', c.company_type === 'AB' ? 'Aktiebolag' : 'Enskild näringsverksamhet'],
+  ['Bolagsform', c.company_type === 'EF' ? 'Enskild näringsverksamhet' : COMPANY_TYPE_LABEL[c.company_type as 'AB'] ?? c.company_type],
   ['Adress', [c.address, `${c.postal_code} ${c.city}`.trim()].filter(Boolean).join(', ') || '–'],
   ['Redovisningsmetod', c.accounting_method === 'cash' ? 'Kontantmetoden (bokslutsmetoden)' : 'Faktureringsmetoden'],
   ['Momsredovisning', c.vat_period === 'month' ? 'Varje månad' : c.vat_period === 'quarter' ? 'Varje kvartal' : 'En gång per år'],

@@ -20,7 +20,7 @@ const VoucherSchema = z.object({
   confidence: z.enum(['high', 'medium', 'low']),
 });
 
-const VOUCHER_SYSTEM = (type: 'AB' | 'EF', today: string) => `Du är redovisningskonsult och bokför åt ett svenskt ${type === 'AB' ? 'aktiebolag' : 'enskild firma'} enligt BAS-kontoplanen och svensk momslagstiftning.
+const VOUCHER_SYSTEM = (type: 'AB' | 'EF' | 'HB' | 'KB', today: string) => `Du är redovisningskonsult och bokför åt ett svenskt ${type === 'AB' ? 'aktiebolag' : type === 'EF' ? 'enskild firma' : type === 'HB' ? 'handelsbolag (delägarnas kapitalkonton 2010–2049)' : 'kommanditbolag (delägarnas kapitalkonton 2010–2049)'} enligt BAS-kontoplanen och svensk momslagstiftning.
 Användaren beskriver med egna ord vad som har hänt. Gör en verifikation med debet och kredit som går jämnt ut.
 Regler:
 - Belopp i kronor som tal (450 eller 1250.50). Beloppet användaren anger är inklusive moms om inget annat sägs.
@@ -43,7 +43,7 @@ export async function suggestVoucher(actor: Actor, text: string): Promise<number
   const input = text.trim();
   if (input.length < 5) throw new ValidationError('Beskriv vad som har hänt med några ord');
   if (input.length > 1000) throw new ValidationError('Beskrivningen är för lång (högst 1 000 tecken)');
-  const [c] = await sql<{ company_type: 'AB' | 'EF' }[]>`SELECT company_type FROM companies WHERE id = ${actor.companyId}`;
+  const [c] = await sql<{ company_type: 'AB' | 'EF' | 'HB' | 'KB' }[]>`SELECT company_type FROM companies WHERE id = ${actor.companyId}`;
   const accounts = await chart(actor.companyId);
   const t = todayFn();
   const client = new Anthropic({ maxRetries: 1, timeout: 60_000 });

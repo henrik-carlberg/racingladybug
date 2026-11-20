@@ -22,7 +22,7 @@ export interface SetupStep {
 type Flags = Record<string, unknown>;
 
 export async function getSetup(companyId: number, userId: number): Promise<{ steps: SetupStep[]; flags: Flags; done: number; total: number; complete: boolean }> {
-  const [c] = await sql<{ company_type: 'AB' | 'EF'; address: string; city: string; phone: string; email: string; bankgiro: string; plusgiro: string; iban: string; setup: Flags }[]>`
+  const [c] = await sql<{ company_type: 'AB' | 'EF' | 'HB' | 'KB'; address: string; city: string; phone: string; email: string; bankgiro: string; plusgiro: string; iban: string; setup: Flags }[]>`
     SELECT company_type, address, city, phone, email, bankgiro, plusgiro, iban, setup FROM companies WHERE id = ${companyId}`;
   const [s] = await sql<{ ib: boolean; prior: boolean; bank: boolean; members: number; passkey: boolean; employees: number; tables: boolean; customers: number }[]>`
     SELECT
@@ -94,7 +94,7 @@ export async function setSetupFlag(actor: Actor, key: string, value: unknown) {
 export interface IbAccount { number: number; name: string; side: 'debit' | 'credit'; hint?: string }
 
 /** Vanliga balanskonton att föra över, anpassat efter bolagsform */
-export function openingBalanceTemplate(type: 'AB' | 'EF'): IbAccount[] {
+export function openingBalanceTemplate(type: 'AB' | 'EF' | 'HB' | 'KB'): IbAccount[] {
   const assets: IbAccount[] = [
     { number: 1930, name: 'Företagskonto (bank)', side: 'debit' },
     { number: 1510, name: 'Kundfordringar (obetalda kundfakturor)', side: 'debit' },

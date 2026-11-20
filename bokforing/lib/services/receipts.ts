@@ -18,7 +18,7 @@ export async function createReceipt(actor: Actor, input: Record<string, unknown>
   const vatRate = (optInt(input, 'vat_rate', 'Moms') ?? cat.vat) as 0 | 6 | 12 | 25;
   if (![0, 6, 12, 25].includes(vatRate)) throw new ValidationError('Momssatsen måste vara 0, 6, 12 eller 25 %');
   const paidWith = (str(input, 'paid_with') || 'company') as PaidWith;
-  const [c] = await sql<{ company_type: 'AB' | 'EF' }[]>`SELECT company_type FROM companies WHERE id = ${actor.companyId}`;
+  const [c] = await sql<{ company_type: 'AB' | 'EF' | 'HB' | 'KB' }[]>`SELECT company_type FROM companies WHERE id = ${actor.companyId}`;
   const what = str(input, 'description', { max: 200 }) || cat.label;
   const { lines: raw } = receiptLines({ category: cat, total, vatRate, persons: optInt(input, 'persons') ?? 1, paidWith, companyType: c.company_type, description: what });
   // Kvitto för ett kortköp: betalningen bokförs på kortets konto i stället för 1930

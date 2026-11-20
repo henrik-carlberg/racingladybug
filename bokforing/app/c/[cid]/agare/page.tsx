@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
@@ -17,6 +18,7 @@ export default async function Owners({ params, searchParams }: { params: Promise
   const { company } = await requireCompany(cid, { perm: 'ledger' });
   await requireCompany(cid, { perm: 'payroll' });
   const b = `/c/${company.id}`;
+  if (company.company_type === 'HB' || company.company_type === 'KB') redirect(`/c/${company.id}/delagare`);
   if (company.company_type !== 'AB') {
     return <div style={{ maxWidth: 760 }}><h1>Ägare och utdelning</h1><EmptyState icon="briefcase" title="Gäller aktiebolag">I en enskild firma tar du ut pengar som eget uttag och beskattas för hela vinsten. 3:12-reglerna och utdelning gäller aktiebolag.</EmptyState></div>;
   }

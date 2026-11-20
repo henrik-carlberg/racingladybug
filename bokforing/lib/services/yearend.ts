@@ -22,7 +22,7 @@ async function fy(companyId: number, fyId: number): Promise<FiscalYear> {
 
 export interface YearStatus {
   fy: FiscalYear;
-  companyType: 'AB' | 'EF';
+  companyType: 'AB' | 'EF' | 'HB' | 'KB';
   association: boolean;
   resultBeforeTax: number; // öre, vinst positiv
   taxBooked: number;
@@ -41,7 +41,7 @@ export interface YearStatus {
 
 export async function yearStatus(companyId: number, fyId: number): Promise<YearStatus> {
   const y = await fy(companyId, fyId);
-  const [c] = await sql<{ company_type: 'AB' | 'EF'; accounting_method: 'invoice' | 'cash'; org_form: string | null }[]>`SELECT company_type, accounting_method, org_form FROM companies WHERE id = ${companyId}`;
+  const [c] = await sql<{ company_type: 'AB' | 'EF' | 'HB' | 'KB'; accounting_method: 'invoice' | 'cash'; org_form: string | null }[]>`SELECT company_type, accounting_method, org_form FROM companies WHERE id = ${companyId}`;
   const sums = await accountSums(companyId, y.start_date, y.end_date);
   let pl = 0, tax = 0, nonDed = 0;
   for (const [n, v] of sums) {
@@ -102,12 +102,22 @@ export async function closeYear(actor: Actor, fyId: number) {
   if (s.cashOpenInvoices) throw new ConflictError('Bokför först de obetalda fakturorna per bokslutsdagen (steg 1)');
   const equity = s.association ? 2069 : s.companyType === 'AB' ? 2099 : 2019;
   const res = s.resultAfterTax; // vinst positiv
+  // Handels- och kommanditbolag: resultatet fördelas på delägarnas 20x9 efter andel i bolagsavtalet
+  let partnerLines: { account: number; amount: number }[] | null = null;
+  if (s.companyType === 'HB' || s.companyType === 'KB') {
+    const { listPartners } = await import('./partnership');
+    const { resultLines, validatePartners } = await import('@/lib/partnership');
+    const ps = await listPartners(sql, actor.companyId);
+    const err = validatePartners(s.companyType, ps);
+    if (err) throw new ValidationError(`Lägg in delägarna först: ${err}`);
+    partnerLines = resultLines(res, ps);
+  }
   return sql.begin(async (tx) => {
     let voucherId: number | null = null;
     if (res !== 0) {
       voucherId = (await createVoucher(tx, {
         actor, date: s.fy.end_date, description: `Årets resultat ${s.fy.start_date.slice(0, 4)}`,
-        lines: fromSigned([{ account: 8999, amount: res }, { account: equity, amount: -res }]), sourceType: 'yearend',
+        lines: fromSigned(partnerLines ?? [{ account: 8999, amount: res }, { account: equity, amount: -res }]), sourceType: 'yearend',
       })).id;
     }
     await tx`UPDATE fiscal_years SET closed = true WHERE id = ${fyId}`;
@@ -130,13 +140,18 @@ export async function closeYear(actor: Actor, fyId: number) {
  */
 export async function carryForward(actor: Actor, fyId: number, input: Record<string, unknown>) {
   const y = await fy(actor.companyId, fyId);
-  const [c] = await sql<{ company_type: 'AB' | 'EF'; org_form: string | null }[]>`SELECT company_type, org_form FROM companies WHERE id = ${actor.companyId}`;
+  const [c] = await sql<{ company_type: 'AB' | 'EF' | 'HB' | 'KB'; org_form: string | null }[]>`SELECT company_type, org_form FROM companies WHERE id = ${actor.companyId}`;
   const done = await sql`SELECT 1 FROM vouchers WHERE company_id = ${actor.companyId} AND fiscal_year_id = ${fyId} AND source_type = 'carry_forward'
     AND NOT EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = vouchers.id)`;
   if (done.length) throw new ConflictError('Förra årets resultat är redan överfört');
   const ib = await openingBalances(actor.companyId, y.start_date);
   const entries: { account: number; amount: number }[] = [];
-  if (c.org_form === 'ideell' || c.org_form === 'brf') {
+  if (c.company_type === 'HB' || c.company_type === 'KB') {
+    const { listPartners } = await import('./partnership');
+    const { carryLines } = await import('@/lib/partnership');
+    entries.push(...carryLines(ib, await listPartners(sql, actor.companyId)));
+    if (!entries.length) throw new ValidationError('Det finns inget att föra över till delägarnas kapitalkonton');
+  } else if (c.org_form === 'ideell' || c.org_form === 'brf') {
     // Förening: årets resultat (2069) balanseras i ny räkning enligt årsmötets beslut
     const v = ib.get(2069) ?? 0;
     if (!v) throw new ValidationError('Det finns inget resultat på 2069 att balansera');
@@ -159,7 +174,7 @@ export async function carryForward(actor: Actor, fyId: number, input: Record<str
     entries.push({ account: 2010, amount: total });
   }
   return sql.begin((tx) => createVoucher(tx, {
-    actor, date: y.start_date, description: c.org_form === 'ideell' || c.org_form === 'brf' ? (c.org_form === 'brf' ? 'Resultatdisposition enligt föreningsstämma' : 'Resultatdisposition enligt årsmöte') : c.company_type === 'AB' ? 'Resultatdisposition enligt årsstämma' : 'Överföring till eget kapital',
+    actor, date: y.start_date, description: c.company_type === 'HB' || c.company_type === 'KB' ? 'Överföring till delägarnas kapitalkonton' : c.org_form === 'ideell' || c.org_form === 'brf' ? (c.org_form === 'brf' ? 'Resultatdisposition enligt föreningsstämma' : 'Resultatdisposition enligt årsmöte') : c.company_type === 'AB' ? 'Resultatdisposition enligt årsstämma' : 'Överföring till eget kapital',
     lines: fromSigned(entries), sourceType: 'carry_forward',
   }));
 }

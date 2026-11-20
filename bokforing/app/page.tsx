@@ -81,7 +81,7 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
         <label>{L("Företagsnamn")}<input name="name" required /></label>
         <div className="row">
           <label>Bolagsform
-            <select name="company_type"><option value="AB">{L("Aktiebolag (AB)")}</option><option value="EF">{L("Enskild firma (enskild näringsidkare)")}</option></select>
+            <select name="company_type"><option value="AB">{L("Aktiebolag (AB)")}</option><option value="EF">{L("Enskild firma (enskild näringsidkare)")}</option><option value="HB">{L("Handelsbolag (HB)")}</option><option value="KB">{L("Kommanditbolag (KB)")}</option></select>
           </label>
           <label>{L("Org.nr (AB) / personnummer (EF)")}<input name="orgnr" required placeholder="556677-8899" /></label>
         </div>

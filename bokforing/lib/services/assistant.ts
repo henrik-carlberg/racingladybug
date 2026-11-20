@@ -7,6 +7,7 @@ import { accountSums, openingBalances } from '@/lib/server/ledger';
 import { addMonths, lastDay, periodOf } from '@/lib/assets';
 import { addDays, today } from '@/lib/format';
 import { groupSums, sumRange } from '@/lib/monthly';
+import { COMPANY_TYPE_LABEL } from '@/lib/partnership';
 
 const MODEL = process.env.ASSISTANT_MODEL || 'claude-opus-5-5';
 const kr = (v: number) => `${(Math.round(Number(v)) / 100).toLocaleString('sv-SE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} kr`;
@@ -30,7 +31,7 @@ export async function companyContext(companyId: number) {
   const cur = periodOf(t);
   const [c] = await sql<{ name: string; company_type: string; accounting_method: string; vat_period: string }[]>`SELECT name, company_type, accounting_method, vat_period FROM companies WHERE id = ${companyId}`;
   const [fy] = await sql<{ start: string; end: string }[]>`SELECT to_char(start_date,'YYYY-MM-DD') AS start, to_char(end_date,'YYYY-MM-DD') AS end FROM fiscal_years WHERE company_id = ${companyId} AND start_date <= ${t} AND end_date >= ${t}`;
-  const lines: string[] = [`Bolag: ${c.name} (${c.company_type === 'AB' ? 'aktiebolag' : 'enskild firma'}), ${c.accounting_method === 'cash' ? 'kontantmetoden' : 'faktureringsmetoden'}, momsperiod ${c.vat_period}. Dagens datum: ${t}.`];
+  const lines: string[] = [`Bolag: ${c.name} (${(COMPANY_TYPE_LABEL[c.company_type as 'AB'] ?? c.company_type).toLowerCase()}), ${c.accounting_method === 'cash' ? 'kontantmetoden' : 'faktureringsmetoden'}, momsperiod ${c.vat_period}. Dagens datum: ${t}.`];
   if (fy) lines.push(`Räkenskapsår: ${fy.start} – ${fy.end}.`);
   lines.push('', 'Resultat per månad (intäkter / kostnader / resultat):');
   for (let i = 12; i >= 0; i--) {

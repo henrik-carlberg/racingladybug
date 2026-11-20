@@ -1,7 +1,7 @@
 // Urval ur BAS-kontoplanen för mindre företag. Fler konton kan läggas till under Kontoplan.
 // Konton markerade med AB/EF läggs bara upp för respektive bolagsform.
 
-type Acc = [number, string, ('AB' | 'EF')?];
+type Acc = [number, string, ('AB' | 'EF' | 'HB' | 'KB')?];
 
 const ACCOUNTS: Acc[] = [
   // 1 Tillgångar
@@ -130,7 +130,7 @@ const ACCOUNTS: Acc[] = [
   [8999, 'Årets resultat'],
 ];
 
-export function basAccountsFor(type: 'AB' | 'EF'): { number: number; name: string }[] {
+export function basAccountsFor(type: 'AB' | 'EF' | 'HB' | 'KB'): { number: number; name: string }[] {
   return ACCOUNTS.filter(([, , only]) => !only || only === type).map(([number, name]) => ({ number, name }));
 }
 

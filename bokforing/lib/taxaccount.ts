@@ -28,7 +28,7 @@ export function parseTaxAccount(text: string): TaxRow[] {
 }
 
 /** Föreslaget motkonto mot 1630. 'bank' = betalning till/från banken som stäms av via bankavstämningen. */
-export function suggestAccount(text: string, companyType: 'AB' | 'EF'): number | 'bank' | null {
+export function suggestAccount(text: string, companyType: 'AB' | 'EF' | 'HB' | 'KB'): number | 'bank' | null {
   const t = text.toLowerCase();
   if (/inbetalning|utbetalning|återbetalning till/.test(t)) return 'bank';
   if (/moms/.test(t)) return 2650;

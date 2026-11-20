@@ -9,6 +9,7 @@ import { Flash, type SP } from '@/components/ui';
 import { ROLE_LABEL } from '@/lib/format';
 import * as a from './actions';
 import { Help } from '@/components/Help';
+import { COMPANY_TYPE_LABEL } from '@/lib/partnership';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,7 +48,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
         <div className="row">
           <label>Företagsnamn<input name="name" defaultValue={c.name} required /></label>
           <label>Org.nr<input value={c.orgnr} disabled /></label>
-          <label>Bolagsform<input value={c.company_type === 'AB' ? 'Aktiebolag' : 'Enskild firma'} disabled /></label>
+          <label>Bolagsform<input value={COMPANY_TYPE_LABEL[c.company_type]} disabled /></label>
         </div>
         <div className="row">
           <label>Adress<input name="address" defaultValue={c.address} /></label>

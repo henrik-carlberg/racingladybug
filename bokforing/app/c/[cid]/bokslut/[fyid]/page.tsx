@@ -91,13 +91,13 @@ export default async function YearendYear({ params, searchParams }: { params: Pr
       <Step n={ab ? 4 : 3} title="Bokför årets resultat och stäng året" done={s.fy.closed}>
         {s.fy.closed ? <p className="small">Året är stängt. Inga fler verifikationer kan bokföras på det.</p> : (
           <form action={close.bind(null, company.id, s.fy.id)} className="stack">
-            <p className="small">Årets resultat {kr(s.resultAfterTax)} kr bokförs mot {ab ? '2099 Årets resultat' : '2019 Årets resultat'} och räkenskapsåret stängs. Nästa räkenskapsår läggs upp automatiskt.</p>
+            <p className="small">Årets resultat {kr(s.resultAfterTax)} kr bokförs mot {ab ? '2099 Årets resultat' : s.companyType === 'HB' || s.companyType === 'KB' ? 'delägarnas konton för årets resultat (20x9) efter andel' : '2019 Årets resultat'} och räkenskapsåret stängs. Nästa räkenskapsår läggs upp automatiskt.</p>
             <div><button disabled={!ended}>Bokför resultat och stäng året</button></div>
           </form>
         )}
       </Step>
 
-      <Step n={ab ? 5 : 4} title={ab ? 'Inkomstdeklaration 2 (INK2)' : 'NE-bilaga till din inkomstdeklaration'}>
+      <Step n={ab ? 5 : 4} title={ab ? 'Inkomstdeklaration 2 (INK2)' : s.companyType === 'HB' || s.companyType === 'KB' ? 'Inkomstdeklaration 4 och delägarnas N3B' : 'NE-bilaga till din inkomstdeklaration'}>
         <p className="small">Underlag med alla rutor ifyllda från bokföringen, och en SRU-fil som kan laddas upp via Skatteverkets filöverföring.
           Senast <b>{ab ? ink2Due(s.fy.end_date) : nextWorkingDay(`${y + 1}-05-02`)}</b>.</p>
         <Link className="btn" href={`${b}/bokslut/${s.fy.id}/deklaration`}>Öppna deklarationsunderlag</Link>
