@@ -31,3 +31,19 @@ describe('Tillverkning', () => {
     expect(v).toMatchObject({ planned: 170280, actual: 181280, diff: 11000, pct: 6.5 });
   });
 });
+
+import { monthlyShare, taxDepreciation, yearlyTax } from '@/lib/property-tax';
+describe('Fastighetsskatt och värdeminskningsavdrag', () => {
+  it('skatt per typ, takbelopp och nybyggnad', () => {
+    expect(yearlyTax({ type: 'lokal', taxValue: 1000000000, apartments: 0, capPerApartment: 0, valueYear: null }, 2026).amount).toBe(10000000);
+    expect(yearlyTax({ type: 'bostad', taxValue: 1000000000, apartments: 10, capPerApartment: 150000, valueYear: 1970 }, 2026)).toMatchObject({ amount: 1500000 });
+    expect(yearlyTax({ type: 'bostad', taxValue: 100000000, apartments: 10, capPerApartment: 150000, valueYear: 1970 }, 2026).amount).toBe(300000);
+    expect(yearlyTax({ type: 'bostad', taxValue: 1000000000, apartments: 10, capPerApartment: 150000, valueYear: 2015 }, 2026).amount).toBe(0);
+    expect([1, 2, 12].map((m) => monthlyShare(10000000, m))).toEqual([833333, 833333, 833337]);
+  });
+  it('avskrivning första året per månad och aldrig mer än det som återstår', () => {
+    const p = { buildingCost: 600000000, buildingRate: 4, improvementCost: 40000000, acquired: '2026-04-01' };
+    expect(taxDepreciation(p, 2026, { building: 0, improvement: 0 })).toEqual({ building: 18000000, improvement: 1500000, total: 19500000, months: 9 });
+    expect(taxDepreciation(p, 2050, { building: 590000000, improvement: 40000000 })).toMatchObject({ building: 10000000, improvement: 0 });
+  });
+});

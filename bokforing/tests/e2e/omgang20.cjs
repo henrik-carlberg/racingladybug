@@ -145,6 +145,30 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await text(owner)).includes('1164,80'), 'aktiverat arbete och omkostnader på 4940');
   log('tillverkning: stycklista med självkostnadskalkyl, material till 1440 vid start, färdiga produkter till lagret med arbete och omkostnader, avvikelse +110 kr');
 
+  // ================= Del 3: fastighetsskatt och skattemässiga avskrivningar =================
+  const FS = await newCompany('Fastighetsbolaget Eken AB', 559070000);
+  await owner.goto(FS + '/fastighet/skatt');
+  await owner.fill('input[name=designation]', 'Eken 4');
+  await owner.selectOption('select[name=type]', 'lokal');
+  await owner.fill('input[name=tax_value]', '10000000');
+  await owner.fill('input[name=acquired]', `${YEAR}-04-01`);
+  await owner.fill('input[name=building_cost]', '6000000'); await owner.fill('input[name=building_rate]', '4');
+  await owner.fill('input[name=improvement_cost]', '400000'); await owner.fill('input[name=land_cost]', '1000000');
+  await owner.click('button:has-text("Lägg upp fastigheten")');
+  await owner.locator('text=Fastigheten är upplagd').waitFor();
+  const ek = owner.locator('.tax-property[data-designation="Eken 4"]');
+  assert(nb(await ek.locator('.pt-yearly').innerText()) === '100000,00' && nb(await ek.locator('.pt-building').innerText()) === '180000,00' && nb(await ek.locator('.pt-improvement').innerText()) === '15000,00', 'skatt och avskrivning: ' + await ek.innerText());
+  await ek.locator('input[name=until]').fill(`${YEAR}-06`);
+  await ek.locator('button:has-text("Bokför månaderna")').click();
+  await owner.locator('text=Fastighetsskatt 24 999,99 kr för 3 månader är bokförd').waitFor();
+  await owner.locator('.tax-property[data-designation="Eken 4"] input[name=until]').fill(`${YEAR}-06`);
+  await owner.locator('.tax-property[data-designation="Eken 4"] button:has-text("Bokför månaderna")').click();
+  await owner.locator('text=Månaderna är redan bokförda').waitFor();
+  await voucher(FS, 'Avskrivning byggnad enligt plan', [[7820, 200000], [1119, -200000]], `${YEAR}-12-31`);
+  await owner.goto(FS + '/fastighet/skatt');
+  assert(nb(await owner.locator('.pt-booked-dep').innerText()) === '200000,00' && nb(await owner.locator('.pt-adjustment').innerText()) === '5000,00' && (await owner.locator('.pt-summary').innerText()).includes('Läggs till'), 'justering INK2S');
+  log('fastighetsskatt 1 % per månad från förvärvet (5191/2513), värdeminskningsavdrag 4 % byggnad och 5 % markanläggningar pro rata, justering mot bokförd avskrivning');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 20: alla steg gick igenom');

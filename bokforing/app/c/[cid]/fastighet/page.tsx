@@ -22,6 +22,7 @@ export default async function Property({ params, searchParams }: { params: Promi
   return (
     <div style={{ maxWidth: 1100 }}>
       <h1>Fastighet och uthyrning</h1>
+      <p className="small"><Link href={`/c/${id}/fastighet/skatt`}>Fastighetsskatt och skattemässiga avskrivningar</Link></p>
       <p className="muted">Fastigheter, lokaler och hyresavtal. Hyresavierna skapas per månad eller kvartal med OCR och bokförs direkt; hyran räknas upp med index och moms läggs på för lokaler med frivillig skattskyldighet.</p>
       <Flash searchParams={searchParams} />
 
