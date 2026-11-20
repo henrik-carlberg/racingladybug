@@ -55,6 +55,7 @@ export function buildNav(o: {
       { path: '/skattekonto', label: 'Skattekontot', perm: 'ledger' },
       { path: '/leasing', label: 'Leasing', perm: 'ledger', hint: 'Leasade bilar, maskiner och lokaler med automatisk bokföring' },
       { path: '/finansiering', label: 'Lån och finansiering', perm: 'ledger', hint: 'Amorteringsplaner, krediter och factoring' },
+      { path: '/vardepapper', label: 'Värdepapper och placeringar', perm: 'ledger', hint: 'Aktier, fonder och kryptotillgångar med värdering och skatt' },
       { path: '/skatt', label: 'Skatteplanering', perm: 'ledger', hint: 'Prognos för skattekontot, preliminärskatt och bokslutsdispositioner' },
     ]) },
     { id: 'lon', label: t('Lön och personal'), icon: 'users', items: items([

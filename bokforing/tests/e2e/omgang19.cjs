@@ -175,6 +175,59 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await owner.locator('.cb-net').innerText()) === '25000,00', 'att skifta');
   log('likvidation: skifte först sex månader efter kallelsen på okända borgenärer, slutredovisning med nettotillgångar');
 
+  // ================= Del 3: värdepapper och placeringar =================
+  const VP = await newCompany('Placeringar AB', 559300000);
+  const addSec = async (name, kind, holding) => {
+    await owner.goto(VP + '/vardepapper');
+    await owner.fill('form:has(button:has-text("Lägg upp innehavet")) input[name=name]', name);
+    await owner.selectOption('form:has(button:has-text("Lägg upp innehavet")) select[name=kind]', kind);
+    await owner.selectOption('form:has(button:has-text("Lägg upp innehavet")) select[name=holding]', holding);
+    await owner.click('button:has-text("Lägg upp innehavet")');
+    await owner.locator('text=Innehavet är upplagt').waitFor();
+  };
+  const secTrade = async (name, kind, qty, amount, fee, d) => {
+    await owner.goto(VP + '/vardepapper');
+    const s = owner.locator(`details.security[data-name="${name}"]`);
+    await s.locator('summary').click();
+    await s.locator('.trade select[name=kind]').selectOption(kind);
+    await s.locator('.trade input[name=date]').fill(d);
+    await s.locator('.trade input[name=quantity]').fill(qty);
+    await s.locator('.trade input[name=amount]').fill(amount);
+    await s.locator('.trade input[name=fee]').fill(fee);
+    await s.locator('.trade button:has-text("Bokför")').click();
+    await owner.locator('.flash').first().waitFor();
+    return nb(await owner.locator('.flash').first().innerText());
+  };
+  await addSec('Investor B', 'listed', 'current');
+  t = await secTrade('Investor B', 'buy', '100', '20000', '50', `${YEAR}-01-10`);
+  t = await secTrade('Investor B', 'buy', '100', '30000', '', `${YEAR}-02-10`);
+  t = await secTrade('Investor B', 'sell', '50', '15000', '', `${YEAR}-03-10`);
+  assert(t.includes('anskaffningsvärde12512,50kr') && t.includes('vinst2487,50kr'), 'försäljning genomsnittsmetoden: ' + t);
+  await owner.goto(VP + '/vardepapper');
+  const ib = owner.locator('details.security[data-name="Investor B"]');
+  await ib.locator('summary').click();
+  await ib.locator('.valuation input[name=market]').fill('30000');
+  await ib.locator('.valuation button:has-text("Värdera")').click();
+  await owner.locator('text=Nedskrivning 7 537,50 kr är bokförd').waitFor();
+  assert(nb(await owner.locator('details.security[data-name="Investor B"] .sec-row-book').innerText()) === '30000,00', 'bokfört värde efter LVP');
+  log('aktier som kortfristig placering: genomsnittsmetoden vid försäljning (vinst 2 487,50 kr) och nedskrivning till lägsta värdets princip');
+
+  await addSec('Dotterbolaget AB', 'unlisted', 'fixed');
+  await secTrade('Dotterbolaget AB', 'buy', '1000', '50000', '', `${YEAR}-01-05`);
+  await secTrade('Dotterbolaget AB', 'dividend', '', '10000', '', `${YEAR}-05-01`);
+  assert(nb(await owner.locator('.sec-exempt').innerText()) === '10000,00' && nb(await owner.locator('.sec-nondeductible').innerText()) === '7537,50', 'skatt: ' + await owner.locator('.tax-summary').innerText());
+  assert(nb(await owner.locator('.sec-tax').innerText()).match(/^[-−]2462,50$/), 'skattejustering');
+  await owner.goto(VP + '/rapporter/huvudbok?account=8210');
+  assert(nb(await text(owner)).includes('10000,00'), 'utdelning på 8210');
+  log('näringsbetingade andelar: skattefri utdelning, nedskrivning av kapitalplacering ej avdragsgill – justering −2 462,50 kr');
+
+  await owner.goto(VP + '/vardepapper');
+  await owner.locator('details.security[data-name="Dotterbolaget AB"] summary').click();
+  await owner.click('details.security[data-name="Dotterbolaget AB"] button:has-text("Ångra senaste")');
+  await owner.locator('text=Den senaste transaktionen är ångrad').waitFor();
+  assert(nb(await owner.locator('.sec-exempt').innerText()) === '0,00', 'ångrad utdelning');
+  log('senaste transaktionen kan ångras med rättelseverifikation');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 19: alla steg gick igenom');

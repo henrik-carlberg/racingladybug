@@ -36,3 +36,28 @@ describe('Kontrollbalansräkning', () => {
     expect(distribution(1000001, [{ name: 'A', pct: 60 }, { name: 'B', pct: 40 }]).map((x) => x.amount)).toEqual([600001, 400000]);
   });
 });
+
+import { accounts, position, saleLines, saleResult, taxSummary, writedown } from '@/lib/securities';
+describe('Värdepapper', () => {
+  it('genomsnittsmetoden, försäljning och lägsta värdets princip', () => {
+    const p = position([{ kind: 'buy', date: '2026-01-01', quantity: 100, amount: 2000000, fee: 5000 }, { kind: 'buy', date: '2026-02-01', quantity: 100, amount: 3000000, fee: 0 }]);
+    expect(p).toMatchObject({ quantity: 200, cost: 5005000 });
+    const r = saleResult(p, 50, 1500000, 0);
+    expect(r).toEqual({ cost: 1251250, net: 1500000, gain: 248750 });
+    expect(saleLines(accounts('listed', 'current'), r, 1930)).toEqual([{ account: 1930, amount: 1500000 }, { account: 1810, amount: -1251250 }, { account: 8350, amount: -248750 }]);
+    expect(() => saleResult(p, 201, 1, 0)).toThrow();
+    expect(writedown({ holding: 'current', cost: 3753750, market: 3000000, current: 0, permanent: false })).toEqual({ target: 753750, change: 753750 });
+    expect(writedown({ holding: 'fixed', cost: 100, market: 50, current: 0, permanent: false }).target).toBe(0);
+    expect(writedown({ holding: 'current', cost: 100, market: 200, current: 30, permanent: false }).change).toBe(-30);
+    expect(accounts('crypto', 'current').asset).toBe(1880);
+  });
+  it('skatt: näringsbetingat, kvittning av förluster och schablonintäkt på fonder', () => {
+    const t = taxSummary([
+      { id: 1, name: 'Dotter', kind: 'unlisted', businessRelated: true, dividends: 1000000, gains: 0, writedowns: 0, fundValueStart: 0 },
+      { id: 2, name: 'Aktie', kind: 'listed', businessRelated: false, dividends: 0, gains: -300000, writedowns: 0, fundValueStart: 0 },
+      { id: 3, name: 'Fond', kind: 'fund', businessRelated: false, dividends: 0, gains: 100000, writedowns: 0, fundValueStart: 10000000 },
+      { id: 4, name: 'BTC', kind: 'crypto', businessRelated: false, dividends: 0, gains: -50000, writedowns: 20000, fundValueStart: 0 },
+    ]);
+    expect(t).toEqual({ exemptIncome: 1000000, nonDeductible: 220000, standardIncome: 40000, lossNotDeductible: 200000, taxableAdjustment: -740000 });
+  });
+});
