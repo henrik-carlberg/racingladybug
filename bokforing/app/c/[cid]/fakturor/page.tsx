@@ -35,7 +35,7 @@ export default async function Invoices({ params, searchParams }: { params: Promi
       <Header title={L('Kundfakturor')}><a className="btn secondary" href={`${b}/rapporter/xlsx?r=kundfakturor`} download>Excel</a><Link className="btn" href={`${b}/fakturor/ny`}>{L("Ny faktura")}</Link></Header>
       <Flash searchParams={searchParams} />
       <div className="actions">
-        {[['', 'Alla'], ['draft', 'Utkast'], ['booked', 'Obetalda'], ['paid', 'Betalda'], ['credited', 'Krediterade']].map(([s, l]) => (
+        {[['', 'Alla'], ['draft', 'Utkast'], ['booked', 'Obetalda'], ['paid', 'Betalda'], ['credited', 'Krediterade'], ['written_off', 'Kundförluster']].map(([s, l]) => (
           <Link key={s} href={`${b}/fakturor${s ? `?status=${s}` : ''}`} className={`btn ${status === s ? '' : 'secondary'}`}>{l}</Link>
         ))}
       </div>

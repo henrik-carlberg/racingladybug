@@ -33,6 +33,7 @@ const STATUS: Record<string, [string, string]> = {
   approved: ['Attesterad', 'warn'],
   paid: ['Betald', 'ok'],
   credited: ['Krediterad', 'danger'],
+  written_off: ['Kundförlust', 'danger'],
 };
 export function Status({ s, overdue }: { s: string; overdue?: boolean }) {
   if (overdue && (s === 'booked' || s === 'approved')) return <span className="badge danger">Förfallen</span>;

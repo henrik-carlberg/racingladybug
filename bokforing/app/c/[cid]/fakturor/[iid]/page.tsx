@@ -11,6 +11,7 @@ import { kr, today } from '@/lib/format';
 import type { ReductionType } from '@/lib/rotrut';
 import { bookInvoice, creditInvoice, deleteDraftNow, refreshKivraStatus, registerPayment, sendBest, sendInvoice, sendKivra, settleAdvance } from '../actions';
 import { servicePeriod } from './service-actions';
+import { recover, undoWriteOff, writeOff } from './bad-debt-actions';
 import { channelFor, deliveriesFor } from '@/lib/services/kivra';
 import { CHANNEL_LABEL } from '@/lib/kivra';
 const KST: Record<string, string> = { sent: 'Skickad', delivered: 'Levererad till brevlådan', read: 'Öppnad av kunden', failed: 'Misslyckades' };
@@ -36,6 +37,7 @@ interface Inv {
   hour_bank: { period: string; purchased: number; drawn_before: number; used_now: number; drawn: number; overage: number; remaining: number } | null;
   c_email: string; public_token: string | null; sent_local: string | null; sent_to: string | null;
   c_name: string; c_orgnr: string; c_vat: string; c_address: string; c_postal: string; c_city: string; c_country: string;
+  written_off_amount: number; written_off_voucher_id: number | null; written_off_date_s: string | null; written_off_reason: string; recovered_amount: number;
   reduction_type: ReductionType | null; tax_reduction: number; reduction_status: string | null; buyer_pnr: string; property: string; brf_orgnr: string; apartment_no: string; work_type: string;
 }
 
@@ -44,7 +46,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
   const { company: co } = await requireCompany(cid, { perm: 'invoicing' });
   const [inv] = await sql<Inv[]>`
     SELECT i.*, to_char(i.invoice_date,'YYYY-MM-DD') AS invoice_date, to_char(i.due_date,'YYYY-MM-DD') AS due_date,
-      to_char(i.paid_date,'YYYY-MM-DD') AS paid_date,
+      to_char(i.paid_date,'YYYY-MM-DD') AS paid_date, to_char(i.written_off_date,'YYYY-MM-DD') AS written_off_date_s,
       c.email AS c_email, to_char(i.sent_at AT TIME ZONE 'Europe/Stockholm','YYYY-MM-DD HH24:MI') AS sent_local,
       c.name AS c_name, c.orgnr AS c_orgnr, c.vat_number AS c_vat, c.address AS c_address, c.postal_code AS c_postal, c.city AS c_city, c.country AS c_country,
       i.reduction_type, i.tax_reduction, i.buyer_pnr, i.property, i.brf_orgnr, i.apartment_no, i.work_type
@@ -175,6 +177,32 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
               <label>Kreditera per datum<input type="date" name="date" defaultValue={t0} required /></label>
               <div style={{ flex: '0 0 auto' }}><button className="danger">Kreditera hela fakturan</button></div>
             </form>}
+          </div>
+        )}
+        {inv.status === 'booked' && inv.voucher_id && inv.due_date < t0 && (
+          <details className="card bad-debt">
+            <summary>Konstaterad kundförlust</summary>
+            <p className="small">När förlusten är konstaterad (konkurs, ackord eller utmätning utan resultat) skrivs resten av fordran bort på 6351 och den utgående momsen sätts ned.
+              Är förlusten bara befarad görs i stället en reserv i bokslutet.</p>
+            <form action={writeOff.bind(null, co.id, inv.id)} className="row">
+              <label>Datum<input type="date" name="date" defaultValue={t0} required /></label>
+              <label style={{ flex: '1 1 240px' }}>Varför förlusten är konstaterad<input name="reason" required maxLength={300} placeholder="T.ex. kunden försatt i konkurs, ingen utdelning" /></label>
+              <div style={{ flex: '0 0 auto' }}><button className="danger">Skriv bort fordran</button></div>
+            </form>
+          </details>
+        )}
+        {inv.status === 'written_off' && (
+          <div className="card stack written-off">
+            <p style={{ margin: 0 }}><b>Konstaterad kundförlust</b> {inv.written_off_date_s}: {kr(inv.written_off_amount)} kr – {inv.written_off_reason}.
+              {inv.written_off_voucher_id && <> <Link href={`${b}/verifikationer/${inv.written_off_voucher_id}`}>Verifikation</Link></>}
+              {Number(inv.recovered_amount) > 0 && <> Återvunnet {kr(inv.recovered_amount)} kr.</>}</p>
+            {Number(inv.recovered_amount) < Number(inv.written_off_amount) && <form action={recover.bind(null, co.id, inv.id)} className="row">
+              <label>Betaldatum<input type="date" name="date" defaultValue={t0} required /></label>
+              <label>Belopp<input name="amount" defaultValue={((Number(inv.written_off_amount) - Number(inv.recovered_amount)) / 100).toFixed(2).replace('.', ',')} required /></label>
+              <label>Bankkonto<select name="bank_account"><option value="1930">1930 Företagskonto</option><option value="1940">1940 Övriga bankkonton</option></select></label>
+              <div style={{ flex: '0 0 auto' }}><button>Registrera återvunnen betalning</button></div>
+            </form>}
+            {!Number(inv.recovered_amount) && <form action={undoWriteOff.bind(null, co.id, inv.id)}><button className="secondary">Ångra bortskrivningen</button></form>}
           </div>
         )}
         {inv.status === 'booked' && !inv.voucher_id && (
