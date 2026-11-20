@@ -294,6 +294,68 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await owner.locator('.val-booked').innerText()) === '1965,00' && nb(await owner.locator('.val-change').innerText()) === '0,00', 'bokfört 1460');
   log('lagervärdering: FIFO eller snittpris, lägsta värdets princip med nettoförsäljningsvärde och inkurans per artikel, jämfört med 97 %-regeln');
 
+  // ================= Del 4: bidrag =================
+  await owner.goto(G + '/uppdrag');
+  await owner.fill('form:has(button:has-text("Skapa uppdrag")) input[name=name]', 'Digitaliseringsprojekt');
+  await owner.selectOption('form:has(button:has-text("Skapa uppdrag")) select[name=customer_id]', { label: 'Byggherren AB' });
+  await owner.click('button:has-text("Skapa uppdrag")');
+  await owner.waitForLoadState('networkidle');
+  await owner.goto(G + '/bidrag');
+  const gf = owner.locator('form:has(button:has-text("Registrera bidrag"))');
+  await gf.locator('input[name=name]').fill('Digitaliseringscheck'); await gf.locator('input[name=grantor]').fill('Region Testlän');
+  await gf.locator('input[name=reference]').fill('RT 2026-123');
+  await gf.locator('select[name=project_id]').selectOption({ label: 'Digitaliseringsprojekt' });
+  await gf.locator('input[name=amount]').fill('20000'); await gf.locator('input[name=coverage_pct]').fill('50'); await gf.locator('input[name=budget]').fill('100000');
+  await gf.locator('input[name=period_from]').fill(`${YEAR}-01-01`); await gf.locator('input[name=period_to]').fill(`${YEAR}-12-31`);
+  await gf.locator('input[name=conditions]').fill('Slutrapport senast 31 januari');
+  await gf.locator('button:has-text("Registrera bidrag")').click();
+  await owner.locator('text=Bidraget är registrerat').waitFor();
+  await owner.locator('.grant form:has(button:has-text("Registrera utbetalning")) input[name=amount]').fill('10000');
+  await owner.click('.grant button:has-text("Registrera utbetalning")');
+  await owner.locator('text=Utbetalningen är bokförd').waitFor();
+  await owner.goto(G + '/bidrag');
+  assert(nb(await owner.locator('.g-balance').innerText()) === '10000,00', 'förutbetalt 2975');
+
+  await owner.goto(G + '/leverantorsfakturor/ny');
+  await owner.selectOption('select[name=supplier_id]', { label: 'UE Plåt AB' });
+  await owner.fill('input[name=invoice_number]', 'IT-77');
+  await owner.fill('input[name=invoice_date]', day(3)); await owner.fill('input[name=due_date]', day(-20));
+  await owner.fill('input[name=total]', '60000');
+  await owner.fill('input[name=account_0]', '4010'); await owner.fill('input[name=amount_0]', '60000');
+  await owner.selectOption('select[name=project_id]', { label: 'Digitaliseringsprojekt' });
+  await owner.click('button:has-text("Registrera och bokför")');
+  await owner.waitForURL(/leverantorsfakturor\/\d+\?ok/);
+  await owner.goto(G + '/bidrag');
+  assert(nb(await owner.locator('.g-costs').innerText()) === '60000,00' && nb(await owner.locator('.g-earned').innerText()) === '20000,00', 'intjänat 50 % med tak');
+  await owner.click('button:has-text("Intäktsför bidragen")');
+  await owner.locator('text=1 bidrag är intäktsförda').waitFor();
+  await owner.goto(G + '/bidrag');
+  assert(nb(await owner.locator('.g-recognized').innerText()) === '20000,00' && nb(await owner.locator('.g-balance').innerText()) === '10000,00' && (await owner.locator('.grant').innerText()).includes('Upplupet'), 'upplupet 1791');
+  await owner.goto(G + '/rapporter/huvudbok?account=3980');
+  assert(nb(await text(owner)).includes('20000,00'), '3980');
+  log('bidrag periodiseras mot projektets kostnader (50 %, tak 20 000): förutbetalt 2975 används först, resten upplupet 1791');
+
+  await owner.goto(G + '/bidrag');
+  await owner.click('.grant a:has-text("Rapport till bidragsgivaren")');
+  await owner.waitForURL(/bidrag\/\d+/);
+  t = nb(await text(owner));
+  assert(t.includes('RT2026-123') && nb(await owner.locator('.to-request').innerText()) === '10000,00' && nb(await owner.locator('.period-costs').innerText()) === '60000,00', 'rapport: ' + t.slice(0, 800));
+  log('ekonomisk rapport till bidragsgivaren: kostnader per konto, intjänat och att rekvirera');
+
+  await owner.goto(G + '/bidrag');
+  await owner.selectOption('.grant select[name=risk]', 'probable');
+  await owner.fill('.grant input[name=risk_note]', 'Projektet slutförs inte inom perioden');
+  await owner.click('.grant button:has-text("Spara bedömning")');
+  await owner.locator('text=Återbetalningsskulden är bokförd').waitFor();
+  await owner.goto(G + '/bidrag');
+  assert((await owner.locator('.grant').innerText()).includes('Ska återbetalas'), 'status');
+  await owner.goto(G + '/rapporter/huvudbok?account=2976');
+  assert(nb(await text(owner)).includes('10000,00'), 'skuld 2976');
+  await owner.goto(G + '/bidrag');
+  await owner.click('.grant button:has-text("Betala tillbaka")');
+  await owner.locator('text=Återbetalningen är bokförd').waitFor();
+  log('sannolik återbetalning: intäkten förs tillbaka, utbetalt blir skuld (2976) och betalas tillbaka');
+
   //@@NEXT@@
   await browser.close(); mailServer.close();
   console.log('Omgång 16: alla steg gick igenom');

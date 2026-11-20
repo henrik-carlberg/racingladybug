@@ -98,6 +98,7 @@ export function buildNav(o: {
       { path: '/revision', label: 'Revision', perm: 'ledger', hint: 'Revisorns stickprov och anmärkningar' },
       { path: '/anlaggningar', label: 'Anläggningsregister' },
       { path: '/periodiseringar', label: 'Periodiseringar' },
+      { path: '/bidrag', label: 'Bidrag', perm: 'ledger', hint: 'Offentliga bidrag periodiserade mot kostnaderna, återbetalningsrisk och rapport' },
       { path: '/konton', label: 'Kontoplan' },
       { path: '/arshjul', label: 'Årshjul', hint: 'Allt som återkommer under året, per modul' },
       { path: '/deadlines', label: 'Deadlines', hint: 'Moms, AGI och deklarationer' },

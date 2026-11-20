@@ -84,3 +84,33 @@ describe('Lagervärdering', () => {
     expect(countLines(-500)).toEqual([{ account: 1460, amount: -500 }, { account: 4960, amount: 500 }]);
   });
 });
+
+import { balanceLines, balances, earned, grantReport, repaymentProvision } from '@/lib/grants';
+describe('Bidrag', () => {
+  const sum = (l: { amount: number }[]) => l.reduce((s, x) => s + x.amount, 0);
+  it('intjänat i takt med kostnaderna, högst beviljat', () => {
+    expect(earned(100000, 50, 1000000)).toBe(50000);
+    expect(earned(5000000, 50, 1000000)).toBe(1000000);
+    expect(earned(-10, 50, 100)).toBe(0);
+  });
+  it('förutbetalt används först, upplupet regleras först', () => {
+    // 30 000 utbetalt i förskott, sedan intäktsförs 50 000
+    const pay = balanceLines({ received: 0, recognized: 0 }, { received: 3000000, recognized: 0 });
+    expect(pay).toEqual([{ account: 1930, amount: 3000000 }, { account: 2975, amount: -3000000 }]);
+    const rec = balanceLines({ received: 3000000, recognized: 0 }, { received: 3000000, recognized: 5000000 });
+    expect(rec).toEqual([{ account: 2975, amount: 3000000 }, { account: 1791, amount: 2000000 }, { account: 3980, amount: -5000000 }]);
+    const pay2 = balanceLines({ received: 3000000, recognized: 5000000 }, { received: 6000000, recognized: 5000000 });
+    expect(pay2).toEqual([{ account: 1930, amount: 3000000 }, { account: 2975, amount: -1000000 }, { account: 1791, amount: -2000000 }]);
+    for (const l of [pay, rec, pay2]) expect(sum(l)).toBe(0);
+    expect(balances(6000000, 5000000)).toEqual({ prepaid: 1000000, accrued: 0 });
+  });
+  it('sannolik återbetalning: intäkten förs tillbaka och utbetalt blir skuld', () => {
+    const l = repaymentProvision(6000000, 5000000);
+    expect(l).toEqual([{ account: 3980, amount: 5000000 }, { account: 2975, amount: 1000000 }, { account: 2976, amount: -6000000 }]);
+    expect(sum(repaymentProvision(1000, 3000))).toBe(0);
+  });
+  it('rapport till bidragsgivaren', () => {
+    expect(grantReport({ costsByAccount: [{ account: 5010, name: '', amount: 8000000 }, { account: 7010, name: '', amount: 2000000 }], coveragePct: 50, cap: 4000000, received: 3000000, budget: 20000000 }))
+      .toEqual({ costs: 10000000, earned: 4000000, toRequest: 1000000, budgetUsedPct: 50, remainingGrant: 0 });
+  });
+});
