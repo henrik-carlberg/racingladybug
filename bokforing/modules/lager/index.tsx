@@ -15,7 +15,7 @@ const MOVE: Record<string, string> = { opening: 'Ingående', receipt: 'Inleveran
 const Badge = ({ s, map }: { s: string; map: Record<string, [string, string]> }) => <span className={`badge ${map[s]?.[1] ?? ''}`}>{map[s]?.[0] ?? s}</span>;
 
 function Nav({ basePath }: { basePath: string }) {
-  const items: [string, string][] = [['', 'Översikt'], ['artiklar', 'Artiklar'], ['inkop', 'Inköp'], ['order', 'Kundorder'], ['inventering', 'Inventering'], ['varde', 'Lagervärde']];
+  const items: [string, string][] = [['', 'Översikt'], ['artiklar', 'Artiklar'], ['inkop', 'Inköp'], ['order', 'Kundorder'], ['inventering', 'Inventering'], ['tillverkning', 'Tillverkning'], ['varde', 'Lagervärde']];
   return <p className="small">{items.map(([p, l], i) => <span key={p}>{i > 0 && ' · '}<Link href={`${basePath}${p ? '/' + p : ''}`}>{l}</Link></span>)}</p>;
 }
 
@@ -485,6 +485,65 @@ async function Value({ companyId, basePath, searchParams }: ModulePageProps) {
 const P = { type: 'object' } as const;
 const LINES = { type: 'array', items: { type: 'object', required: ['product_id', 'qty'], properties: { product_id: { type: 'integer' }, qty: { type: 'number' }, unit_price: { type: 'integer', description: 'öre, tomt = artikelns pris' } } } } as const;
 
+
+// ---------- Tillverkning ----------
+
+const PROD_STATUS: Record<string, [string, string]> = { planned: ['Planerad', ''], started: ['Pågår', 'warn'], done: ['Färdig', 'ok'], cancelled: ['Makulerad', ''] };
+async function Manufacturing({ companyId, basePath }: ModulePageProps) {
+  const { overview } = await import('./manufacturing');
+  const [m, products, whs] = await Promise.all([overview(companyId), svc.listProducts(companyId, { active: true }), svc.warehouses(sql, companyId)]);
+  const t = today();
+  return (
+    <>
+      <h1>Tillverkning</h1>
+      <Nav basePath={basePath} />
+      <div className="grid">
+        <div className="card stat"><div className="label">Produkter i arbete (1440)</div><div className="value mf-wip">{kr(m.wip)}</div></div>
+        <div className="card stat"><div className="label">Pågående order</div><div className="value">{m.orders.filter((o) => o.status === 'started').length}</div></div>
+      </div>
+      <h2>Stycklistor</h2>
+      <table className="mf-boms"><thead><tr><th>Produkt</th><th>Komponenter per st</th><th className="num">Arbete</th><th className="num">Material</th><th className="num">Självkostnad per st</th></tr></thead>
+        <tbody>{m.boms.map((b) => <tr key={b.id} className="mf-bom" data-sku={b.sku}><td>{b.sku} {b.name}</td><td className="small">{b.components.map((c) => `${qty(c.qty)} × ${c.sku}`).join(', ')}</td>
+          <td className="num">{qty(b.labor_minutes)} min à {kr(b.labor_rate)} kr/h{b.overhead_pct ? `, +${b.overhead_pct} %` : ''}</td><td className="num">{kr(b.unit.material)}</td><td className="num mf-unit">{kr(Math.round(b.unit.total))}</td></tr>)}
+          {!m.boms.length && <tr><td colSpan={5} className="muted">Inga stycklistor än.</td></tr>}</tbody></table>
+      <details className="card stack">
+        <summary>Ny eller ändrad stycklista</summary>
+        <form action={a.saveBom.bind(null, companyId)} className="stack mf-bom-form">
+          <label>Produkt som tillverkas<select name="product_id">{products.map((p) => <option key={p.id} value={p.id}>{p.sku} {p.name}</option>)}</select></label>
+          <table><thead><tr><th>Komponent</th><th className="num">Antal per st</th></tr></thead><tbody>{[...Array(4)].map((_, i) => (
+            <tr key={i}><td><select name={`component_${i}`} defaultValue="" aria-label={`Komponent ${i + 1}`}><option value="">–</option>{products.map((p) => <option key={p.id} value={p.id}>{p.sku} {p.name} ({kr(Math.round(p.avg_cost))} kr)</option>)}</select></td>
+              <td className="num"><input name={`cqty_${i}`} inputMode="decimal" aria-label={`Antal ${i + 1}`} style={{ maxWidth: '6rem' }} /></td></tr>))}</tbody></table>
+          <div className="row">
+            <label>Arbetstid per st (minuter)<input name="labor_minutes" defaultValue="0" /></label>
+            <label>Timkostnad (kr)<input name="labor_rate" defaultValue="0" /></label>
+            <label>Omkostnadspålägg (%)<input name="overhead_pct" defaultValue="0" /></label>
+          </div>
+          <button>Spara stycklista</button>
+        </form>
+      </details>
+      {m.boms.length > 0 && <form action={a.createProduction.bind(null, companyId)} className="card row mf-new">
+        <label>Tillverka<select name="bom_id">{m.boms.map((b) => <option key={b.id} value={b.id}>{b.sku} {b.name}</option>)}</select></label>
+        <label>Antal<input name="qty" required style={{ width: '6rem' }} /></label>
+        <label>Lager<select name="warehouse_id">{whs.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></label>
+        <div style={{ flex: '0 0 auto' }}><button>Skapa tillverkningsorder</button></div>
+      </form>}
+      <h2>Tillverkningsorder</h2>
+      <table className="mf-orders"><thead><tr><th>Nr</th><th>Produkt</th><th className="num">Antal</th><th>Status</th><th className="num">Kalkyl</th><th className="num">Utfall</th><th></th></tr></thead>
+        <tbody>{m.orders.map((o) => {
+          const planned = o.planned.material + o.planned.labor + o.planned.overhead;
+          return (
+            <tr key={o.id} className="mf-order" data-number={o.number}><td>{o.number}</td><td>{o.sku}</td><td className="num">{qty(o.qty)}</td><td><Badge s={o.status} map={PROD_STATUS} /></td>
+              <td className="num">{kr(planned)}</td>
+              <td className="num">{o.variance ? <span className="mf-variance">{kr(o.variance.actual)} ({o.variance.diff >= 0 ? '+' : ''}{kr(o.variance.diff)}, {o.variance.pct} %)</span> : o.status === 'started' ? `material ${kr(o.material)}` : ''}</td>
+              <td>{o.status === 'planned' && <div className="row"><form action={a.startProduction.bind(null, companyId, o.id)} className="row"><input type="date" name="date" defaultValue={t} aria-label="Startdatum" /><button className="small">Starta</button></form>
+                <form action={a.cancelProduction.bind(null, companyId, o.id)}><button className="secondary small">Makulera</button></form></div>}
+                {o.status === 'started' && <form action={a.completeProduction.bind(null, companyId, o.id)} className="row"><input name="minutes" placeholder="Faktisk tid (min)" aria-label="Faktisk arbetstid i minuter" style={{ width: '9rem' }} /><input type="date" name="date" defaultValue={t} aria-label="Färdigdatum" /><button className="small">Färdig</button></form>}</td></tr>);
+        })}{!m.orders.length && <tr><td colSpan={7} className="muted">Inga tillverkningsorder.</td></tr>}</tbody></table>
+      <p className="small muted">Vid start dras komponenterna från lagret till snittpris och förs till produkter i arbete (1440). När ordern är färdig aktiveras arbete och omkostnader (4940) och produkterna läggs i lager till självkostnad.</p>
+    </>
+  );
+}
+
 export const lager: ModuleDefinition = {
   id: 'lager',
   name: 'Inköp, lager och logistik',
@@ -496,11 +555,12 @@ export const lager: ModuleDefinition = {
     { label: 'Inköp', path: 'inkop' },
     { label: 'Kundorder', path: 'order' },
     { label: 'Inventering', path: 'inventering' },
+    { label: 'Tillverkning', path: 'tillverkning' },
     { label: 'Lagervärde', path: 'varde' },
   ],
   pages: {
     '': Overview, artiklar: Products, 'artiklar/:id': Product, inkop: Purchases, 'inkop/:id': Purchase,
-    order: Orders, 'order/:id': Order, inventering: Count, varde: Value,
+    order: Orders, 'order/:id': Order, inventering: Count, varde: Value, tillverkning: Manufacturing,
   },
   scopes: [
     { scope: 'lager:read', description: 'Läsa artiklar, saldon, inköpsorder och kundorder' },

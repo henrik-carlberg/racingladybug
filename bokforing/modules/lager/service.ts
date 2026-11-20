@@ -40,7 +40,7 @@ export async function createWarehouse(actor: Actor, input: Record<string, unknow
   }
 }
 
-async function warehouseId(db: Db, companyId: number, input: Record<string, unknown>) {
+export async function warehouseId(db: Db, companyId: number, input: Record<string, unknown>) {
   const id = optInt(input, 'warehouse_id', 'Lagerställe');
   const list = await warehouses(db, companyId);
   if (id == null) return list[0].id;
@@ -148,7 +148,7 @@ export async function saveProduct(actor: Actor, id: number | null, input: Record
 interface MoveIn { product_id: number; warehouse_id: number; qty: number; unit_cost?: number; type: 'opening' | 'receipt' | 'delivery' | 'adjustment' | 'transfer'; date: string; ref_type?: string; ref_id?: number; note?: string }
 
 /** Bokför en lagerrörelse. Inleveranser uppdaterar det vägda genomsnittspriset. Uttag får inte göra saldot negativt. */
-async function move(tx: Tx, actor: Actor, m: MoveIn) {
+export async function move(tx: Tx, actor: Actor, m: MoveIn) {
   const [p] = await tx<{ avg_cost: number; on_hand: number; sku: string }[]>`SELECT p.avg_cost::float8 AS avg_cost, p.sku,
     COALESCE((SELECT SUM(qty) FROM inv_stock WHERE product_id = p.id), 0)::float8 AS on_hand
     FROM inv_products p WHERE p.id = ${m.product_id} AND p.company_id = ${actor.companyId} FOR UPDATE`;

@@ -104,6 +104,47 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert((await text(owner)).includes('rattelse1') || (await text(owner)).includes(':r1'), 'ny deklaration förberedd');
   log('rättelse av momsdeklaration: sen verifikation i deklarerad period ger differens per ruta, rättelse till 2650 och ny deklaration' + (warned ? ', varning i formuläret' : ''));
 
+  // ================= Del 2: tillverkning =================
+  const TV = await newCompany('Verkstaden AB', 559060000);
+  await owner.goto(TV + '/moduler');
+  await owner.locator('.card:has(h2:text-is("Inköp, lager och logistik")) button:has-text("Aktivera")').click();
+  await owner.waitForURL(/ok=/);
+  const TM = TV + '/m/lager';
+  for (const [sku, name, buy, opening] of [['R-1', 'Plåt', '100', '10'], ['R-2', 'Skruv', '2', '100'], ['F-1', 'Låda', '0', '0']]) {
+    await owner.goto(TM + '/artiklar');
+    await owner.fill('input[name=sku]', sku); await owner.fill('input[name=name]', name);
+    await owner.fill('input[name=purchase_price]', buy); await owner.fill('input[name=sales_price]', '1000');
+    await owner.fill('input[name=opening_qty]', opening);
+    await owner.click('button:has-text("Lägg upp artikel")');
+    await owner.locator('text=Artikeln är upplagd').waitFor();
+  }
+  await owner.goto(TM + '/tillverkning');
+  const optOf = async (sel, sku) => owner.locator(`${sel} option:has-text("${sku} ")`).first().getAttribute('value');
+  await owner.click('summary:has-text("Ny eller ändrad stycklista")');
+  await owner.selectOption('.mf-bom-form select[name=product_id]', await optOf('.mf-bom-form select[name=product_id]', 'F-1'));
+  await owner.selectOption('select[name=component_0]', await optOf('select[name=component_0]', 'R-1')); await owner.fill('input[name=cqty_0]', '2');
+  await owner.selectOption('select[name=component_1]', await optOf('select[name=component_1]', 'R-2')); await owner.fill('input[name=cqty_1]', '8');
+  await owner.fill('input[name=labor_minutes]', '30'); await owner.fill('input[name=labor_rate]', '600'); await owner.fill('input[name=overhead_pct]', '10');
+  await owner.click('button:has-text("Spara stycklista")');
+  await owner.locator('text=Stycklistan är sparad').waitFor();
+  assert(nb(await owner.locator('.mf-bom[data-sku="F-1"] .mf-unit').innerText()) === '567,60', 'självkostnad per st: ' + await owner.locator('.mf-boms').innerText());
+  await owner.fill('.mf-new input[name=qty]', '3');
+  await owner.click('button:has-text("Skapa tillverkningsorder")');
+  await owner.locator('text=Tillverkningsordern är skapad').waitFor();
+  await owner.click('.mf-order button:has-text("Starta")');
+  await owner.locator('text=material 648,00 kr är fört till produkter i arbete').waitFor();
+  assert(nb(await owner.locator('.mf-wip').innerText()) === '648,00', 'produkter i arbete');
+  await owner.fill('.mf-order input[name=minutes]', '100');
+  await owner.click('.mf-order button:has-text("Färdig")');
+  await owner.locator('text=självkostnad 1 812,80 kr (604,27 kr per st)').waitFor();
+  assert(nb(await owner.locator('.mf-wip').innerText()) === '0,00' && nb(await owner.locator('.mf-variance').innerText()).includes('+110,00'), 'avvikelse mot kalkyl');
+  await owner.goto(TM + '/artiklar');
+  t = await text(owner);
+  assert(/R-1.*Plåt/.test(t), 'artiklar');
+  await owner.goto(TV + '/rapporter/huvudbok?account=4940');
+  assert(nb(await text(owner)).includes('1164,80'), 'aktiverat arbete och omkostnader på 4940');
+  log('tillverkning: stycklista med självkostnadskalkyl, material till 1440 vid start, färdiga produkter till lagret med arbete och omkostnader, avvikelse +110 kr');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 20: alla steg gick igenom');

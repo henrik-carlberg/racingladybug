@@ -19,3 +19,15 @@ describe('Rättelse av momsdeklaration', () => {
     expect(c.some((x) => x.text.includes('redan deklarerad'))).toBe(true);
   });
 });
+
+import { calculate, completeLines, startLines, variance } from '@/lib/manufacturing';
+describe('Tillverkning', () => {
+  const bom = { laborMinutes: 30, laborRate: 60000, overheadPct: 10, lines: [{ componentId: 1, qty: 2, avgCost: 10000 }, { componentId: 2, qty: 8, avgCost: 200 }] };
+  it('självkostnadskalkyl, bokföring och avvikelse', () => {
+    expect(calculate(bom, 3)).toEqual({ material: 64800, labor: 90000, overhead: 15480, total: 170280, perUnit: 56760 });
+    expect(startLines(64800)).toEqual([{ account: 1440, amount: 64800 }, { account: 1460, amount: -64800 }]);
+    expect(completeLines(64800, 100000, 16480)).toEqual([{ account: 1460, amount: 181280 }, { account: 1440, amount: -64800 }, { account: 4940, amount: -116480 }]);
+    const v = variance({ material: 64800, labor: 90000, overhead: 15480 }, { material: 64800, labor: 100000, overhead: 16480 });
+    expect(v).toMatchObject({ planned: 170280, actual: 181280, diff: 11000, pct: 6.5 });
+  });
+});
