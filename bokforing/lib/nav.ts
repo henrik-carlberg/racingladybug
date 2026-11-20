@@ -70,6 +70,7 @@ export function buildNav(o: {
       { path: '/lon/skattetabeller', label: 'Skattetabeller', perm: 'payroll' },
       { path: '/lon/bilforman', label: 'Bilförmån', perm: 'payroll' },
       { path: '/lon/avtal', label: 'Kollektivavtal', perm: 'payroll', hint: 'OB, övertid, beredskap, pension' },
+      { path: '/lon/personaloptioner', label: 'Personaloptioner', perm: 'payroll', hint: 'Kvalificerade personaloptioner med villkor och intjänande' },
       { path: '/lon/sarskild-skatt', label: 'Expertskatt och SINK', perm: 'payroll', hint: 'Skattefri fjärdedel för experter och särskild inkomstskatt för utomlands bosatta' },
       { path: '/agare', label: 'Ägare och utdelning', perm: 'ledger', hint: 'K10, gränsbelopp och lön eller utdelning' },
       { path: '/aktiebok', label: 'Aktiebok', perm: 'ledger', hint: 'Aktieägare, överlåtelser, nyemission och styrelseprotokoll' },

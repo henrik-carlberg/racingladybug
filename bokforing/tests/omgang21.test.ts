@@ -19,7 +19,7 @@ import { calculatePayslip } from '@/lib/payroll';
 import { buildAgiXml } from '@/lib/agi';
 import { validate } from '@/lib/special-tax';
 describe('Expertskatt och SINK', () => {
-  const items = [{ type: 'salary' as const, code: 'monthly', description: 'Lön', amount: 4000000 }, { type: 'benefit' as const, code: 'car', description: 'Bil', amount: 400000 }];
+  const items = [{ type: 'salary' as const, description: 'Lön', amount: 4000000 }, { type: 'benefit' as const, description: 'Bil', amount: 400000 }];
   it('expertskatt: en fjärdedel skattefri, även för avgifterna', () => {
     const c = calculatePayslip(items, { mode: 'percent', percent: 30 }, 1985, '2026-11-25', null, 'expert');
     expect(c).toMatchObject({ taxKind: 'expert', exemptCash: 1000000, exemptBenefits: 100000, taxable: 3300000 });
@@ -37,5 +37,21 @@ describe('Expertskatt och SINK', () => {
     expect(validate('expert', '2026-01-01', '2030-12-31')).toBeNull();
     expect(validate('expert', '2026-01-01', '2031-01-01')).toMatch(/högst 5 år/);
     expect(validate('sink', '2026-01-01', '2027-01-31')).toMatch(/ett inkomstår/);
+  });
+});
+
+import { companyChecks, exercise, grantChecks, vestedOn } from '@/lib/kpo';
+describe('Kvalificerade personaloptioner', () => {
+  it('villkor för bolag och tilldelning', () => {
+    expect(companyChecks({ employees: 30, turnover: 1e9, balance: 1e9, startedYear: 2020, year: 2026, excluded: false }).every((c) => c.ok)).toBe(true);
+    expect(companyChecks({ employees: 300, turnover: 1e9, balance: 1e9, startedYear: 2010, year: 2026, excluded: false }).filter((c) => !c.ok)).toHaveLength(2);
+    expect(grantChecks({ hoursPerWeek: 20, options: 10, shareValue: 1000, premium: 0 }, 0).filter((c) => !c.ok).map((c) => c.text)).toEqual([expect.stringMatching(/30 timmar/)]);
+    expect(grantChecks({ hoursPerWeek: 40, options: 1, shareValue: 7500000001, premium: 0 }, 0).some((c) => !c.ok)).toBe(true);
+  });
+  it('utnyttjande efter tre år är kvalificerat, annars förmån', () => {
+    expect(vestedOn('2026-03-15')).toBe('2029-03-15');
+    expect(exercise({ grantedOn: '2026-03-15', date: '2029-03-15', count: 100, strike: 1000, marketPrice: 5000, employedThrough: true })).toMatchObject({ qualified: true, benefit: 0 });
+    expect(exercise({ grantedOn: '2026-03-15', date: '2028-01-01', count: 100, strike: 1000, marketPrice: 5000, employedThrough: true })).toMatchObject({ qualified: false, benefit: 400000 });
+    expect(exercise({ grantedOn: '2026-03-15', date: '2030-01-01', count: 100, strike: 1000, marketPrice: 5000, employedThrough: false }).qualified).toBe(false);
   });
 });

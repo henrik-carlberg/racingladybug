@@ -144,6 +144,30 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(sam.includes('faltkod="274">10000<') && !sam.includes('faltkod="001"'), 'SINK 25 % i ruta 274: ' + sam.slice(0, 900));
   log('expertskatt redovisar 75 % av lönen i AGI och SINK ger 25 % särskild inkomstskatt i ruta 274; beslut längre än fem år nekas');
 
+  // ================= Del 3: kvalificerade personaloptioner =================
+  await owner.goto(SK + '/lon/personaloptioner');
+  await owner.fill('input[name=name]', 'KPO ' + YEAR); await owner.fill('input[name=started_year]', String(YEAR - 2));
+  await owner.click('button:has-text("Lägg upp")');
+  await owner.locator('text=Optionsprogrammet är upplagt').waitFor();
+  const prog = owner.locator(`.kpo-program[data-name="KPO ${YEAR}"]`);
+  assert(await prog.locator('.kpo-check.fail').count() === 0, 'bolaget uppfyller villkoren');
+  const giveOptions = async (name, hours) => {
+    await owner.goto(SK + '/lon/personaloptioner');
+    const f = owner.locator(`.kpo-program[data-name="KPO ${YEAR}"] .kpo-grant-form`);
+    await f.locator('select[name=employee_id]').selectOption({ label: name });
+    await f.locator('input[name=options]').fill('1000'); await f.locator('input[name=strike]').fill('10'); await f.locator('input[name=share_value]').fill('10'); await f.locator('input[name=hours_per_week]').fill(hours);
+    await f.locator('button:has-text("Tilldela")').click();
+    await owner.locator('.flash').first().waitFor();
+    return owner.locator('.flash').first().innerText();
+  };
+  assert((await giveOptions('Sam Sink', '20')).includes('minst 30 timmar'), 'deltid nekas');
+  assert((await giveOptions('Eva Expert', '40')).includes(`kan utnyttjas som kvalificerade från ${YEAR + 3}`), 'tilldelning med intjänande tre år');
+  const eg = owner.locator('.kpo-grant[data-employee="Eva Expert"]');
+  await eg.locator('input[name=market_price]').fill('50');
+  await eg.locator('button:has-text("Utnyttja")').click();
+  await owner.locator('text=förmånsvärdet beskattas som lön: förmånsvärde 40 000,00 kr').waitFor();
+  log('kvalificerade personaloptioner: villkor för bolag och anställd, tre års intjänande och förmånsvärde vid för tidigt utnyttjande');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 21: alla steg gick igenom');
