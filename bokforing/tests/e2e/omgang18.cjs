@@ -230,6 +230,38 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(t.includes('Hämta in underlag för bilförmån') && t.includes(ftitle), 'klara visas med filtret');
   log('byråns uppgifter: kundens deadlines med ansvarig, egna uppgifter, försenade först, klarmarkering');
 
+  // ===== Del 5: kvalitetskontroller före bokslut =====
+  const QC = await newCompany('Kontrollbolaget AB', 559600000);
+  await voucher(QC, 'Försäljning kontant', [[1930, 125000], [3001, -100000], [2611, -25000]], `${YEAR}-02-01`);
+  await voucher(QC, 'Försäljning med fel moms', [[1510, 110000], [3001, -100000], [2611, -10000]], `${YEAR}-03-01`);
+  await voucher(QC, 'Varuinköp', [[4010, 300000], [1930, -300000]], `${YEAR}-03-05`);
+  await voucher(QC, 'Okänd insättning', [[1930, 5000], [2890, -5000]], `${YEAR}-01-10`);
+  await owner.goto(QC + '/bokslut');
+  await owner.locator(`tr:has-text("${YEAR}-01-01") a:has-text("Öppna")`).first().click();
+  await owner.waitForURL(/bokslut\/\d+/);
+  const QCK = owner.url().split('?')[0] + '/kontroller';
+  await owner.click('a:has-text("Kontroller före bokslut")');
+  await owner.waitForURL(/kontroller/);
+  const keys = await owner.$$eval('.qc-finding', (els) => els.map((e) => e.getAttribute('data-key')));
+  for (const k of ['neg:1930', 'stale:2890', 'vat:out', 'vat:open']) assert(keys.includes(k), `kontroll ${k}: ${keys}`);
+  assert(!keys.includes('neg:1510') && !keys.includes('stale:1510'), 'kundfordran med debetsaldo är normal');
+  t = nb(await owner.locator('.qc-finding[data-key="vat:out"]').innerText());
+  assert(t.includes('35000,00kr') && t.includes('50000,00kr'), 'moms: ' + t);
+  assert(nb(await owner.locator('.qc-finding[data-key="neg:1930"]').innerText()).match(/[-−]170000,00kr/), 'banksaldo');
+  assert(await owner.locator('.qc-errors').innerText() === '1', 'ett fel');
+  log('kontroller före bokslut: negativt banksaldo, gammalt avräkningskonto, utgående moms mot försäljning och ej avräknad moms');
+
+  await owner.fill('.qc-finding[data-key="neg:1930"] input[name=note]', 'Utnyttjad checkkredit, omförs till 2330');
+  await owner.click('.qc-finding[data-key="neg:1930"] button:has-text("Kvittera")');
+  await owner.locator('text=Avvikelsen är kvitterad').waitFor();
+  assert(await owner.locator('.qc-errors').innerText() === '0' && await owner.locator('.qc-acked').innerText() === '1', 'kvitterad räknas inte som fel');
+  assert((await text(owner)).includes('Utnyttjad checkkredit, omförs till 2330'), 'förklaringen visas');
+  await voucher(QC, 'Checkkredit', [[1930, 170000], [2330, -170000]], `${YEAR}-12-31`);
+  await owner.goto(QCK);
+  t = await text(owner);
+  assert(!(await owner.$$eval('.qc-finding', (els) => els.map((e) => e.getAttribute('data-key')))).includes('neg:1930'), 'åtgärdad avvikelse försvinner');
+  log('avvikelse kvitteras med förklaring och försvinner när den är åtgärdad');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 18: alla steg gick igenom');

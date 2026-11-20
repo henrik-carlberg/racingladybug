@@ -34,6 +34,7 @@ const ACCOUNTS: Acc[] = [
   [2099, 'Årets resultat', 'AB'],
   [2110, 'Periodiseringsfonder', 'AB'],
   [2150, 'Ackumulerade överavskrivningar', 'AB'],
+  [2330, 'Checkräkningskredit'],
   [2350, 'Andra långfristiga skulder till kreditinstitut'],
   [2393, 'Lån från närstående personer', 'AB'],
   [2440, 'Leverantörsskulder'],

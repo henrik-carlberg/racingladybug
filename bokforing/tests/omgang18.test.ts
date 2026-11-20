@@ -80,3 +80,19 @@ describe('Byråns arbetstavla', () => {
     expect(board(dl, tasks, '2026-11-20', { showDone: true, companyId: 2 }).map((x) => x.state)).toEqual(['upcoming', 'done']);
   });
 });
+
+import { qcSummary, qualityChecks } from '@/lib/quality-checks';
+describe('Kvalitetskontroller före bokslut', () => {
+  it('ovanliga saldon, gamla avräkningskonton och moms', () => {
+    const f = qualityChecks({ end: '2026-12-31',
+      balances: new Map([[1930, -100], [1229, -5000], [1220, 9000], [2440, 300], [2890, -500], [1680, 200], [2611, -1000]]),
+      year: new Map([[3001, -1000000], [2611, -100000], [6110, -50], [4990, -200], [3740, 30]]),
+      lastMovement: new Map([[2890, '2026-01-10'], [1680, '2026-12-01']]) });
+    const keys = f.map((x) => x.key);
+    expect(keys).toEqual(expect.arrayContaining(['neg:1930', 'debit:2440', 'stale:2890', 'sign:6110', 'vat:out', 'vat:open']));
+    expect(keys).not.toEqual(expect.arrayContaining(['neg:1229']));
+    expect(keys.filter((k) => ['neg:1229', 'stale:1680', 'sign:4990', 'sign:3740'].includes(k))).toEqual([]);
+    expect(qcSummary(f, new Set(['neg:1930']))).toMatchObject({ errors: 0, acked: 1 });
+    expect(qualityChecks({ end: '2026-12-31', balances: new Map(), year: new Map([[3001, -1000000], [2611, -250000]]), lastMovement: new Map() })).toEqual([]);
+  });
+});
