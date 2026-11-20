@@ -1,0 +1,33 @@
+# IT-Säkert
+
+> IT-säkerhetsföretag i Kungsbacka som hjälper små och medelstora företag att skydda sina system, sin data och sina medarbetare. Fokus på förebyggande säkerhet, regelefterlevnad (cybersäkerhetslagen/NIS2, GDPR, ISO 27001), incidenthjälp dygnet runt och systemintegration. Personlig kontakt med en egen ansvarig konsult, raka besked på ren svenska.
+
+Grundare: Henrik Carlberg, 30 år inom it, varav över 20 år med informationssäkerhet och GRC, tidigare CIO. Kontakt: hello@itsakert.se, 070-514 72 83 (dygnet runt vid akuta incidenter). Kungsbacka, verksamt i hela Sverige.
+
+## Tjänster
+
+- Säkerhetsgranskning: Kartläggning av IT-miljön, sårbarheter och en prioriterad åtgärdsplan.
+- Penetrationstester: Kontrollerade intrångsförsök mot webb, nätverk och system.
+- Övervakning och larm: Löpande bevakning av systemen så att misstänkt aktivitet upptäcks tidigt.
+- Backup och återställning: Automatisk, krypterad säkerhetskopiering som testas regelbundet, skydd mot ransomware.
+- Utbildning för personal: Utbildning om nätfiske, lösenord och säkert distansarbete, på plats eller online via Studieplaner.se.
+- GDPR och NIS2 (cybersäkerhetslagen): Policyer, riskanalyser och dokumentation för att uppfylla GDPR, cybersäkerhetslagen och ISO 27001.
+- Åtgärder vid incidenter dygnet runt: Hjälp vid intrång, ransomware, kapade konton och dataläckor: stoppa angreppet, utreda, återställa och rapportera till IMY.
+- Systemintegration: Integrationsanalys, skräddarsydda integrationer, färdiga kopplingar samt drift och övervakning av integrationer.
+- Timbank: Köp 10, 20 eller 40 timmar i förväg som gäller i 12 månader, för säkerhet, incidenter, integrationer, utbildning och regelefterlevnad.
+
+## Timbank
+
+- Bas, 10 timmar: för mindre företag som vill ha någon att ringa
+- Standard, 20 timmar: säkerhetsgenomgång varje kvartal, kort personalutbildning och mindre justeringar av integrationer
+- Plus, 40 timmar: löpande stöd med cybersäkerhetslagen (NIS2) eller ISO 27001, förvaltning av integrationer och stöd inför tillsyn
+- Timmarna gäller i 12 månader. Pris enligt offert. Jourtid (vardagar före 07 och efter 18, helger och helgdagar) räknas med påslag 2,0.
+
+## Så arbetar vi
+
+Kostnadsfritt möte, nulägesanalys, åtgärdsplan och löpande skydd. Boka en kostnadsfri säkerhetskoll på https://itsakert.se/#kontakt.
+
+## Relaterat
+
+- [Studieplaner](https://studieplaner.se/): onlinekurser på svenska i GRC, ISO 27001, cybersäkerhetslagen, PPS, it-ekonomi och Azure, av samma grundare
+- [Vårdskylt](https://www.vardskylt.se/): digital skyltning för vård och omsorg, drivs av IT-Säkert
