@@ -32,7 +32,7 @@ export async function savePartners(actor: Actor, input: Record<string, unknown>)
     if (!(share > 0 && share <= 100)) throw new ValidationError(`Ange andel i procent för ${name}`);
     const contribution = parseAmount(String(input[`contribution_${i}`] ?? '').trim() || '0');
     if (contribution == null || contribution < 0) throw new ValidationError(`Ogiltig insats för ${name}`);
-    rows.push({ n: rows.length + 1, name, identity: str(input, `identity_${i}`, { max: 20 }), kind: str(input, `kind_${i}`) === 'company' ? 'company' : 'person',
+    rows.push({ n: i, name, identity: str(input, `identity_${i}`, { max: 20 }), kind: str(input, `kind_${i}`) === 'company' ? 'company' : 'person',
       sharePct: share, limited: input[`limited_${i}`] === 'on', contribution });
   }
   const err = validatePartners(type, rows);
@@ -40,7 +40,7 @@ export async function savePartners(actor: Actor, input: Record<string, unknown>)
   await sql.begin(async (tx) => {
     const used = await tx<{ n: number }[]>`SELECT DISTINCT ((l.account_number - 2000) / 10) AS n FROM voucher_lines l JOIN vouchers v ON v.id = l.voucher_id
       WHERE v.company_id = ${actor.companyId} AND l.account_number BETWEEN 2010 AND 2049`;
-    for (const u of used) if (u.n > rows.length) throw new ValidationError(`Delägare ${u.n} har bokförda belopp och kan inte tas bort`);
+    for (const u of used) if (!rows.some((r) => r.n === Number(u.n))) throw new ValidationError(`Delägare ${u.n} har bokförda belopp på sina kapitalkonton och kan inte tas bort – flytta först saldot`);
     await tx`DELETE FROM partners WHERE company_id = ${actor.companyId}`;
     for (const p of rows) {
       await tx`INSERT INTO partners ${tx({ company_id: actor.companyId, n: p.n, name: p.name, identity: p.identity, kind: p.kind, share_pct: p.sharePct, limited: p.limited, contribution: p.contribution })}`;

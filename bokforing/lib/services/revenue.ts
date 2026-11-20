@@ -30,13 +30,14 @@ export async function setServicePeriod(actor: Actor, invoiceId: number, input: R
 /** Periodiserar en bokförd faktura: framtida månaders intäkt flyttas till 2970 och läggs i intäktsplanen */
 export async function deferInvoice(actor: Actor, invoiceId: number) {
   return sql.begin(async (tx) => {
-    const [inv] = await tx<{ status: string; invoice_date: string; service_from: string | null; service_to: string | null; customer_id: number; total_net: number; credit: boolean; number: number | null }[]>`
-      SELECT status, to_char(invoice_date,'YYYY-MM-DD') AS invoice_date, to_char(service_from,'YYYY-MM-DD') AS service_from, to_char(service_to,'YYYY-MM-DD') AS service_to,
+    const [inv] = await tx<{ status: string; invoice_date: string; service_from: string | null; service_to: string | null; customer_id: number; total_net: number; credit: boolean; number: number | null; voucher_id: number | null }[]>`
+      SELECT status, voucher_id, to_char(invoice_date,'YYYY-MM-DD') AS invoice_date, to_char(service_from,'YYYY-MM-DD') AS service_from, to_char(service_to,'YYYY-MM-DD') AS service_to,
         customer_id, total_net::float8 AS total_net, credit_of_id IS NOT NULL AS credit, invoice_number AS number
       FROM invoices WHERE id = ${invoiceId} AND company_id = ${actor.companyId} FOR UPDATE`;
     if (!inv) throw new NotFoundError('Fakturan');
     if (inv.status === 'draft' || inv.status === 'credited' || inv.credit) throw new ValidationError('Bara bokförda fakturor (inte krediterade) periodiseras');
     if (!inv.service_from || !inv.service_to) throw new ValidationError('Ange tjänsteperioden först');
+    if (!inv.voucher_id) throw new ValidationError('Fakturan är inte intäktsförd ännu (kontantmetoden) – periodisering görs först när intäkten bokförs');
     const [done] = await tx`SELECT 1 FROM invoice_deferrals WHERE invoice_id = ${invoiceId}`;
     if (done) throw new ConflictError('Fakturan är redan periodiserad');
     const raw = await tx<{ account: number; net: number }[]>`SELECT account_number AS account, ROUND(quantity * unit_price)::float8 AS net FROM invoice_lines WHERE invoice_id = ${invoiceId} AND account_number BETWEEN 3000 AND 3799`;
@@ -57,9 +58,21 @@ export async function deferInvoice(actor: Actor, invoiceId: number) {
 
 /** När en faktura med tjänsteperiod bokförs periodiseras den automatiskt */
 export async function deferIfNeeded(actor: Actor, invoiceId: number) {
-  const [i] = await sql<{ ok: boolean }[]>`SELECT service_from IS NOT NULL AND service_to IS NOT NULL AND NOT EXISTS (SELECT 1 FROM invoice_deferrals d WHERE d.invoice_id = invoices.id) AS ok
+  const [i] = await sql<{ ok: boolean }[]>`SELECT service_from IS NOT NULL AND service_to IS NOT NULL AND voucher_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM invoice_deferrals d WHERE d.invoice_id = invoices.id) AS ok
     FROM invoices WHERE id = ${invoiceId} AND company_id = ${actor.companyId}`;
   if (i?.ok) await deferInvoice(actor, invoiceId);
+}
+
+/** Krediterad faktura: det som ännu inte intäktsförts förs tillbaka från 2970 och intäktsplanen tas bort */
+export async function cancelForCredit(actor: Actor, invoiceId: number, creditDate: string) {
+  return sql.begin(async (tx) => {
+    const rows = await tx<{ id: number; account: number; amount: number }[]>`DELETE FROM revenue_schedules WHERE company_id = ${actor.companyId} AND invoice_id = ${invoiceId} AND NOT posted
+      RETURNING id, account, amount::float8 AS amount`;
+    if (!rows.length) return 0;
+    await createVoucher(tx, { actor, date: creditDate, description: 'Kreditering: återstående förutbetalda intäkter förs tillbaka', lines: fromSigned(releaseLines(rows)), sourceType: 'revenue_release', sourceId: invoiceId });
+    await auditBy(tx, actor, 'revenue_cancel', 'invoice', invoiceId, { months: rows.length });
+    return rows.length;
+  });
 }
 
 /** Månadens del förs från förutbetalda intäkter till intäktskontot (en verifikation per månad). Bara avslutade månader och innevarande månad på sista dagen. */

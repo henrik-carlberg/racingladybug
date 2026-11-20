@@ -58,9 +58,9 @@ export async function positions(companyId: number, at: string) {
         AND l.account_number BETWEEN 4000 AND 7999 AND l.account_number <> ${LOSS_COST} AND v.date <= ${at}), 0)::float8 AS cost,
       COALESCE((SELECT SUM(l.credit - l.debit) FROM voucher_lines l JOIN vouchers v ON v.id = l.voucher_id WHERE v.company_id = ${companyId} AND l.project_id = c.project_id
         AND l.account_number BETWEEN 3000 AND 3799 AND l.account_number <> ${WIP_REVENUE} AND v.date <= ${at}), 0)::float8 AS invoiced,
-      (SELECT p.wip FROM poc_postings p WHERE p.contract_id = c.id ORDER BY p.date DESC, p.id DESC LIMIT 1)::float8 AS booked_wip,
-      (SELECT p.loss_provision FROM poc_postings p WHERE p.contract_id = c.id ORDER BY p.date DESC, p.id DESC LIMIT 1)::float8 AS booked_loss,
-      (SELECT to_char(MAX(p.date),'YYYY-MM-DD') FROM poc_postings p WHERE p.contract_id = c.id) AS last
+      (SELECT p.wip FROM poc_postings p WHERE p.contract_id = c.id AND p.date <= ${at} AND NOT EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = p.voucher_id) ORDER BY p.date DESC, p.id DESC LIMIT 1)::float8 AS booked_wip,
+      (SELECT p.loss_provision FROM poc_postings p WHERE p.contract_id = c.id AND p.date <= ${at} AND NOT EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = p.voucher_id) ORDER BY p.date DESC, p.id DESC LIMIT 1)::float8 AS booked_loss,
+      (SELECT to_char(MAX(p.date),'YYYY-MM-DD') FROM poc_postings p WHERE p.contract_id = c.id AND NOT EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = p.voucher_id)) AS last
     FROM poc_contracts c WHERE c.company_id = ${companyId} ORDER BY c.id`;
   return cs.map((c) => {
     const done = c.status === 'done';
@@ -75,10 +75,15 @@ export async function positions(companyId: number, at: string) {
 /** Bokför bokslutsjusteringen per datumet för alla uppdrag (en verifikation) */
 export async function book(actor: Actor, input: Record<string, unknown>) {
   const d = date(input, 'date', 'Bokslutsdag', false) || today();
-  const ps = await positions(actor.companyId, d);
-  const lines = ps.flatMap((p) => p.lines.map((l) => ({ ...l, projectId: p.project_id })));
-  if (!lines.length) throw new ValidationError('Det finns inga förändringar att bokföra');
   return sql.begin(async (tx) => {
+    // En bokning åt gången per bolag, och aldrig före en tidigare bokning (annars blir utgångsläget fel)
+    await tx`SELECT pg_advisory_xact_lock(86001, ${actor.companyId})`;
+    const [mx] = await tx<{ last: string | null }[]>`SELECT to_char(MAX(p.date),'YYYY-MM-DD') AS last FROM poc_postings p JOIN poc_contracts c ON c.id = p.contract_id
+      WHERE c.company_id = ${actor.companyId} AND NOT EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = p.voucher_id)`;
+    if (mx.last && d < mx.last) throw new ValidationError(`Det finns redan en bokning per ${mx.last} – välj samma eller ett senare datum`);
+    const ps = await positions(actor.companyId, d);
+    const lines = ps.flatMap((p) => p.lines.map((l) => ({ ...l, projectId: p.project_id })));
+    if (!lines.length) throw new ValidationError('Det finns inga förändringar att bokföra');
     await tx`INSERT INTO accounts (company_id, number, name) VALUES (${actor.companyId}, ${WIP_ASSET}, 'Upparbetad men ej fakturerad intäkt'), (${actor.companyId}, ${WIP_LIABILITY}, 'Fakturerad men ej upparbetad intäkt'),
       (${actor.companyId}, ${WIP_REVENUE}, 'Förändring av upparbetade intäkter (successiv vinstavräkning)'), (${actor.companyId}, ${LOSS_COST}, 'Befarad förlust på pågående uppdrag'),
       (${actor.companyId}, ${LOSS_PROVISION}, 'Avsättning för befarade förluster') ON CONFLICT DO NOTHING`;

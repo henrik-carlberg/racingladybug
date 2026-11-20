@@ -411,6 +411,11 @@ export async function creditInvoice(actor: Actor, invoiceId: number, input: Reco
     const out = await fetchInvoice(tx, actor.companyId, creditId);
     await emit(tx, actor.companyId, 'invoice.credited', out);
     return out;
+  }).then(async (out) => {
+    // Periodiserad faktura: återstående förutbetalda intäkter förs tillbaka
+    const { cancelForCredit } = await import('./revenue');
+    await cancelForCredit(actor, invoiceId, (out as { invoice_date: string }).invoice_date).catch((e) => console.error('periodisering kreditering', e instanceof Error ? e.message : e));
+    return out;
   });
 }
 

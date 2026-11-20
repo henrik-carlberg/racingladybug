@@ -66,6 +66,10 @@ export async function bookFunds(actor: Actor, fyId: number, input: Record<string
   if (!pfond && !expansion) throw new ValidationError('Ange minst en avsättning');
   const lines = fundLines({ year: pl.year, pfond, expansion });
   return sql.begin(async (tx) => {
+    await tx`SELECT pg_advisory_xact_lock(85001, ${actor.companyId})`;
+    const [again] = await tx`SELECT 1 FROM vouchers WHERE company_id = ${actor.companyId} AND source_type = 'ef_funds' AND fiscal_year_id = ${fyId}
+      AND NOT EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = vouchers.id) LIMIT 1`;
+    if (again) throw new ConflictError('Fonderna är redan bokförda för året');
     await tx`INSERT INTO accounts (company_id, number, name) VALUES (${actor.companyId}, 8811, 'Avsättning till periodiseringsfond'),
       (${actor.companyId}, ${2120 + (pl.year % 10)}, ${`Periodiseringsfond ${pl.year}`}), (${actor.companyId}, 2050, 'Avsättning till expansionsfond'), (${actor.companyId}, 2010, 'Eget kapital') ON CONFLICT DO NOTHING`;
     const v = await createVoucher(tx, { actor, date: pl.fy.end_date, description: `Avsättning till fonder ${pl.year} enligt skatteplaneringen`, lines: fromSigned(lines), sourceType: 'ef_funds' });

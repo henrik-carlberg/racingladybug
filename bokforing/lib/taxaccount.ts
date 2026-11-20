@@ -34,10 +34,10 @@ export function suggestAccount(text: string, companyType: 'AB' | 'EF' | 'HB' | '
   if (/moms/.test(t)) return 2650;
   if (/arbetsgivaravgift/.test(t)) return 2731;
   if (/avdragen skatt|källskatt|skatteavdrag/.test(t)) return 2710;
-  if (/preliminärskatt|prel\. ?skatt|debiterad prel/.test(t)) return companyType === 'AB' ? 2518 : 2012;
+  if (/preliminärskatt|prel\. ?skatt|debiterad prel/.test(t)) return companyType === 'AB' ? 2518 : companyType === 'EF' ? 2012 : null;
   if (/intäktsränta/.test(t)) return 8314;
   if (/kostnadsränta/.test(t)) return 8423;
   if (/förseningsavgift|avgift/.test(t)) return 6992;
-  if (/slutlig skatt|kvarskatt/.test(t)) return companyType === 'AB' ? 2518 : 2012;
+  if (/slutlig skatt|kvarskatt/.test(t)) return companyType === 'AB' ? 2518 : companyType === 'EF' ? 2012 : null;
   return null;
 }
