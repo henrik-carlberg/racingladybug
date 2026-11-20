@@ -3,6 +3,7 @@ import { attempt, done, str } from '@/lib/server/action';
 import { requireCompany } from '@/lib/server/auth';
 import { userActor } from '@/lib/services/actor';
 import { createCustomer, updateCustomer } from '@/lib/services/customers';
+import { checkNewCustomer } from '@/lib/services/credit';
 
 export async function saveCustomer(cid: number, id: number | null, fd: FormData) {
   const actor = userActor(await requireCompany(cid, { perm: 'invoicing' }));
@@ -11,7 +12,9 @@ export async function saveCustomer(cid: number, id: number | null, fd: FormData)
     postal_code: str(fd, 'postal_code'), city: str(fd, 'city'), country: str(fd, 'country'), payment_terms: str(fd, 'payment_terms'),
     reverse_charge: fd.get('reverse_charge') === 'on', construction_rc: fd.get('construction_rc') === 'on', peppol_id: str(fd, 'peppol_id'), currency: str(fd, 'currency'), language: str(fd, 'language'),
   };
-  await attempt(id ? `/c/${cid}/kunder/${id}` : `/c/${cid}/kunder`, () => (id ? updateCustomer(actor, id, input) : createCustomer(actor, input)));
+  let created: number | null = null;
+  await attempt(id ? `/c/${cid}/kunder/${id}` : `/c/${cid}/kunder`, async () => { if (id) await updateCustomer(actor, id, input); else created = (await createCustomer(actor, input)).id; });
+  if (created) await checkNewCustomer(actor, created);
   done(`/c/${cid}/kunder`, 'Kunden är sparad');
 }
 

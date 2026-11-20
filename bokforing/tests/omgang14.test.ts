@@ -26,3 +26,25 @@ describe('Bostadsrättsföreningar', () => {
     expect(v).toEqual({ fee_per_kvm: 720, fee_share: 90, debt_per_kvm: 8333, debt_per_br_kvm: 10000, saving_per_kvm: 125, interest_sensitivity: 13.9, energy_per_kvm: 100 });
   });
 });
+
+import { creditDecision, onTimeFactor, riskClass, suggestedLimit } from '@/lib/credit';
+describe('Kreditkontroll', () => {
+  it('riskklass', () => {
+    expect(riskClass({ score: 85, remarks: 0, status: 'active', recommendedLimit: 1 }, null)).toBe('low');
+    expect(riskClass({ score: 50, remarks: 0, status: 'active', recommendedLimit: 1 }, null)).toBe('medium');
+    expect(riskClass({ score: 85, remarks: 1, status: 'active', recommendedLimit: 1 }, null)).toBe('high');
+    expect(riskClass({ score: 85, remarks: 0, status: 'bankruptcy', recommendedLimit: 1 }, null)).toBe('stop');
+    expect(riskClass({ score: 85, remarks: 0, status: 'active', recommendedLimit: 1 }, { count: 5, avgDelay: 40, onTimeShare: 0 })).toBe('high');
+    expect(riskClass({ score: 50, remarks: 0, status: 'active', recommendedLimit: 1 }, { count: 5, avgDelay: 0, onTimeShare: 1 })).toBe('low');
+    expect(riskClass(null, null)).toBe('medium');
+  });
+  it('kreditgräns', () => {
+    expect(creditDecision({ limit: 1000000, open: 600000, amount: 300000, risk: 'low', policy: 'block' })).toMatchObject({ ok: true, block: false, utilization: 90 });
+    const d = creditDecision({ limit: 1000000, open: 800000, amount: 300000, risk: 'low', policy: 'block' });
+    expect(d.block).toBe(true);
+    expect(d.reasons[0].replace(/\s/g, ' ')).toContain('10 000 kr');
+    expect(creditDecision({ limit: null, open: 0, amount: 1, risk: 'stop', policy: 'warn' })).toMatchObject({ ok: false, block: false });
+    expect(suggestedLimit({ score: 50, remarks: 0, status: 'active', recommendedLimit: 10000000 }, 'medium')).toBe(7000000);
+    expect(onTimeFactor('high')).toBeLessThan(onTimeFactor('low'));
+  });
+});

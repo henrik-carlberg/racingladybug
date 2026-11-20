@@ -22,6 +22,20 @@ async function login(browser, email, password) {
 
 const mailServer = http.createServer((req, res) => { req.resume(); req.on('end', () => { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"id":"m1"}'); }); }).listen(3303);
 
+// Kreditupplysningstjänst
+const crypto = require('node:crypto');
+const cr = { status: 'active', remarks: 0, score: 82, monitors: {} };
+const creditServer = http.createServer((req, res) => {
+  let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => {
+    const send = (c, j) => { res.writeHead(c, { 'content-type': 'application/json' }); res.end(JSON.stringify(j)); };
+    if (req.headers.authorization !== 'Bearer credit-key') return send(401, {});
+    if (req.method === 'POST' && req.url === '/reports') { const j = JSON.parse(b); return send(200, { id: 'R' + Date.now(), orgnr: j.orgnr, name: 'Risk AB', score: cr.score, rating: cr.score >= 70 ? 'AA' : 'B', payment_remarks: cr.remarks, status: cr.status, recommended_limit: 5000000 }); }
+    if (req.method === 'POST' && req.url === '/monitors') { const id = 'M' + (Object.keys(cr.monitors).length + 1); cr.monitors[id] = JSON.parse(b); return send(201, { id }); }
+    if (req.method === 'DELETE' && req.url.startsWith('/monitors/')) { delete cr.monitors[req.url.split('/')[2]]; return send(200, {}); }
+    send(404, {});
+  });
+}).listen(3318);
+
 (async () => {
   const browser = await chromium.launch();
   const owner = await login(browser, 'agare@example.com', 'hemligtlosen1');
@@ -108,7 +122,66 @@ const mailServer = http.createServer((req, res) => { req.resume(); req.on('end',
   await owner.click('button:has-text("Stäng av bostadsrättsföreningsläget")');
   await owner.locator('text=Bostadsrättsföreningsläget är av').waitFor();
 
+  // ================= Del 2: kreditkontroll och kundrisk =================
+  await owner.goto(B + '/kunder');
+  await owner.fill('input[name=name]', 'Risk AB');
+  await owner.fill('input[name=orgnr]', '556677-8899');
+  await owner.click('form button:has-text("Spara")');
+  await owner.locator('text=Kunden är sparad').waitFor();
+  await owner.goto(B + '/kundrisk');
+  await owner.locator('tr.credit-row:has-text("Risk AB") button:has-text("Ta upplysning")').click();
+  await owner.locator('text=Kreditupplysningen är hämtad: Låg risk – föreslagen kreditgräns 50').waitFor();
+  const crow = owner.locator('tr.credit-row:has-text("Risk AB")');
+  assert((await crow.locator('.risk').innerText()) === 'Låg risk' && (await crow.innerText()).includes('AA'), 'upplysning');
+  await crow.locator('input[name=credit_limit]').fill('10000');
+  await crow.locator('select[name=credit_policy]').selectOption('block');
+  await crow.locator('button:has-text("Spara")').click();
+  await owner.locator('text=Kreditgränsen är sparad').waitFor();
+  log('kreditupplysning på organisationsnummer ger riskklass och förslag till kreditgräns');
+
+  await owner.goto(B + '/fakturor/ny');
+  await owner.selectOption('select[name=customer_id]', { label: 'Risk AB' });
+  const rr = owner.locator('tbody tr').first();
+  await rr.locator('td:nth-child(1) input').fill('Konsulttjänst'); await rr.locator('td:nth-child(2) input').fill('1');
+  await rr.locator('td:nth-child(3) input').fill('st'); await rr.locator('td:nth-child(4) input').fill('10000');
+  await owner.click('button:has-text("Spara utkast")');
+  await owner.waitForURL(/fakturor\/\d+\?ok/);
+  const invUrl = owner.url().split('?')[0];
+  assert((await owner.locator('.credit-warning').innerText()).includes('Fakturan kan inte bokföras'), 'varning på utkastet');
+  await owner.click('button:has-text("Bokför faktura")');
+  await owner.locator('.flash.error, .flash:has-text("Kreditkontroll")').first().waitFor();
+  assert((await text(owner)).includes('kreditgränsen 10 000 kr överskrids'), 'stoppad');
+  await owner.goto(B + '/kundrisk');
+  await owner.locator('tr.credit-row:has-text("Risk AB") select[name=credit_policy]').selectOption('warn');
+  await owner.locator('tr.credit-row:has-text("Risk AB") button:has-text("Spara")').click();
+  await owner.locator('text=Kreditgränsen är sparad').waitFor();
+  await owner.goto(invUrl);
+  assert((await owner.locator('.credit-warning').innerText()).includes('Kreditvarning'), 'varning');
+  await owner.click('button:has-text("Bokför faktura")');
+  await owner.locator('text=klar att skicka').first().waitFor();
+  await owner.goto(B + '/kundrisk');
+  assert(nb(await owner.locator('tr.credit-row:has-text("Risk AB") .util').innerText()) === '125%avgränsen', 'utnyttjande');
+  t = await text(owner);
+  assert(t.includes('Faktura till Risk AB stoppad'), 'händelse om stoppad faktura');
+  log('kreditgräns per kund: fakturan stoppas eller varnar vid bokföringen och utnyttjandet visas');
+
+  await owner.locator('tr.credit-row:has-text("Risk AB") button:has-text("Bevaka")').click();
+  await owner.locator('text=Kunden bevakas').waitFor();
+  cr.status = 'bankruptcy';
+  const hook = JSON.stringify({ monitor_id: 'M1', event: 'bankruptcy', orgnr: '556677-8899' });
+  const bad = await owner.context().request.post(BASE + '/api/credit/webhook', { data: hook, headers: { 'content-type': 'application/json', 'x-credit-signature': 'sha256=00' } });
+  assert(bad.status() === 401, 'osignerad webhook nekas');
+  const sig = crypto.createHmac('sha256', 'creditsecret').update(hook).digest('hex');
+  const ok = await owner.context().request.post(BASE + '/api/credit/webhook', { data: hook, headers: { 'content-type': 'application/json', 'x-credit-signature': `sha256=${sig}` } });
+  assert(ok.status() === 200 && (await ok.json()).customers === 1, 'webhook');
+  await owner.goto(B + '/kundrisk');
+  t = await text(owner);
+  assert((await owner.locator('tr.credit-row:has-text("Risk AB") .risk').innerText()) === 'Stoppa kredit' && t.includes('status bankruptcy hos kreditupplysningen') && t.includes('Låg risk → Stoppa kredit'), 'bevakning: ' + t.slice(-1500));
+  await owner.locator('tr.credit-row:has-text("Risk AB") button:has-text("Sluta bevaka")').click();
+  await owner.locator('text=Bevakningen är avslutad').waitFor();
+  log('bevakning: konkurs hos kunden hämtas om från upplysningstjänsten och ger riskklass Stoppa kredit');
+
   //@@NEXT@@
-  await browser.close(); mailServer.close();
+  await browser.close(); mailServer.close(); creditServer.close();
   console.log('Omgång 14: alla steg gick igenom');
 })().catch((e) => { console.error(e); process.exit(1); });

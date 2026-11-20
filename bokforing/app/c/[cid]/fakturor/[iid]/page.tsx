@@ -22,6 +22,8 @@ import { invoiceMessage } from '@/lib/services/peppol';
 import { isVerified } from '@/lib/services/identity';
 import { refreshPeppol, sendViaPeppol } from '../../peppol/actions';
 import { listTimeEntries } from '@/lib/services/time';
+import { customerCredit } from '@/lib/services/credit';
+import { creditDecision } from '@/lib/credit';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,6 +49,9 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
     FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.id = ${Number(iid)} AND i.company_id = ${co.id}`;
   if (!inv) notFound();
   const lines = await loadLines(sql, inv.id);
+  const credit = inv.status === 'draft' ? await customerCredit(co.id, inv.customer_id) : null;
+  const creditMsg = credit && (credit.credit_limit != null || credit.risk_class === 'stop')
+    ? creditDecision({ limit: credit.credit_limit, open: credit.open, amount: Number(inv.total), risk: credit.risk_class, policy: credit.credit_policy }) : null;
   const advances = inv.status === 'draft' && !inv.advance && !inv.reduction_type ? await openAdvances(sql, co.id, inv.customer_id) : [];
   const payments = await sql<{ id: number; date: string; amount: number; voucher_id: number | null }[]>`SELECT id, to_char(date,'YYYY-MM-DD') AS date, amount, voucher_id FROM invoice_payments WHERE invoice_id = ${inv.id} ORDER BY date, id`;
   const [orig] = inv.credit_of_id ? await sql<{ id: number; invoice_number: number }[]>`SELECT id, invoice_number FROM invoices WHERE id = ${inv.credit_of_id}` : [];
@@ -72,6 +77,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
           </div>
         </div>
         <Flash searchParams={searchParams} />
+        {creditMsg && !creditMsg.ok && <div className="card small credit-warning" style={{ borderColor: creditMsg.block ? 'var(--danger)' : 'var(--warn)' }}>{creditMsg.block ? '⛔ Fakturan kan inte bokföras: ' : '⚠️ Kreditvarning: '}{creditMsg.reasons.join(' och ')}.</div>}
         {inv.status === 'draft' && (
           <div className="card actions">
             <Link className="btn secondary" href={`${b}/fakturor/${inv.id}/redigera`}>Redigera</Link>
