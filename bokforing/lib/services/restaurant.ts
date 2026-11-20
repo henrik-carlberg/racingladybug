@@ -86,7 +86,8 @@ export async function bookMealVat(actor: Actor, input: Record<string, unknown>) 
   const end = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
   return sql.begin(async (tx) => {
     await tx`SELECT pg_advisory_xact_lock(95001, ${actor.companyId})`;
-    const rows = await tx<{ id: number; vat: number }[]>`SELECT id, vat::float8 AS vat FROM staff_meals WHERE company_id = ${actor.companyId} AND period = ${period} AND voucher_id IS NULL FOR UPDATE`;
+    const rows = await tx<{ id: number; vat: number }[]>`SELECT id, vat::float8 AS vat FROM staff_meals WHERE company_id = ${actor.companyId} AND period = ${period}
+      AND (voucher_id IS NULL OR EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = staff_meals.voucher_id)) FOR UPDATE`;
     const vat = rows.reduce((s, r) => s + r.vat, 0);
     if (!vat) throw new ConflictError('Det finns ingen obokad personalmat för månaden');
     await ensure(tx as unknown as typeof sql, actor.companyId, [MEAL_COST]);
@@ -115,14 +116,17 @@ export async function representation(actor: Actor, input: Record<string, unknown
   });
 }
 
-export async function overview(companyId: number, period: string) {
-  const meals = await sql<{ id: number; name: string; breakfasts: number; lunches: number; dinners: number; paid: number; value: number; taxable: number; vat: number; booked: boolean }[]>`
-    SELECT id, name, breakfasts, lunches, dinners, paid::float8 AS paid, value::float8 AS value, taxable::float8 AS taxable, vat::float8 AS vat, voucher_id IS NOT NULL AS booked
+/** Personalmatens förmåner per anställd visas bara för den som har lönebehörighet (payroll) */
+export async function overview(companyId: number, period: string, payroll = false) {
+  const meals = !payroll ? [] : await sql<{ id: number; name: string; breakfasts: number; lunches: number; dinners: number; paid: number; value: number; taxable: number; vat: number; booked: boolean }[]>`
+    SELECT id, name, breakfasts, lunches, dinners, paid::float8 AS paid, value::float8 AS value, taxable::float8 AS taxable, vat::float8 AS vat, (voucher_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = staff_meals.voucher_id)) AS booked
     FROM staff_meals WHERE company_id = ${companyId} AND period = ${period} ORDER BY name, id`;
+  const [u] = await sql<{ vat: number }[]>`SELECT COALESCE(SUM(vat), 0)::float8 AS vat FROM staff_meals WHERE company_id = ${companyId} AND period = ${period}
+    AND (voucher_id IS NULL OR EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = staff_meals.voucher_id))`;
   const [t] = await sql<{ tips: number }[]>`SELECT COALESCE(SUM(l.credit - l.debit), 0)::float8 AS tips FROM voucher_lines l JOIN vouchers v ON v.id = l.voucher_id
     WHERE v.company_id = ${companyId} AND l.account_number = ${TIPS_LIABILITY}`;
   const reports = await sql<{ date: string; register: string; z_number: string; data: { gross: Record<string, number>; payments: Record<string, number>; tips: number } }[]>`
     SELECT to_char(date,'YYYY-MM-DD') AS date, register, z_number, data FROM cash_reports WHERE company_id = ${companyId} AND (data->>'restaurant')::boolean ORDER BY date DESC, id DESC LIMIT 20`;
-  const employees = await sql<{ id: number; name: string }[]>`SELECT id, first_name || ' ' || last_name AS name FROM employees WHERE company_id = ${companyId} ORDER BY first_name`;
-  return { meals, tipsLiability: t.tips, reports, employees, values: mealValuesFor(Number(period.slice(0, 4))) };
+  const employees = !payroll ? [] : await sql<{ id: number; name: string }[]>`SELECT id, first_name || ' ' || last_name AS name FROM employees WHERE company_id = ${companyId} ORDER BY first_name`;
+  return { unbookedVat: u.vat, meals, tipsLiability: t.tips, reports, employees, values: mealValuesFor(Number(period.slice(0, 4))) };
 }

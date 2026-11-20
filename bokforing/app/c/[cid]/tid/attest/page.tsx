@@ -28,7 +28,7 @@ export default async function TimeApproval({ params, searchParams }: { params: P
       {ctx.role === 'owner' && <form action={approval.bind(null, c.id, !o.approval)} className="card row"><span className="small">{o.approval ? 'Attest krävs innan tid faktureras.' : 'Tid kan faktureras utan attest.'}</span><button className="secondary small">{o.approval ? 'Kräv inte attest för fakturering' : 'Kräv attest innan fakturering'}</button></form>}
       <form method="get" className="row"><label>Från<input type="date" name="from" defaultValue={from} /></label><label>Till<input type="date" name="to" defaultValue={to} /></label><button className="secondary">Visa</button></form>
       <div className="table-wrap"><table className="time-people">
-        <thead><tr><th>Person</th><th className="num">Att attestera</th><th className="num">Attesterat</th><th className="num">Förd till lön</th><th>Till lönen</th><th></th></tr></thead>
+        <thead><tr><th>Person</th><th className="num">Att attestera</th><th className="num">Attesterat</th><th className="num">Förd till lön</th><th>OB, övertid och restid (ej överfört)</th><th></th></tr></thead>
         <tbody>{o.people.map((p) => (
           <tr key={p.user_id} className="time-person">
             <td><b>{p.name}</b>{!p.employee_id && <div className="small muted">Inte kopplad till en anställd</div>}</td>

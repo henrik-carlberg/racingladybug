@@ -28,7 +28,7 @@ export async function overview(companyId: number, from: string, to: string) {
   const entries = await sql<(FlowEntry & { id: number; user_id: number; project: string; status: string; payslip_id: number | null })[]>`
     SELECT e.id, e.user_id, to_char(e.date,'YYYY-MM-DD') AS date, e.minutes, to_char(e.start_time,'HH24:MI') AS start_time, to_char(e.end_time,'HH24:MI') AS end_time, e.kind, e.status, e.payslip_id, p.name AS project
     FROM time_entries e JOIN projects p ON p.id = e.project_id WHERE e.company_id = ${companyId} AND e.date BETWEEN ${from} AND ${to} ORDER BY e.date, e.id`;
-  return { approval: c?.on ?? false, people: rows.map((r) => ({ ...r, hours: hoursForPayroll(entries.filter((e) => e.user_id === r.user_id && e.status === 'approved' && !e.payslip_id)) })), entries };
+  return { approval: c?.on ?? false, people: rows.map((r) => ({ ...r, hours: hoursForPayroll(entries.filter((e) => e.user_id === r.user_id && !e.payslip_id)) })), entries };
 }
 
 /** Attest av en persons tid i perioden. Den som attesterar får inte attestera sin egen tid (utom ägaren i ett litet bolag). */

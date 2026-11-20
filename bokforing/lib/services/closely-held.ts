@@ -93,9 +93,12 @@ export async function registerValue(actor: Actor, id: number, input: Record<stri
   const write = input.writedown === 'on' || input.writedown === true;
   return sql.begin(async (tx) => {
     await tx`SELECT id FROM capital_insurances WHERE id = ${id} FOR UPDATE`;
+    // Värden registreras i datumordning – en äldre värdering får inte skriva ned en förlust som redan är nedskriven
+    const [last] = await tx<{ d: string | null }[]>`SELECT to_char(MAX(e.date),'YYYY-MM-DD') AS d FROM capital_insurance_events e WHERE e.insurance_id = ${id} AND e.kind IN ('value','writedown') AND (e.voucher_id IS NULL OR ${NOT_REVERSED})`;
+    if (last.d && d < last.d) throw new ValidationError(`Det finns redan en värdering per ${last.d} – ange ett senare datum`);
     await tx`INSERT INTO capital_insurance_events ${tx({ insurance_id: id, date: d, kind: 'value', amount: value })}`;
     const [b] = await tx<{ booked: number }[]>`SELECT COALESCE(SUM(CASE WHEN e.kind = 'premium' THEN e.amount WHEN e.kind = 'writedown' THEN -e.amount ELSE 0 END), 0)::float8 AS booked
-      FROM capital_insurance_events e WHERE e.insurance_id = ${id} AND e.date <= ${d} AND (e.voucher_id IS NULL OR ${NOT_REVERSED})`;
+      FROM capital_insurance_events e WHERE e.insurance_id = ${id} AND (e.voucher_id IS NULL OR ${NOT_REVERSED})`;
     const wd = insuranceWritedown(b.booked, value);
     if (write && wd > 0) {
       const v = await createVoucher(tx, { actor, date: d, description: `Nedskrivning kapitalförsäkring ${ins.name} till ${(value / 100).toFixed(2).replace('.', ',')} kr`, lines: fromSigned([{ account: INSURANCE_WRITEDOWN, amount: wd }, { account: CAPITAL_INSURANCE, amount: -wd }]), sourceType: 'capital_insurance', sourceId: id });

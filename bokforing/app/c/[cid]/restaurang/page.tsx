@@ -13,8 +13,9 @@ export default async function Restaurant({ params, searchParams }: { params: Pro
   const c = ctx.company;
   const t = today();
   const period = /^\d{4}-\d{2}$/.test(String(sp.period ?? '')) ? String(sp.period) : t.slice(0, 7);
-  const o = await overview(c.id, period);
-  const unbooked = o.meals.filter((m) => !m.booked).reduce((s, m) => s + m.vat, 0);
+  const payroll = ctx.can('payroll');
+  const o = await overview(c.id, period, payroll);
+  const unbooked = o.unbookedVat;
   const v = (x: number) => String(x / 100).replace('.', ',');
   return (
     <div style={{ maxWidth: 1050 }}>
@@ -37,17 +38,17 @@ export default async function Restaurant({ params, searchParams }: { params: Pro
       <h2 id="personalmat">Personalmat {period}</h2>
       <p className="small muted">Fri eller subventionerad mat är en skattepliktig kostförmån: förmånsvärdet enligt Skatteverkets schablon minus vad den anställde betalar läggs på lönen. Restaurangen redovisar dessutom uttagsmoms 12 % på förmånsvärdet. Kontrollera schablonvärdena för året.</p>
       <form method="get" className="row"><label>Månad<input type="month" name="period" defaultValue={period} /></label><button className="secondary">Visa</button></form>
-      <form action={meals.bind(null, c.id)} className="card row">
+      {payroll ? <form action={meals.bind(null, c.id)} className="card row">
         <input type="hidden" name="period" value={period} />
         <label>Anställd<select name="employee_id" required>{o.employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}</select></label>
         <label>Frukostar<input name="breakfasts" inputMode="numeric" style={{ width: 70 }} /></label><label>Luncher<input name="lunches" inputMode="numeric" style={{ width: 70 }} /></label><label>Middagar<input name="dinners" inputMode="numeric" style={{ width: 70 }} /></label>
         <label>Betalat själv (kr)<input name="paid" inputMode="decimal" style={{ width: 100 }} /></label>
         <label>Värde frukost/lunch/middag (kr)<span className="row"><input name="v_breakfast" defaultValue={v(o.values.breakfast)} style={{ width: 60 }} /><input name="v_lunch" defaultValue={v(o.values.lunch)} style={{ width: 60 }} /><input name="v_dinner" defaultValue={v(o.values.dinner)} style={{ width: 60 }} /></span></label>
         <button className="secondary" disabled={!o.employees.length}>Registrera</button>
-      </form>
-      {o.meals.length > 0 && <>
-        <table className="meals"><thead><tr><th>Anställd</th><th className="num">Frukost</th><th className="num">Lunch</th><th className="num">Middag</th><th className="num">Förmånsvärde</th><th className="num">Betalat</th><th className="num">Till lönen</th><th className="num">Uttagsmoms</th><th></th></tr></thead>
-          <tbody>{o.meals.map((m) => <tr key={m.id} className="meal-row"><td>{m.name}</td><td className="num">{m.breakfasts}</td><td className="num">{m.lunches}</td><td className="num">{m.dinners}</td><td className="num">{kr(m.value)}</td><td className="num">{kr(m.paid)}</td><td className="num taxable">{kr(m.taxable)}</td><td className="num vat">{kr(m.vat)}</td><td className="small">{m.booked ? 'Bokförd' : ''}</td></tr>)}</tbody></table>
+      </form> : <p className="small muted">Registrering och förmåner per anställd kräver lönebehörighet.</p>}
+      {(o.meals.length > 0 || unbooked > 0) && <>
+        {o.meals.length > 0 && <table className="meals"><thead><tr><th>Anställd</th><th className="num">Frukost</th><th className="num">Lunch</th><th className="num">Middag</th><th className="num">Förmånsvärde</th><th className="num">Betalat</th><th className="num">Till lönen</th><th className="num">Uttagsmoms</th><th></th></tr></thead>
+          <tbody>{o.meals.map((m) => <tr key={m.id} className="meal-row"><td>{m.name}</td><td className="num">{m.breakfasts}</td><td className="num">{m.lunches}</td><td className="num">{m.dinners}</td><td className="num">{kr(m.value)}</td><td className="num">{kr(m.paid)}</td><td className="num taxable">{kr(m.taxable)}</td><td className="num vat">{kr(m.vat)}</td><td className="small">{m.booked ? 'Bokförd' : ''}</td></tr>)}</tbody></table>}
         <form action={mealVat.bind(null, c.id)} className="actions"><input type="hidden" name="period" value={period} /><button disabled={!unbooked}>Bokför uttagsmoms {kr(unbooked)} kr</button></form>
       </>}
 

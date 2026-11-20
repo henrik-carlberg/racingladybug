@@ -158,13 +158,27 @@ export async function createTimeEntry(actor: Actor, input: Record<string, unknow
   if ((st || et) && !(timeRe.test(st) && timeRe.test(et))) throw new ValidationError('Ange start och slut som klockslag, t.ex. 17:00 och 23:30');
   const shift = st && et ? minutesBetween(st, et) : null;
   const kind = str(input, 'kind') === 'travel' ? 'travel' : 'work';
-  const minutes = input.minutes != null && input.minutes !== '' ? int(input, 'minutes', 'Minuter') : String(input.hours ?? '').trim() ? parseDuration(String(input.hours ?? '')) : shift;
+  if (st && et && st === et) throw new ValidationError('Start och slut kan inte vara samma klockslag');
+  // Med klockslag är det passets längd som gäller (OB och lön räknas på klockslagen) – en annan angiven tid avvisas
+  const given = input.minutes != null && input.minutes !== '' ? int(input, 'minutes', 'Minuter') : String(input.hours ?? '').trim() ? parseDuration(String(input.hours ?? '')) : null;
+  if (shift != null && given != null && given !== shift) throw new ValidationError(`Tiden (${Math.round((given / 60) * 100) / 100} h) stämmer inte med passet ${st}–${et} – lämna tiden tom eller ändra klockslagen`);
+  const minutes = shift ?? given;
   if (!minutes || minutes <= 0 || minutes > 1440) throw new ValidationError('Ange tid, t.ex. 1,5 eller 1:30 (högst 24 timmar)');
   const billable = a.billing === 'internal' ? false : input.billable == null ? a.billable : bool(input, 'billable');
+  const entryDate = date(input, 'date', 'Datum');
   return sql.begin(async (tx) => {
+    if (st && et) {
+      // Pass med klockslag får inte överlappa personens andra pass samma dag
+      await tx`SELECT pg_advisory_xact_lock(96001, ${actor.userId})`;
+      const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+      const a0 = toMin(st), a1 = a0 + (shift ?? 0);
+      const others = await tx<{ s: string; minutes: number }[]>`SELECT to_char(start_time,'HH24:MI') AS s, minutes FROM time_entries
+        WHERE company_id = ${actor.companyId} AND user_id = ${actor.userId} AND date = ${entryDate} AND start_time IS NOT NULL`;
+      if (others.some((o) => { const b0 = toMin(o.s), b1 = b0 + o.minutes; return a0 < b1 && b0 < a1; })) throw new ValidationError('Passet överlappar ett annat pass samma dag');
+    }
     const [{ id }] = await tx<{ id: number }[]>`INSERT INTO time_entries ${tx({
       company_id: actor.companyId, project_id: a.project_id, activity_id: activityId, user_id: actor.userId,
-      date: date(input, 'date', 'Datum'), minutes, description: str(input, 'description'), billable,
+      date: entryDate, minutes, description: str(input, 'description'), billable,
       start_time: st || null, end_time: et || null, kind,
     })} RETURNING id`;
     await auditBy(tx, actor, 'create', 'time_entry', id);
