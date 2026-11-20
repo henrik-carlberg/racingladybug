@@ -55,3 +55,17 @@ describe('Kvalificerade personaloptioner', () => {
     expect(exercise({ grantedOn: '2026-03-15', date: '2030-01-01', count: 100, strike: 1000, marketPrice: 5000, employedThrough: false }).qualified).toBe(false);
   });
 });
+
+import { parentLines, subsidiaryLines, takeover } from '@/lib/merger';
+describe('Fusion av helägt dotterbolag', () => {
+  it('andelsvärdemetoden med positiv och negativ fusionsdifferens', () => {
+    const b = new Map([[1930, 8000000], [1510, 2000000], [2440, -1500000], [2110, -500000], [2081, -5000000], [2091, -3000000]]);
+    const t = takeover(b, 5000000);
+    expect(t).toMatchObject({ net: 8000000, difference: 3000000 });
+    expect(parentLines(t, 'equity')).toEqual([{ account: 1510, amount: 2000000 }, { account: 1930, amount: 8000000 }, { account: 2110, amount: -500000 }, { account: 2440, amount: -1500000 }, { account: 1311, amount: -5000000 }, { account: 2091, amount: -3000000 }]);
+    expect(subsidiaryLines(t).reduce((s, l) => s + l.amount, 0)).toBe(0);
+    const neg = takeover(b, 10000000);
+    expect(parentLines(neg, 'goodwill').at(-1)).toEqual({ account: 1070, amount: 2000000 });
+    expect(parentLines(neg, 'equity').reduce((s, l) => s + l.amount, 0)).toBe(0);
+  });
+});

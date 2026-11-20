@@ -168,6 +168,31 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   await owner.locator('text=förmånsvärdet beskattas som lön: förmånsvärde 40 000,00 kr').waitFor();
   log('kvalificerade personaloptioner: villkor för bolag och anställd, tre års intjänande och förmånsvärde vid för tidigt utnyttjande');
 
+  // ================= Del 4: fusion av helägt dotterbolag =================
+  const MO = await newCompany('Fusionsmoder AB', 559030000);
+  const DO = await newCompany('Fusionsdotter AB', 559040000);
+  const idOf = (u) => u.split('/c/')[1];
+  await owner.goto(`${BASE}/koncern?c=${idOf(MO)}&c=${idOf(DO)}&moder=${idOf(MO)}&from=${YEAR}-01-01&to=${YEAR}-12-31`);
+  const gl = owner.locator('form.group-link');
+  await gl.locator('input[name=ownership]').fill('100'); await gl.locator('input[name=acquisition_cost]').fill('50000');
+  await gl.locator('button:has-text("Koppla som dotterbolag")').click();
+  await owner.locator('text=Koncernuppgifterna är sparade').waitFor();
+  await voucher(DO, 'Aktiekapital', [[1930, 50000], [2081, -50000]], `${YEAR}-01-02`);
+  await voucher(DO, 'Vinst i dotterbolaget', [[1930, 30000], [3001, -30000]], `${YEAR}-02-01`);
+  await owner.goto(MO + '/fusion');
+  const mg = owner.locator('.merger[data-name="Fusionsdotter AB"]');
+  assert(nb(await mg.locator('.mg-net').innerText()) === '80000,00' && nb(await mg.locator('.mg-diff').innerText()) === '30000,00', 'fusionsdifferens: ' + await mg.innerText());
+  await mg.locator('button:has-text("Registrera fusionsplan")').click();
+  await owner.locator('text=Fusionsplanen är registrerad').waitFor();
+  await owner.locator('.merger[data-name="Fusionsdotter AB"] button:has-text("Bokför fusionen i båda bolagen")').click();
+  await owner.locator('text=Fusionen är bokförd: nettotillgångar 80 000,00 kr, fusionsdifferens 30 000,00 kr').waitFor();
+  assert(await owner.locator('.merger-done').count() === 1, 'genomförd');
+  await owner.goto(MO + '/rapporter/huvudbok?account=2091');
+  assert(nb(await text(owner)).includes('30000,00'), 'fusionsdifferens till eget kapital');
+  await owner.goto(MO + '/rapporter/huvudbok?account=1930');
+  assert(nb(await text(owner)).includes('80000,00'), 'banken tas över');
+  log('fusion: helägt dotterbolag går upp i moderbolaget med fusionsplan och registrering, fusionsdifferens 30 000 kr mot eget kapital');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 21: alla steg gick igenom');
