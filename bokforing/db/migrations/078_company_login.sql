@@ -5,6 +5,7 @@ ALTER TABLE sessions ADD COLUMN created_at timestamptz NOT NULL DEFAULT now();
 ALTER TABLE sessions ADD COLUMN last_seen_at timestamptz NOT NULL DEFAULT now();
 ALTER TABLE sessions ADD COLUMN ip text;
 ALTER TABLE sessions ADD COLUMN user_agent text;
+ALTER TABLE sessions ADD COLUMN sso_company_id integer REFERENCES companies(id) ON DELETE CASCADE;  -- SSO-sessioner gäller bara det bolaget
 CREATE INDEX sessions_user ON sessions (user_id);
 ALTER TABLE companies ADD COLUMN require_mfa boolean NOT NULL DEFAULT false;
 ALTER TABLE companies ADD COLUMN ip_allowlist text[] NOT NULL DEFAULT '{}';

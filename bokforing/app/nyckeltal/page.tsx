@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { requireUser } from '@/lib/server/auth';
+import { allowedCompanies, requireUser } from '@/lib/server/auth';
 import { kr } from '@/lib/format';
 import { KPI_LABEL, PCT_KPIS, type Kpis } from '@/lib/report-builder';
 import { compareCompanies } from '@/lib/services/custom-reports';
@@ -11,7 +11,7 @@ const show = (k: keyof Kpis, v: number | null) => (v == null ? '–' : PCT_KPIS.
 /** Nyckeltal för användarens bolag sida vid sida – för ägare med flera bolag och byråer */
 export default async function Compare() {
   const user = await requireUser();
-  const list = await compareCompanies(user.id);
+  const list = await allowedCompanies(await compareCompanies(user.id));
   return (
     <div className="center" style={{ maxWidth: 1200 }}>
       <div className="header"><h1>Jämför bolag</h1><Link className="btn secondary" href="/">Mina bolag</Link></div>

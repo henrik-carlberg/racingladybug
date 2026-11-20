@@ -18,7 +18,7 @@ export async function GET(req: Request) {
   if (u.searchParams.get('error')) return to(origin, '/login', 'Inloggningen avbröts hos identitetsleverantören');
   try {
     const r = await ssoComplete(origin, u.searchParams.get('state') ?? '', cookieState, u.searchParams.get('code') ?? '');
-    await createSession(r.userId, { method: 'sso', mfa: r.mfa });
+    await createSession(r.userId, { method: 'sso', mfa: r.mfa, ssoCompanyId: r.companyId });
     await audit(sql, { companyId: r.companyId, userId: r.userId, action: 'login_sso', entity: 'user', entityId: r.userId }).catch(() => {});
     return to(origin, `/c/${r.companyId}`);
   } catch (e) {

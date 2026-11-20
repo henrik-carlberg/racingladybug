@@ -30,7 +30,9 @@ export function parseDomains(text: string): string[] {
 /** E-postadressen ur id_token: verifierad e-post, eller Entras preferred_username/upn */
 export function emailFrom(c: Record<string, unknown>, provider: SsoProvider): string | null {
   const email = typeof c.email === 'string' ? c.email : null;
-  if (email && c.email_verified !== false && c.email_verified !== 'false') return email.toLowerCase();
+  // Google och Entra utfärdar bara e-post de själva kontrollerar; andra leverantörer måste uttryckligen ange email_verified
+  const verified = provider === 'oidc' ? c.email_verified === true || c.email_verified === 'true' : c.email_verified !== false && c.email_verified !== 'false';
+  if (email && verified) return email.toLowerCase();
   if (provider === 'entra') {
     const u = typeof c.preferred_username === 'string' ? c.preferred_username : typeof c.upn === 'string' ? c.upn : null;
     if (u && u.includes('@')) return u.toLowerCase();
@@ -48,6 +50,15 @@ export function domainAllowed(email: string, domains: string[], claims: Record<s
 
 /** Har identitetsleverantören gjort tvåstegsverifiering? (amr enligt RFC 8176) */
 export const amrHasMfa = (c: Record<string, unknown>) => Array.isArray(c.amr) && c.amr.some((x) => ['mfa', 'otp', 'hwk', 'swk', 'fido', 'sms', 'face', 'fpt'].includes(String(x)));
+
+/** Privat, lokal eller reserverad adress (får inte nås från servern för identitetsleverantörer) */
+export function isPrivateIp(ipRaw: string): boolean {
+  const ip = ipRaw.replace(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i, '$1');
+  const blocked = isIP(ip) === 4
+    ? ['0.0.0.0/8', '10.0.0.0/8', '100.64.0.0/10', '127.0.0.0/8', '169.254.0.0/16', '172.16.0.0/12', '192.0.0.0/24', '192.168.0.0/16', '198.18.0.0/15', '224.0.0.0/4', '240.0.0.0/4']
+    : ['::/128', '::1/128', 'fc00::/7', 'fe80::/10', 'ff00::/8', '64:ff9b::/96', '2001:db8::/32'];
+  return isIP(ip) === 0 || blocked.some((c) => ipAllowed(ip, [c]));
+}
 
 // ---------- IP ----------
 function toBig(ip: string): { v: bigint; bits: number } | null {

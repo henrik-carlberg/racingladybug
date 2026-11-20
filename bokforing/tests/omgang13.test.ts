@@ -172,3 +172,16 @@ describe('Företagsinloggning', () => {
     expect(deviceLabel('Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 Chrome/120 Safari/537.36')).toBe('Chrome på Windows');
   });
 });
+
+import { isPrivateIp } from '@/lib/sso';
+describe('SSRF-skydd', () => {
+  it('privata adresser', () => {
+    for (const ip of ['10.0.0.5', '127.0.0.1', '169.254.169.254', '192.168.1.1', '172.20.0.1', '100.64.1.1', '::1', 'fd00::1', 'fe80::1', '::ffff:10.0.0.1']) expect(isPrivateIp(ip)).toBe(true);
+    for (const ip of ['8.8.8.8', '20.190.160.1', '2606:4700::1111']) expect(isPrivateIp(ip)).toBe(false);
+  });
+  it('e-post från annan OIDC kräver email_verified', async () => {
+    const { emailFrom } = await import('@/lib/sso');
+    expect(emailFrom({ email: 'a@exempel.se' }, 'oidc')).toBeNull();
+    expect(emailFrom({ email: 'a@exempel.se', email_verified: true }, 'oidc')).toBe('a@exempel.se');
+  });
+});

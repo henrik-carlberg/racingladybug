@@ -441,19 +441,25 @@ const idpServer = http.createServer((req, res) => {
   await sso.locator('text=IP-begränsningen är sparad').waitFor();
   log('IP-begränsning per bolag med skydd mot att stänga ute sig själv');
 
-  await sso.goto(BASE + '/konto/sessioner');
-  const before = await sso.locator('tr.my-session').count();
-  assert(before >= 2 && (await sso.locator('tr.my-session:has-text("Den här enheten")').count()) === 1, 'mina sessioner');
-  await sso.locator('tr.my-session button:has-text("Logga ut")').first().click();
-  await sso.locator('text=Sessionen är utloggad').waitFor();
-  assert((await sso.locator('tr.my-session').count()) === before - 1, 'en session mindre');
-  log('mina sessioner: se var kontot är inloggat och logga ut andra enheter');
+  await sso.goto(BASE + '/konto');
+  await sso.waitForURL(/\/login/);
+  await sso.goto(BASE + '/');
+  assert((await text(sso)).includes('Den inloggningen gäller bara det bolaget'), 'SSO-sessionens startsida');
+  log('en SSO-session gäller bara bolaget som företagsinloggningen gjordes för – inte kontot eller andra bolag');
 
   await sso.goto(S);
   await sso.click('button:has-text("Sluta kräva")');
   await sso.locator('text=Tvåstegsverifiering krävs inte längre').waitFor();
   await sso.click('button:has-text("Ta bort företagsinloggningen")');
   await sso.locator('text=Företagsinloggningen är borttagen').waitFor();
+
+  await owner.goto(BASE + '/konto/sessioner');
+  const before = await owner.locator('tr.my-session').count();
+  assert(before >= 2 && (await owner.locator('tr.my-session:has-text("Den här enheten")').count()) === 1, 'mina sessioner');
+  await owner.locator('tr.my-session button:has-text("Logga ut")').first().click();
+  await owner.locator('text=Sessionen är utloggad').waitFor();
+  assert((await owner.locator('tr.my-session').count()) === before - 1, 'en session mindre');
+  log('mina sessioner: se var kontot är inloggat och logga ut andra enheter');
 
   //@@NEXT@@
   await browser.close(); mailServer.close(); idpServer.close();

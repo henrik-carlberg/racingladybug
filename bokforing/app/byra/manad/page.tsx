@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { requireUser } from '@/lib/server/auth';
+import { allowedCompanies, requireUser } from '@/lib/server/auth';
 import { Flash, type SP } from '@/components/ui';
 import { today } from '@/lib/format';
 import { myFirms } from '@/lib/services/firms';
@@ -16,7 +16,7 @@ export default async function MonthClose({ searchParams }: { searchParams: SP })
   const firm = firms.find((f) => String(f.id) === sp.f) ?? firms[0];
   if (!firm) return <div className="center"><p>Du är inte med i någon byrå. <Link href="/byra">Skapa en byrå</Link></p></div>;
   const period = /^\d{4}-\d{2}$/.test(String(sp.period)) ? String(sp.period) : prevPeriod(today());
-  const rows = await firmMonth(user.id, firm.id, period);
+  const rows = await allowedCompanies(await firmMonth(user.id, firm.id, period));
   const shift = (n: number) => { const d = new Date(Date.UTC(Number(period.slice(0, 4)), Number(period.slice(5, 7)) - 1 + n, 1)); return d.toISOString().slice(0, 7); };
   const doneN = rows.filter((r) => r.done).length, waitingN = rows.filter((r) => !r.done && r.waiting).length;
   return (

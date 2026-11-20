@@ -1,12 +1,13 @@
 import 'server-only';
 import { randomBytes, createHash } from 'node:crypto';
+import { lookup } from 'node:dns/promises';
 import { sql } from '@/lib/db';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import { auditBy } from '@/lib/server/audit';
 import { currentSession, policyIp } from '@/lib/server/auth';
 import { decrypt, encrypt } from '@/lib/server/crypto';
 import { s256, verifyIdToken } from '@/lib/bankid';
-import { amrHasMfa, deviceLabel, domainAllowed, domainOf, emailFrom, ipAllowed, issuerFor, parseCidrs, parseDomains, type SsoProvider } from '@/lib/sso';
+import { amrHasMfa, isPrivateIp, deviceLabel, domainAllowed, domainOf, emailFrom, ipAllowed, issuerFor, parseCidrs, parseDomains, type SsoProvider } from '@/lib/sso';
 import type { Actor } from './actor';
 import { str } from './input';
 
@@ -18,11 +19,19 @@ const on = (v: unknown) => v === 'on' || v === true || v === 'true';
 interface Discovery { issuer: string; authorization_endpoint: string; token_endpoint: string; jwks_uri: string }
 const disc = new Map<string, { at: number; d: Discovery; jwks: { keys: never[] } }>();
 
-async function getJson<T>(url: string): Promise<T> {
+/** Alla anrop till leverantören (även adresser ur dess konfiguration) ska gå till publika adresser över https */
+async function assertPublic(url: string) {
   const u = new URL(url);
   if (u.protocol !== 'https:' && !(insecure() && u.protocol === 'http:')) throw new ValidationError('Identitetsleverantören måste använda https');
-  const r = await fetch(url, { signal: AbortSignal.timeout(10000), redirect: 'error' });
-  if (!r.ok) throw new ValidationError(`Identitetsleverantören svarade ${r.status}`);
+  if (insecure()) return;
+  const addrs = await lookup(u.hostname.replace(/^\[|\]$/g, ''), { all: true }).catch(() => []);
+  if (!addrs.length || addrs.some((a) => isPrivateIp(a.address))) throw new ValidationError('Identitetsleverantören gick inte att nå');
+}
+
+async function getJson<T>(url: string): Promise<T> {
+  await assertPublic(url);
+  const r = await fetch(url, { signal: AbortSignal.timeout(10000), redirect: 'error' }).catch(() => null);
+  if (!r?.ok) throw new ValidationError('Identitetsleverantören gick inte att nå');
   return r.json() as Promise<T>;
 }
 
@@ -33,7 +42,8 @@ async function discovery(issuer: string, force = false) {
   // Microsofts multi-tenant-dokument har {tenantid} i issuer; den katalogspecifika adressen ger rätt värde
   if (d.issuer !== issuer) throw new ValidationError('Utfärdaren i leverantörens konfiguration stämmer inte');
   for (const k of ['authorization_endpoint', 'token_endpoint', 'jwks_uri'] as const) {
-    const u = new URL(d[k]);
+    let u: URL;
+    try { u = new URL(d[k]); } catch { throw new ValidationError('Leverantörens konfiguration är ogiltig'); }
     if (u.protocol !== 'https:' && !(insecure() && u.protocol === 'http:')) throw new ValidationError('Leverantörens adresser måste använda https');
   }
   const v = { at: Date.now(), d, jwks: await getJson<{ keys: never[] }>(d.jwks_uri) };
@@ -103,7 +113,8 @@ export async function memberSessions(companyId: number) {
   const rows = await sql<{ id: string; name: string; email: string; method: string; mfa: boolean; created_at: string; last_seen_at: string; ip: string | null; user_agent: string | null; blocked: boolean }[]>`
     SELECT s.id, u.name, u.email, s.method, s.mfa, to_char(s.created_at,'YYYY-MM-DD HH24:MI') AS created_at, to_char(s.last_seen_at,'YYYY-MM-DD HH24:MI') AS last_seen_at, s.ip, s.user_agent,
       EXISTS (SELECT 1 FROM session_company_blocks b WHERE b.session_id = s.id AND b.company_id = ${companyId}) AS blocked
-    FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.expires_at > now() AND s.user_id IN (${memberIds(companyId)}) ORDER BY s.last_seen_at DESC LIMIT 200`;
+    FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.expires_at > now() AND s.user_id IN (SELECT user_id FROM memberships WHERE company_id = ${companyId})
+      AND (s.sso_company_id IS NULL OR s.sso_company_id = ${companyId}) ORDER BY s.last_seen_at DESC LIMIT 200`;
   // Sessionens id visas aldrig – bara en kort referens som inte kan användas för att logga in
   return rows.map(({ id, user_agent, ...r }) => ({ ...r, ref: id.slice(0, 12), device: deviceLabel(user_agent), current: id === me?.id }));
 }
@@ -174,6 +185,7 @@ export async function ssoComplete(origin: string, state: string, cookieState: st
     SELECT provider, issuer, client_id, client_secret, domains, idp_mfa FROM company_sso WHERE company_id = ${f.company_id} AND enabled`;
   if (!c) throw new ValidationError('Företagsinloggningen är avstängd');
   const { d } = await discovery(c.issuer);
+  await assertPublic(d.token_endpoint);
   const r = await fetch(d.token_endpoint, {
     method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10000),
     headers: { 'content-type': 'application/x-www-form-urlencoded', authorization: `Basic ${Buffer.from(`${encodeURIComponent(c.client_id)}:${encodeURIComponent(decrypt(c.client_secret))}`).toString('base64')}` },

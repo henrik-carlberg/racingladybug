@@ -2,7 +2,7 @@ import { translator } from '@/lib/ui-i18n';
 import { uiLang } from '@/lib/server/lang';
 import Link from 'next/link';
 import { sql } from '@/lib/db';
-import { currentUser } from '@/lib/server/auth';
+import { currentSession, currentUser } from '@/lib/server/auth';
 import { Landing } from '@/components/Landing';
 import { createCompany, createDemo } from './company-actions';
 import { logout } from './auth-actions';
@@ -14,7 +14,22 @@ export const dynamic = 'force-dynamic';
 export default async function Home({ searchParams }: { searchParams: SP }) {
   const user = await currentUser();
   const L = translator(await uiLang());
-  if (!user) return <Landing />;
+  if (!user) {
+    // SSO-session: gäller bara bolaget som företagsinloggningen gjordes för
+    const s = await currentSession();
+    if (s?.method === 'sso' && s.ssoCompanyId) {
+      const [c] = await sql<{ name: string }[]>`SELECT name FROM companies WHERE id = ${s.ssoCompanyId}`;
+      return (
+        <div className="center" style={{ maxWidth: 720 }}>
+          <h1>{c?.name}</h1>
+          <Flash searchParams={searchParams} />
+          <p>Du är inloggad med företagets inloggning (SSO) för {c?.name}. Den inloggningen gäller bara det bolaget.</p>
+          <div className="actions"><Link className="btn" href={`/c/${s.ssoCompanyId}`}>Öppna {c?.name}</Link><form action={logout}><button className="secondary">Logga ut</button></form></div>
+        </div>
+      );
+    }
+    return <Landing />;
+  }
   const companies = await sql<{ id: number; name: string; orgnr: string; role: 'owner' | 'accountant' | 'employee' | 'auditor' }[]>`
     SELECT c.id, c.name, c.orgnr, m.role FROM companies c JOIN memberships m ON m.company_id = c.id
     WHERE m.user_id = ${user.id} ORDER BY c.name`;

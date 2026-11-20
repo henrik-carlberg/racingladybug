@@ -43,13 +43,14 @@ export async function logLogin(o: { userId: number | null; email?: string; metho
     VALUES (${o.userId}, ${(o.email ?? '').slice(0, 200)}, ${o.method}, ${o.success}, ${o.reason ?? ''}, ${(await policyIp()) || null}, ${(h.get('user-agent') ?? '').slice(0, 400) || null})`.catch(() => {});
 }
 
-export async function createSession(userId: number, o: { method?: LoginMethod; mfa?: boolean } = {}) {
+export async function createSession(userId: number, o: { method?: LoginMethod; mfa?: boolean; ssoCompanyId?: number } = {}) {
   const token = newToken();
   const expires = new Date(Date.now() + SESSION_DAYS * 86400_000);
   const h = await headers();
   const method = o.method ?? 'password';
-  await sql`INSERT INTO sessions (id, user_id, expires_at, method, mfa, ip, user_agent)
-    VALUES (${sha256(token)}, ${userId}, ${expires}, ${method}, ${!!o.mfa}, ${(await policyIp()) || null}, ${(h.get('user-agent') ?? '').slice(0, 400) || null})`;
+  if (method === 'sso' && !o.ssoCompanyId) throw new Error('SSO-session utan bolag');
+  await sql`INSERT INTO sessions (id, user_id, expires_at, method, mfa, ip, user_agent, sso_company_id)
+    VALUES (${sha256(token)}, ${userId}, ${expires}, ${method}, ${!!o.mfa}, ${(await policyIp()) || null}, ${(h.get('user-agent') ?? '').slice(0, 400) || null}, ${o.ssoCompanyId ?? null})`;
   await logLogin({ userId, method, success: true });
   (await cookies()).set(COOKIE, token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', expires });
   // Gränssnittets språk följer användaren
@@ -74,23 +75,27 @@ export async function destroyOtherSessions(userId: number) {
   await sql`DELETE FROM sessions WHERE user_id = ${userId} AND id <> ${token ? sha256(token) : ''}`;
 }
 
-export interface SessionInfo { id: string; user: User; method: string; mfa: boolean }
+export interface SessionInfo { id: string; user: User; method: string; mfa: boolean; ssoCompanyId: number | null }
 
 /** Den inloggade sessionen (en gång per anrop). Senast aktiv uppdateras högst var femte minut. */
 export const currentSession = cache(async (): Promise<SessionInfo | null> => {
   const token = (await cookies()).get(COOKIE)?.value;
   if (!token) return null;
   const id = sha256(token);
-  const rows = await sql<(User & { method: string; mfa: boolean; stale: boolean })[]>`
-    SELECT u.id, u.email, u.name, s.method, s.mfa, s.last_seen_at < now() - interval '5 minutes' AS stale FROM sessions s JOIN users u ON u.id = s.user_id
+  const rows = await sql<(User & { method: string; mfa: boolean; stale: boolean; sso_company_id: number | null })[]>`
+    SELECT u.id, u.email, u.name, s.method, s.mfa, s.sso_company_id, s.last_seen_at < now() - interval '5 minutes' AS stale FROM sessions s JOIN users u ON u.id = s.user_id
     WHERE s.id = ${id} AND s.expires_at > now()`;
   const r = rows[0];
   if (!r) return null;
   if (r.stale) await sql`UPDATE sessions SET last_seen_at = now() WHERE id = ${id}`.catch(() => {});
-  return { id, user: { id: r.id, email: r.email, name: r.name }, method: r.method, mfa: r.mfa };
+  return { id, user: { id: r.id, email: r.email, name: r.name }, method: r.method, mfa: r.mfa, ssoCompanyId: r.sso_company_id };
 });
 
-export const currentUser = async (): Promise<User | null> => (await currentSession())?.user ?? null;
+/**
+ * Inloggad användare för sidor utanför ett bolag (konto, byrå, koncern, appar). En SSO-session gäller bara bolaget
+ * vars identitetsleverantör utfärdade den – bolagets ägare väljer leverantören och kan därför inte ge åtkomst till något annat.
+ */
+export const currentUser = async (): Promise<User | null> => { const s = await currentSession(); return s && s.method !== 'sso' ? s.user : null; };
 
 export async function requireUser(): Promise<User> {
   const u = await currentUser();
@@ -102,17 +107,38 @@ export async function requireUser(): Promise<User> {
  * Bolagets åtkomstregler för den här sessionen: utloggad av ägaren, IP-begränsning, krav på SSO för bolagets domäner
  * och krav på tvåstegsverifiering. Gäller alla roller, även redovisningsbyråns konsulter.
  */
-async function enforceCompanyAccess(companyId: number, user: User, c: { require_mfa: boolean; ip_allowlist: string[] }) {
-  const s = await currentSession();
-  if (!s) redirect('/login');
+/** Varför sessionen inte får använda bolaget just nu (null = tillåten) */
+export async function companyPolicyBlock(companyId: number, s: SessionInfo, c?: { require_mfa: boolean; ip_allowlist: string[] }): Promise<{ msg: string; mfa?: boolean } | null> {
+  if (!c) [c] = await sql<{ require_mfa: boolean; ip_allowlist: string[] }[]>`SELECT require_mfa, ip_allowlist FROM companies WHERE id = ${companyId}`;
+  if (!c) return { msg: 'Bolaget finns inte' };
+  if (s.method === 'sso' && s.ssoCompanyId !== companyId) return { msg: 'Företagsinloggningen gäller bara bolaget som den gjordes för. Logga ut och logga in igen för att öppna ett annat bolag.' };
+  const user = s.user;
   const [r] = await sql<{ blocked: boolean; sso: boolean }[]>`
     SELECT EXISTS (SELECT 1 FROM session_company_blocks WHERE session_id = ${s.id} AND company_id = ${companyId}) AS blocked,
       EXISTS (SELECT 1 FROM company_sso WHERE company_id = ${companyId} AND enabled AND enforce AND ${user.email.split('@')[1]?.toLowerCase() ?? ''} = ANY(domains)) AS sso`;
-  const deny = (msg: string): never => redirect(`/?error=${encodeURIComponent(msg)}`);
-  if (r.blocked) deny('Du har loggats ut från bolaget. Logga in igen för att fortsätta.');
-  if (c.ip_allowlist?.length && !ipAllowed(await policyIp(), c.ip_allowlist)) deny('Bolaget tillåter bara inloggning från vissa nätverk – din anslutning finns inte med.');
-  if (r.sso && s.method !== 'sso') deny('Bolaget kräver att du loggar in med företagets inloggning (SSO). Logga ut och välj "Logga in med SSO".');
-  if (c.require_mfa && !s.mfa) redirect(`/konto?error=${encodeURIComponent('Bolaget kräver tvåstegsverifiering. Slå på den här (eller använd en passkey/BankID) och logga in igen.')}#tvasteg`);
+  if (r.blocked) return { msg: 'Du har loggats ut från bolaget. Logga in igen för att fortsätta.' };
+  if (c.ip_allowlist?.length && !ipAllowed(await policyIp(), c.ip_allowlist)) return { msg: 'Bolaget tillåter bara inloggning från vissa nätverk – din anslutning finns inte med.' };
+  if (r.sso && s.method !== 'sso') return { msg: 'Bolaget kräver att du loggar in med företagets inloggning (SSO). Logga ut och välj "Logga in med SSO".' };
+  if (c.require_mfa && !s.mfa) return { msg: 'Bolaget kräver tvåstegsverifiering. Slå på den här (eller använd en passkey/BankID) och logga in igen.', mfa: true };
+  return null;
+}
+
+/** Bolagen i listan som sessionen får använda (för sidor som visar flera bolag: koncern, nyckeltal, byråvy, appar) */
+export async function allowedCompanies<T extends { id: number }>(rows: T[]): Promise<T[]> {
+  const s = await currentSession();
+  if (!s) return [];
+  const out: T[] = [];
+  for (const r of rows) if (!(await companyPolicyBlock(r.id, s))) out.push(r);
+  return out;
+}
+
+async function enforceCompanyAccess(companyId: number, c: { require_mfa: boolean; ip_allowlist: string[] }) {
+  const s = await currentSession();
+  if (!s) redirect('/login');
+  const b = await companyPolicyBlock(companyId, s, c);
+  if (!b) return;
+  if (b.mfa && s.method !== 'sso') redirect(`/konto?error=${encodeURIComponent(b.msg)}#tvasteg`);
+  redirect(`/?error=${encodeURIComponent(b.msg)}`);
 }
 
 export interface Ctx { user: User; company: Company; role: Role; billing: Access; employeeId: number | null; permissions: Permission[] | null; can: (p: Permission) => boolean }
@@ -152,7 +178,10 @@ async function denyAction(companyId: number, msg: string): Promise<never> {
  * - allowLocked: sidan fungerar även när abonnemanget har gått ut (abonnemang, export)
  */
 export async function requireCompany(companyId: number | string, opts: { owner?: boolean; employee?: boolean; allowLocked?: boolean; perm?: Permission; auditWork?: boolean } = {}): Promise<Ctx> {
-  const user = await requireUser();
+  // SSO-sessioner släpps in här; companyPolicyBlock begränsar dem till sitt eget bolag
+  const session = await currentSession();
+  if (!session) redirect('/login');
+  const user = session.user;
   const id = Number(companyId);
   if (!Number.isInteger(id)) notFound();
   // Medlemskap i bolaget, eller åtkomst via en redovisningsbyrå som bolaget har gett behörighet (roll redovisningskonsult)
@@ -166,7 +195,7 @@ export async function requireCompany(companyId: number | string, opts: { owner?:
   const row = rows[0];
   if (!row || !row.role) notFound();
   const { role, employee_id, permissions, ...company } = row;
-  await enforceCompanyAccess(id, user, row as unknown as { require_mfa: boolean; ip_allowlist: string[] });
+  await enforceCompanyAccess(id, row as unknown as { require_mfa: boolean; ip_allowlist: string[] });
   if (role === 'employee' && !opts.employee) redirect(`/c/${id}/mitt`);
   if (opts.owner && role !== 'owner') throw new Error('Endast ägare får göra detta');
   // Behörighet per användare: åtgärder kräver behörigheten, sidor kräver läsbehörighet
