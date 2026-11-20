@@ -61,3 +61,16 @@ describe('Värdepapper', () => {
     expect(t).toEqual({ exemptIncome: 1000000, nonDeductible: 220000, standardIncome: 40000, lossNotDeductible: 200000, taxableAdjustment: -740000 });
   });
 });
+
+import { abLines, closingFundLines, efLines, finalNe, split } from '@/lib/conversion';
+describe('Ombildning från enskild firma', () => {
+  it('underprisöverlåtelse till bokfört värde och återföring av fonder', () => {
+    const s = split(new Map([[1930, 4000000], [1220, 5000000], [2440, -1000000], [2010, -6000000], [2110, -2000000], [2050, -500000], [3001, -100]]));
+    expect(s).toMatchObject({ assets: 9000000, liabilities: 1000000, net: 8000000, pfondTotal: 2000000, expansion: 500000 });
+    expect(abLines(s, 'debt')).toEqual([{ account: 1220, amount: 5000000 }, { account: 1930, amount: 4000000 }, { account: 2440, amount: -1000000 }, { account: 2893, amount: -8000000 }]);
+    expect(efLines(s).reduce((a, l) => a + l.amount, 0)).toBe(0);
+    expect(closingFundLines(s)).toEqual([{ account: 2110, amount: 2000000 }, { account: 8819, amount: -2000000 }, { account: 2050, amount: 500000 }, { account: 2010, amount: -500000 }]);
+    expect(finalNe({ result: 3000000, pfondTotal: 2000000, expansion: 500000 })).toEqual({ result: 3000000, pfondReversed: 2000000, expansionReversed: 500000, taxable: 3500000, expansionTaxCredit: 103000 });
+    expect(() => abLines(split(new Map([[1930, 100], [2440, -200]])), 'debt')).toThrow();
+  });
+});

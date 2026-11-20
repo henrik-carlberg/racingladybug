@@ -228,6 +228,40 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await owner.locator('.sec-exempt').innerText()) === '0,00', 'ångrad utdelning');
   log('senaste transaktionen kan ångras med rättelseverifikation');
 
+  // ================= Del 4: ombildning från enskild firma =================
+  await owner.goto(BASE + '/');
+  await owner.fill('input[name=name]', 'Ombildningsfirman');
+  await owner.selectOption('select[name=company_type]', 'EF');
+  const epn = orgnrFor('790202' + String(100 + (Date.now() % 800)).padStart(3, '0'));
+  await owner.fill('input[name=orgnr]', `19${epn}`);
+  await owner.fill('input[name=fy_start]', `${YEAR}-01-01`); await owner.fill('input[name=fy_end]', `${YEAR}-12-31`);
+  await owner.click('button:has-text("Skapa bolag")');
+  await owner.waitForURL(/kom-igang/);
+  const EF = owner.url().replace(/\/kom-igang.*/, '');
+  await voucher(EF, 'Egen insättning', [[1930, 100000], [2018, -100000]], `${YEAR}-01-02`);
+  await voucher(EF, 'Maskin', [[1220, 50000], [1930, -50000]], `${YEAR}-01-03`);
+  await voucher(EF, 'Varor på kredit', [[4010, 10000], [2440, -10000]], `${YEAR}-01-04`);
+  await voucher(EF, 'Periodiseringsfond från tidigare år', [[8811, 20000], [2110, -20000]], `${YEAR}-01-05`);
+  await voucher(EF, 'Expansionsfond från tidigare år', [[2010, 5000], [2050, -5000]], `${YEAR}-01-05`);
+  const AB2 = await newCompany('Firman AB', 559200000);
+  await owner.goto(EF + '/ombildning');
+  assert(nb(await owner.locator('.conv-net').innerText()) === '90000,00', 'nettovärde 100 000 − 10 000: ' + await owner.locator('.conv-net').innerText());
+  assert(nb(await owner.locator('.ne-pfond').innerText()) === '20000,00' && nb(await owner.locator('.ne-expansion').innerText()) === '5000,00' && nb(await owner.locator('.ne-credit').innerText()) === '1030,00', 'slutlig NE');
+  await owner.selectOption('.conv-form select[name=ab_company_id]', { label: 'Firman AB' });
+  await owner.selectOption('.conv-form select[name=payment]', 'debt');
+  await owner.click('button:has-text("Överlåt verksamheten")');
+  await owner.locator('text=Verksamheten är överlåten till aktiebolaget för 90 000,00 kr').waitFor();
+  assert(await owner.locator('.conv-done').count() === 1 && !(await owner.locator('.conv-form').count()), 'en gång');
+  await owner.goto(AB2 + '/rapporter/huvudbok?account=2893');
+  assert(nb(await text(owner)).includes('90000,00'), 'skuld till ägaren i bolaget');
+  await owner.goto(AB2 + '/rapporter/huvudbok?account=1220');
+  assert(nb(await text(owner)).includes('50000,00'), 'maskinen i bolaget');
+  await owner.goto(EF + '/rapporter/huvudbok?account=1930');
+  assert(nb(await text(owner)).includes('50000,00'), 'banken lämnar firman');
+  await owner.goto(EF + '/rapporter/huvudbok?account=8819');
+  assert(nb(await text(owner)).includes('20000,00'), 'periodiseringsfonden återförs');
+  log('ombildning: tillgångar och skulder till bokfört värde till aktiebolaget (skuld 90 000 kr till ägaren), fonder återförs i firmans slutliga NE');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 19: alla steg gick igenom');
