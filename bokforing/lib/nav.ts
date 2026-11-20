@@ -45,6 +45,7 @@ export function buildNav(o: {
       { path: '/bank/regler', label: 'Konteringsregler', perm: 'ledger' },
       { path: '/kort', label: 'Företagskort', perm: 'ledger', hint: 'Kortköp som saknar kvitto' },
       { path: '/skattekonto', label: 'Skattekontot', perm: 'ledger' },
+      { path: '/finansiering', label: 'Lån och finansiering', perm: 'ledger', hint: 'Amorteringsplaner, krediter och factoring' },
       { path: '/skatt', label: 'Skatteplanering', perm: 'ledger', hint: 'Prognos för skattekontot, preliminärskatt och bokslutsdispositioner' },
     ]) },
     { id: 'lon', label: t('Lön och personal'), icon: 'users', items: items([
@@ -59,12 +60,15 @@ export function buildNav(o: {
       { path: '/lon/bilforman', label: 'Bilförmån', perm: 'payroll' },
       { path: '/lon/avtal', label: 'Kollektivavtal', perm: 'payroll', hint: 'OB, övertid, beredskap, pension' },
       { path: '/agare', label: 'Ägare och utdelning', perm: 'ledger', hint: 'K10, gränsbelopp och lön eller utdelning' },
+      { path: '/aktiebok', label: 'Aktiebok', perm: 'ledger', hint: 'Aktieägare, överlåtelser, nyemission och styrelseprotokoll' },
     ]) },
     { id: 'rapp', label: t('Rapporter'), icon: 'chart', items: items([
       { path: '/rapporter/panel', label: 'Instrumentpanel', hint: 'Diagram och nyckeltal' },
       { path: '/rapporter/manad', label: 'Månadsrapport' },
       { path: '/nyckeltal', label: 'Nyckeltal', perm: 'ledger', hint: 'För vd, ekonomi och styrelse' },
       { path: '/rapporter/egna', label: 'Egna rapporter', perm: 'ledger', hint: 'Bygg och dela egna rapporter' },
+      { path: '/koncerninternt', label: 'Koncerninterna flöden', perm: 'ledger', hint: 'Speglade fakturor, mellanhavanden och koncernavgifter' },
+      { path: '/klimat', label: 'Klimatbokföring', perm: 'ledger', hint: 'Utsläpp ur bokföringen per scope' },
       { path: '/rapporter', label: 'Resultat & balans' },
       { path: '/rapporter/budget', label: 'Budget' },
       { path: '/rapporter/moms', label: 'Moms', hint: 'Momsdeklarationen' },
