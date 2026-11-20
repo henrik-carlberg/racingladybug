@@ -79,6 +79,49 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(t.includes('Övervärde Koncerntest Dotter AB') && t.includes('Internvinst i lager Koncerntest Dotter AB') && nb(t).includes('25000,00') && t.includes('Avskrivning goodwill och övervärden'), 'elimineringar: ' + t);
   log('förvärvsanalys: övervärde med uppskjuten skatt, goodwill 472 960 kr som skrivs av från förvärvsdagen, minoritet 20 % och internvinst i lager');
 
+  // ================= Del 2: fåmansföretag och 3:12 =================
+  for (const [n, sh, sv] of [['Anna Ägare', '60', '10000'], ['Bertil Ägare', '40', '0']]) {
+    await owner.goto(MO + '/agare');
+    const f = owner.locator('form:has(button:has-text("Lägg till ägare"))');
+    await f.locator('input[name=name]').fill(n); await f.locator('input[name=share_pct]').fill(sh); await f.locator('input[name=saved_space]').fill(sv);
+    await f.locator('button:has-text("Lägg till ägare")').click();
+    await owner.locator('text=Ägaren är sparad').waitFor();
+  }
+  await owner.goto(MO + `/agare?year=${YEAR}&plan=400000`);
+  const ibb = { 2025: 80600, 2026: 83400 }[YEAR - 1] ?? 83400;
+  const limA = Math.round(4 * ibb * 0.6) + 10000, limB = Math.round(4 * ibb * 0.4);
+  const maxW = Math.floor(Math.min(limA / 0.6, limB / 0.4));
+  assert(nb(await owner.locator('.max-within').innerText()).startsWith(String(maxW)), 'största utdelning inom gränsbeloppen: ' + await owner.locator('.max-within').innerText() + ' ≠ ' + maxW);
+  const bRow = owner.locator('tr.plan-row:has-text("Bertil Ägare")');
+  assert(nb(await bRow.locator('.above').innerText()) === `${160000 - limB},00`, 'Bertil över gränsbeloppet: ' + await bRow.innerText());
+  log('utdelningsplan för flera ägare: fördelning efter andel, del över gränsbeloppet och största utdelning inom allas gränsbelopp');
+  await owner.click(`button:has-text("Spara K10 för ${YEAR}")`);
+  await owner.locator(`text=K10 för ${YEAR} är sparad för 2 ägare`).waitFor();
+  await owner.goto(MO + `/agare?year=${YEAR + 1}`);
+  const annaK10 = owner.locator('section.k10:has(h3:text-is("Anna Ägare"))');
+  t = await annaK10.innerText();
+  assert(t.includes(`från sparad K10 ${YEAR}`) && nb(await annaK10.locator('.saved-in').innerText()) === `${limA},00` && (await annaK10.locator('.k10-history').count()) === 1, 'sparat utrymme förs vidare: ' + t);
+  log('K10 sparas per ägare och år och sparat utdelningsutrymme förs automatiskt till nästa år');
+
+  await owner.goto(MO + '/agare#kapitalforsakring');
+  const nf = owner.locator('form:has(button:has-text("Ny kapitalförsäkring"))');
+  await nf.locator('input[name=name]').fill('Pensionsförsäkring Anna'); await nf.locator('input[name=insurer]').fill('Testförsäkring AB'); await nf.locator('input[name=pledged]').fill('Pensionsutfästelse Anna Ägare');
+  await nf.locator('button:has-text("Ny kapitalförsäkring")').click();
+  await owner.locator('text=Kapitalförsäkringen är registrerad').waitFor();
+  await owner.locator('section.insurance input[name=amount]').fill('50000');
+  await owner.click('section.insurance button:has-text("Bokför premie")');
+  await owner.locator('text=Premien är bokförd på 1385').waitFor();
+  await owner.goto(MO + '/agare#kapitalforsakring');
+  await owner.locator('section.insurance input[name=value]').fill('45000');
+  await owner.check('section.insurance input[name=writedown]');
+  await owner.click('section.insurance button:has-text("Registrera värde")');
+  await owner.locator('text=nedskrivningen bokförd').waitFor();
+  await owner.goto(MO + '/agare#kapitalforsakring');
+  assert(nb(await owner.locator('.ins-booked').innerText()) === '45000,00', 'bokfört efter nedskrivning');
+  await owner.goto(MO + '/rapporter/huvudbok?account=8270');
+  assert(nb(await text(owner)).includes('5000,00'), 'nedskrivning 8270');
+  log('kapitalförsäkring: premier på 1385, avkastningsskatt beräknad och nedskrivning vid bestående värdenedgång');
+
   //@@NEXT@@
   await browser.close(); mailServer.close();
   console.log('Omgång 17: alla steg gick igenom');

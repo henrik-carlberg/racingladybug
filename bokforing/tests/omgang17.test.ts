@@ -32,3 +32,25 @@ describe('Koncernredovisning', () => {
     expect(r.analyses[0].a.goodwill).toBeGreaterThan(0);
   });
 });
+
+import { dividendPlan, insuranceWritedown, savedSpaceFor, yieldTax } from '@/lib/closely-held';
+describe('Fåmansföretag och 3:12', () => {
+  it('utdelningsplan för flera ägare', () => {
+    const p = dividendPlan(30000000, [{ id: 1, name: 'A', share: 60, limit: 20000000 }, { id: 2, name: 'B', share: 40, limit: 5000000 }]);
+    expect(p.rows.map((r) => r.amount)).toEqual([18000000, 12000000]);
+    expect(p.rows[1]).toMatchObject({ within: 5000000, above: 7000000, tax: 1000000 });
+    expect(p.maxWithin).toBe(12500000); // B:s gränsbelopp 50 000 / 40 %
+  });
+  it('sparat utdelningsutrymme år för år', () => {
+    const h = [{ year: 2024, saved_next: 100 }, { year: 2025, saved_next: 250 }];
+    expect(savedSpaceFor(2026, h, 999)).toEqual({ amount: 250, from: 2025 });
+    expect(savedSpaceFor(2025, h, 999)).toEqual({ amount: 100, from: 2024 });
+    expect(savedSpaceFor(2024, h, 999)).toEqual({ amount: 999, from: null });
+  });
+  it('avkastningsskatt på kapitalförsäkring och nedskrivning', () => {
+    expect(yieldTax({ valueJan1: 100000000, premiumsH1: 10000000, premiumsH2: 10000000, slr: 2.0 })).toEqual({ base: 115000000, rate: 3, tax: 1035000 });
+    expect(yieldTax({ valueJan1: 100000000, premiumsH1: 0, premiumsH2: 0, slr: 0 }).rate).toBe(1.25);
+    expect(insuranceWritedown(1000, 800)).toBe(200);
+    expect(insuranceWritedown(1000, 1200)).toBe(0);
+  });
+});
