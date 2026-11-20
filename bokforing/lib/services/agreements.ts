@@ -10,7 +10,7 @@ import { getPayrollRun, updatePayslip } from './payroll';
 export interface Agreement extends AgreementRules { id: number; name: string; fora_insurance_percent: number }
 const COLS = sql`id, name, ob_evening::float8 AS ob_evening, ob_night::float8 AS ob_night, ob_weekend::float8 AS ob_weekend, ob_holiday::float8 AS ob_holiday,
   overtime_simple_divisor, overtime_qualified_divisor, oncall_weekday::float8 AS oncall_weekday, oncall_weekend::float8 AS oncall_weekend,
-  vacation_supplement::float8 AS vacation_supplement, fora_insurance_percent::float8 AS fora_insurance_percent`;
+  vacation_supplement::float8 AS vacation_supplement, fora_insurance_percent::float8 AS fora_insurance_percent, travel_divisor`;
 
 export async function listAgreements(companyId: number) {
   return [...await sql<Agreement[]>`SELECT ${COLS} FROM collective_agreements WHERE company_id = ${companyId} ORDER BY name`];
@@ -22,8 +22,8 @@ function parse(input: Record<string, string>) {
   if (!name) throw new ValidationError('Ange avtalets namn');
   const f: Record<string, number | string> = { name };
   for (const k of MONEY) { const v = (input[k] ?? '').trim(); const o = v ? parseAmount(v) : 0; if (o == null) throw new ValidationError(`Ogiltigt belopp "${v}"`); f[k] = o; if ((f[k] as number) < 0) throw new ValidationError('Negativt belopp'); }
-  for (const k of ['overtime_simple_divisor', 'overtime_qualified_divisor'] as const) {
-    const v = Number((input[k] ?? '').trim() || (k === 'overtime_simple_divisor' ? 94 : 72));
+  for (const k of ['overtime_simple_divisor', 'overtime_qualified_divisor', 'travel_divisor'] as const) {
+    const v = Number((input[k] ?? '').trim() || (k === 'overtime_simple_divisor' ? 94 : k === 'travel_divisor' ? 240 : 72));
     if (!Number.isInteger(v) || v < 0 || v > 400) throw new ValidationError('Delaren för övertid ska vara ett heltal, t.ex. 94 eller 72 (0 = ingen ersättning)');
     f[k] = v;
   }

@@ -45,7 +45,7 @@ export default async function Group({ searchParams }: { searchParams: SP }) {
       {r?.parentId && (
         <section className="card stack no-print">
           <b>Dotterbolag till {r.companies.find((c) => c.id === r.parentId)?.name}</b>
-          <p className="small muted" style={{ margin: 0 }}>Aktierna i dotterbolaget (1310–1319 i moderbolaget) elimineras mot dotterbolagets eget kapital vid förvärvet. Skillnaden blir koncernmässig goodwill. Lämnas fälten tomma används moderbolagets konto 1310–1319 och dotterbolagets bundna egna kapital (passar för bolag som moderbolaget har bildat). Goodwill skrivs inte av automatiskt.</p>
+          <p className="small muted" style={{ margin: 0 }}>Aktierna i dotterbolaget (1310–1319 i moderbolaget) elimineras mot dotterbolagets eget kapital vid förvärvet. Skillnaden blir koncernmässig goodwill. Lämnas fälten tomma används moderbolagets konto 1310–1319 och dotterbolagets bundna egna kapital (passar för bolag som moderbolaget har bildat). Övervärden (t.ex. fastigheter) tas upp med uppskjuten skatt 20,6 %. Goodwill och övervärden skrivs av linjärt från förvärvsdagen. Internvinst i lager = koncerninternt köpta varor i dotterbolagets lager × säljarens marginal.</p>
           {r.companies.filter((c) => c.id !== r.parentId).map((c) => {
             const l = r.links.find((x) => x.subsidiaryId === c.id);
             return (
@@ -54,6 +54,13 @@ export default async function Group({ searchParams }: { searchParams: SP }) {
                 <label style={{ flex: '0 0 110px' }}>Ägarandel %<input name="ownership" inputMode="decimal" defaultValue={l ? String(l.ownership).replace('.', ',') : '100'} /></label>
                 <label style={{ flex: '0 0 170px' }}>Anskaffningsvärde kr<input name="acquisition_cost" inputMode="decimal" defaultValue={amt(l?.acquisitionCost ?? null)} placeholder="Konto 1310" /></label>
                 <label style={{ flex: '0 0 190px' }}>Eget kapital vid förvärv kr<input name="acquired_equity" inputMode="decimal" defaultValue={amt(l?.acquiredEquity ?? null)} placeholder="Bundet eget kapital" /></label>
+                <label style={{ flex: '0 0 150px' }}>Förvärvsdag<input type="date" name="acquired_on" defaultValue={l?.acquiredOn ?? ''} /></label>
+                <label style={{ flex: '0 0 150px' }}>Övervärde kr<input name="surplus" inputMode="decimal" defaultValue={amt(l?.surplus ?? null)} placeholder="T.ex. byggnad" /></label>
+                <label style={{ flex: '0 0 110px' }}>År övervärde<input name="surplus_years" inputMode="numeric" defaultValue={l?.surplusYears ?? 10} /></label>
+                <label style={{ flex: '0 0 110px' }}>År goodwill<input name="goodwill_years" inputMode="numeric" defaultValue={l?.goodwillYears ?? 5} /></label>
+                <label style={{ flex: '0 0 170px' }}>Lager köpt inom koncernen kr<input name="intra_inventory" inputMode="decimal" defaultValue={amt(l?.intraInventory ?? null)} /></label>
+                <label style={{ flex: '0 0 150px' }}>Dito vid periodens början kr<input name="intra_inventory_opening" inputMode="decimal" defaultValue={amt(l?.intraInventoryOpening ?? null)} /></label>
+                <label style={{ flex: '0 0 120px' }}>Säljarens marginal %<input name="intra_margin" inputMode="decimal" defaultValue={l?.intraMargin ? String(l.intraMargin).replace('.', ',') : ''} /></label>
                 <div style={{ flex: '0 0 auto' }}><button className="secondary">{l ? 'Spara' : 'Koppla som dotterbolag'}</button></div>
                 {l && <div style={{ flex: '0 0 auto' }}><button className="link" name="remove" value="1">Ta bort koppling</button></div>}
               </form>
@@ -63,8 +70,14 @@ export default async function Group({ searchParams }: { searchParams: SP }) {
       )}
       {r && r.companies.length > 0 && (
         <>
-          <p className="small muted">Bolagens bokföring summeras. Försäljning mellan bolagen (kund med samma organisationsnummer som ett annat valt bolag) och obetalda koncerninterna fakturor elimineras, liksom fordringar och skulder på koncernkontona (1320–1329, 1660–1669, 2360–2369, 2860–2869). Med ett moderbolag elimineras även utdelning från dotterbolag och aktier i dotterbolag mot eget kapital, med goodwill och minoritetsandel. Internvinster i lager elimineras inte automatiskt – stäm av med revisorn inför en koncernredovisning.</p>
+          <p className="small muted">Bolagens bokföring summeras. Försäljning mellan bolagen (kund med samma organisationsnummer som ett annat valt bolag) och obetalda koncerninterna fakturor elimineras, liksom fordringar och skulder på koncernkontona (1320–1329, 1660–1669, 2360–2369, 2860–2869). Med ett moderbolag elimineras även utdelning från dotterbolag och aktier i dotterbolag mot eget kapital, med goodwill och minoritetsandel. Internvinster i lager elimineras med de uppgifter som anges per dotterbolag.</p>
           {r.warnings.map((w) => <p key={w} className="flash error">{w}</p>)}
+          {r.analyses.length > 0 && (
+            <div className="table-wrap"><table className="acquisition">
+              <thead><tr><th>Förvärvsanalys</th><th className="num">Anskaffning</th><th className="num">Eget kapital</th><th className="num">Övervärde</th><th className="num">Uppskjuten skatt</th><th className="num">Goodwill</th><th className="num">Avskrivet i perioden</th><th className="num">Kvar per {to}</th></tr></thead>
+              <tbody>{r.analyses.map((x) => <tr key={x.id} className="acq-row"><td>{x.name} ({x.ownership.toLocaleString('sv-SE')} %{x.acquiredOn ? `, ${x.acquiredOn}` : ''})</td><td className="num">{kr(x.cost)}</td><td className="num">{kr(x.equity)}</td><td className="num">{kr(x.a.surplus)}</td><td className="num">{kr(x.a.deferredTax)}</td><td className="num acq-gw">{kr(x.a.goodwill)}</td><td className="num acq-dep">{kr(x.a.period.gw + x.a.period.s)}</td><td className="num acq-left">{kr(x.a.remaining.gw + x.a.remaining.s)}</td></tr>)}</tbody>
+            </table></div>
+          )}
           {r.entries.length > 0 && (
             <div className="card small elims"><b>Elimineringar</b><ul style={{ margin: '.3rem 0 0' }}>{r.entries.map((e) => <li key={e.label}>{e.label}: {kr(e.amount)}</li>)}</ul></div>
           )}

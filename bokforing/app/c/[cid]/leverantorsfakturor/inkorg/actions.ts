@@ -1,4 +1,5 @@
 'use server';
+import { ValidationError } from '@/lib/errors';
 import { enqueue } from '@/lib/server/jobs';
 import { amount, attempt, done, result, str } from '@/lib/server/action';
 import { requireCompany } from '@/lib/server/auth';
@@ -50,8 +51,9 @@ export async function reopen(cid: number, id: number) {
 }
 
 export async function retry(cid: number, id: number) {
-  const actor = userActor(await requireCompany(cid, { perm: 'purchasing' }));
-  await attempt(`${base(cid)}/${id}`, () => svc.retryDocument(actor, id));
+  const ctx = await requireCompany(cid, { perm: 'purchasing' });
+  const actor = userActor(ctx);
+  await attempt(`${base(cid)}/${id}`, async () => { if (!ctx.aiAccess) throw new ValidationError('Du har inte tillgång till automatisk avläsning'); await svc.retryDocument(actor, id); });
   done(`${base(cid)}/${id}`, 'Fakturan är tolkad igen');
 }
 

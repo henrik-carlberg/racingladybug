@@ -99,7 +99,7 @@ export async function voucherLines(db: Tx | typeof sql, voucherId: number): Prom
 }
 
 /** Rättelseverifikation (BFL 5 kap 5 §): ny verifikation med omvända belopp som hänvisar till originalet. */
-const SUBLEDGER_SOURCES = new Set(['coop_insats', 'coop_refund', 'foundation_grant', 'retention', 'retention_release']);
+const SUBLEDGER_SOURCES = new Set(['coop_insats', 'coop_refund', 'foundation_grant', 'retention', 'retention_release', 'capital_insurance']);
 
 export async function reverseVoucher(tx: Tx, actor: Actor, voucherId: number, date: string, reason: string) {
   const companyId = actor.companyId;

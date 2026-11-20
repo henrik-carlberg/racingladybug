@@ -6,9 +6,12 @@ import { Flash, EmptyState, type SP } from '@/components/ui';
 import { Help } from '@/components/Help';
 import { PayoutCalculator } from '@/components/PayoutCalculator';
 import { kr, today } from '@/lib/format';
-import { defaultParams, k10, stateThresholdFor } from '@/lib/k10';
-import { dividendStatus, k10Basis, ku31, listOwners } from '@/lib/services/owners';
-import { decide, pay, removeOwner, saveOwner } from './actions';
+import { defaultParams, stateThresholdFor } from '@/lib/k10';
+import { dividendStatus, ku31, listOwners } from '@/lib/services/owners';
+import { createInsurance, decide, insuranceValue, pay, premium, removeOwner, saveK10, saveOwner } from './actions';
+import { insurances, k10Year } from '@/lib/services/closely-held';
+import { dividendPlan } from '@/lib/closely-held';
+import { parseAmount } from '@/lib/money';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,8 +29,11 @@ export default async function Owners({ params, searchParams }: { params: Promise
   const year = Number(sp.year) || Number(today().slice(0, 4));
   const owners = await listOwners(company.id);
   const params0 = defaultParams(year);
-  const k10s = await Promise.all(owners.map(async (o) => ({ o, basis: await k10Basis(company.id, year, o) })));
-  const results = k10s.map(({ o, basis }) => ({ o, basis, r: k10(params0, { share: o.share_pct, costBasis: o.cost_basis, savedSpace: o.saved_space, ...basis }) }));
+  // Sparat utdelningsutrymme hämtas från förra årets sparade K10 (annars det som angetts på ägaren)
+  const results = await k10Year(company.id, year);
+  const planTotal = parseAmount(String(sp.plan ?? '')) ?? 0;
+  const plan = dividendPlan(planTotal, results.map(({ o, r }) => ({ id: o.id, name: o.name, share: o.share_pct, limit: r.limit })));
+  const ins = await insurances(company.id, year);
   const status = await dividendStatus(company.id);
   const ku = await ku31(company.id, year);
   const [res] = await sql<{ v: number }[]>`
@@ -62,9 +68,9 @@ export default async function Owners({ params, searchParams }: { params: Promise
         {ownerForm()}
       </div>
 
-      <h2>Gränsbelopp (K10) för inkomstår {year}</h2>
+      <h2 id="k10">Gränsbelopp (K10) för inkomstår {year}</h2>
       <div className="actions">{[year - 1, year, year + 1].map((y) => <Link key={y} className={`btn ${y === year ? '' : 'secondary'}`} href={`${b}/agare?year=${y}`}>{y}</Link>)}</div>
-      {results.map(({ o, basis, r }) => (
+      {results.map(({ o, basis, r, saved, stored, history }) => (
         <section key={o.id} className="card k10">
           <h3 style={{ marginTop: 0 }}>{o.name}</h3>
           <div className="grid">
@@ -77,13 +83,44 @@ export default async function Owners({ params, searchParams }: { params: Promise
             {r.capital > 0 && <tr><td>Ränta på omkostnadsbeloppet</td><td className="num">{kr(r.capital)}</td></tr>}
             <tr><td>Lönebaserat utrymme (lönesumma {basis.wages ? kr(basis.wages) : '0'} år {year - 1})</td><td className="num">{kr(r.wageBased)}</td></tr>
             {r.wageRequirementMet !== null && <tr><td>Lönekrav: egen lön {kr(basis.ownSalary)}, krav {kr(r.wageRequirement)}</td><td className="num">{r.wageRequirementMet ? '✓ uppfyllt' : 'Inte uppfyllt'}</td></tr>}
-            <tr><td>Sparat utdelningsutrymme{params0.newRules ? '' : ' (uppräknat)'}</td><td className="num">{kr(r.savedUplifted)}</td></tr>
+            <tr><td>Sparat utdelningsutrymme{params0.newRules ? '' : ' (uppräknat)'}{saved.from ? <span className="muted"> – från sparad K10 {saved.from}</span> : <span className="muted"> – angivet på ägaren</span>}</td><td className="num saved-in">{kr(r.savedUplifted)}</td></tr>
             <tr className="sum"><td>Gränsbelopp</td><td className="num">{kr(r.limit)}</td></tr>
           </tbody></table>
           {r.notes.map((n) => <p key={n} className="small muted" style={{ margin: '.25rem 0' }}>{n}</p>)}
+          {stored && <p className="small">K10 för {year} sparad {stored.saved_at}{stored.limit_amount !== r.limit ? ' – underlaget har ändrats sedan dess, spara igen' : ''}.</p>}
+          {history.length > 0 && <table className="small k10-history"><thead><tr><th>År</th><th>Regel</th><th className="num">Gränsbelopp</th><th className="num">Utdelning</th><th className="num">Sparat vidare</th></tr></thead>
+            <tbody>{history.map((h) => <tr key={h.year}><td>{h.year}</td><td>{h.rule}</td><td className="num">{kr(h.limit_amount)}</td><td className="num">{kr(h.dividends)}</td><td className="num">{kr(h.saved_next)}</td></tr>)}</tbody></table>}
         </section>
       ))}
+      {results.length > 0 && <form action={saveK10.bind(null, company.id, year)} className="actions"><button className="secondary">Spara K10 för {year}</button><span className="small muted">Sparat utdelningsutrymme förs då automatiskt till {year + 1}.</span></form>}
+
+      {results.length > 0 && <>
+        <h3 id="plan">Utdelningsplan för ägarna</h3>
+        <form className="row" method="get"><input type="hidden" name="year" value={year} /><label>Total utdelning (kr)<input name="plan" defaultValue={planTotal ? String(planTotal / 100) : ''} inputMode="decimal" /></label><button className="secondary">Räkna</button>
+          <span className="small muted" style={{ alignSelf: 'center' }}>Största utdelning som ryms inom allas gränsbelopp: <b className="max-within">{kr(plan.maxWithin)}</b> kr</span></form>
+        {planTotal > 0 && <table className="plan"><thead><tr><th>Ägare</th><th className="num">Andel</th><th className="num">Utdelning</th><th className="num">Inom gränsbeloppet (20 %)</th><th className="num">Över (tjänst)</th><th className="num">Skatt inom</th></tr></thead>
+          <tbody>{plan.rows.map((p) => <tr key={p.id} className="plan-row"><td>{p.name}</td><td className="num">{String(p.share).replace('.', ',')} %</td><td className="num">{kr(p.amount)}</td><td className="num">{kr(p.within)}</td><td className="num above">{kr(p.above)}</td><td className="num">{kr(p.tax)}</td></tr>)}</tbody></table>}
+      </>}
       {owners.length > 0 && <p className="small muted">Inkomstbasbelopp {params0.ibb.toLocaleString('sv-SE')} kr, statslåneränta {String(params0.slr).replace('.', ',')} %. Kontrollera beloppen mot Skatteverkets K10-blankett för inkomståret innan du deklarerar.</p>}
+
+      <h2 id="kapitalforsakring">Kapitalförsäkring</h2>
+      <p className="small muted">Bolagsägd kapitalförsäkring (t.ex. pantsatt för en pensionsutfästelse till ägaren) tas upp på 1385 till anskaffningsvärdet. Premierna är inte avdragsgilla. Försäkringsbolaget betalar avkastningsskatten (30 % av kapitalunderlaget × statslåneräntan + 1 procentenhet, lägst 1,25 %) och tar den ur försäkringen. Bestående värdenedgång under bokfört värde skrivs ned.</p>
+      {ins.map((i) => (
+        <section key={i.id} className="card insurance">
+          <b>{i.name}</b> <span className="small muted">{i.insurer}{i.policy_no && ` · ${i.policy_no}`}{i.pledged && ` · ${i.pledged}`}</span>
+          <div className="grid">
+            <div className="stat"><div className="label">Bokfört (1385)</div><div className="value ins-booked">{kr(i.booked)}</div></div>
+            <div className="stat"><div className="label">Senaste värde</div><div className="value">{i.latest ? `${kr(i.latest.amount)} (${i.latest.date})` : '–'}</div></div>
+            <div className="stat"><div className="label">Avkastningsskatt {year}</div><div className="value ins-tax">{kr(i.yieldTax.tax)}</div><div className="small muted">underlag {kr(i.yieldTax.base)} × {String(i.yieldTax.rate).replace('.', ',')} % × 30 %</div></div>
+          </div>
+          <div className="row">
+            <form action={premium.bind(null, company.id, i.id)} className="row"><label>Premie (kr)<input name="amount" inputMode="decimal" required style={{ width: 110 }} /></label><label>Datum<input type="date" name="date" defaultValue={today()} /></label><button className="secondary">Bokför premie</button></form>
+            <form action={insuranceValue.bind(null, company.id, i.id)} className="row"><label>Värde enligt försäkringsbolaget (kr)<input name="value" inputMode="decimal" required style={{ width: 120 }} /></label><label>Per<input type="date" name="date" defaultValue={today()} /></label>
+              <label className="check"><input type="checkbox" name="writedown" /> Skriv ned om värdet är lägre</label><button className="secondary">Registrera värde</button></form>
+          </div>
+          {i.possibleWritedown > 0 && <p className="small" style={{ color: 'var(--warn)' }}>Värdet understiger bokfört värde med {kr(i.possibleWritedown)} kr – skriv ned om nedgången bedöms bestående.</p>}
+        </section>))}
+      <form action={createInsurance.bind(null, company.id)} className="card row"><label>Namn<input name="name" required /></label><label>Försäkringsbolag<input name="insurer" /></label><label>Försäkringsnummer<input name="policy_no" /></label><label>Pantsatt för<input name="pledged" placeholder="T.ex. pensionsutfästelse till ägaren" /></label><button className="secondary">Ny kapitalförsäkring</button></form>
 
       <h2>Lön eller utdelning?</h2>
       <div className="card"><PayoutCalculator profit={Number(res.v)} limit={mainLimit} threshold={stateThresholdFor(year) * 100} /></div>

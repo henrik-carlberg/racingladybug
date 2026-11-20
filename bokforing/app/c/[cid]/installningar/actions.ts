@@ -154,6 +154,17 @@ export async function revokeInvite(cid: number, inviteId: number) {
 }
 
 /** Ägaren begränsar vad en redovisningskonsult eller annan användare får göra */
+/** Ägaren ger eller tar tillgång till AI-funktionerna (assistenten, avläsning och AI-kontering) för en användare */
+export async function setAiAccess(cid: number, userId: number, on: boolean) {
+  const { company, user } = await requireCompany(cid, { owner: true });
+  await attempt(back(cid), async () => {
+    const r = await sql`UPDATE memberships SET ai_access = ${on} WHERE company_id = ${company.id} AND user_id = ${userId} AND role IN ('accountant','owner') RETURNING user_id`;
+    if (!r.length) throw new Error('AI-tillgång kan bara ges till redovisningskonsulter');
+    await audit(sql, { companyId: company.id, userId: user.id, action: on ? 'ai_access_on' : 'ai_access_off', entity: 'membership', entityId: userId });
+  });
+  done(back(cid), on ? 'Användaren har nu tillgång till assistenten och AI-funktionerna' : 'Användaren har inte längre tillgång till AI-funktionerna');
+}
+
 export async function setPermissions(cid: number, userId: number, fd: FormData) {
   const { company, user } = await requireCompany(cid, { owner: true });
   await attempt(back(cid), async () => {

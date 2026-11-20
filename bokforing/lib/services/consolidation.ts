@@ -28,23 +28,35 @@ export async function groupReport(userId: number, ids: number[], from: string, t
   }
   const parent = parentId && sel.some((c) => c.id === parentId) ? parentId : null;
   const links = parent ? await groupLinks(parent) : [];
-  return { companies: sel, candidates: allowed, parentId: parent, links, ...consolidate(cs, { parentId: parent, links }) };
+  return { companies: sel, candidates: allowed, parentId: parent, links, ...consolidate(cs, { parentId: parent, links, period: { from, to } }) };
 }
 
 export async function groupLinks(parentId: number): Promise<GroupLink[]> {
-  return (await sql<{ sub: number; ownership: number; cost: string | null; eq: string | null }[]>`
-    SELECT subsidiary_company_id AS sub, ownership::float8 AS ownership, acquisition_cost AS cost, acquired_equity AS eq FROM group_links WHERE parent_company_id = ${parentId}`)
-    .map((r) => ({ subsidiaryId: r.sub, ownership: r.ownership, acquisitionCost: r.cost == null ? null : Number(r.cost), acquiredEquity: r.eq == null ? null : Number(r.eq) }));
+  return (await sql<{ sub: number; ownership: number; cost: string | null; eq: string | null; acquired_on: string | null; goodwill_years: number; surplus: number; surplus_years: number; intra_inventory: number; intra_inventory_opening: number; intra_margin: number }[]>`
+    SELECT subsidiary_company_id AS sub, ownership::float8 AS ownership, acquisition_cost AS cost, acquired_equity AS eq, to_char(acquired_on,'YYYY-MM-DD') AS acquired_on, goodwill_years,
+      surplus::float8 AS surplus, surplus_years, intra_inventory::float8 AS intra_inventory, intra_inventory_opening::float8 AS intra_inventory_opening, intra_margin::float8 AS intra_margin
+    FROM group_links WHERE parent_company_id = ${parentId}`)
+    .map((r) => ({ subsidiaryId: r.sub, ownership: r.ownership, acquisitionCost: r.cost == null ? null : Number(r.cost), acquiredEquity: r.eq == null ? null : Number(r.eq),
+      acquiredOn: r.acquired_on, goodwillYears: r.goodwill_years, surplus: r.surplus, surplusYears: r.surplus_years, intraInventory: r.intra_inventory, intraInventoryOpening: r.intra_inventory_opening, intraMargin: r.intra_margin }));
 }
 
 /** Sparar dotterbolagets ägarandel och förvärvsuppgifter. Användaren ska vara ägare eller konsult i båda bolagen. */
-export async function saveGroupLink(userId: number, parentId: number, subId: number, input: { ownership: number; acquisitionCost: number | null; acquiredEquity: number | null; remove?: boolean }) {
+export async function saveGroupLink(userId: number, parentId: number, subId: number, input: { ownership: number; acquisitionCost: number | null; acquiredEquity: number | null; remove?: boolean;
+  acquiredOn?: string | null; goodwillYears?: number; surplus?: number; surplusYears?: number; intraInventory?: number; intraInventoryOpening?: number; intraMargin?: number }) {
   const [ok] = await sql<{ n: number }[]>`SELECT count(DISTINCT company_id)::int AS n FROM memberships WHERE user_id = ${userId} AND role IN ('owner','accountant') AND company_id IN (${parentId}, ${subId})`;
   if (parentId === subId || ok.n !== 2) throw new ValidationError('Du behöver vara ägare eller redovisningskonsult i både moderbolaget och dotterbolaget');
   if (input.remove) { await sql`DELETE FROM group_links WHERE parent_company_id = ${parentId} AND subsidiary_company_id = ${subId}`; return; }
   if (!(input.ownership > 0 && input.ownership <= 100)) throw new ValidationError('Ägarandelen ska vara 0–100 %');
-  await sql`INSERT INTO group_links (parent_company_id, subsidiary_company_id, ownership, acquisition_cost, acquired_equity, updated_by)
-    VALUES (${parentId}, ${subId}, ${input.ownership}, ${input.acquisitionCost}, ${input.acquiredEquity}, ${userId})
+  if (input.acquiredOn && (!/^\d{4}-\d{2}-\d{2}$/.test(input.acquiredOn) || Number.isNaN(Date.parse(input.acquiredOn)))) throw new ValidationError('Ogiltig förvärvsdag');
+  const gy = input.goodwillYears ?? 5, sy = input.surplusYears ?? 10;
+  if (!(Number.isInteger(gy) && gy >= 1 && gy <= 20)) throw new ValidationError('Avskrivningstiden för goodwill ska vara 1–20 år');
+  if (!(Number.isInteger(sy) && sy >= 1 && sy <= 50)) throw new ValidationError('Avskrivningstiden för övervärden ska vara 1–50 år');
+  for (const [v, l] of [[input.surplus, 'Övervärdet'], [input.intraInventory, 'Lagret'], [input.intraInventoryOpening, 'Ingående lager']] as const) if (v != null && !(v >= 0)) throw new ValidationError(`${l} kan inte vara negativt`);
+  const mg = input.intraMargin ?? 0;
+  if (!(mg >= 0 && mg <= 100)) throw new ValidationError('Marginalen ska vara 0–100 %');
+  await sql`INSERT INTO group_links (parent_company_id, subsidiary_company_id, ownership, acquisition_cost, acquired_equity, updated_by, acquired_on, goodwill_years, surplus, surplus_years, intra_inventory, intra_inventory_opening, intra_margin)
+    VALUES (${parentId}, ${subId}, ${input.ownership}, ${input.acquisitionCost}, ${input.acquiredEquity}, ${userId}, ${input.acquiredOn ?? null}, ${gy}, ${input.surplus ?? 0}, ${sy}, ${input.intraInventory ?? 0}, ${input.intraInventoryOpening ?? 0}, ${mg})
     ON CONFLICT (parent_company_id, subsidiary_company_id) DO UPDATE SET ownership = EXCLUDED.ownership, acquisition_cost = EXCLUDED.acquisition_cost,
-      acquired_equity = EXCLUDED.acquired_equity, updated_by = EXCLUDED.updated_by, updated_at = now()`;
+      acquired_equity = EXCLUDED.acquired_equity, updated_by = EXCLUDED.updated_by, updated_at = now(), acquired_on = EXCLUDED.acquired_on, goodwill_years = EXCLUDED.goodwill_years,
+      surplus = EXCLUDED.surplus, surplus_years = EXCLUDED.surplus_years, intra_inventory = EXCLUDED.intra_inventory, intra_inventory_opening = EXCLUDED.intra_inventory_opening, intra_margin = EXCLUDED.intra_margin`;
 }

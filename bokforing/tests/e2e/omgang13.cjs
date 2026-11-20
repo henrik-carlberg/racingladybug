@@ -345,9 +345,11 @@ const idpServer = http.createServer((req, res) => {
   await owner.click('button:has-text("Spara besked")');
   await owner.locator('text=Tullverkets besked är sparat').waitFor();
   assert((await owner.locator(`tr.rec-row:has-text("${day(0).slice(0, 7)}") .rec-status`).innerText()).startsWith('Avviker'), 'avvikelse');
+  await owner.goto(B + '/tull');
+  await owner.fill('form:has(button:has-text("Spara besked")) input[name=month]', day(0).slice(0, 7));
   await owner.fill('form:has(button:has-text("Spara besked")) input[name=amount]', '3600');
   await owner.click('button:has-text("Spara besked")');
-  await owner.waitForLoadState('networkidle');
+  await owner.locator('text=Tullverkets besked är sparat').waitFor();
   await owner.goto(B + '/tull');
   assert((await owner.locator(`tr.rec-row:has-text("${day(0).slice(0, 7)}") .rec-status`).innerText()) === 'Stämmer', 'stämmer');
   log('avstämning per månad mot Tullverkets besked och mot ruta 50/60 i bokföringen');

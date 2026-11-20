@@ -1,4 +1,5 @@
 'use server';
+import { ValidationError } from '@/lib/errors';
 import { redirect } from 'next/navigation';
 import { attempt, done, result, str } from '@/lib/server/action';
 import { requireCompany } from '@/lib/server/auth';
@@ -98,8 +99,9 @@ export async function ignoreTxNow(cid: number, txId: number) {
 export async function aiSuggest(cid: number, ids: number[]) {
   const { suggestBankAccounts } = await import('@/lib/services/ai-bookkeeping');
   const { limit } = await import('@/lib/server/ratelimit');
-  const actor = userActor(await requireCompany(cid, { perm: 'ledger' }));
+  const ctx = await requireCompany(cid, { perm: 'ledger' });
+  const actor = userActor(ctx);
   let n = 0;
-  await attempt(`/c/${cid}/bank/avstamning`, async () => { await limit(`ai-bank:${cid}`, 200, 3600); n = await suggestBankAccounts(actor, ids); });
+  await attempt(`/c/${cid}/bank/avstamning`, async () => { if (!ctx.aiAccess) throw new ValidationError('Du har inte tillgång till AI-förslag'); await limit(`ai-bank:${cid}`, 200, 3600); n = await suggestBankAccounts(actor, ids); });
   done(`/c/${cid}/bank/avstamning`, n ? `AI har föreslagit konto för ${n} ${n === 1 ? 'transaktion' : 'transaktioner'} – kontrollera och bokför` : 'AI kunde inte föreslå något konto');
 }

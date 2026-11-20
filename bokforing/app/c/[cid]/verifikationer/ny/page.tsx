@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function NewVoucher({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: Promise<{ kopiera?: string; ai?: string; error?: string }> }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid, { perm: 'ledger' });
+  const { company, aiAccess } = await requireCompany(cid, { perm: 'ledger' });
   // "Bokför igen": samma beskrivning, konton och belopp som en tidigare verifikation i bolaget
   const copyId = Number((await searchParams).kopiera);
   const copy = Number.isInteger(copyId) && copyId > 0 ? await getVoucher(company.id, copyId).catch(() => null) : null;
@@ -26,7 +26,7 @@ export default async function NewVoucher({ params, searchParams }: { params: Pro
       <h1>Ny verifikation <Help term="verifikation" /> <Help term="debet_kredit" /></h1>
       <p className="muted small">Tips: för vanliga kvitton är det enklare att använda <a href={`/c/${company.id}/kvitto`}>Nytt kvitto</a> – då väljer appen konton åt dig.</p>
       {sp.error && <div className="flash error" role="alert">{sp.error}</div>}
-      {aiEnabled() && !ai && (
+      {aiEnabled() && aiAccess && !ai && (
         <form action={aiVoucher.bind(null, company.id)} className="card stack ai-box" id="ai">
           <label><b>✨ Beskriv vad som har hänt</b> – så föreslår appen verifikationen
             <textarea name="text" rows={2} required placeholder="T.ex. Betalade 450 kr för parkering med företagskortet i går" /></label>

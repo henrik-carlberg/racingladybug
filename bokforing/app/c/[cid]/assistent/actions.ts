@@ -7,8 +7,9 @@ import { invoiceAiEnabled } from '@/lib/services/invoice-ai';
 import { sql } from '@/lib/db';
 
 export async function askAssistant(cid: number, turns: ChatTurn[]): Promise<{ answer?: string; actions?: Suggestion[]; error?: string }> {
-  const { company, user } = await requireCompany(cid);
+  const { company, user, aiAccess } = await requireCompany(cid);
   if (!invoiceAiEnabled()) return { error: 'Assistenten är inte påslagen' };
+  if (!aiAccess) return { error: 'Du har inte tillgång till assistenten – ägaren kan ge dig tillgång under Inställningar' };
   try {
     await limit(`assistant:${company.id}:${user.id}`, 60, 3600);
     const clean = (Array.isArray(turns) ? turns : []).filter((x) => x && (x.role === 'user' || x.role === 'assistant') && typeof x.content === 'string');

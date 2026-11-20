@@ -1,4 +1,5 @@
 import 'server-only';
+import { minutesBetween } from '@/lib/time-flow';
 import { sql, type Tx } from '@/lib/db';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import { auditBy } from '@/lib/server/audit';
@@ -151,13 +152,34 @@ export async function createTimeEntry(actor: Actor, input: Record<string, unknow
     WHERE a.id = ${activityId} AND p.company_id = ${actor.companyId}`;
   if (!a) throw new ValidationError('Aktiviteten finns inte');
   if (!a.active || !a.p_active) throw new ValidationError('Uppdraget eller aktiviteten är avslutad');
-  const minutes = input.minutes != null && input.minutes !== '' ? int(input, 'minutes', 'Minuter') : parseDuration(String(input.hours ?? ''));
+  // Klockslag (för OB och lön): tiden räknas från passet om inget annat anges
+  const st = str(input, 'start_time'), et = str(input, 'end_time');
+  const timeRe = /^([01]?\d|2[0-3]):[0-5]\d$/;
+  if ((st || et) && !(timeRe.test(st) && timeRe.test(et))) throw new ValidationError('Ange start och slut som klockslag, t.ex. 17:00 och 23:30');
+  const shift = st && et ? minutesBetween(st, et) : null;
+  const kind = str(input, 'kind') === 'travel' ? 'travel' : 'work';
+  if (st && et && st === et) throw new ValidationError('Start och slut kan inte vara samma klockslag');
+  // Med klockslag är det passets längd som gäller (OB och lön räknas på klockslagen) – en annan angiven tid avvisas
+  const given = input.minutes != null && input.minutes !== '' ? int(input, 'minutes', 'Minuter') : String(input.hours ?? '').trim() ? parseDuration(String(input.hours ?? '')) : null;
+  if (shift != null && given != null && given !== shift) throw new ValidationError(`Tiden (${Math.round((given / 60) * 100) / 100} h) stämmer inte med passet ${st}–${et} – lämna tiden tom eller ändra klockslagen`);
+  const minutes = shift ?? given;
   if (!minutes || minutes <= 0 || minutes > 1440) throw new ValidationError('Ange tid, t.ex. 1,5 eller 1:30 (högst 24 timmar)');
   const billable = a.billing === 'internal' ? false : input.billable == null ? a.billable : bool(input, 'billable');
+  const entryDate = date(input, 'date', 'Datum');
   return sql.begin(async (tx) => {
+    if (st && et) {
+      // Pass med klockslag får inte överlappa personens andra pass samma dag
+      await tx`SELECT pg_advisory_xact_lock(96001, ${actor.userId})`;
+      const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+      const a0 = toMin(st), a1 = a0 + (shift ?? 0);
+      const others = await tx<{ s: string; minutes: number }[]>`SELECT to_char(start_time,'HH24:MI') AS s, minutes FROM time_entries
+        WHERE company_id = ${actor.companyId} AND user_id = ${actor.userId} AND date = ${entryDate} AND start_time IS NOT NULL`;
+      if (others.some((o) => { const b0 = toMin(o.s), b1 = b0 + o.minutes; return a0 < b1 && b0 < a1; })) throw new ValidationError('Passet överlappar ett annat pass samma dag');
+    }
     const [{ id }] = await tx<{ id: number }[]>`INSERT INTO time_entries ${tx({
       company_id: actor.companyId, project_id: a.project_id, activity_id: activityId, user_id: actor.userId,
-      date: date(input, 'date', 'Datum'), minutes, description: str(input, 'description'), billable,
+      date: entryDate, minutes, description: str(input, 'description'), billable,
+      start_time: st || null, end_time: et || null, kind,
     })} RETURNING id`;
     await auditBy(tx, actor, 'create', 'time_entry', id);
     const [out] = await tx<TimeEntryOut[]>`SELECT ${TCOLS(tx)} FROM ${TFROM(tx)} WHERE e.id = ${id}`;
@@ -168,9 +190,10 @@ export async function createTimeEntry(actor: Actor, input: Record<string, unknow
 
 export async function deleteTimeEntry(actor: Actor, id: number) {
   await sql.begin(async (tx) => {
-    const [e] = await tx<{ invoice_id: number | null }[]>`SELECT invoice_id FROM time_entries WHERE id = ${id} AND company_id = ${actor.companyId} FOR UPDATE`;
+    const [e] = await tx<{ invoice_id: number | null; payslip_id: number | null }[]>`SELECT invoice_id, payslip_id FROM time_entries WHERE id = ${id} AND company_id = ${actor.companyId} FOR UPDATE`;
     if (!e) throw new NotFoundError('Tidraden');
     if (e.invoice_id) throw new ConflictError('Tiden är fakturerad eller avräknad och kan inte tas bort');
+    if (e.payslip_id) throw new ConflictError('Tiden är överförd till lönen och kan inte tas bort');
     await tx`DELETE FROM time_entries WHERE id = ${id}`;
     await auditBy(tx, actor, 'delete', 'time_entry', id);
   });
@@ -187,6 +210,7 @@ async function unbilled(tx: Tx, companyId: number, projectId: number, to: string
       LEFT JOIN project_user_rates r ON r.project_id = e.project_id AND r.user_id = e.user_id
     WHERE e.company_id = ${companyId} AND e.project_id = ${projectId} AND e.billable AND e.invoice_id IS NULL
       AND e.date <= ${to} ${from ? tx`AND e.date >= ${from}` : tx``}
+      AND (e.status = 'approved' OR NOT (SELECT time_approval FROM companies WHERE id = ${companyId}))
     ORDER BY e.date, e.id FOR UPDATE OF e`;
 }
 
