@@ -194,6 +194,36 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(await outOf(YEAR - 1) === '120000,00' && await outOf(YEAR) === '10000,00', 'justerat resultat (gränsen 40 000 kr gäller fortfarande)');
   log('underskottsavdrag: rullande underskott, beloppsspärr vid ägarförändring (200 % av köpeskillingen) och koncernbidragsspärr');
 
+  // ================= Del 5: forskningsavdrag =================
+  await owner.goto(BASE + '/c/1/lon');
+  const runs = await owner.$$eval('a[href*="/c/1/lon/"]', (as) => [...new Set(as.map((a) => a.getAttribute('href')).filter((h) => /\/lon\/\d+$/.test(h)))]);
+  let fouUrl = null;
+  for (const r of runs) {
+    await owner.goto(BASE + r + '/fou');
+    if ((await owner.locator('.fou-row').count()) >= 2 && (await owner.locator('button:has-text("Bokför avdraget")').count())) { fouUrl = BASE + r + '/fou'; break; }
+  }
+  assert(fouUrl, 'en bokförd lönekörning med minst två anställda: ' + runs.join(','));
+  const r0 = owner.locator('.fou-row').nth(0), r1 = owner.locator('.fou-row').nth(1);
+  const n0 = await r0.getAttribute('data-name'), n1 = await r1.getAttribute('data-name');
+  await r0.locator('input[name=fou_hours]').fill('120'); await r0.locator('input[name=total_hours]').fill('160'); await r0.locator('input[name=description]').fill('Projekt Sensor');
+  await r0.locator('button:has-text("Spara")').click();
+  await owner.locator('text=Arbetstiden är sparad').waitFor();
+  await owner.goto(fouUrl);
+  const row1 = owner.locator(`.fou-row[data-name="${n1}"]`);
+  await row1.locator('input[name=fou_hours]').fill('10'); await row1.locator('input[name=total_hours]').fill('160');
+  await row1.locator('button:has-text("Spara")').click();
+  await owner.locator('text=Arbetstiden är sparad').waitFor();
+  await owner.goto(fouUrl);
+  const parse = (s) => Number(nb(s).replace(/[−-]/, '-').replace(',', '.'));
+  const row0 = owner.locator(`.fou-row[data-name="${n0}"]`);
+  const base0 = parse(await row0.locator('td').nth(1).innerText()), ded0 = parse(await row0.locator('.fou-amount').innerText());
+  assert(Math.abs(ded0 - Math.round(base0 * 20) / 100) < 0.01 && parse(await owner.locator(`.fou-row[data-name="${n1}"] .fou-amount`).innerText()) === 0
+    && (await owner.locator(`.fou-row[data-name="${n1}"]`).innerText()).includes('Mindre än 15 timmar'), `avdrag 20 %: ${base0} → ${ded0}; ${await owner.locator('.fou-slips').innerText()}`);
+  await owner.click('button:has-text("Bokför avdraget")');
+  await owner.locator('text=är bokfört – arbetsgivaravgifterna minskar').waitFor();
+  assert(await owner.locator('.fou-booked').count() === 1 && !(await owner.locator('button:has-text("Bokför avdraget")').count()), 'bokfört en gång');
+  log(`forskningsavdrag: 20 % av underlaget (${ded0.toFixed(2)} kr) för den med minst 15 timmar och halva tiden i FoU, bokfört mot 7510/2731`);
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 20: alla steg gick igenom');

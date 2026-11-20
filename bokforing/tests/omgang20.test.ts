@@ -65,3 +65,21 @@ describe('Underskottsavdrag', () => {
     expect(r[3]).toMatchObject({ usedOld: 300000, outgoing: 300000 });
   });
 });
+
+import { deduction, deductionLines, qualifies } from '@/lib/fou';
+describe('Forskningsavdrag', () => {
+  it('krav på tid, 20 % av underlaget, golv vid ålderspensionsavgiften och tak per månad', () => {
+    expect(qualifies({ fouHours: 80, totalHours: 160 })).toBe(true);
+    expect(qualifies({ fouHours: 14, totalHours: 20 })).toBe(false);
+    expect(qualifies({ fouHours: 70, totalHours: 160 })).toBe(false);
+    const d = deduction([
+      { id: 1, name: 'A', base: 5000000, feeRate: 31.42, fouHours: 120, totalHours: 160 },
+      { id: 2, name: 'B', base: 4000000, feeRate: 10.21, fouHours: 160, totalHours: 160 },
+      { id: 3, name: 'C', base: 4000000, feeRate: 31.42, fouHours: 10, totalHours: 160 },
+    ]);
+    expect(d.rows.map((r) => r.amount)).toEqual([1000000, 0, 0]);
+    expect(d).toMatchObject({ base: 9000000, total: 1000000, capped: false });
+    expect(deduction([{ id: 1, name: 'A', base: 2000000000, feeRate: 31.42, fouHours: 160, totalHours: 160 }]).total).toBe(300000000);
+    expect(deductionLines(100)).toEqual([{ account: 2731, amount: 100 }, { account: 7510, amount: -100 }]);
+  });
+});
