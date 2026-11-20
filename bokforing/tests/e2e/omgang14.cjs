@@ -240,6 +240,92 @@ const creditServer = http.createServer((req, res) => {
   await owner.locator('text=Bolaget tillämpar nu K2').waitFor();
   log('finansiell leasing enligt K3: tillgång i anläggningsregistret, leasingskuld som amorteras med ränta och not i årsredovisningen');
 
+  // ================= Del 4: provisioner och säljbonus =================
+  const P = `${YEAR}-${String(MONTH).padStart(2, '0')}`;
+  const addSeller = async (f) => {
+    await owner.goto(B + '/provisioner');
+    const form = owner.locator('form:has(button:has-text("Lägg upp säljare"))');
+    await form.locator('input[name=name]').fill(f.name); await form.locator('select[name=kind]').selectOption(f.kind);
+    if (f.employee) await form.locator('select[name=employee_id]').selectOption({ label: f.employee });
+    if (f.supplier) await form.locator('select[name=supplier_id]').selectOption({ index: 1 });
+    await form.locator('input[name=base_rate]').fill(f.rate);
+    if (f.target) { await form.locator('input[name=target]').fill(f.target); await form.locator('input[name=target_bonus]').fill(f.bonus); }
+    await form.locator('button').click();
+    await owner.locator('text=Säljaren är upplagd').waitFor();
+  };
+  await addSeller({ name: 'Säljare Anna', kind: 'employee', employee: 'Anna Andersson', rate: '5', target: '15000', bonus: '1000' });
+  await addSeller({ name: 'Agent Bo', kind: 'agent', supplier: true, rate: '10' });
+  await owner.goto(B + '/provisioner');
+  const sAnna = owner.locator('.seller:has-text("Säljare Anna")');
+  await sAnna.locator('input[name=threshold]').fill('10000'); await sAnna.locator('input[name=rate_pct]').fill('2');
+  await sAnna.locator('button:has-text("Lägg till steg")').click();
+  await owner.locator('text=Bonussteget är sparat').waitFor();
+
+  for (const [cust, seller] of [['Provkund Ett', 'Säljare Anna'], ['Agentkund', 'Agent Bo']]) {
+    await owner.goto(B + '/kunder');
+    await owner.fill('input[name=name]', cust);
+    await owner.click('form button:has-text("Spara")');
+    await owner.locator('text=Kunden är sparad').waitFor();
+    await owner.goto(B + '/provisioner');
+    await owner.selectOption('form:has(button:has-text("Koppla")) select[name=customer_id]', { label: cust });
+    await owner.selectOption('form:has(button:has-text("Koppla")) select[name=seller_id]', { label: seller });
+    await owner.click('button:has-text("Koppla")');
+    await owner.locator('text=Kunden har fått säljare').waitFor();
+  }
+  await owner.goto(B + '/provisioner');
+  const rf = owner.locator('form:has(button:has-text("Spara regel"))');
+  await rf.locator('select[name=seller_id]').selectOption({ label: 'Säljare Anna' });
+  await rf.locator('select[name=customer_id]').selectOption({ label: 'Provkund Ett' });
+  await rf.locator('input[name=rate_pct]').fill('8');
+  await rf.locator('button').click();
+  await owner.locator('text=Regeln är sparad').waitFor();
+  log('säljare (anställda och agenter) med grundprovision, kundregler, bonustrappa och mål');
+
+  const sellPaid = async (cust, amount) => {
+    await owner.goto(B + '/fakturor/ny');
+    await owner.selectOption('select[name=customer_id]', { label: cust });
+    const r = owner.locator('tbody tr').first();
+    await r.locator('td:nth-child(1) input').fill('Tjänst'); await r.locator('td:nth-child(2) input').fill('1');
+    await r.locator('td:nth-child(3) input').fill('st'); await r.locator('td:nth-child(4) input').fill(amount);
+    await owner.click('button:has-text("Spara utkast")');
+    await owner.waitForURL(/fakturor\/\d+\?ok/);
+    await owner.click('button:has-text("Bokför faktura")');
+    await owner.locator('text=klar att skicka').first().waitFor();
+    await owner.click('button:has-text("Registrera inbetalning")');
+    await owner.locator('text=Inbetalningen är bokförd').waitFor();
+  };
+  await sellPaid('Provkund Ett', '20000');
+  await sellPaid('Agentkund', '5000');
+  await owner.goto(`${B}/provisioner?period=${P}`);
+  const rowOf = (n) => owner.locator(`tr.seller-row:has-text("${n}")`);
+  const cell = async (n, c) => nb(await rowOf(n).locator(c).innerText());
+  assert((await cell('Säljare Anna', '.basis')) === '20000,00' && (await cell('Säljare Anna', '.comm')) === '1600,00' && (await cell('Säljare Anna', '.bonus')) === '1200,00' && (await cell('Säljare Anna', '.total')) === '2800,00', 'provision Anna');
+  assert((await cell('Agent Bo', '.total')) === '500,00', 'provision agent');
+  log('provision på betalda fakturor: kundregel 8 %, bonustrappa över 10 000 kr och målbonus');
+
+  await owner.goto(B + '/lon');
+  await owner.fill('input[name=period]', `${YEAR}-03`); await owner.fill('input[name=payment_date]', `${YEAR}-03-25`);
+  await owner.click('button:has-text("Ny lönekörning")');
+  await owner.waitForURL(/\/lon\/\d+/);
+  const runUrl = owner.url().split('?')[0];
+  await owner.goto(`${B}/provisioner?period=${P}`);
+  await owner.click('button:has-text("Avräkna")');
+  await owner.locator('text=Avräkningen är sparad för 2 säljare').waitFor();
+  await rowOf('Säljare Anna').locator('button:has-text("Lägg på lönen")').click();
+  await owner.locator('text=Provisionen är överförd').waitFor();
+  await owner.goto(`${B}/provisioner?period=${P}`);
+  await rowOf('Agent Bo').locator('button:has-text("Skapa självfaktura")').click();
+  await owner.locator('text=Provisionen är överförd').waitFor();
+  await owner.goto(`${B}/provisioner?period=${P}`);
+  assert((await owner.locator('.transferred').count()) === 2, 'överförda');
+  await owner.goto(runUrl);
+  const vals = await owner.locator('input').evaluateAll((els) => els.map((e) => e.value));
+  assert(vals.includes(`Provision ${P}`), 'provisionsraden på lönespecen: ' + vals.slice(0, 40).join('|'));
+  await owner.goto(B + '/leverantorsfakturor');
+  t = await text(owner);
+  assert(t.includes(`SF-${P}`) && t.includes('625,00'), 'självfaktura med moms: ' + t.slice(0, 1500));
+  log('anställds provision läggs på lönespecen och agenten får en självfaktura med moms');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); creditServer.close();
   console.log('Omgång 14: alla steg gick igenom');

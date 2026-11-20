@@ -57,6 +57,7 @@ export function buildNav(o: {
       { path: '/lon/anstallda', label: 'Anställda', perm: 'payroll' },
       { path: '/lon/franvaro', label: 'Frånvaro och semester', perm: 'payroll' },
       { path: '/lon/formaner', label: 'Skattefria förmåner', perm: 'payroll', hint: 'Friskvårdsbidrag och gåvor med tak per anställd' },
+      { path: '/provisioner', label: 'Provisioner och bonus', perm: 'payroll', hint: 'Säljprovision på betalda fakturor till lön eller självfaktura' },
       { path: '/lon/flex', label: 'Flextid och tidbank', perm: 'payroll', hint: 'Schemat mot stämplad tid' },
       { path: '/schema', label: 'Schema' },
       { path: '/personalliggare', label: 'Personalliggare' },

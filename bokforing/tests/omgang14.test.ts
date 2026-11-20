@@ -79,3 +79,26 @@ describe('Leasing', () => {
     expect(maturity([{ fee: 100000, residual: 0, start: '2026-01-01', months: 120 }], '2026-06-30').over5).toBe(100000 * (114 - 60));
   });
 });
+
+import { invoiceCommission, rateFor, selfInvoiceVat, targetBonus, tierBonus } from '@/lib/commission';
+describe('Provisioner', () => {
+  const rules = [
+    { scope: 'account' as const, customerId: null, account: 3041, ratePct: 10, sellerId: null },
+    { scope: 'customer' as const, customerId: 7, account: null, ratePct: 2, sellerId: null },
+    { scope: 'customer' as const, customerId: 7, account: null, ratePct: 4, sellerId: 1 },
+  ];
+  it('mest specifika regeln', () => {
+    expect(rateFor(rules, { sellerId: 1, customerId: 7, account: 3041, baseRate: 5 })).toBe(4);
+    expect(rateFor(rules, { sellerId: 2, customerId: 7, account: 3041, baseRate: 5 })).toBe(2);
+    expect(rateFor(rules, { sellerId: 2, customerId: 8, account: 3041, baseRate: 5 })).toBe(10);
+    expect(rateFor(rules, { sellerId: 2, customerId: 8, account: 3001, baseRate: 5 })).toBe(5);
+  });
+  it('provision per rad och bonus', () => {
+    expect(invoiceCommission({ netSek: 1000000, lines: [{ account: 3041, net: 500000 }, { account: 3001, net: 500000 }], sellerId: 2, customerId: 8, baseRate: 5, rules })).toBe(75000);
+    expect(tierBonus([{ threshold: 10000000, ratePct: 2 }, { threshold: 20000000, ratePct: 3 }], 25000000)).toBe(200000 + 150000);
+    expect(tierBonus([{ threshold: 10000000, ratePct: 2 }], 5000000)).toBe(0);
+    expect(targetBonus({ target: 10000000, amount: 500000, basis: 10000000 })).toBe(500000);
+    expect(targetBonus({ target: 10000000, amount: 500000, basis: 9999999 })).toBe(0);
+    expect(selfInvoiceVat(100000, true)).toBe(25000);
+  });
+});
