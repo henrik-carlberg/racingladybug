@@ -53,7 +53,7 @@ const NE_RESULT: [string, string, string, Range[], '+' | '-'][] = [
 ];
 
 /** Konton som normalt inte är avdragsgilla (representation, ej avdragsgilla avgifter, skattetillägg/ränta på skatt) */
-export const NON_DEDUCTIBLE_ACCOUNTS = [6072, 6342, 6982, 6992, 7623, 7632, 8423];
+export const NON_DEDUCTIBLE_ACCOUNTS = [6072, 6342, 6982, 6992, 6993, 7623, 7632, 8423];
 
 export function neForm(closing: Sums, result: Sums): { balance: FormField[]; income: FormField[]; adjustments: FormField[]; unmapped: number[]; bookedResult: number } {
   const balance: FormField[] = [];

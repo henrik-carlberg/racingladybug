@@ -99,7 +99,7 @@ export async function voucherLines(db: Tx | typeof sql, voucherId: number): Prom
 }
 
 /** Rättelseverifikation (BFL 5 kap 5 §): ny verifikation med omvända belopp som hänvisar till originalet. */
-const SUBLEDGER_SOURCES = new Set(['royalty', 'employee_loan', 'liquidation', 'offset', 'direct_pension', 'foreign_dividend', 'fx_forward', 'business_acquisition', 'board_fee', 'insurance', 'replacement_fund', 'property_sale', 'owner_loan', 'sick_pay_claim', 'merger', 'fou_deduction', 'property_tax', 'production', 'vat_correction', 'bad_debt_undo', 'security_undo', 'provision', 'conversion', 'bad_debt', 'bad_debt_recovery', 'security_trade', 'security_valuation', 'coop_insats', 'coop_refund', 'foundation_grant', 'retention', 'retention_release', 'capital_insurance', 'shareholder_contribution']);
+const SUBLEDGER_SOURCES = new Set(['sponsorship', 'asset_activation', 'forest', 'vmb', 'royalty', 'employee_loan', 'liquidation', 'offset', 'direct_pension', 'foreign_dividend', 'fx_forward', 'business_acquisition', 'board_fee', 'insurance', 'replacement_fund', 'property_sale', 'owner_loan', 'sick_pay_claim', 'merger', 'fou_deduction', 'property_tax', 'production', 'vat_correction', 'bad_debt_undo', 'security_undo', 'provision', 'conversion', 'bad_debt', 'bad_debt_recovery', 'security_trade', 'security_valuation', 'coop_insats', 'coop_refund', 'foundation_grant', 'retention', 'retention_release', 'capital_insurance', 'shareholder_contribution']);
 
 export async function reverseVoucher(tx: Tx, actor: Actor, voucherId: number, date: string, reason: string) {
   const companyId = actor.companyId;
@@ -120,6 +120,9 @@ export async function reverseVoucher(tx: Tx, actor: Actor, voucherId: number, da
     const [o] = await tx<{ source_type: string | null }[]>`SELECT o.source_type FROM vouchers v JOIN vouchers o ON o.id = v.corrects_id WHERE v.id = ${voucherId}`;
     if (o?.source_type && SUBLEDGER_SOURCES.has(o.source_type)) throw new BookkeepingError('Rättelsen hör till en reskontra och kan inte makuleras här');
   }
+  // Ett inköp som har aktiverats till anläggningsregistret rättas inte fristående (då finns tillgången kvar utan kostnad)
+  const [act] = await tx`SELECT 1 FROM small_asset_reviews WHERE voucher_id = ${voucherId} AND decision = 'activated'`;
+  if (act) throw new BookkeepingError('Inköpet är aktiverat i anläggningsregistret – avyttra eller utrangera tillgången i stället');
   const already = await tx`SELECT 1 FROM vouchers WHERE corrects_id = ${voucherId} AND source_type = 'reversal'`;
   if (already.length) throw new BookkeepingError('Verifikationen är redan makulerad med en rättelse');
   const lines = reverseLines(await voucherLines(tx, voucherId));

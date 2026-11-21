@@ -13,7 +13,7 @@ import { bookOpenSupplierInvoicesAtYearEnd } from './suppliers';
 
 export const CORPORATE_TAX_RATE = 20.6; // procent, bolagsskatt (gäller sedan 2021)
 /** Konton som normalt inte är avdragsgilla vid inkomstbeskattningen (läggs tillbaka i INK2S) */
-export const NON_DEDUCTIBLE = [6072, 6982, 6992, 7623, 8423];
+export const NON_DEDUCTIBLE = [6072, 6982, 6992, 6993, 7623, 8423];
 
 async function fy(companyId: number, fyId: number): Promise<FiscalYear> {
   const y = (await fiscalYears(companyId)).find((x) => x.id === fyId);
