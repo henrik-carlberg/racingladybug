@@ -27,3 +27,14 @@ describe('Intrastat', () => {
     expect(file('2026-10', [l])).toContain('2;202610;94036010;DE;;11;4000000;1200;');
   });
 });
+
+import { deductionRoom, depositRoom } from '@/lib/forest';
+describe('Skogskonto', () => {
+  it('utrymme och skogsavdrag', () => {
+    const sales = [{ kind: 'rotpost' as const, amount: 10000000 }, { kind: 'leveransvirke' as const, amount: 5000000 }];
+    expect(depositRoom(sales, 'skog', { skog: 0, skada: 0 })).toBe(8000000);
+    expect(depositRoom(sales, 'skada', { skog: 4000000, skada: 0 })).toBe(5250000);
+    expect(depositRoom(sales, 'skog', { skog: 0, skada: 10500000 })).toBe(0);
+    expect(deductionRoom(sales, 12000000, 0)).toEqual({ ofIncome: 6500000, total: 6000000, max: 6000000 });
+  });
+});

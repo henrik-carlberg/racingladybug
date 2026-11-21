@@ -92,6 +92,7 @@ export function buildNav(o: {
       { path: '/rapporter/panel', label: 'Instrumentpanel', hint: 'Diagram och nyckeltal' },
       { path: '/rapporter/manad', label: 'Månadsrapport' },
       { path: '/nyckeltal', label: 'Nyckeltal', perm: 'ledger', hint: 'För vd, ekonomi och styrelse' },
+      { path: '/skog', label: 'Skogsbruk', perm: 'ledger', hint: 'Skogskonto, skogsskadekonto och skogsavdrag (enskild firma)' },
       { path: '/intrastat', label: 'Intrastat', perm: 'ledger', hint: 'Varuhandel med EU-länder till SCB' },
       { path: '/vmb', label: 'Vinstmarginalbeskattning', perm: 'ledger', hint: 'Moms på marginalen för begagnade varor och konst' },
       { path: '/licenser', label: 'Licenser och royalty', perm: 'ledger', hint: 'Royaltyrapporter, minimiavgift och utländsk källskatt' },

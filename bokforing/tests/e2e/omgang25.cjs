@@ -163,6 +163,45 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert((await text(owner)).includes('Inköp av varor från annat EU-land'), 'ruta 20 i momsrapporten');
   log('Intrastat: varning nära tröskeln, rapporteringsplikt över 4,5 Mkr utförsel, rad med KN-nummer stämmer med bokföringen, fil för SCB');
 
+  // ================= Del 3: skogsbruk =================
+  const pnr = (nine) => { let s = 0; for (let i = 0; i < 9; i++) { const v = +nine[i] * (i % 2 ? 1 : 2); s += v > 9 ? v - 9 : v; } return nine + ((10 - (s % 10)) % 10); };
+  const nr = pnr(`8505${String(10 + (Date.now() % 18)).padStart(2, '0')}${String(Date.now() % 1000).padStart(3, '0')}`);
+  await owner.goto(BASE + '/');
+  await owner.fill('input[name=name]', 'Skogsägaren Enskild Firma');
+  await owner.selectOption('select[name=company_type]', 'EF');
+  await owner.fill('input[name=orgnr]', `19${nr.slice(0, 6)}-${nr.slice(6)}`);
+  await owner.fill('input[name=fy_start]', `${YEAR}-01-01`); await owner.fill('input[name=fy_end]', `${YEAR}-12-31`);
+  await owner.click('button:has-text("Skapa bolag")');
+  await owner.waitForURL(/kom-igang/);
+  const SK = owner.url().replace(/\/kom-igang.*/, '');
+  await voucher(SK, 'Insättning eget kapital', [[1930, 500000], [2010, -500000]], `${YEAR}-01-02`);
+  const sk = async (formSel, fields, btn) => {
+    await owner.goto(SK + `/skog?ar=${YEAR}`);
+    const f = owner.locator(formSel);
+    for (const [k, v] of Object.entries(fields)) { if (k === 'kind' || k === 'account') await f.locator(`select[name=${k}]`).selectOption(v); else await f.locator(`input[name=${k}]`).fill(v); }
+    await f.locator(`button:has-text("${btn}")`).click();
+    await owner.locator('.flash').first().waitFor();
+    return nb(await owner.locator('.flash').first().innerText());
+  };
+  await sk('form:has(button:has-text("Registrera likvid"))', { date: `${YEAR}-03-01`, kind: 'rotpost', amount: '100000' }, 'Registrera likvid');
+  await sk('form:has(button:has-text("Registrera likvid"))', { date: `${YEAR}-04-01`, kind: 'leveransvirke', amount: '50000' }, 'Registrera likvid');
+  await owner.goto(SK + `/skog?ar=${YEAR}`);
+  assert(nb(await owner.locator('.sk-room-skog').innerText()) === '80000,00' && nb(await owner.locator('.sk-room-skada').innerText()) === '105000,00', 'insättningsutrymme 60/40 och 80/50');
+  await sk('.sk-deposit', { account: 'skog', amount: '40000' }, 'Bokför insättning');
+  await owner.goto(SK + `/skog?ar=${YEAR}`);
+  assert(nb(await owner.locator('.sk-room-skog').innerText()) === '40000,00' && nb(await owner.locator('.sk-room-skada').innerText()) === '52500,00', 'insättningen tar utrymme från båda kontona');
+  assert((await sk('.sk-deposit', { account: 'skog', amount: '50000' }, 'Bokför insättning')).includes('Utrymmetförinsättning'), 'över utrymmet nekas');
+  await sk('.sk-withdraw', { account: 'skog', amount: '10000' }, 'Bokför uttag');
+  await sk('form:has(button:has-text("Spara")):has(input[name=acquisition_value])', { acquisition_value: '120000' }, 'Spara');
+  assert((await sk('form:has(button:has-text("Spara skogsavdrag"))', { amount: '70000' }, 'Spara skogsavdrag')).includes('högst60000kr'), 'skogsavdraget begränsas av halva anskaffningsvärdet');
+  await sk('form:has(button:has-text("Spara skogsavdrag"))', { amount: '60000' }, 'Spara skogsavdrag');
+  await owner.goto(SK + `/skog?ar=${YEAR}`);
+  assert(nb(await owner.locator('.sk-ne-deposit').innerText()) === '40000,00' && nb(await owner.locator('.sk-ne-withdrawn').innerText()) === '10000,00'
+    && nb(await owner.locator('.sk-ne-ded').innerText()) === '60000,00' && nb(await owner.locator('.sk-bal-skog').innerText()) === '30000,00', 'NE-bilagans belopp och saldo');
+  await owner.goto(IS + '/skog');
+  assert(await owner.locator('.sk-not-ef').count() === 1, 'aktiebolag har inte skogskonto');
+  log('skogsbruk: insättningsutrymme 60/40 och 80/50 delat mellan kontona, uttag som intäkt, skogsavdrag högst halva anskaffningsvärdet, bara enskild firma');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 25: alla steg gick igenom');
