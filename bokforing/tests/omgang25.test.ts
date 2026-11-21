@@ -51,3 +51,13 @@ describe('Direktavdrag', () => {
     expect(f.map((x) => [x.voucherId, x.flagged])).toEqual([[1, 'related'], [2, 'related']]);
   });
 });
+
+import { giftLines, sponsorLines } from '@/lib/sponsorship';
+describe('Sponsring och gåvor', () => {
+  it('avdragsrätt och moms', () => {
+    expect(sponsorLines({ amount: 2000000, vat: 500000, counter: true }).lines).toContainEqual({ account: 2641, amount: 500000 });
+    expect(sponsorLines({ amount: 500000, vat: 0, counter: false })).toMatchObject({ deductible: false, lines: [{ account: 6993, amount: 500000 }, { account: 1930, amount: -500000 }] });
+    expect(giftLines({ amount: 250000, vat: 62500, recipients: 10 })).toMatchObject({ per: 25000, deductible: true });
+    expect(giftLines({ amount: 200000, vat: 50000, recipients: 4 }).lines[0]).toEqual({ account: 6993, amount: 250000 });
+  });
+});

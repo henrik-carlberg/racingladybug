@@ -236,6 +236,25 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(await owner.locator('.da-row').count() === 1 && await owner.locator('.da-decided tr').count() === 2, 'en kvar att bedöma, två bedömda');
   log(`direktavdrag: halvt prisbasbelopp ${half} kr, korttidsinventarier, inköp som hör ihop flaggas, aktivering till anläggningsregistret och motiverat direktavdrag`);
 
+  // ================= Del 5: sponsring och gåvor =================
+  const SP = await newCompany('Sponsorn AB', 559300000);
+  const spons = async (formSel, f, btn) => {
+    await owner.goto(SP + '/sponsring');
+    const fm = owner.locator(formSel);
+    for (const [k, v] of Object.entries(f)) await fm.locator(`input[name=${k}]`).fill(v);
+    await fm.locator(`button:has-text("${btn}")`).click();
+    await owner.locator('.flash').first().waitFor();
+    return nb(await owner.locator('.flash').first().innerText());
+  };
+  assert((await spons('.sp-sponsor', { recipient: 'IFK Orten', amount: '20000', vat: '5000', counter_performance: 'Logotyp på matchtröjor' }, 'Bokför sponsring')).includes('avdragsgillkostnad'), 'sponsring med motprestation');
+  assert((await spons('.sp-sponsor', { recipient: 'Välgörenhet', amount: '5000', vat: '0' }, 'Bokför sponsring')).includes('utanmotprestation'), 'sponsring utan motprestation är gåva');
+  assert((await spons('.sp-gift', { recipient: 'Julgåvor till kunder', recipients: '10', amount: '2500', vat: '625' }, 'Bokför gåvor')).includes('avdragsgillkostnad'), 'gåvor 250 kr per mottagare');
+  t = await spons('.sp-gift', { recipient: 'Vinflaskor', recipients: '4', amount: '2000', vat: '500' }, 'Bokför gåvor');
+  assert(t.includes('500,00krpermottagare'), 'gåvor över 300 kr: ' + t);
+  await owner.goto(SP + '/sponsring');
+  assert(nb(await owner.locator('.sp-ded').innerText()) === '22500,00' && nb(await owner.locator('.sp-nonded').innerText()) === '7500,00', 'avdragsgillt och ej avdragsgillt');
+  log('sponsring och gåvor: motprestation ger avdrag och moms, utan motprestation och gåvor över 300 kr per mottagare är ej avdragsgilla (6993)');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 25: alla steg gick igenom');
