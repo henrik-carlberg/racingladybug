@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 /** Kvittning av kundfordringar mot leverantörsskulder hos samma motpart */
 export default async function Netting({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid, { perm: 'ledger' });
+  const { company } = await requireCompany(cid, { perm: 'payments' });
   const [c, h] = await Promise.all([candidates(company.id), history(company.id)]);
   return (
     <div style={{ maxWidth: 1000 }}>
@@ -17,7 +17,7 @@ export default async function Netting({ params, searchParams }: { params: Promis
       <Flash searchParams={searchParams} />
       <p className="small">När en motpart både är kund och leverantör kan fordran och skulden kvittas mot varandra i stället för att pengar skickas åt båda hållen.
         Kvittning förutsätter att båda fordringarna är förfallna eller att det finns ett kvittningsavtal; spara avtalet eller hänvisningen som dokumentation.
-        Fakturorna matchas på organisationsnummer, och koncernbolag markeras så att koncerninterna mellanhavanden kan nettas regelbundet.</p>
+        Fakturorna matchas på organisationsnummer. ROT/RUT-fakturor, belånade fakturor och leverantörsfakturor med en pågående bankbetalning kvittas inte; koncernbolag markeras så att koncerninterna mellanhavanden kan nettas regelbundet.</p>
       {!c.length && <p className="muted kv-none">Ingen motpart har just nu både en obetald kundfaktura och en attesterad leverantörsfaktura.</p>}
       {c.map((x) => (
         <form key={x.orgnr} action={offsetAction.bind(null, company.id)} className="card kv-cand" style={{ marginBottom: '1rem' }}>

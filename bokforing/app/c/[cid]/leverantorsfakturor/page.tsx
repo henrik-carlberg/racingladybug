@@ -13,7 +13,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function SupplierInvoices({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company } = await requireCompany(cid, { perm: 'purchasing' });
+  const ctx = await requireCompany(cid, { perm: 'purchasing' });
+  const { company } = ctx;
   const L = translator(await uiLang());
   const sp = await searchParams;
   const status = String(sp.status ?? 'open');
@@ -40,7 +41,7 @@ export default async function SupplierInvoices({ params, searchParams }: { param
         <a className="btn secondary" href={`${b}/rapporter/xlsx?r=leverantorsfakturor`} download>Excel</a>
       </Header>
       <Flash searchParams={searchParams} />
-      {await nettable(company.id).then((n) => n.length > 0 && <p className="card kv-reminder">{n.length} motpart{n.length > 1 ? 'er' : ''} har både obetalda kundfakturor och leverantörsfakturor ({n.map((x) => x.name).join(', ')}). <Link href={`/c/${company.id}/kvittning`}>Kvitta</Link></p>)}
+      {ctx.can('payments') && await nettable(company.id).then((n) => n.length > 0 && <p className="card kv-reminder">{n.length} motpart{n.length > 1 ? 'er' : ''} har både obetalda kundfakturor och leverantörsfakturor ({n.map((x) => x.name).join(', ')}). <Link href={`/c/${company.id}/kvittning`}>Kvitta</Link></p>)}
       <div className="actions">
         {[['open', 'Obetalda'], ['booked', 'Att attestera'], ['approved', 'Attesterade'], ['paid', 'Betalda'], ['all', 'Alla']].map(([s, l]) => (
           <Link key={s} href={`${b}/leverantorsfakturor?status=${s}`} className={`btn ${status === s ? '' : 'secondary'}`}>{l}</Link>

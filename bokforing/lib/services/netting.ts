@@ -11,13 +11,15 @@ import { date, str } from './input';
 
 const norm = (o: string) => o.replace(/\D/g, '');
 
-/** Öppna fakturor (svenska kronor, bokförda enligt faktureringsmetoden) per motpart; leverantörsfakturor måste vara attesterade */
+/** Öppna fakturor utan ROT/RUT, factoring eller pågående bankbetalning (svenska kronor, bokförda enligt faktureringsmetoden) per motpart; leverantörsfakturor måste vara attesterade */
 async function open(db: Tx | typeof sql, companyId: number, orgnr?: string, lock = false) {
   const recv = await db<(Open & { orgnr: string; name: string; number: number })[]>`SELECT i.id, (i.total - i.paid_amount)::float8 AS remaining, to_char(i.due_date,'YYYY-MM-DD') AS due, c.orgnr, c.name, i.invoice_number AS number
     FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.company_id = ${companyId} AND i.status = 'booked' AND i.voucher_id IS NOT NULL AND i.currency = 'SEK' AND i.total > i.paid_amount
+      AND COALESCE(i.tax_reduction, 0) = 0 AND NOT EXISTS (SELECT 1 FROM factoring_deals f WHERE f.invoice_id = i.id AND f.status IN ('offered','accepted','funded'))
       AND regexp_replace(c.orgnr, '\\D', '', 'g') <> '' ${orgnr ? db`AND regexp_replace(c.orgnr, '\\D', '', 'g') = ${orgnr}` : db``} ${lock ? db`FOR UPDATE OF i` : db``}`;
   const pay = await db<(Open & { orgnr: string; name: string; number: string })[]>`SELECT i.id, (i.total - i.paid_amount)::float8 AS remaining, to_char(i.due_date,'YYYY-MM-DD') AS due, s.orgnr, s.name, i.invoice_number AS number
     FROM supplier_invoices i JOIN suppliers s ON s.id = i.supplier_id WHERE i.company_id = ${companyId} AND i.status = 'approved' AND i.voucher_id IS NOT NULL AND i.currency = 'SEK' AND i.total > i.paid_amount
+      AND NOT EXISTS (SELECT 1 FROM bank_payment_items bi JOIN bank_payments bp ON bp.id = bi.payment_id WHERE bi.supplier_invoice_id = i.id AND bp.status IN ('authorization','accepted','executed'))
       AND regexp_replace(s.orgnr, '\\D', '', 'g') <> '' ${orgnr ? db`AND regexp_replace(s.orgnr, '\\D', '', 'g') = ${orgnr}` : db``} ${lock ? db`FOR UPDATE OF i` : db``}`;
   return { recv, pay };
 }

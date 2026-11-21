@@ -7,7 +7,9 @@ import * as svc from '@/lib/services/netting';
 
 const base = (cid: number) => `/c/${cid}/kvittning`;
 export async function offsetAction(cid: number, fd: FormData) {
-  const actor = userActor(await requireCompany(cid, { perm: 'ledger' }));
+  // Kvittningen markerar både kund- och leverantörsfakturor som betalda: samma behörigheter som för betalningarna
+  await requireCompany(cid, { perm: 'invoicing' });
+  const actor = userActor(await requireCompany(cid, { perm: 'payments' }));
   let a = 0;
   await attempt(base(cid), async () => { a = await svc.offset(actor, Object.fromEntries([...fd.entries()].map(([k, v]) => [k, String(v)]))); });
   done(base(cid), `Kvittningen är bokförd: ${kr(a)} kr`);
