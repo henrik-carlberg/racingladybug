@@ -13,3 +13,17 @@ describe('Vinstmarginalbeskattning', () => {
     expect(r.boxes.find((b) => b.box === '10')?.amount).toBe(250000);
   });
 });
+
+import { deviation, file, obligation, validate } from '@/lib/intrastat';
+describe('Intrastat', () => {
+  it('tröskel, kontroll och fil', () => {
+    expect(obligation('dispatch', 400000000)).toMatchObject({ required: false, warning: true });
+    expect(obligation('dispatch', 500000000).required).toBe(true);
+    const l = { flow: 'dispatch' as const, kn: '94036010', country: 'DE', origin: '', txn: '11', value: 400000000, mass: 1200, supp: null };
+    expect(validate(l)).toBeNull();
+    expect(validate({ ...l, country: 'SE' })).toMatch(/EU-land/);
+    expect(validate({ ...l, flow: 'arrival' })).toMatch(/ursprungsland/);
+    expect(deviation(105, 100)).toBe(5);
+    expect(file('2026-10', [l])).toContain('2;202610;94036010;DE;;11;4000000;1200;');
+  });
+});

@@ -34,6 +34,7 @@ export function vatReport(sums: AccountSums): { boxes: VatBox[]; toPay: number }
   const box10 = neg(sum(sums, (n) => inRange(n, 2610, 2613) || inRange(n, 2616, 2619)));
   const box11 = neg(sum(sums, (n) => inRange(n, 2620, 2623) || inRange(n, 2626, 2629)));
   const box12 = neg(sum(sums, (n) => inRange(n, 2630, 2633) || inRange(n, 2636, 2639)));
+  const box20 = sum(sums, (n) => inRange(n, 4515, 4517));
   const box21 = sum(sums, (n) => n === 4535);
   const box30 = neg(sum(sums, (n) => n === 2614));
   const box31 = neg(sum(sums, (n) => n === 2624));
@@ -55,6 +56,7 @@ export function vatReport(sums: AccountSums): { boxes: VatBox[]; toPay: number }
     { box: '10', label: 'Utgående moms 25 %', amount: box10 },
     { box: '11', label: 'Utgående moms 12 %', amount: box11 },
     { box: '12', label: 'Utgående moms 6 %', amount: box12 },
+    ...(box20 ? [{ box: '20', label: 'Inköp av varor från annat EU-land', amount: box20 }] : []),
     { box: '21', label: 'Inköp av tjänster från annat EU-land (25 %)', amount: box21 },
     { box: '30', label: 'Utgående moms 25 % på inköp i ruta 20–24', amount: box30 },
     ...(box31 ? [{ box: '31', label: 'Utgående moms 12 % på inköp i ruta 20–24', amount: box31 }] : []),

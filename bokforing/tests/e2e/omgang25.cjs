@@ -134,6 +134,35 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(t.includes('Beskattningsunderlag vid vinstmarginalbeskattning'), 'ruta 07 i momsrapporten: ' + t.slice(0, 600));
   log('VMB: förenklad metod, negativ marginal 2 000 kr förs över, marginal 12 500 kr ger moms 2 500 kr och underlag 10 000 kr i ruta 07');
 
+  // ================= Del 2: Intrastat =================
+  const IS = await newCompany('Exportören AB', 559280000);
+  const P = `${YEAR}-10`;
+  await voucher(IS, 'Försäljning till Tyskland', [[1930, 4000000], [3106, -4000000]], `${P}-15`);
+  await voucher(IS, 'Inköp från Polen', [[4515, 100000], [1930, -100000]], `${P}-16`);
+  await owner.goto(IS + `/intrastat?period=${P}`);
+  t = nb(await owner.locator('.is-dispatch .is-status').innerText());
+  assert(t.includes('Näratröskeln'), 'varning nära tröskeln: ' + t);
+  await voucher(IS, 'Försäljning till Finland', [[1930, 1000000], [3106, -1000000]], `${YEAR}-09-10`);
+  await owner.goto(IS + `/intrastat?period=${P}`);
+  assert(nb(await owner.locator('.is-dispatch .is-status').innerText()).includes('Rapporteringsplikt') && !nb(await owner.locator('.is-arrival .is-status').innerText()).includes('Rapporteringsplikt'), 'utförseln över tröskeln, inte införseln');
+  const isLine = async (kn, value, mass) => {
+    await owner.goto(IS + `/intrastat?period=${P}`);
+    await owner.fill('input[name=kn]', kn); await owner.selectOption('select[name=country]', 'DE');
+    await owner.fill('input[name=value]', value); await owner.fill('input[name=mass]', mass);
+    await owner.click('button:has-text("Lägg till rad")');
+    await owner.locator('.flash').first().waitFor();
+    return nb(await owner.locator('.flash').first().innerText());
+  };
+  assert((await isLine('1234', '100', '1')).includes('åttasiffror'), 'KN-nummer med åtta siffror');
+  await isLine('94036010', '4000000', '1200');
+  await owner.goto(IS + `/intrastat?period=${P}`);
+  assert(nb(await owner.locator('.is-dispatch').innerText()).includes('(0%)'), 'deklarationen stämmer med bokföringen');
+  const csv = await (await owner.request.get(IS + `/intrastat/fil?period=${P}`)).text();
+  assert(csv.includes(`2;${P.replace('-', '')};94036010;DE;;11;4000000;1200;`), 'fil: ' + csv);
+  await owner.goto(IS + `/rapporter/moms?from=${P}-01&to=${P}-31`);
+  assert((await text(owner)).includes('Inköp av varor från annat EU-land'), 'ruta 20 i momsrapporten');
+  log('Intrastat: varning nära tröskeln, rapporteringsplikt över 4,5 Mkr utförsel, rad med KN-nummer stämmer med bokföringen, fil för SCB');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 25: alla steg gick igenom');
