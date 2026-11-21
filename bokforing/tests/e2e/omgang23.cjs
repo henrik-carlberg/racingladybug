@@ -124,6 +124,28 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(t.includes('30000,00'), 'reserven löses upp vid avräkning');
   log('valutatermin: osäkrad termin reserveras med 30 000 kr i bokslutet (lägsta värdets princip) och avräknas med kursförlust 20 000 kr');
 
+  // ================= Del 3: kupongskatt =================
+  const KS = await newCompany('Utdelaren AB', 559180000);
+  await voucher(KS, 'Utdelningsbeslut', [[2091, 200000], [2898, -200000]], `${YEAR}-05-15`);
+  const divi = async (f) => {
+    await owner.goto(KS + '/kupongskatt');
+    for (const [k, v] of Object.entries(f)) { if (k === 'recipient_type') await owner.selectOption('select[name=recipient_type]', v); else if (k === 'business_related') await owner.check('input[name=business_related]'); else await owner.fill(`input[name=${k}]`, v); }
+    await owner.click('button:has-text("Bokför utbetalning")');
+    await owner.locator('.flash').first().waitFor();
+    return nb(await owner.locator('.flash').first().innerText());
+  };
+  t = await divi({ recipient: 'Ola Nordmann', country: 'NO', gross: '100000' });
+  assert(t.includes('kupongskatt15%(15000,00kr)') && t.includes('utbetalt85000,00kr'), 'Norge 15 %: ' + t);
+  t = await divi({ recipient: 'Mutter GmbH', country: 'DE', recipient_type: 'company', holding_pct: '30', gross: '80000' });
+  assert(t.includes('kupongskatt0%'), 'EU-bolag befriat: ' + t);
+  t = await divi({ recipient: 'För mycket', country: 'NO', gross: '50000' });
+  assert(t.includes('störreänbeslutad'), 'mer än beslutad utdelning nekas');
+  await owner.goto(KS + '/kupongskatt');
+  assert(nb(await owner.locator('.ks-unpaid').innerText()) === '15000,00', 'att betala');
+  await owner.click('button:has-text("Bokför inbetalning till Skatteverket")');
+  await owner.locator('text=Kupongskatt 15 000,00 kr är bokförd som betald').waitFor();
+  log('kupongskatt: 15 % enligt avtal med Norge, EU-moderbolag befriat, utdelning över beslutat belopp nekas, inbetalning till Skatteverket');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 23: alla steg gick igenom');
