@@ -25,3 +25,14 @@ describe('Försäljning av fastighet', () => {
     expect(taxGain({ price: 600000000, costs: 10000000, acquisition: 500000000, improvements: 0, taxDepreciation: 32000000 })).toEqual({ adjustedBasis: 468000000, gain: 122000000, recaptured: 32000000, capital: 90000000 });
   });
 });
+
+import { damageLines, deadline, maxFund, useLines } from '@/lib/replacement-fund';
+describe('Ersättningsfond', () => {
+  it('skada, fond och ianspråktagande', () => {
+    expect(damageLines({ bookValue: 6000000, assetAccount: 1220, compensation: 9000000, receivedTo: 1930 })).toEqual([{ account: 1930, amount: 9000000 }, { account: 3994, amount: -9000000 }, { account: 7970, amount: 6000000 }, { account: 1220, amount: -6000000 }]);
+    expect(maxFund(9000000, 0)).toBe(9000000);
+    expect(deadline(2026)).toBe('2029-12-31');
+    expect(useLines(100, 'inventarier')).toEqual([{ account: 2160, amount: 100 }, { account: 2150, amount: -100 }]);
+    expect(useLines(100, 'byggnad')[1].account).toBe(8860);
+  });
+});

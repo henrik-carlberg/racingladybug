@@ -139,6 +139,33 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await text(owner)).includes('980000,00'), 'vinst på 3973');
   log('fastighetsförsäljning: bokförd vinst 980 000 kr mot bokfört värde, skattepliktig vinst 1 220 000 kr med 320 000 kr återförda värdeminskningsavdrag');
 
+  // ================= Del 3: försäkringsersättning och ersättningsfond =================
+  const EF2 = await newCompany('Skadebolaget AB', 559130000);
+  await voucher(EF2, 'Svarv', [[1220, 100000], [1930, -100000]], `${YEAR}-01-10`);
+  await owner.goto(EF2 + '/bokslut/ersattningsfond');
+  await owner.fill('input[name=description]', 'Svarv, brand'); await owner.fill('input[name=damage_date]', `${YEAR}-03-01`);
+  await owner.fill('input[name=book_value]', '60000'); await owner.fill('input[name=compensation]', '90000');
+  await owner.click('button:has-text("Bokför skadan")');
+  await owner.locator('text=Skadan och försäkringsersättningen är bokförda').waitFor();
+  const rf = () => owner.locator('.rf-row[data-desc="Svarv, brand"]');
+  await rf().locator('input[name=amount]').fill('100000');
+  await rf().locator('button:has-text("Avsätt till fond")').click();
+  await owner.locator('text=högst försäkringsersättningen').waitFor();
+  await owner.goto(EF2 + '/bokslut/ersattningsfond');
+  await rf().locator('button:has-text("Avsätt till fond")').click();
+  await owner.locator('text=Avsättningen till ersättningsfond är bokförd').waitFor();
+  assert(nb(await rf().locator('.rf-left').innerText()) === '90000,00' && (await rf().innerText()).includes(`${YEAR + 3}-12-31`), 'fond med tidsfrist');
+  await rf().locator('input[name=amount]').fill('50000');
+  await rf().locator('button:has-text("Bokför")').click();
+  await owner.locator('text=Ianspråktagen ersättningsfond 50 000,00 kr är bokförd').waitFor();
+  await rf().locator('select[name=action]').selectOption('reverse');
+  await rf().locator('button:has-text("Bokför")').click();
+  await owner.locator('text=Återförd ersättningsfond 40 000,00 kr är bokförd').waitFor();
+  assert(nb(await rf().locator('.rf-left').innerText()) === '0,00', 'fonden är förbrukad');
+  await owner.goto(EF2 + '/rapporter/huvudbok?account=2150');
+  assert(nb(await text(owner)).includes('50000,00'), 'ianspråktagen fond blir överavskrivning');
+  log('ersättningsfond: skada med utrangering och ersättning, avsättning högst ersättningen, ianspråktagande till överavskrivningar och återföring');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 22: alla steg gick igenom');
