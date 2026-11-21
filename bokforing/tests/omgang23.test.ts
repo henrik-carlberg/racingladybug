@@ -47,3 +47,14 @@ describe('Direktpension', () => {
     expect(taxAdjustment(5000000, true)).toBe(0);
   });
 });
+
+import { offsetLines, pairs } from '@/lib/netting';
+describe('Kvittning', () => {
+  it('parar äldst först upp till det mindre beloppet', () => {
+    const r = pairs([{ id: 1, remaining: 50000, due: '2026-02-01' }, { id: 2, remaining: 30000, due: '2026-01-01' }], [{ id: 9, remaining: 60000, due: '2026-01-15' }]);
+    expect(r.total).toBe(60000);
+    expect(r.pairs).toEqual([{ invoiceId: 2, supplierInvoiceId: 9, amount: 30000 }, { invoiceId: 1, supplierInvoiceId: 9, amount: 30000 }]);
+    expect(pairs([], [{ id: 1, remaining: 1, due: '2026-01-01' }]).total).toBe(0);
+    expect(offsetLines(100)).toEqual([{ account: 2440, amount: 100 }, { account: 1510, amount: -100 }]);
+  });
+});

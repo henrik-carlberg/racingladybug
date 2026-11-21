@@ -168,6 +168,40 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(t.includes('Pensioner enligt tryggandelagen') && t.includes('Gunnar Grundare'), 'pensionsskulden i noten Avsättningar');
   log('direktpension: pensionsskuld 500 000 kr på 2210 med särskild löneskatt 121 300 kr, utbetalning minskar skulden, i noten Avsättningar');
 
+  // ================= Del 5: kvittning =================
+  const KV = await newCompany('Kvittarna AB', 559200000);
+  const party = orgnrFor('556677889');
+  await owner.goto(KV + '/kunder');
+  await owner.fill('input[name=name]', 'Motparten AB'); await owner.fill('input[name=orgnr]', party);
+  await owner.click('button:has-text("Spara kund")'); await owner.waitForURL(/ok=/);
+  await owner.goto(KV + '/leverantorer');
+  await owner.fill('input[name=name]', 'Motparten Leverantör AB'); await owner.fill('input[name=orgnr]', party.replace('-', ''));
+  await owner.click('button:has-text("Spara leverantör")'); await owner.waitForURL(/ok=/);
+  await invoice(KV, 'Motparten AB', 10000); // 12 500 kr inkl. moms
+  await owner.goto(KV + '/leverantorsfakturor/ny');
+  await owner.selectOption('select[name=supplier_id]', { label: 'Motparten Leverantör AB' });
+  await owner.fill('input[name=invoice_number]', 'MP-1'); await owner.fill('input[name=due_date]', day(20));
+  await owner.fill('input[name=total]', '5000'); await owner.fill('input[name=vat]', '1000');
+  await owner.fill('input[name=account_0]', '4010'); await owner.fill('input[name=amount_0]', '4000');
+  await owner.click('button:has-text("Registrera och bokför")'); await owner.waitForURL(/ok=/);
+  const mp1 = owner.url().split('?')[0];
+  await owner.goto(KV + '/kvittning');
+  assert(await owner.locator('.kv-none').count() === 1, 'ej attesterad leverantörsfaktura kvittas inte');
+  await owner.goto(mp1);
+  await owner.click('button:has-text("Attestera")'); await owner.waitForURL(/ok=/);
+  await owner.goto(KV + '/leverantorsfakturor');
+  assert(await owner.locator('.kv-reminder:has-text("Motparten AB")').count() === 1, 'påminnelse om kvittning');
+  await owner.goto(KV + '/kvittning');
+  assert(nb(await owner.locator('.kv-total').innerText()) === '5000,00', 'kvittas 5 000 kr: ' + await owner.locator('.kv-total').innerText());
+  await owner.fill('input[name=agreement]', 'Kvittningsavtal 2026-01-10');
+  await owner.click('button:has-text("Bokför kvittning")');
+  await owner.locator('text=Kvittningen är bokförd: 5 000,00 kr').waitFor();
+  await owner.goto(KV + '/kvittning');
+  assert(await owner.locator('.kv-none').count() === 1 && await owner.locator('.kv-hist tr').count() === 1, 'kvittningen i historiken');
+  await owner.goto(KV + '/leverantorsfakturor?status=paid');
+  assert((await text(owner)).includes('MP-1'), 'leverantörsfakturan är betald');
+  log('kvittning: kund 12 500 kr mot leverantör 5 000 kr på samma org.nr, attest krävs, påminnelse, 5 000 kr kvittas 2440/1510');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 23: alla steg gick igenom');

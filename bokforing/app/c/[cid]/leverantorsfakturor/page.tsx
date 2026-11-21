@@ -7,6 +7,7 @@ import { companyInboxAddress } from '@/lib/services/inbox';
 import { requireCompany } from '@/lib/server/auth';
 import { Flash, Header, Status, type SP, EmptyState } from '@/components/ui';
 import { kr, today } from '@/lib/format';
+import { candidates as nettable } from '@/lib/services/netting';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,6 +40,7 @@ export default async function SupplierInvoices({ params, searchParams }: { param
         <a className="btn secondary" href={`${b}/rapporter/xlsx?r=leverantorsfakturor`} download>Excel</a>
       </Header>
       <Flash searchParams={searchParams} />
+      {await nettable(company.id).then((n) => n.length > 0 && <p className="card kv-reminder">{n.length} motpart{n.length > 1 ? 'er' : ''} har både obetalda kundfakturor och leverantörsfakturor ({n.map((x) => x.name).join(', ')}). <Link href={`/c/${company.id}/kvittning`}>Kvitta</Link></p>)}
       <div className="actions">
         {[['open', 'Obetalda'], ['booked', 'Att attestera'], ['approved', 'Attesterade'], ['paid', 'Betalda'], ['all', 'Alla']].map(([s, l]) => (
           <Link key={s} href={`${b}/leverantorsfakturor?status=${s}`} className={`btn ${status === s ? '' : 'secondary'}`}>{l}</Link>

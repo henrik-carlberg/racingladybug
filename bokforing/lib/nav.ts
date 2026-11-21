@@ -78,6 +78,7 @@ export function buildNav(o: {
       { path: '/lon/sarskild-skatt', label: 'Expertskatt och SINK', perm: 'payroll', hint: 'Skattefri fjärdedel för experter och särskild inkomstskatt för utomlands bosatta' },
       { path: '/agare', label: 'Ägare och utdelning', perm: 'ledger', hint: 'K10, gränsbelopp och lön eller utdelning' },
       { path: '/aktiebok', label: 'Aktiebok', perm: 'ledger', hint: 'Aktieägare, överlåtelser, nyemission och styrelseprotokoll' },
+      { path: '/kvittning', label: 'Kvittning', perm: 'ledger', hint: 'Kvitta kundfordringar mot leverantörsskulder' },
       { path: '/kupongskatt', label: 'Kupongskatt', perm: 'ledger', hint: 'Utdelning till utländska ägare' },
       { path: '/lan-till-agare', label: 'Lån till ägare', perm: 'ledger', hint: 'Låneförbudet för ägare, styrelse och närstående' },
       { path: '/internprissattning', label: 'Internprissättning', perm: 'ledger', hint: 'Koncerninterna priser, räntor och dokumentation' },
