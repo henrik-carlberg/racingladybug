@@ -2,8 +2,8 @@ import Link from 'next/link';
 import { requireCompany } from '@/lib/server/auth';
 import { EmptyState, Flash, type SP } from '@/components/ui';
 import { kr, today } from '@/lib/format';
-import { finalReport, overview } from '@/lib/services/capital-control';
-import { drawSheet, holdMeeting, liquidate, liquidationStep } from './actions';
+import { finalReport, overview, payouts } from '@/lib/services/capital-control';
+import { distribute, drawSheet, holdMeeting, liquidate, liquidationStep } from './actions';
 
 export const dynamic = 'force-dynamic';
 const STAGE: Record<string, string> = { drawn: 'Upprättad', first_meeting: 'Första kontrollstämman hållen', second_meeting: 'Andra kontrollstämman hållen', restored: 'Ingen kapitalbrist / återställt', liquidation: 'Likvidation' };
@@ -16,6 +16,7 @@ export default async function ControlBalance({ params, searchParams }: { params:
   if (company.company_type !== 'AB') return <div style={{ maxWidth: 760 }}><h1>Kontrollbalansräkning</h1><EmptyState icon="briefcase" title="Gäller aktiebolag">Reglerna om kapitalbrist och kontrollbalansräkning gäller aktiebolag.</EmptyState></div>;
   const o = await overview(company.id);
   const final = o.liquidation ? await finalReport(company.id) : null;
+  const paid = o.liquidation ? await payouts(company.id) : [];
   const t = today();
   return (
     <div style={{ maxWidth: 900 }}>
@@ -90,6 +91,24 @@ export default async function ControlBalance({ params, searchParams }: { params:
             <table className="cb-distribution"><tbody>{final.owners.map((x) => <tr key={x.name} className="cb-owner"><td>{x.name}</td><td className="num">{x.pct} %</td><td className="num">{kr(x.amount)}</td></tr>)}</tbody></table>
             <p className="small muted" style={{ margin: 0 }}>Skiftet beskattas hos ägarna som avyttring av aktierna (K10 eller K4). <Link href={`${b}/agare`}>Ägare</Link></p>
           </>}
+          {paid.length > 0 ? <>
+            <h3 style={{ margin: 0 }}>Bokfört skifte</h3>
+            <table className="lq-payouts"><thead><tr><th>Ägare</th><th className="num">Skifteslikvid</th><th className="num">Omkostnadsbelopp</th><th className="num">Kapitalvinst</th></tr></thead>
+              <tbody>{paid.map((x) => <tr key={x.name} className="lq-row" data-name={x.name}><td>{x.name}</td><td className="num">{kr(x.amount)}</td><td className="num">{kr(x.cost_basis)}</td><td className="num lq-gain">{kr(x.gain)}</td></tr>)}</tbody></table>
+            <p className="small" style={{ margin: 0 }}>Kapitalvinsten deklareras av ägaren: i K10 för kvalificerade andelar i fåmansföretag (vinst upp till gränsbeloppet i tjänst över 3:12-reglerna), annars i K4.</p>
+            <h3 style={{ margin: 0 }}>Kvar att göra</h3>
+            <ul className="small lq-checklist">
+              <li>Slutlig inkomstdeklaration (INK2) för tiden fram till skiftet</li>
+              <li>Avregistrera bolaget för moms och som arbetsgivare hos Skatteverket</li>
+              <li>Slutredovisningen läggs fram på bolagsstämma och skickas till Bolagsverket – bolaget är upplöst när den har registrerats</li>
+              <li>Spara räkenskapsinformationen i sju år; ange vem som förvarar den</li>
+            </ul>
+          </> : (
+            <form action={distribute.bind(null, company.id)} className="row">
+              <label>Skiftesdag<input type="date" name="date" defaultValue={t} /></label>
+              <div style={{ flex: '0 0 auto' }}><button>Bokför skifte till ägarna</button></div>
+            </form>
+          )}
         </section>
       ) : (
         <details className="card">

@@ -5,6 +5,9 @@ import { auditBy } from '@/lib/server/audit';
 import { accountSums, fiscalYearFor, openingBalances } from '@/lib/server/ledger';
 import { today } from '@/lib/format';
 import { addMonths, controlBalance, deadlines, distribution, equityFromBalances, parseAdjustments, warning, type Adjustment } from '@/lib/capital-control';
+import { createVoucher } from '@/lib/server/ledger';
+import { fromSigned } from '@/lib/ledger-lines';
+import { distributionLines, gains } from '@/lib/liquidation';
 import type { Actor } from './actor';
 import { date, str } from './input';
 
@@ -121,4 +124,34 @@ export async function finalReport(companyId: number, at = today()) {
   const owners = await sql<{ name: string; pct: number }[]>`SELECT name, share_pct::float8 AS pct FROM company_owners WHERE company_id = ${companyId} AND share_pct > 0 ORDER BY share_pct DESC, name`;
   const net = assets - liabilities;
   return { at, assets, liabilities, net, owners: distribution(net, owners) };
+}
+
+/** Skiftet bokförs: likvida medel betalas ut till ägarna efter ägarandel, och kapitalvinsten per ägare räknas fram (underlag för K10/K4) */
+export async function bookDistribution(actor: Actor, input: Record<string, unknown>) {
+  const d = date(input, 'date', 'Skiftesdag');
+  return sql.begin(async (tx) => {
+    const [l] = await tx<{ decided_on: string; creditor_notice_on: string | null; distribution_voucher_id: number | null }[]>`SELECT to_char(decided_on,'YYYY-MM-DD') AS decided_on,
+      to_char(creditor_notice_on,'YYYY-MM-DD') AS creditor_notice_on, distribution_voucher_id FROM liquidations WHERE company_id = ${actor.companyId} FOR UPDATE`;
+    if (!l) throw new NotFoundError('Likvidationen');
+    if (l.distribution_voucher_id) throw new ConflictError('Skiftet är redan bokfört');
+    if (!l.creditor_notice_on) throw new ValidationError('Kallelse på okända borgenärer ska ha kungjorts innan skifte');
+    const earliest = addMonths(l.creditor_notice_on, 6);
+    if (d < earliest) throw new ValidationError(`Skifte kan ske tidigast ${earliest}, när tiden för okända borgenärer har gått ut`);
+    let r: ReturnType<typeof distributionLines>;
+    try { r = distributionLines(await balancesAt(actor.companyId, d)); } catch (e) { throw new ValidationError((e as Error).message); }
+    const owners = await tx<{ id: number; name: string; pct: number; cost_basis: number }[]>`SELECT id, name, share_pct::float8 AS pct, cost_basis::float8 AS cost_basis FROM company_owners
+      WHERE company_id = ${actor.companyId} AND share_pct > 0 ORDER BY share_pct DESC, name`;
+    if (!owners.length) throw new ValidationError('Lägg upp aktieägarna under Ägare och utdelning före skiftet');
+    const dist = distribution(r.net, owners);
+    const v = await createVoucher(tx, { actor, date: d, description: 'Skifte vid likvidation, utbetalning till aktieägarna', lines: fromSigned(r.lines), sourceType: 'liquidation' });
+    const rows = gains(dist.map((x, i) => ({ name: x.name, amount: x.amount, costBasis: Number(owners[i].cost_basis) })));
+    for (const [i, x] of rows.entries()) await tx`INSERT INTO liquidation_payouts ${tx({ company_id: actor.companyId, owner_id: owners[i].id, name: x.name, amount: x.amount, cost_basis: x.costBasis, gain: x.gain })}`;
+    await tx`UPDATE liquidations SET distribution_voucher_id = ${v.id}, final_report_on = COALESCE(final_report_on, ${d}::date) WHERE company_id = ${actor.companyId}`;
+    await auditBy(tx, actor, 'liquidation_distribution', 'company', actor.companyId, { net: r.net });
+    return { net: r.net, rows };
+  });
+}
+
+export async function payouts(companyId: number) {
+  return sql<{ name: string; amount: number; cost_basis: number; gain: number }[]>`SELECT name, amount::float8 AS amount, cost_basis::float8 AS cost_basis, gain::float8 AS gain FROM liquidation_payouts WHERE company_id = ${companyId} ORDER BY amount DESC, id`;
 }

@@ -36,3 +36,10 @@ export async function liquidationStep(cid: number, fd: FormData) {
   await attempt(base(cid), () => svc.liquidationStep(actor, { step: str(fd, 'step'), date: str(fd, 'date') }));
   done(base(cid), 'Steget är registrerat');
 }
+
+export async function distribute(cid: number, fd: FormData) {
+  const actor = await actorFor(cid);
+  let n = 0;
+  await attempt(base(cid), async () => { n = (await svc.bookDistribution(actor, form(fd))).net; });
+  done(base(cid), `Skiftet är bokfört: ${kr(n)} kr till aktieägarna`);
+}
