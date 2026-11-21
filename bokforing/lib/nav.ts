@@ -92,6 +92,7 @@ export function buildNav(o: {
       { path: '/rapporter/panel', label: 'Instrumentpanel', hint: 'Diagram och nyckeltal' },
       { path: '/rapporter/manad', label: 'Månadsrapport' },
       { path: '/nyckeltal', label: 'Nyckeltal', perm: 'ledger', hint: 'För vd, ekonomi och styrelse' },
+      { path: '/vmb', label: 'Vinstmarginalbeskattning', perm: 'ledger', hint: 'Moms på marginalen för begagnade varor och konst' },
       { path: '/licenser', label: 'Licenser och royalty', perm: 'ledger', hint: 'Royaltyrapporter, minimiavgift och utländsk källskatt' },
       { path: '/intaktsplan', label: 'Återkommande intäkter', perm: 'ledger', hint: 'Periodiserade abonnemang, MRR, ARR och churn' },
       { path: '/rapporter/egna', label: 'Egna rapporter', perm: 'ledger', hint: 'Bygg och dela egna rapporter' },

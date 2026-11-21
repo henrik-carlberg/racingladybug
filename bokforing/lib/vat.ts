@@ -28,6 +28,8 @@ export function vatReport(sums: AccountSums): { boxes: VatBox[]; toPay: number }
   const box40 = neg(sum(sums, (n) => n === 3305));
   const box41 = neg(sum(sums, (n) => n === 3231));
   const box42 = neg(sum(sums, (n) => n === 3004));
+  // Vinstmarginalbeskattning: beskattningsunderlaget (marginalen exkl. moms) bokas på 3213 vid periodens avräkning
+  const box07 = neg(sum(sums, (n) => n === 3213));
   // x4 = omvänd skattskyldighet (ruta 30–32), x5 = import av varor (ruta 60–62)
   const box10 = neg(sum(sums, (n) => inRange(n, 2610, 2613) || inRange(n, 2616, 2619)));
   const box11 = neg(sum(sums, (n) => inRange(n, 2620, 2623) || inRange(n, 2626, 2629)));
@@ -49,6 +51,7 @@ export function vatReport(sums: AccountSums): { boxes: VatBox[]; toPay: number }
 
   const boxes: VatBox[] = [
     { box: '05', label: 'Momspliktig försäljning som inte ingår i ruta 06–08', amount: box05 },
+    ...(box07 ? [{ box: '07', label: 'Beskattningsunderlag vid vinstmarginalbeskattning', amount: box07 }] : []),
     { box: '10', label: 'Utgående moms 25 %', amount: box10 },
     { box: '11', label: 'Utgående moms 12 %', amount: box11 },
     { box: '12', label: 'Utgående moms 6 %', amount: box12 },
