@@ -27,7 +27,7 @@ export default async function Assets({ params, searchParams }: { params: Promise
   return (
     <div>
       <h1>Anläggningsregister</h1>
-      <p className="small"><Link href={`${b}/forvarv`}>Förvärv av rörelse (inkråmsköp)</Link> – fördela köpeskillingen på tillgångar och goodwill.</p>
+      <p className="small"><Link href={`${b}/forvarv`}>Förvärv av rörelse (inkråmsköp)</Link> – fördela köpeskillingen på tillgångar och goodwill. · <Link href={`${b}/anlaggningar/direktavdrag`}>Direktavdrag eller aktivering</Link> – bedöm kostnadsförda inventarier.</p>
       <Flash searchParams={searchParams} />
       <p className="muted">Inventarier, datorer, bilar och andra anläggningstillgångar skrivs av linjärt per månad enligt plan. Anskaffningen bokförs som vanligt, t.ex. via leverantörsfakturan på konto 1220 eller 1250, och läggs sedan upp här.
         Inventarier med kort livslängd (under tre år) eller lågt värde (under ett halvt prisbasbelopp) får dras av direkt som förbrukningsinventarier.</p>

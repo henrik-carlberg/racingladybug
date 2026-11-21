@@ -38,3 +38,16 @@ describe('Skogskonto', () => {
     expect(deductionRoom(sales, 12000000, 0)).toEqual({ ofIncome: 6500000, total: 6000000, max: 6000000 });
   });
 });
+
+import { classify, flag, halfPriceBase } from '@/lib/small-assets';
+describe('Direktavdrag', () => {
+  it('bedömning och flaggning', () => {
+    expect(halfPriceBase(2026)).toBe(2960000);
+    expect(classify({ price: 2000000, lifeYears: 5, related: 0, year: 2026 }).verdict).toBe('small_value');
+    expect(classify({ price: 2000000, lifeYears: 5, related: 6000000, year: 2026 }).verdict).toBe('asset');
+    expect(classify({ price: 9000000, lifeYears: 3, related: 0, year: 2026 }).verdict).toBe('short_life');
+    const f = flag([{ voucherId: 1, date: '2026-05-10', text: 'Kontorsmöbler: skrivbord', amount: 1800000 }, { voucherId: 2, date: '2026-05-10', text: 'Kontorsmöbler: stolar', amount: 1500000 },
+      { voucherId: 3, date: '2026-06-02', text: 'Pärmar', amount: 90000 }], 2026);
+    expect(f.map((x) => [x.voucherId, x.flagged])).toEqual([[1, 'related'], [2, 'related']]);
+  });
+});

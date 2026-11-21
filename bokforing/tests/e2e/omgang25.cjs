@@ -202,6 +202,40 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(await owner.locator('.sk-not-ef').count() === 1, 'aktiebolag har inte skogskonto');
   log('skogsbruk: insättningsutrymme 60/40 och 80/50 delat mellan kontona, uttag som intäkt, skogsavdrag högst halva anskaffningsvärdet, bara enskild firma');
 
+  // ================= Del 4: korttidsinventarier och inventarier av mindre värde =================
+  const DA = await newCompany('Inventarieköparen AB', 559290000);
+  const half = ({ 2024: 28650, 2025: 29400, 2026: 29600 })[YEAR] ?? 29600;
+  await voucher(DA, 'Kontorsmöbler: skrivbord', [[5410, 18000], [1930, -18000]], `${YEAR}-05-10`);
+  await voucher(DA, 'Kontorsmöbler: stolar', [[5410, 15000], [1930, -15000]], `${YEAR}-05-10`);
+  await voucher(DA, 'Maskin svarv', [[5410, 40000], [1930, -40000]], `${YEAR}-06-01`);
+  await voucher(DA, 'Pärmar', [[5410, 900], [1930, -900]], `${YEAR}-06-02`);
+  await owner.goto(DA + `/anlaggningar/direktavdrag?ar=${YEAR}&price=20000&life=5`);
+  assert((await owner.locator('.da-small_value').count()) === 1, 'under halvt prisbasbelopp: direktavdrag');
+  await owner.goto(DA + `/anlaggningar/direktavdrag?ar=${YEAR}&price=20000&life=5&related=60000`);
+  assert((await owner.locator('.da-asset').count()) === 1 && (await text(owner)).includes('större anskaffning'), 'naturligt samband över gränsen');
+  await owner.goto(DA + `/anlaggningar/direktavdrag?ar=${YEAR}&price=40000&life=2`);
+  assert((await owner.locator('.da-short_life').count()) === 1, 'korttidsinventarie');
+  await owner.goto(DA + `/anlaggningar/direktavdrag?ar=${YEAR}`);
+  assert(await owner.locator('.da-row').count() === 3 && !(await text(owner)).includes('Pärmar'), 'tre flaggade inköp (två hör ihop), pärmarna inte: ' + (await text(owner)).slice(0, 800));
+  const row = (desc) => owner.locator(`.da-row:has-text("${desc}")`);
+  await row('Maskin svarv').locator('select[name=category]').selectOption('maskiner');
+  await row('Maskin svarv').locator('button:has-text("Aktivera och skriv av")').click();
+  await owner.locator('text=Inventariet (40 000,00 kr) är aktiverat').waitFor();
+  await row('skrivbord').locator('select[name=decision]').selectOption('keep');
+  await row('skrivbord').locator('button:has-text("Spara bedömning")').click();
+  await owner.locator('text=Motivera varför').waitFor();
+  await owner.goto(DA + `/anlaggningar/direktavdrag?ar=${YEAR}`);
+  await row('skrivbord').locator('input[name=note]').fill('Skrivbordet är fristående från stolarna');
+  await row('skrivbord').locator('select[name=decision]').selectOption('keep');
+  await row('skrivbord').locator('button:has-text("Spara bedömning")').click();
+  await owner.locator('text=Direktavdraget behålls').waitFor();
+  await owner.goto(DA + '/anlaggningar');
+  t = await text(owner);
+  assert(t.includes('Maskin svarv'), 'maskinen i anläggningsregistret: ' + t.slice(0, 800));
+  await owner.goto(DA + `/anlaggningar/direktavdrag?ar=${YEAR}`);
+  assert(await owner.locator('.da-row').count() === 1 && await owner.locator('.da-decided tr').count() === 2, 'en kvar att bedöma, två bedömda');
+  log(`direktavdrag: halvt prisbasbelopp ${half} kr, korttidsinventarier, inköp som hör ihop flaggas, aktivering till anläggningsregistret och motiverat direktavdrag`);
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 25: alla steg gick igenom');
