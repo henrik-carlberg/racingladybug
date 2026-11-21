@@ -23,6 +23,7 @@ const ACCOUNTS: Acc[] = [
   [1630, 'Avräkning för skatter och avgifter (skattekonto)'],
   [1650, 'Momsfordran'],
   [1680, 'Andra kortfristiga fordringar'],
+  [1685, 'Kortfristiga fordringar hos delägare eller närstående'],
   [1710, 'Förutbetalda hyreskostnader'],
   [1790, 'Övriga förutbetalda kostnader och upplupna intäkter'],
   [1910, 'Kassa'],
