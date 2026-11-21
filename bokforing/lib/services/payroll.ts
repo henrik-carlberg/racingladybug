@@ -278,8 +278,11 @@ export async function bookPayrollRun(actor: Actor, runId: number) {
     ]) : [];
     if (pensionLines.length) for (const [n, name] of [[7411, 'Premier för kollektiva pensionsförsäkringar'], [7533, 'Särskild löneskatt för pensionskostnader'], [2514, 'Beräknad särskild löneskatt på pensionskostnader'], [2990, 'Övriga upplupna kostnader och förutbetalda intäkter'], [7570, 'Premier för arbetsmarknadsförsäkringar']] as const)
       await tx`INSERT INTO accounts (company_id, number, name) VALUES (${actor.companyId}, ${n}, ${name}) ON CONFLICT DO NOTHING`;
+    // Avtalad ränta på medarbetarlån som dras på nettolönen
+    const [li] = await tx<{ interest: number }[]>`SELECT COALESCE(SUM(interest), 0)::float8 AS interest FROM employee_loan_installments WHERE run_id = ${runId}`;
+    const loanLines = li.interest ? fromSigned([{ account: 1610, amount: li.interest }, { account: 8310, amount: -li.interest, description: 'Ränta på lån till anställda' }]) : [];
     const v = await createVoucher(tx, {
-      actor, date: r.payment_date, description: `Lön ${r.period}`, lines: [...payrollBookingLines(calcs), ...pensionLines], sourceType: 'payroll', sourceId: runId, series: 'L',
+      actor, date: r.payment_date, description: `Lön ${r.period}`, lines: [...payrollBookingLines(calcs), ...pensionLines, ...loanLines], sourceType: 'payroll', sourceId: runId, series: 'L',
     });
     await tx`UPDATE payroll_runs SET status = 'booked', voucher_id = ${v.id}, booked_by = ${actor.userId}, booked_at = now() WHERE id = ${runId}`;
     await auditBy(tx, actor, 'book', 'payroll_run', runId);

@@ -73,6 +73,7 @@ export function buildNav(o: {
       { path: '/lon/avtal', label: 'Kollektivavtal', perm: 'payroll', hint: 'OB, övertid, beredskap, pension' },
       { path: '/lon/personaloptioner', label: 'Personaloptioner', perm: 'payroll', hint: 'Kvalificerade personaloptioner med villkor och intjänande' },
       { path: '/lon/hogkostnadsskydd', label: 'Högkostnadsskydd', perm: 'payroll', hint: 'Ersättning för höga sjuklönekostnader' },
+      { path: '/lon/medarbetarlan', label: 'Medarbetarlån', perm: 'payroll', hint: 'Lån till anställda med avdrag på lönen och ränteförmån' },
       { path: '/lon/direktpension', label: 'Direktpension', perm: 'ledger', hint: 'Pensionsskuld enligt tryggandelagen' },
       { path: '/lon/styrelsearvoden', label: 'Styrelsearvoden', perm: 'payroll', hint: 'Arvoden som lön eller mot faktura med F-skattekontroll' },
       { path: '/lon/sarskild-skatt', label: 'Expertskatt och SINK', perm: 'payroll', hint: 'Skattefri fjärdedel för experter och särskild inkomstskatt för utomlands bosatta' },

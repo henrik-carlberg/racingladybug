@@ -10,3 +10,14 @@ describe('Skifte vid likvidation', () => {
     expect(gains([{ name: 'A', amount: 2100000, costBasis: 1500000 }])[0].gain).toBe(600000);
   });
 });
+
+import { benefitRate, loanItems } from '@/lib/employee-loans';
+describe('Medarbetarlån', () => {
+  it('förmånsränta och lönerader', () => {
+    expect(benefitRate(2026)).toBeCloseTo(3.55);
+    const r = loanItems({ balance: 12000000, agreedRate: 1, installment: 1000000 }, 2026);
+    expect(r).toMatchObject({ amortization: 1000000, interest: 10000, benefit: 25500 });
+    expect(r.items.map((i) => i.type)).toEqual(['net_deduction', 'benefit']);
+    expect(loanItems({ balance: 50000, agreedRate: 5, installment: 1000000 }, 2026)).toMatchObject({ amortization: 50000, benefit: 0 });
+  });
+});

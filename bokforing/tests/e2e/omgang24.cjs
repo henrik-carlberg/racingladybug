@@ -123,6 +123,39 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(await owner.locator('.lq-checklist li').count() === 4 && !(await owner.locator('button:has-text("Bokför skifte")').count()), 'checklista, inget nytt skifte');
   log('likvidation: skifte först efter borgenärstiden och när tillgångarna är sålda, 35 000 kr fördelas 60/40 med kapitalvinst 6 000 och 4 000 kr');
 
+  // ================= Del 2: medarbetarlån =================
+  const ML = await newCompany('Lånegivaren AB', 559220000);
+  await voucher(ML, 'Aktiekapital', [[1930, 500000], [2081, -500000]], `${YEAR}-01-02`);
+  await owner.goto(ML + '/lon/anstallda');
+  await owner.fill('input[name=first_name]', 'Lena'); await owner.fill('input[name=last_name]', 'Lånetagare');
+  await owner.fill('input[name=personal_number]', '19811218-9876'); await owner.fill('input[name=monthly_salary]', '40000'); await owner.fill('input[name=tax_table]', '32');
+  await owner.click('form:has(input[name=first_name]) button:has-text("Spara")'); await owner.waitForURL(/ok=/);
+  await owner.goto(ML + '/lon/medarbetarlan');
+  await owner.fill('input[name=principal]', '120000'); await owner.fill('input[name=installment]', '10000'); await owner.fill('input[name=loan_date]', day(5));
+  await owner.click('button:has-text("Bokför lånet")');
+  await owner.locator('text=skattepliktig ränteförmån').waitFor();
+  await owner.goto(ML + '/lon');
+  await owner.fill('input[name=period]', `${YEAR}-${String(MONTH).padStart(2, '0')}`);
+  await owner.fill('input[name=payment_date]', day(0));
+  await owner.click('button:has-text("Ny lönekörning")');
+  await owner.waitForURL(/lon\/\d+\?ok/);
+  const loanRun = owner.url().split('?')[0];
+  await owner.goto(ML + '/lon/medarbetarlan');
+  await owner.locator('.el-row[data-name="Lena Lånetagare"] button:has-text("Dra på lönen")').click();
+  await owner.locator('.flash').first().waitFor();
+  const benefit = Math.round(12000000 * ({ 2024: 3.62, 2025: 2.96 }[YEAR] ?? 3.55) / 100 / 12);
+  t = nb(await owner.locator('.flash').first().innerText());
+  assert(t.includes('amortering10000,00kr') && t.includes(`ränteförmån${(benefit / 100).toFixed(2).replace('.', ',')}kr`), 'amortering och ränteförmån: ' + t);
+  assert(!(await owner.locator('.el-row button:has-text("Dra på lönen")').count()), 'en gång per lönekörning');
+  await owner.goto(loanRun);
+  t = await owner.content();
+  assert(t.includes('Ränteförmån medarbetarlån') && t.includes('Medarbetarlån: amortering'), 'raderna på lönespecen');
+  await owner.click('button:has-text("Bokför lönekörning")');
+  await owner.locator('text=Lönekörningen är bokförd').waitFor();
+  await owner.goto(ML + '/lon/medarbetarlan');
+  assert(nb(await owner.locator('.el-row[data-name="Lena Lånetagare"] .el-balance').innerText()) === '110000,00', 'saldo efter bokförd lön');
+  log('medarbetarlån: 120 000 kr till 0 % ränta, amortering 10 000 kr på nettolönen och ränteförmån enligt statslåneräntan + 1 %, saldo 110 000 kr');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 24: alla steg gick igenom');
