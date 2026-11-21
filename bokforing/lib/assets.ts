@@ -7,6 +7,7 @@ export const ASSET_CATEGORIES = {
   bilar: { label: 'Bilar och transportmedel', asset: 1240, accDep: 1249, dep: 7834, life: 60, names: ['Bilar och andra transportmedel', 'Ackumulerade avskrivningar på bilar och andra transportmedel', 'Avskrivningar på bilar och andra transportmedel'] },
   byggnader: { label: 'Byggnader', asset: 1110, accDep: 1119, dep: 7820, life: 600, names: ['Byggnader', 'Ackumulerade avskrivningar på byggnader', 'Avskrivningar på byggnader och markanläggningar'] },
   immateriella: { label: 'Immateriella tillgångar', asset: 1010, accDep: 1019, dep: 7810, life: 60, names: ['Balanserade utgifter för utvecklingsarbeten och liknande arbeten', 'Ackumulerade avskrivningar på balanserade utgifter', 'Avskrivningar på immateriella anläggningstillgångar'] },
+  goodwill: { label: 'Goodwill', asset: 1070, accDep: 1079, dep: 7817, life: 60, names: ['Goodwill', 'Ackumulerade avskrivningar på goodwill', 'Avskrivningar på goodwill'] },
 } as const;
 export type AssetCategory = keyof typeof ASSET_CATEGORIES;
 

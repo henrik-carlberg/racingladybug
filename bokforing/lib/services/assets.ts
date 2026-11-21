@@ -16,7 +16,7 @@ export interface AssetOut {
   booked: number; last_period: string | null; cost_center_id: number | null; notes: string; source_voucher_id: number | null;
 }
 
-async function ensureAccounts(db: Tx | typeof sql, companyId: number, cat: AssetCategory) {
+export async function ensureAccounts(db: Tx | typeof sql, companyId: number, cat: AssetCategory) {
   const c = ASSET_CATEGORIES[cat];
   const rows = [[c.asset, c.names[0]], [c.accDep, c.names[1]], [c.dep, c.names[2]], [DISPOSAL_ACCOUNTS.gain, 'Vinst vid avyttring av maskiner och inventarier'], [DISPOSAL_ACCOUNTS.loss, 'Förlust vid avyttring av maskiner och inventarier']] as const;
   for (const [n, name] of rows) await db`INSERT INTO accounts (company_id, number, name) VALUES (${companyId}, ${n}, ${name}) ON CONFLICT DO NOTHING`;
