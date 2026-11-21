@@ -142,6 +142,8 @@ export async function annualReport(companyId: number, fyId: number): Promise<{ h
   const poc = (await pocNote(companyId, fy.end_date)) ?? undefined;
   const { notes: provisionNotes } = await import('./provisions');
   const pn = await provisionNotes(companyId, fy.start_date, fy.end_date);
+  const { pensionNote } = await import('./direct-pension');
+  pn.provisions.push(...(await pensionNote(companyId, fy.start_date, fy.end_date)) as never[]);
   const input: AnnualReportInput = {
     company: c, years, activity: data.activity ?? '', events: data.events ?? '', dividend: data.dividend ?? 0,
     board, employees: await averageEmployees(companyId, fy), place: data.place ?? c.city, k3, brf, leasing: leasing.total ? leasing : undefined, poc,

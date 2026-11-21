@@ -146,6 +146,28 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   await owner.locator('text=Kupongskatt 15 000,00 kr är bokförd som betald').waitFor();
   log('kupongskatt: 15 % enligt avtal med Norge, EU-moderbolag befriat, utdelning över beslutat belopp nekas, inbetalning till Skatteverket');
 
+  // ================= Del 4: direktpension =================
+  const DP = await newCompany('Pensionsbolaget AB', 559190000);
+  await owner.goto(DP + '/lon/direktpension');
+  await owner.fill('input[name=person]', 'Gunnar Grundare'); await owner.check('input[name=insured]');
+  await owner.click('button:has-text("Registrera åtagande")');
+  await owner.locator('text=Pensionsåtagandet är registrerat').waitFor();
+  const dp = () => owner.locator('.dp-row[data-person="Gunnar Grundare"]');
+  await dp().locator('input[name=capital_value]').fill('500000');
+  await dp().locator('button:has-text("Räkna upp")').click();
+  await owner.locator('text=Pensionsskulden är ökad med 500 000,00 kr, särskild löneskatt 121 300,00 kr').waitFor();
+  await dp().locator('input[name=amount]').fill('20000');
+  await dp().locator('button:has-text("Utbetalning")').click();
+  await owner.locator('text=Utbetald pension 20 000,00 kr').waitFor();
+  assert(nb(await dp().locator('.dp-liability').innerText()) === '480000,00' && nb(await owner.locator('.dp-nondeductible').innerText()) === '0,00', 'skuld efter utbetalning, avdragsgill');
+  await owner.goto(DP + '/bokslut');
+  await owner.locator(`tr:has-text("${YEAR}-01-01") a:has-text("Öppna")`).first().click();
+  await owner.waitForURL(/bokslut\/\d+/);
+  await owner.goto(owner.url().split('?')[0] + '/arsredovisning');
+  t = await text(owner);
+  assert(t.includes('Pensioner enligt tryggandelagen') && t.includes('Gunnar Grundare'), 'pensionsskulden i noten Avsättningar');
+  log('direktpension: pensionsskuld 500 000 kr på 2210 med särskild löneskatt 121 300 kr, utbetalning minskar skulden, i noten Avsättningar');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 23: alla steg gick igenom');

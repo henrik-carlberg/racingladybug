@@ -37,3 +37,13 @@ describe('Kupongskatt', () => {
     expect(payoutLines(1000000, 150000)).toEqual([{ account: 2898, amount: 1000000 }, { account: 2750, amount: -150000 }, { account: 1930, amount: -850000 }]);
   });
 });
+
+import { taxAdjustment, valuation, valuationLines } from '@/lib/direct-pension';
+describe('Direktpension', () => {
+  it('uppräkning med särskild löneskatt och avdragsrätt', () => {
+    expect(valuation(10000000, 15000000)).toEqual({ change: 5000000, slp: 1213000 });
+    expect(valuationLines(5000000, 1213000)).toEqual([{ account: 7420, amount: 5000000 }, { account: 2210, amount: -5000000 }, { account: 7533, amount: 1213000 }, { account: 2514, amount: -1213000 }]);
+    expect(taxAdjustment(5000000, false)).toBe(5000000);
+    expect(taxAdjustment(5000000, true)).toBe(0);
+  });
+});
