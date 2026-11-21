@@ -104,6 +104,26 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await text(owner)).includes('50000,00'), 'övertagen semesterlöneskuld');
   log('inkråmsköp: köpeskilling 500 000 kr fördelad på inventarier och lager, semesterlöneskuld tas över, goodwill 250 000 kr i anläggningsregistret');
 
+  // ================= Del 2: valutaterminer =================
+  const VT = await newCompany('Valutasäkrarna AB', 559170000);
+  await owner.goto(VT + '/valutaterminer');
+  await owner.fill('input[name=amount]', '100000'); await owner.fill('input[name=forward_rate]', '11,5'); await owner.fill('input[name=maturity]', `${YEAR + 1}-03-31`);
+  await owner.click('button:has-text("Registrera termin")');
+  await owner.locator('text=Terminen är registrerad').waitFor();
+  const fx = () => owner.locator('.fx-row[data-currency="EUR"]');
+  await fx().locator('input[name=rate]').fill('11,8');
+  await fx().locator('button:has-text("Värdera")').click();
+  await owner.locator('text=reserv för orealiserad förlust 30 000,00 kr').waitFor();
+  assert(nb(await fx().locator('.fx-reserve').innerText()) === '30000,00', 'reserv');
+  await fx().locator('form:has(input[name=spot_rate]) input[name=date]').fill(`${YEAR}-12-31`);
+  await fx().locator('input[name=spot_rate]').fill('11,7');
+  await fx().locator('button:has-text("Avräkna")').click();
+  await owner.locator('text=Terminen är avräknad: kursförlust 20 000,00 kr').waitFor();
+  await owner.goto(VT + '/rapporter/huvudbok?account=2990');
+  t = nb(await text(owner));
+  assert(t.includes('30000,00'), 'reserven löses upp vid avräkning');
+  log('valutatermin: osäkrad termin reserveras med 30 000 kr i bokslutet (lägsta värdets princip) och avräknas med kursförlust 20 000 kr');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 23: alla steg gick igenom');

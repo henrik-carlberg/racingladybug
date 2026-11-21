@@ -54,6 +54,7 @@ export function buildNav(o: {
       { path: '/kort', label: 'Företagskort', perm: 'ledger', hint: 'Kortköp som saknar kvitto' },
       { path: '/skattekonto', label: 'Skattekontot', perm: 'ledger' },
       { path: '/leasing', label: 'Leasing', perm: 'ledger', hint: 'Leasade bilar, maskiner och lokaler med automatisk bokföring' },
+      { path: '/valutaterminer', label: 'Valutaterminer', perm: 'ledger', hint: 'Valutasäkring, värdering i bokslutet och avräkning' },
       { path: '/finansiering', label: 'Lån och finansiering', perm: 'ledger', hint: 'Amorteringsplaner, krediter och factoring' },
       { path: '/vardepapper', label: 'Värdepapper och placeringar', perm: 'ledger', hint: 'Aktier, fonder och kryptotillgångar med värdering och skatt' },
       { path: '/skatt', label: 'Skatteplanering', perm: 'ledger', hint: 'Prognos för skattekontot, preliminärskatt och bokslutsdispositioner' },
