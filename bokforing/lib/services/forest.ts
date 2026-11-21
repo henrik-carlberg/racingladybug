@@ -8,6 +8,7 @@ import { parseAmount } from '@/lib/money';
 import { ACCOUNTS, deductionRoom, depositLines, depositRoom, maxDeposit, type ForestAccount, type Sale, type SaleKind } from '@/lib/forest';
 import type { Actor } from './actor';
 import { date, str } from './input';
+import { today } from '@/lib/format';
 
 const kronor = (v: unknown, label: string, zero = false) => { const n = parseAmount(String(v ?? '').trim() || (zero ? '0' : '')); if (n == null || n < 0 || (!zero && !n)) throw new ValidationError(`Ange ${label} i kronor`); return n; };
 const account = (v: unknown): ForestAccount => (v === 'skada' ? 'skada' : 'skog');
@@ -28,7 +29,8 @@ export async function overview(companyId: number, year: number) {
   const balance = (a: ForestAccount) => tx.filter((t) => t.account === a).reduce((x, t) => x + (t.kind === 'deposit' ? t.amount : -t.amount), 0);
   const withdrawnThisYear = tx.filter((t) => t.kind === 'withdrawal' && t.date.startsWith(String(year))).reduce((x, t) => x + t.amount, 0);
   const deds = await sql<{ tax_year: number; amount: number }[]>`SELECT tax_year, amount::float8 AS amount FROM forest_deductions WHERE company_id = ${companyId}`;
-  const usedBefore = settings.used_before + deds.filter((d) => d.tax_year < year).reduce((x, d) => x + d.amount, 0);
+  // Taket gäller sammanlagt för alla år: övriga års skogsavdrag (även senare år) tar utrymme
+  const usedBefore = settings.used_before + deds.filter((d) => d.tax_year !== year).reduce((x, d) => x + d.amount, 0);
   const deduction = deds.find((d) => d.tax_year === year)?.amount ?? 0;
   return {
     year, settings, sales, transactions: tx, deposited, deduction, withdrawnThisYear,
@@ -86,7 +88,11 @@ export async function withdraw(actor: Actor, input: Record<string, unknown>) {
 export async function setDeduction(actor: Actor, input: Record<string, unknown>) {
   await soleTrader(actor.companyId);
   const year = Number(str(input, 'tax_year')), amount = kronor(input.amount, 'skogsavdraget', true);
-  const o = await overview(actor.companyId, year);
-  if (amount > o.deductionRoom.max) throw new ValidationError(`Skogsavdraget får vara högst ${(o.deductionRoom.max / 100).toLocaleString('sv-SE')} kr för ${year}`);
-  await sql`INSERT INTO forest_deductions ${sql({ company_id: actor.companyId, tax_year: year, amount })} ON CONFLICT (company_id, tax_year) DO UPDATE SET amount = EXCLUDED.amount`;
+  if (!Number.isInteger(year) || year < 2000 || year > Number(today().slice(0, 4))) throw new ValidationError('Ange ett beskattningsår som har börjat');
+  await sql.begin(async (tx) => {
+    await tx`SELECT pg_advisory_xact_lock(hashtext('forest'), ${actor.companyId})`;
+    const o = await overview(actor.companyId, year);
+    if (amount > o.deductionRoom.max) throw new ValidationError(`Skogsavdraget får vara högst ${(o.deductionRoom.max / 100).toLocaleString('sv-SE')} kr för ${year}`);
+    await tx`INSERT INTO forest_deductions ${tx({ company_id: actor.companyId, tax_year: year, amount })} ON CONFLICT (company_id, tax_year) DO UPDATE SET amount = EXCLUDED.amount`;
+  });
 }

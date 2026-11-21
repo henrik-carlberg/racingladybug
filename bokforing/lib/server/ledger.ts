@@ -120,6 +120,9 @@ export async function reverseVoucher(tx: Tx, actor: Actor, voucherId: number, da
     const [o] = await tx<{ source_type: string | null }[]>`SELECT o.source_type FROM vouchers v JOIN vouchers o ON o.id = v.corrects_id WHERE v.id = ${voucherId}`;
     if (o?.source_type && SUBLEDGER_SOURCES.has(o.source_type)) throw new BookkeepingError('Rättelsen hör till en reskontra och kan inte makuleras här');
   }
+  // Ett inköp som har aktiverats till anläggningsregistret rättas inte fristående (då finns tillgången kvar utan kostnad)
+  const [act] = await tx`SELECT 1 FROM small_asset_reviews WHERE voucher_id = ${voucherId} AND decision = 'activated'`;
+  if (act) throw new BookkeepingError('Inköpet är aktiverat i anläggningsregistret – avyttra eller utrangera tillgången i stället');
   const already = await tx`SELECT 1 FROM vouchers WHERE corrects_id = ${voucherId} AND source_type = 'reversal'`;
   if (already.length) throw new BookkeepingError('Verifikationen är redan makulerad med en rättelse');
   const lines = reverseLines(await voucherLines(tx, voucherId));

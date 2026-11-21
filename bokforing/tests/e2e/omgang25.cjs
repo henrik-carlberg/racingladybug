@@ -129,6 +129,7 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   await vmb('försäljning', 'Tavla', '19500', `${YEAR}-02-25`);
   t = await settleVmb(`${YEAR}-02-01`, `${YEAR}-02-28`);
   assert(t.includes('Marginalenär12500,00kr:moms2500,00kr,beskattningsunderlag10000,00kriruta07'), 'moms på marginalen: ' + t);
+  assert((await vmb('försäljning', 'Sen byrå', '5000', `${YEAR}-02-10`)).includes('VMBäravräknadtillochmed'), 'försäljning i avräknad period nekas');
   await owner.goto(VM + `/rapporter/moms?from=${YEAR}-02-01&to=${YEAR}-02-28`);
   t = await text(owner);
   assert(t.includes('Beskattningsunderlag vid vinstmarginalbeskattning'), 'ruta 07 i momsrapporten: ' + t.slice(0, 600));

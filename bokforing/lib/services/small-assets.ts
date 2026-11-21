@@ -31,7 +31,7 @@ export async function keep(actor: Actor, voucherId: number, input: Record<string
   const decision = str(input, 'decision') === 'short_life' ? 'short_life' : 'keep';
   const note = str(input, 'note', { max: 500 });
   if (decision === 'keep' && !note) throw new ValidationError('Motivera varför direktavdraget behålls');
-  const [v] = await sql`SELECT 1 FROM vouchers WHERE id = ${voucherId} AND company_id = ${actor.companyId}`;
+  const [v] = await sql`SELECT 1 FROM vouchers v WHERE v.id = ${voucherId} AND v.company_id = ${actor.companyId} AND v.corrects_id IS NULL AND NOT EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = v.id)`;
   if (!v) throw new NotFoundError('Verifikationen');
   const r = await sql`INSERT INTO small_asset_reviews ${sql({ voucher_id: voucherId, company_id: actor.companyId, decision, note, decided_by: actor.userId })} ON CONFLICT DO NOTHING RETURNING voucher_id`;
   if (!r.length) throw new ConflictError('Inköpet är redan bedömt');
@@ -46,8 +46,9 @@ export async function activate(actor: Actor, voucherId: number, input: Record<st
   return sql.begin(async (tx) => {
     const [v] = await tx<{ date: string; text: string; amount: number }[]>`SELECT to_char(v.date,'YYYY-MM-DD') AS date, v.description AS text,
       COALESCE((SELECT SUM(debit - credit) FROM voucher_lines WHERE voucher_id = v.id AND account_number = ${EXPENSE_ACCOUNT}), 0)::float8 AS amount
-      FROM vouchers v WHERE v.id = ${voucherId} AND v.company_id = ${actor.companyId} FOR UPDATE`;
-    if (!v) throw new NotFoundError('Verifikationen');
+      FROM vouchers v WHERE v.id = ${voucherId} AND v.company_id = ${actor.companyId} AND v.corrects_id IS NULL
+        AND NOT EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = v.id) FOR UPDATE`;
+    if (!v) throw new NotFoundError('Verifikationen (eller så är den rättad)');
     if (v.amount <= 0) throw new ValidationError('Verifikationen har ingen kostnad på förbrukningsinventarier');
     const [dup] = await tx`SELECT 1 FROM small_asset_reviews WHERE voucher_id = ${voucherId}`;
     if (dup) throw new ConflictError('Inköpet är redan bedömt');

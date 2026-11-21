@@ -9,6 +9,14 @@ import { ACC } from '@/lib/bas';
 import { SIMPLE_LIMIT, VMB, settle, settleLines } from '@/lib/vmb';
 import type { Actor } from './actor';
 import { date, str } from './input';
+import { today } from '@/lib/format';
+
+/** VMB-inköp och försäljningar får inte dateras i en period som redan är avräknad (då skulle de aldrig beskattas) */
+async function assertOpen(tx: Tx, companyId: number, d: string) {
+  await tx`SELECT pg_advisory_xact_lock(hashtext('vmb'), ${companyId})`;
+  const [last] = await tx<{ to: string }[]>`SELECT to_char(max(period_to),'YYYY-MM-DD') AS "to" FROM vmb_settlements WHERE company_id = ${companyId}`;
+  if (last?.to && d <= last.to) throw new ValidationError(`VMB är avräknad till och med ${last.to}; datera inköp och försäljningar efter det`);
+}
 
 const kronor = (v: unknown, label: string) => { const n = parseAmount(String(v ?? '').trim()); if (n == null || n <= 0) throw new ValidationError(`Ange ${label} i kronor`); return n; };
 async function ensure(db: Tx | typeof sql, companyId: number) {
@@ -41,6 +49,7 @@ export async function purchase(actor: Actor, input: Record<string, unknown>) {
   const d = date(input, 'date', 'Datum');
   const what = str(input, 'description', { required: true, label: 'Vara', max: 200 });
   return sql.begin(async (tx) => {
+    await assertOpen(tx, actor.companyId, d);
     await ensure(tx, actor.companyId);
     await createVoucher(tx, { actor, date: d, description: `VMB-inköp: ${what}`, lines: fromSigned([{ account: VMB.purchases, amount: price }, { account: ACC.bank, amount: -price }]), sourceType: 'vmb_purchase' });
     await auditBy(tx, actor, 'vmb_purchase', 'company', actor.companyId, { price });
@@ -53,6 +62,7 @@ export async function sale(actor: Actor, input: Record<string, unknown>) {
   const d = date(input, 'date', 'Datum');
   const what = str(input, 'description', { required: true, label: 'Vara', max: 200 });
   return sql.begin(async (tx) => {
+    await assertOpen(tx, actor.companyId, d);
     await ensure(tx, actor.companyId);
     await createVoucher(tx, { actor, date: d, description: `VMB-försäljning: ${what} (Vinstmarginalbeskattning för begagnade varor)`, lines: fromSigned([{ account: ACC.bank, amount: price }, { account: VMB.sales, amount: -price }]), sourceType: 'vmb_sale' });
     await auditBy(tx, actor, 'vmb_sale', 'company', actor.companyId, { price });
@@ -63,6 +73,7 @@ export async function sale(actor: Actor, input: Record<string, unknown>) {
 export async function settlePeriod(actor: Actor, input: Record<string, unknown>) {
   const from = date(input, 'period_from', 'Från'), to = date(input, 'period_to', 'Till');
   if (to < from) throw new ValidationError('Perioden slutar före den börjar');
+  if (to > today()) throw new ValidationError('En period kan bara avräknas när den är slut');
   return sql.begin(async (tx) => {
     await tx`SELECT pg_advisory_xact_lock(hashtext('vmb'), ${actor.companyId})`;
     const [last] = await tx<{ period_to: string; carry_out: number }[]>`SELECT to_char(period_to,'YYYY-MM-DD') AS period_to, carry_out::float8 AS carry_out FROM vmb_settlements
