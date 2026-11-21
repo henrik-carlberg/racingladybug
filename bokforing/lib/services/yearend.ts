@@ -1,4 +1,5 @@
 import 'server-only';
+import { turnoverWarning } from '@/lib/accounting-method';
 import { sql } from '@/lib/db';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import { accountSums, createVoucher, fiscalYears, openingBalances, type FiscalYear } from '@/lib/server/ledger';
@@ -37,6 +38,8 @@ export interface YearStatus {
   accountingMethod: 'invoice' | 'cash';
   /** Kontantmetoden: obetalda fakturor (kund + leverantör) som ska bokföras per bokslutsdagen */
   cashOpenInvoices: number;
+  /** Kontantmetoden: nettoomsättningen är över gränsen på 3 miljoner kronor */
+  cashTurnoverWarning: string | null;
 }
 
 export async function yearStatus(companyId: number, fyId: number): Promise<YearStatus> {
@@ -66,6 +69,7 @@ export async function yearStatus(companyId: number, fyId: number): Promise<YearS
     resultAfterTax: resultBeforeTax - tax, resultBooked: (sums.get(8999) ?? 0) !== 0,
     unreconciledBank: o.bank, draftInvoices: o.drafts, unpaidSupplierInvoicesWithoutApproval: o.si, vatUnsettled: o.vat,
     accountingMethod: c.accounting_method, cashOpenInvoices: o.cash,
+    cashTurnoverWarning: c.accounting_method === 'cash' ? turnoverWarning([...sums].reduce((t, [n, v]) => (n >= 3000 && n <= 3799 ? t - Number(v) : t), 0)) : null,
   };
 }
 

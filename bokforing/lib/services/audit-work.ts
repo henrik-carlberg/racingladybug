@@ -7,6 +7,8 @@ import { addDays } from '@/lib/format';
 import { CHECKPOINTS, drawSample, ledgerEvidence, materialitySuggestion, musSample, seeded, summary, type LedgerItem, type SampleMethod, type VoucherInfo } from '@/lib/audit-work';
 import { accountSums } from '@/lib/server/ledger';
 import type { Ctx } from '@/lib/server/auth';
+import { OPINIONS, reportText, suggestedRemarks, type Opinion } from '@/lib/audit-report';
+import { warning as capitalWarning } from '@/lib/capital-control';
 
 // Granskningen ändrar inte bokföringen. Bara revisorn (rollen revisor) granskar; bolaget ser resultatet och svarar på anmärkningar.
 const log = (ctx: Ctx, action: string, entity: string, id: number | null, details?: unknown) => audit(sql, { companyId: ctx.company.id, userId: ctx.user.id, action, entity, entityId: id, details });
@@ -220,4 +222,45 @@ export async function engagements(companyId: number) {
       (SELECT count(*)::int FROM audit_samples s WHERE s.engagement_id = e.id) AS samples,
       (SELECT count(*)::int FROM audit_samples s WHERE s.engagement_id = e.id AND s.status = 'remark') + (SELECT count(*)::int FROM audit_checkpoints c WHERE c.engagement_id = e.id AND c.status = 'remark') AS remarks
     FROM audit_engagements e JOIN fiscal_years f ON f.id = e.fiscal_year_id WHERE e.company_id = ${companyId} ORDER BY f.start_date DESC`];
+}
+
+/** Förslag på anmärkningar: förbjudna lån, kapitalbrist och underskott på skattekontot på balansdagen */
+export async function reportIndicators(companyId: number, end: string) {
+  const bal = await openingBalances(companyId, addDays(end, 1));
+  const balances = new Map([...bal].map(([k, v]) => [k, Number(v)]));
+  const [loans] = await sql<{ amount: number }[]>`SELECT COALESCE(SUM(amount - repaid), 0)::float8 AS amount FROM owner_loans WHERE company_id = ${companyId}
+    AND relation IN ('owner','board','ceo','related') AND purpose = 'private' AND loan_date <= ${end}`;
+  const tax = balances.get(1630) ?? 0;
+  return suggestedRemarks({ forbiddenLoans: loans.amount, deficit: !!capitalWarning(balances), taxDeficit: tax < 0 ? -tax : 0 });
+}
+
+export async function auditReport(companyId: number, engId: number) {
+  const [r] = await sql<{ opinion: Opinion; basis: string; remarks: string; adopt: boolean; discharge: boolean; place: string; signer_name: string; signed_on: string; start: string; end: string; company: string; orgnr: string }[]>`
+    SELECT r.opinion, r.basis, r.remarks, r.adopt, r.discharge, r.place, r.signer_name, to_char(r.signed_on,'YYYY-MM-DD') AS signed_on, to_char(f.start_date,'YYYY-MM-DD') AS start,
+      to_char(f.end_date,'YYYY-MM-DD') AS "end", c.name AS company, c.orgnr
+    FROM audit_reports r JOIN audit_engagements e ON e.id = r.engagement_id JOIN fiscal_years f ON f.id = e.fiscal_year_id JOIN companies c ON c.id = r.company_id
+    WHERE r.engagement_id = ${engId} AND r.company_id = ${companyId}`;
+  if (!r) return null;
+  const remarks = r.remarks.split('\n').map((x) => x.trim()).filter(Boolean);
+  return { ...r, remarkList: remarks, sections: reportText({ company: r.company, orgnr: r.orgnr, start: r.start, end: r.end, opinion: r.opinion, basis: r.basis, remarks, adopt: r.adopt, discharge: r.discharge, auditor: r.signer_name, place: r.place, date: r.signed_on }) };
+}
+
+/** Revisorn upprättar och signerar revisionsberättelsen när granskningen är avslutad. Den kan inte ändras efteråt. */
+export async function issueReport(ctx: Ctx, engId: number, input: { opinion: string; basis: string; remarks: string; adopt: boolean; discharge: boolean; place: string; date: string }) {
+  reviewer(ctx);
+  const e = await ownEngagement(ctx, engId, false);
+  if (e.status !== 'closed') throw new ValidationError('Avsluta granskningen innan revisionsberättelsen upprättas');
+  if (!(input.opinion in OPINIONS)) throw new ValidationError('Välj uttalande');
+  const opinion = input.opinion as Opinion;
+  const basis = input.basis.trim().slice(0, 4000);
+  if (opinion !== 'clean' && !basis) throw new ValidationError('Beskriv grunden för det modifierade uttalandet');
+  const place = input.place.trim().slice(0, 100);
+  if (!place) throw new ValidationError('Ange ort');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date) || input.date <= e.end) throw new ValidationError('Revisionsberättelsen dateras efter räkenskapsårets slut');
+  const remarks = input.remarks.trim().slice(0, 4000);
+  // Anmärkning i förvaltningen och ansvarsfrihet hänger ihop: med anmärkning ska revisorn ta ställning, men tillstyrkan är möjlig
+  const r = await sql`INSERT INTO audit_reports ${sql({ engagement_id: engId, company_id: ctx.company.id, opinion, basis, remarks, adopt: input.adopt, discharge: input.discharge, place,
+    signed_by: ctx.user.id, signer_name: ctx.user.name, signed_on: input.date })} ON CONFLICT (engagement_id) DO NOTHING RETURNING engagement_id`;
+  if (!r.length) throw new ValidationError('Revisionsberättelsen är redan signerad');
+  await log(ctx, 'audit_report', 'audit_engagement', engId, { opinion, remarks: !!remarks, discharge: input.discharge });
 }

@@ -43,6 +43,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ cid: st
       case 'checkpoint': await svc.reviewCheckpoint(ctx, eid, g('key'), g('status') as 'ok', g('comment')); hash = `#k-${g('key')}`; break;
       case 'send': { const n = await svc.sendRemarks(ctx, eid); msg = n ? `${n} anmärkningar är skickade till bolaget` : 'Inga nya anmärkningar att skicka'; break; }
       case 'close': await svc.closeEngagement(ctx, eid, g('conclusion')); msg = 'Granskningen är avslutad'; break;
+      case 'report': await svc.issueReport(ctx, eid, { opinion: g('opinion'), basis: g('basis'), remarks: g('remarks'), adopt: g('adopt') === 'on', discharge: g('discharge') === 'on', place: g('place'), date: g('date') });
+        msg = 'Revisionsberättelsen är signerad'; hash = '#revisionsberattelse'; break;
       default: return new Response('Okänd åtgärd', { status: 400 });
     }
   } catch (e) {

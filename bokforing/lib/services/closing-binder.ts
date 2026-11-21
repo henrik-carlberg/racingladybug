@@ -1,4 +1,5 @@
 import 'server-only';
+import { auditReport } from './audit-work';
 import { sql } from '@/lib/db';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { auditBy } from '@/lib/server/audit';
@@ -87,5 +88,18 @@ export async function saveItem(actor: Actor, fyId: number, account: number, inpu
 export async function pdf(companyId: number, fyId: number) {
   const b = await binder(companyId, fyId);
   const [c] = await sql<{ name: string; orgnr: string }[]>`SELECT name, orgnr FROM companies WHERE id = ${companyId}`;
-  return { file: textPdf(binderPdf({ company: c.name, orgnr: c.orgnr, start: b.fy.start_date, end: b.fy.end_date, created: today(), secs: b.secs, result: b.result }), `Bokslutspärm ${c.name} ${b.fy.end_date}`), name: `Bokslutsparm ${b.fy.end_date}.pdf` };
+  const lines = binderPdf({ company: c.name, orgnr: c.orgnr, start: b.fy.start_date, end: b.fy.end_date, created: today(), secs: b.secs, result: b.result });
+  // Revisionsberättelsen läggs sist i pärmen när revisorn har signerat den
+  const [eng] = await sql<{ id: number }[]>`SELECT id FROM audit_engagements WHERE company_id = ${companyId} AND fiscal_year_id = ${fyId}`;
+  const report = eng ? await auditReport(companyId, eng.id) : null;
+  if (report) {
+    lines.push({ text: 'Revisionsberättelse', size: 13, bold: true, gap: 34 });
+    for (const sec of report.sections) {
+      if (sec.heading) lines.push({ text: sec.heading.replace(/[\u2013\u2014]/g, '-'), bold: true, gap: 18 });
+      for (const p of sec.paragraphs) for (const row of wrap(p.replace(/[\u2013\u2014]/g, '-'), 95)) lines.push({ text: row, gap: 13 });
+    }
+  }
+  return { file: textPdf(lines, `Bokslutspärm ${c.name} ${b.fy.end_date}`), name: `Bokslutsparm ${b.fy.end_date}.pdf` };
 }
+
+const wrap = (t: string, n: number) => { const out: string[] = []; let line = ''; for (const w of t.split(' ')) { if ((line + ' ' + w).trim().length > n) { out.push(line); line = w; } else line = (line + ' ' + w).trim(); } if (line) out.push(line); return out; };

@@ -65,6 +65,7 @@ export default async function YearendYear({ params, searchParams }: { params: Pr
           <div className="stack" style={{ margin: '.5rem 0' }}>
             <p className="small">Du använder <b>kontantmetoden</b> <Help term="kontantmetoden" />. Registrera först alla betalningar som kommit in eller gått ut till och med {s.fy.end_date}.
               Sedan bokförs de fakturor som fortfarande är obetalda per bokslutsdagen – gör det <b>innan</b> du bokför årets sista momsavräkning, eftersom momsen på dem hör till året.</p>
+            {s.cashTurnoverWarning && <p className="small cash-warning" style={{ color: 'var(--warn)' }}>{s.cashTurnoverWarning}</p>}
             {s.cashOpenInvoices > 0 && (
               <form action={openInvoices.bind(null, company.id, s.fy.id)}>
                 <button className="secondary" disabled={!ended}>Bokför {s.cashOpenInvoices} obetalda fakturor per {s.fy.end_date}</button>
