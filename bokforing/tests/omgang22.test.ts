@@ -50,3 +50,17 @@ describe('Styrelsearvoden', () => {
     expect(period('2026-05-15')).toBe('2026/27');
   });
 });
+
+import { checks, needsDocumentation } from '@/lib/transfer-pricing';
+describe('Internprissättning', () => {
+  const base = { type: 'loan' as const, crossBorder: true, amount: 1000000000, method: 'cup' as const, markupPct: null, ratePct: 2, rangeMin: 3, rangeMax: 6, documented: false, lowValue: false };
+  it('dokumentationskrav och marknadsmässighet', () => {
+    expect(needsDocumentation({ crossBorder: true, amount: 499999999, type: 'goods' })).toBe(false);
+    expect(needsDocumentation({ crossBorder: true, amount: 100, type: 'license' })).toBe(true);
+    expect(needsDocumentation({ crossBorder: false, amount: 1e12, type: 'goods' })).toBe(false);
+    expect(checks(base).map((w) => w.level)).toEqual(['error', 'error']);
+    expect(checks({ ...base, ratePct: 4, documented: true })).toEqual([]);
+    expect(checks({ ...base, type: 'services', method: 'cost_plus', ratePct: null, markupPct: 0, rangeMin: null, rangeMax: null, documented: true }).some((w) => w.text.includes('utan påslag'))).toBe(true);
+    expect(checks({ ...base, type: 'services', method: 'cost_plus', ratePct: null, markupPct: 3, rangeMin: null, rangeMax: null, documented: true, lowValue: true })[0].text).toMatch(/5 % påslag/);
+  });
+});

@@ -77,6 +77,7 @@ export function buildNav(o: {
       { path: '/agare', label: 'Ägare och utdelning', perm: 'ledger', hint: 'K10, gränsbelopp och lön eller utdelning' },
       { path: '/aktiebok', label: 'Aktiebok', perm: 'ledger', hint: 'Aktieägare, överlåtelser, nyemission och styrelseprotokoll' },
       { path: '/lan-till-agare', label: 'Lån till ägare', perm: 'ledger', hint: 'Låneförbudet för ägare, styrelse och närstående' },
+      { path: '/internprissattning', label: 'Internprissättning', perm: 'ledger', hint: 'Koncerninterna priser, räntor och dokumentation' },
       { path: '/kontrollbalans', label: 'Kontrollbalansräkning', perm: 'ledger', hint: 'Kapitalbrist, kontrollstämmor och likvidation' },
       { path: '/brf', label: 'Bostadsrättsförening', perm: 'ledger', hint: 'Lägenhetsförteckning, avgifter efter andelstal, underhållsplan och nyckeltal' },
       { path: '/forening', label: 'Förening', perm: 'ledger', hint: 'Medlemsregister, medlemsavgifter, gåvor och årsmöte' },

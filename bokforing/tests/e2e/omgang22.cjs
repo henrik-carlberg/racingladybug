@@ -192,6 +192,28 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert((await owner.$$eval('input[name^=desc_]', (els) => els.map((e) => e.value))).some((v) => v.startsWith('Styrelsearvode')), 'arvodet på lönespecen');
   log('styrelsearvoden: arvode som lön i lönekörningen, faktura med F-skatt utan avdrag, utan F-skatt 30 % skatt och arbetsgivaravgifter');
 
+  // ================= Del 5: internprissättning =================
+  const TP = await newCompany('Koncernpriser AB', 559150000);
+  const addTp = async (cp, country, type, amount, method, extra) => {
+    await owner.goto(TP + '/internprissattning');
+    await owner.fill('input[name=counterparty]', cp); await owner.fill('input[name=country]', country); await owner.selectOption('select[name=type]', type);
+    await owner.fill('form:has(button:has-text("Registrera transaktion")) input[name=amount]', amount); await owner.selectOption('select[name=method]', method);
+    for (const [k, v] of Object.entries(extra)) await owner.fill(`input[name=${k}]`, v);
+    await owner.click('button:has-text("Registrera transaktion")');
+    await owner.locator('text=Transaktionen är registrerad').waitFor();
+  };
+  await addTp('Parent GmbH', 'DE', 'loan', '10000000', 'cup', { rate_pct: '1', range_min: '3', range_max: '6' });
+  await addTp('Systerbolaget AB', 'SE', 'services', '200000', 'cost_plus', { markup_pct: '5' });
+  const pg = owner.locator('.tp-row[data-counterparty="Parent GmbH"]');
+  t = await pg.innerText();
+  assert(t.includes('Dokumentation saknas') && t.includes('utanför det marknadsmässiga intervallet') && await owner.locator('.tp-errors').innerText() === '2', 'lån utan dokumentation och med för låg ränta: ' + t);
+  assert(await owner.locator('.tp-row[data-counterparty="Systerbolaget AB"] .badge.ok').count() === 1, 'inhemsk tjänst med påslag OK');
+  await pg.locator('input[name=documentation]').fill('Lånevillkor jämförda med bankens offert, pärm TP-2026');
+  await pg.locator('button:has-text("Spara")').click();
+  await owner.locator('text=Dokumentationen är sparad').waitFor();
+  assert(await owner.locator('.tp-errors').innerText() === '1' && (await owner.locator('.tp-row[data-counterparty="Parent GmbH"] .tp-doc').count()) === 1, 'dokumenterad');
+  log('internprissättning: gränsöverskridande lån kräver dokumentation och marknadsmässig ränta, inhemsk tjänst med påslag godkänns');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 22: alla steg gick igenom');
