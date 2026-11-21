@@ -8,6 +8,7 @@ import { fiscalYears } from '@/lib/server/ledger';
 import { Flash, type SP } from '@/components/ui';
 import { ROLE_LABEL } from '@/lib/format';
 import * as a from './actions';
+import { methodHistory } from '@/lib/services/accounting-method';
 import { Help } from '@/components/Help';
 import { COMPANY_TYPE_LABEL } from '@/lib/partnership';
 
@@ -16,6 +17,7 @@ export const dynamic = 'force-dynamic';
 export default async function Settings({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
   const { company: c, role, user } = await requireCompany(cid);
+  const history = await methodHistory(c.id);
   const sp = await searchParams;
   const prevMonthEnd = (() => { const d = new Date(); d.setUTCDate(0); return d.toISOString().slice(0, 10); })();
   const lockDate = typeof sp.lockcheck === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(sp.lockcheck) ? sp.lockcheck : prevMonthEnd;
@@ -81,6 +83,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
             <select name="accounting_method" defaultValue={c.accounting_method}>
               <option value="invoice">Faktureringsmetoden</option><option value="cash">Kontantmetoden (bokslutsmetoden)</option>
             </select>
+            <span className="small muted">Byts vid nytt räkenskapsår; kontantmetoden kräver omsättning högst 3 Mkr.{history.length > 0 && ` Senast bytt ${history[0].changed_at} (${history[0].from_method === 'cash' ? 'kontant' : 'faktura'} → ${history[0].to_method === 'cash' ? 'kontant' : 'faktura'}).`}</span>
           </label>
           <label>Preliminärskatt betalas från (månad)<input name="prelskatt_from" type="month" defaultValue={c.prelskatt_from ?? ''} placeholder="ÅÅÅÅ-MM" /></label>
         </div>

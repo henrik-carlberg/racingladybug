@@ -250,6 +250,44 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(pdf.status() === 200 && (await pdf.body()).toString('latin1').includes('Revisionsber'), 'revisionsberättelsen i bokslutspärmen');
   log('revisionsberättelse: ren berättelse med anmärkning om underskott på skattekontot, avstyrkt ansvarsfrihet, signerad en gång och med i bokslutspärmen');
 
+  // ================= Del 5: kontantmetoden =================
+  const setMethod = async (B, m) => {
+    await owner.goto(B + '/installningar');
+    await owner.selectOption('select[name=accounting_method]', m);
+    await owner.click('form:has(select[name=accounting_method]) button:has-text("Spara")');
+    await owner.locator('.flash').first().waitFor();
+    return owner.locator('.flash').first().innerText();
+  };
+  const FM = await newCompany('Fakturametoden AB', 559250000);
+  await owner.goto(FM + '/kunder');
+  await owner.fill('input[name=name]', 'Metodkunden AB');
+  await owner.click('button:has-text("Spara kund")'); await owner.waitForURL(/ok=/);
+  await invoice(FM, 'Metodkunden AB', 1000);
+  t = await setMethod(FM, 'cash');
+  assert(t.includes('byts vid ett nytt räkenskapsår'), 'byte mitt i året nekas: ' + t);
+  await owner.goto(BASE + '/');
+  await owner.fill('input[name=name]', 'Kontantfirman AB');
+  await owner.selectOption('select[name=company_type]', 'AB');
+  await owner.fill('input[name=orgnr]', orgnrFor(String(559260000 + (Date.now() % 900000)).slice(0, 9)));
+  await owner.fill('input[name=fy_start]', `${YEAR}-01-01`); await owner.fill('input[name=fy_end]', `${YEAR}-12-31`);
+  await owner.selectOption('select[name=accounting_method]', 'cash');
+  await owner.click('button:has-text("Skapa bolag")');
+  await owner.waitForURL(/kom-igang/);
+  const KM = owner.url().replace(/\/kom-igang.*/, '');
+  await owner.goto(KM + '/kunder');
+  await owner.fill('input[name=name]', 'Kontantkunden AB');
+  await owner.click('button:has-text("Spara kund")'); await owner.waitForURL(/ok=/);
+  await invoice(KM, 'Kontantkunden AB', 1000);
+  t = await setMethod(KM, 'invoice');
+  assert(t.includes('Bokför först de 1 obetalda fakturorna'), 'obokförda fakturor stoppar bytet: ' + t);
+  await voucher(KM, 'Stor försäljning', [[1930, 4375000], [3001, -3500000], [2611, -875000]], `${YEAR}-02-01`);
+  await owner.goto(KM + '/bokslut');
+  await owner.locator(`tr:has-text("${YEAR}-01-01") a:has-text("Öppna")`).first().click();
+  await owner.waitForURL(/bokslut\/\d+/);
+  t = nb(await owner.locator('.cash-warning').innerText());
+  assert(t.includes('3500000kr') && t.includes('övergränsenpå3miljonerkronor'), 'varning över 3 Mkr: ' + t);
+  log('kontantmetoden: byte av metod bara vid nytt räkenskapsår, obokförda fakturor stoppar bytet till faktureringsmetoden, varning när omsättningen passerar 3 Mkr');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 24: alla steg gick igenom');

@@ -45,3 +45,14 @@ describe('Revisionsberättelse', () => {
     expect(t[2].paragraphs[2]).toMatch(/avstyrker/);
   });
 });
+
+import { methodChangeError, turnoverWarning } from '@/lib/accounting-method';
+describe('Kontantmetoden', () => {
+  it('byte av metod', () => {
+    expect(methodChangeError({ from: 'invoice', to: 'cash', turnover: 100000000, bookedThisYear: 0, unbookedOpen: 0 })).toBeNull();
+    expect(methodChangeError({ from: 'invoice', to: 'cash', turnover: 400000000, bookedThisYear: 0, unbookedOpen: 0 })).toMatch(/3 miljoner/);
+    expect(methodChangeError({ from: 'invoice', to: 'cash', turnover: null, bookedThisYear: 2, unbookedOpen: 0 })).toMatch(/nytt räkenskapsår/);
+    expect(methodChangeError({ from: 'cash', to: 'invoice', turnover: null, bookedThisYear: 0, unbookedOpen: 3 })).toMatch(/3 obetalda/);
+    expect(turnoverWarning(250000000)).toBeNull();
+  });
+});

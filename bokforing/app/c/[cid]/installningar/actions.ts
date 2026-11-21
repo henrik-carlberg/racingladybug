@@ -7,6 +7,7 @@ import { requireCompany, newToken, sha256 } from '@/lib/server/auth';
 import { audit } from '@/lib/server/audit';
 import { addDays } from '@/lib/format';
 import { fiscalYearError } from '@/lib/fiscal';
+import { changeMethod } from '@/lib/services/accounting-method';
 
 const back = (cid: number) => `/c/${cid}/installningar`;
 
@@ -17,7 +18,9 @@ export async function updateCompany(cid: number, fd: FormData) {
     const method = str(fd, 'accounting_method') === 'cash' ? 'cash' : 'invoice';
     const prelFrom = str(fd, 'prelskatt_from');
     if (prelFrom && !/^\d{4}-\d{2}$/.test(prelFrom)) throw new Error('Ange månad som ÅÅÅÅ-MM');
-    await sql`UPDATE companies SET
+    await sql.begin(async (tx) => {
+    await changeMethod(tx, company.id, user.id, method);
+    await tx`UPDATE companies SET
       name = CASE WHEN is_demo THEN name ELSE ${str(fd, 'name')} END, address = ${str(fd, 'address')}, postal_code = ${str(fd, 'postal_code')}, city = ${str(fd, 'city')},
       email = ${str(fd, 'email')}, phone = ${str(fd, 'phone')}, vat_number = ${str(fd, 'vat_number')},
       bankgiro = ${str(fd, 'bankgiro')}, plusgiro = ${str(fd, 'plusgiro')}, iban = ${str(fd, 'iban')}, bic = ${str(fd, 'bic').toUpperCase()},
@@ -25,6 +28,7 @@ export async function updateCompany(cid: number, fd: FormData) {
       f_skatt = ${fd.get('f_skatt') === 'on'}, invoice_terms = ${int(fd, 'invoice_terms') ?? 30},
       late_interest = ${str(fd, 'late_interest')}, vat_period = ${vat}, accounting_method = ${method}, prelskatt_from = ${prelFrom || null}
       WHERE id = ${company.id}`;
+    });
     await audit(sql, { companyId: company.id, userId: user.id, action: 'update', entity: 'company', entityId: company.id });
   });
   done(back(cid), 'Uppgifterna är sparade');
