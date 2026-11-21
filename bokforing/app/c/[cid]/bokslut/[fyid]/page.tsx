@@ -47,6 +47,8 @@ export default async function YearendYear({ params, searchParams }: { params: Pr
       {s.companyType === 'EF' && <p className="small"><Link href={`${b}/bokslut/${s.fy.id}/ne-planering`}>Skatteplanering NE</Link> – räntefördelning, periodiseringsfond och expansionsfond med förslag som ger lägst skatt.</p>}
       <p className="small"><Link href={`${b}/bokslut/${s.fy.id}/kassaflode`}>Kassaflödesanalys</Link> per månad och år · <Link href={`${b}/bokslut/${s.fy.id}/k3`}>Regelverk K2/K3</Link> – byte till K3, uppskjuten skatt och utökade noter.</p>
       {s.companyType === 'EF' && <p className="small"><Link href={`${b}/ombildning`}>Ombildning till aktiebolag</Link> – för över verksamheten till ditt aktiebolag till bokfört värde och gör den slutliga NE-bilagan.</p>}
+      {ab && <p className="small"><Link href={`${b}/fusion`}>Fusion av dotterbolag</Link> – helägt dotterbolag som går upp i moderbolaget.</p>}
+      {ab && <p className="small"><Link href={`${b}/bokslut/ranteavdrag`}>Ränteavdragsbegränsning</Link> – EBITDA-regeln, förenklingsregeln och sparat negativt räntenetto.</p>}
       {ab && <p className="small"><Link href={`${b}/bokslut/underskott`}>Underskottsavdrag</Link> – rullande underskott med belopps- och koncernbidragsspärr vid ägarförändring.</p>}
       {ab && <p className="small"><Link href={`${b}/kontrollbalans`}>Kontrollbalansräkning</Link> – kapitalbrist, kontrollstämmor och likvidation.</p>}
       <p className="small"><Link href={`${b}/bokslut/${s.fy.id}/avsattningar`}>Avsättningar och åtaganden</Link> – garantiavsättningar, ställda säkerheter och eventualförpliktelser till noterna.</p>

@@ -15,6 +15,7 @@ export interface AgiIndividual {
   grossCash: number; // öre – ruta 011
   benefits: number; // öre – ruta 012
   tax: number; // öre – ruta 001
+  sinkTax?: number; // öre – ruta 274 (särskild inkomstskatt för utomlands bosatta)
 }
 
 export interface AgiInput {
@@ -69,7 +70,8 @@ export function buildAgiXml(input: AgiInput): string {
   const ius = input.individuals.map((i) => {
     if (!/^\d{12}$/.test(i.personalNumber)) throw new Error(`Ogiltigt personnummer: ${i.personalNumber}`);
     const fields = [
-      `<agd:AvdrPrelSkatt faltkod="001">${kr(i.tax)}</agd:AvdrPrelSkatt>`,
+      i.tax > 0 || !i.sinkTax ? `<agd:AvdrPrelSkatt faltkod="001">${kr(i.tax)}</agd:AvdrPrelSkatt>` : '',
+      i.sinkTax ? `<agd:AvdrSkattSINK faltkod="274">${kr(i.sinkTax)}</agd:AvdrSkattSINK>` : '',
       i.grossCash > 0 ? `<agd:KontantErsattningUlagAG faltkod="011">${kr(i.grossCash)}</agd:KontantErsattningUlagAG>` : '',
       i.benefits > 0 ? `<agd:SkatteplOvrigaFormanerUlagAG faltkod="012">${kr(i.benefits)}</agd:SkatteplOvrigaFormanerUlagAG>` : '',
     ].filter(Boolean);
