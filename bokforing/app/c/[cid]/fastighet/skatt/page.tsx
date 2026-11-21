@@ -16,7 +16,7 @@ export default async function PropertyTax({ params, searchParams }: { params: Pr
   const t = today();
   const year = /^\d{4}$/.test(String(sp.year)) ? Number(sp.year) : Number(t.slice(0, 4));
   const o = await overview(company.id, year);
-  const forSale = new Map(await Promise.all(o.rows.filter((r) => !r.sold_on).map(async (r) => [r.id, (await propertyForSale(company.id, r.id)).book] as const)));
+  const forSale = new Map(await Promise.all(o.rows.filter((r) => !r.sold_on).map(async (r) => [r.id, (await propertyForSale(company.id, r.id))] as const)));
   const k = (n: number) => (n / 100).toFixed(2).replace('.', ',');
   return (
     <div style={{ maxWidth: 1000 }}>
@@ -44,9 +44,10 @@ export default async function PropertyTax({ params, searchParams }: { params: Pr
                 <div className="row"><label>Tillträdesdag<input type="date" name="date" defaultValue={t} required /></label><label>Köpeskilling (kr)<input name="price" required /></label>
                   <label>Försäljningskostnader (kr)<input name="costs" /></label><label>Förbättringsutgifter (kr)<input name="improvements" /></label></div>
                 <div className="row small">
-                  <label>Byggnad 1110<input name="book_building" defaultValue={k(forSale.get(r.id)?.building ?? 0)} /></label><label>Ack. avskr. 1119<input name="book_building_dep" defaultValue={k(forSale.get(r.id)?.buildingDep ?? 0)} /></label>
-                  <label>Mark 1130<input name="book_land" defaultValue={k(forSale.get(r.id)?.land ?? 0)} /></label><label>Markanl. 1150<input name="book_improvement" defaultValue={k(forSale.get(r.id)?.improvement ?? 0)} /></label>
-                  <label>Ack. avskr. 1159<input name="book_improvement_dep" defaultValue={k(forSale.get(r.id)?.improvementDep ?? 0)} /></label></div>
+                  <label>Byggnad 1110<input name="book_building" defaultValue={k(forSale.get(r.id)?.book.building ?? 0)} /></label><label>Ack. avskr. 1119<input name="book_building_dep" defaultValue={k(forSale.get(r.id)?.book.buildingDep ?? 0)} /></label>
+                  <label>Mark 1130<input name="book_land" defaultValue={k(forSale.get(r.id)?.book.land ?? 0)} /></label><label>Markanl. 1150<input name="book_improvement" defaultValue={k(forSale.get(r.id)?.book.improvement ?? 0)} /></label>
+                  <label>Ack. avskr. 1159<input name="book_improvement_dep" defaultValue={k(forSale.get(r.id)?.book.improvementDep ?? 0)} /></label></div>
+                {!forSale.get(r.id)?.single && <p className="small muted" style={{ margin: 0 }}>Bolaget har flera fastigheter – ange den här fastighetens ackumulerade avskrivningar.</p>}
                 <button>Bokför försäljningen</button>
               </form></details>}
         </section>

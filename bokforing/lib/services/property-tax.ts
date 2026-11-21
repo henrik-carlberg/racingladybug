@@ -59,10 +59,16 @@ export function taxDepreciationBefore(p: Prop, year: number) {
 export async function propertyForSale(companyId: number, id: number) {
   const [p] = await sql<Prop[]>`SELECT ${COLS} FROM tax_properties WHERE id = ${id} AND company_id = ${companyId}`;
   if (!p) throw new NotFoundError('Fastigheten');
-  const rows = await sql<{ n: number; b: number }[]>`SELECT l.account_number AS n, SUM(l.debit - l.credit)::float8 AS b FROM voucher_lines l JOIN vouchers v ON v.id = l.voucher_id
-    WHERE v.company_id = ${companyId} AND l.account_number IN (1110, 1119, 1130, 1150, 1159) GROUP BY l.account_number`;
-  const g = (n: number) => rows.find((r) => r.n === n)?.b ?? 0;
-  return { p, book: { building: g(1110), buildingDep: -g(1119), land: g(1130), improvement: g(1150), improvementDep: -g(1159) } };
+  // Anskaffningsvärdena tas från fastighetens egna uppgifter. Huvudbokens ackumulerade avskrivningar gäller hela bolaget och används
+  // bara som förslag när bolaget har en enda fastighet kvar; annars får användaren ange dem
+  const [{ n: unsold }] = await sql<{ n: number }[]>`SELECT count(*)::int AS n FROM tax_properties WHERE company_id = ${companyId} AND sold_on IS NULL`;
+  let buildingDep = 0, improvementDep = 0;
+  if (unsold === 1) {
+    const rows = await sql<{ n: number; b: number }[]>`SELECT l.account_number AS n, SUM(l.debit - l.credit)::float8 AS b FROM voucher_lines l JOIN vouchers v ON v.id = l.voucher_id
+      WHERE v.company_id = ${companyId} AND l.account_number IN (1119, 1159) GROUP BY l.account_number`;
+    buildingDep = -(rows.find((r) => r.n === 1119)?.b ?? 0); improvementDep = -(rows.find((r) => r.n === 1159)?.b ?? 0);
+  }
+  return { p, single: unsold === 1, book: { building: p.building_cost, buildingDep, land: p.land_cost, improvement: p.improvement_cost, improvementDep } };
 }
 
 /** Bokför fastighetsskatten månad för månad till och med vald månad (månader som redan är bokförda hoppas över) */

@@ -47,6 +47,8 @@ export async function settle(actor: Actor, id: number, input: Record<string, unk
   const bank = optInt(input, 'bank_account', 'Bankkonto') ?? 1930;
   if (bank < 1900 || bank > 1999) throw new ValidationError('Bankkonto måste vara ett 19xx-konto');
   return sql.begin(async (tx) => {
+    // En reglering åt gången per bolag – annars kan samma beslutade utdelning kvittas mot två lån
+    await tx`SELECT pg_advisory_xact_lock(119001, ${actor.companyId})`;
     const [l] = await tx<{ borrower: string; amount: number; repaid: number; account: number }[]>`SELECT borrower, amount::float8 AS amount, repaid::float8 AS repaid, account FROM owner_loans WHERE id = ${id} AND company_id = ${actor.companyId} FOR UPDATE`;
     if (!l) throw new NotFoundError('Lånet');
     if (amount > l.amount - l.repaid) throw new ValidationError('Beloppet är större än det som återstår av lånet');

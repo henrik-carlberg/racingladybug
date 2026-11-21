@@ -65,7 +65,8 @@ export async function pay(actor: Actor, memberId: number, input: Record<string, 
     const a = assess({ mode: m.mode, recipient: m.recipient, fSkatt: m.f_skatt, inBusiness: m.in_business });
     if (a.treatment === 'salary') {
       const runId = optInt(input, 'run_id', 'Lönekörning');
-      const [run] = runId ? await tx<{ id: number; status: string }[]>`SELECT id, status FROM payroll_runs WHERE id = ${runId} AND company_id = ${actor.companyId}` : [];
+      // Låset krockar med bokföringen av lönekörningen, så att ingen lönespec ändras i en körning som håller på att bokföras
+      const [run] = runId ? await tx<{ id: number; status: string }[]>`SELECT id, status FROM payroll_runs WHERE id = ${runId} AND company_id = ${actor.companyId} FOR UPDATE` : [];
       if (!run || run.status !== 'draft') throw new ValidationError('Välj en lönekörning som inte är bokförd');
       if (!m.employee_id) throw new ValidationError('Ledamoten saknar anställningsuppgifter för lön');
       await tx`INSERT INTO payslips (run_id, employee_id, items, employer_fee_rate) VALUES (${run.id}, ${m.employee_id}, '[]'::jsonb, 0) ON CONFLICT DO NOTHING`;
