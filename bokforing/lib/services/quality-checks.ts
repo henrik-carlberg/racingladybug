@@ -30,6 +30,12 @@ export async function yearChecks(companyId: number, fyId: number) {
   const cw = await capitalWarning(companyId, f.end_date);
   if (cw) findings.unshift({ key: 'capital:deficit', level: 'error', title: 'Eget kapital understiger halva aktiekapitalet', detail: `Bokfört eget kapital ${(cw.equity / 100).toLocaleString('sv-SE')} kr, aktiekapital ${(cw.shareCapital / 100).toLocaleString('sv-SE')} kr`,
     action: 'Styrelsen ska genast upprätta en kontrollbalansräkning (aktiebolagslagen 25 kap.) och kalla till kontrollstämma om kapitalbristen kvarstår.', href: `${b}/kontrollbalans` });
+  const { overview: loans } = await import('./owner-loans');
+  const ol = await loans(companyId);
+  if (ol.prohibited) findings.unshift({ key: 'loan:prohibited', level: 'error', title: 'Förbjudna lån till ägare eller närstående', detail: `Utestående ${(ol.prohibited / 100).toLocaleString('sv-SE')} kr`,
+    action: 'Lånet ska återbetalas (aktiebolagslagen 21 kap.). Reglera det eller kvitta mot beslutad utdelning.', href: `${b}/lan-till-agare` });
+  else if (ol.unregistered) findings.push({ key: 'loan:unregistered', level: 'warn', title: 'Fordran på delägare eller närstående (1685) utan registrerat lån', detail: `Saldo ${(ol.unregistered / 100).toLocaleString('sv-SE')} kr`,
+    action: 'Registrera vem lånet avser så att låneförbudet kan bedömas.', href: `${b}/lan-till-agare` });
   for (const i of await checkIntegrity(companyId)) if (i.severity === 'error')
     findings.unshift({ key: `integrity:${i.key}`, level: 'error', title: i.title, detail: i.detail, action: 'Rätta verifikationen innan bokslutet – bokföringen måste vara hel.', href: i.href ?? `${b}/verifikationer` });
   const acks = await sql<{ key: string; note: string; by: string | null; at: string }[]>`SELECT a.key, a.note, u.name AS by, to_char(a.acked_at,'YYYY-MM-DD') AS at
