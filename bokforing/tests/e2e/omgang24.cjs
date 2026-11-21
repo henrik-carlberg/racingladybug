@@ -156,6 +156,40 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await owner.locator('.el-row[data-name="Lena Lånetagare"] .el-balance').innerText()) === '110000,00', 'saldo efter bokförd lön');
   log('medarbetarlån: 120 000 kr till 0 % ränta, amortering 10 000 kr på nettolönen och ränteförmån enligt statslåneräntan + 1 %, saldo 110 000 kr');
 
+  // ================= Del 3: licensintäkter och royalty =================
+  const LI = await newCompany('Licensgivaren AB', 559230000);
+  const agree = async (f) => {
+    await owner.goto(LI + '/licenser');
+    for (const [k, v] of Object.entries(f)) await owner.fill(`form:has(button:has-text("Spara licensavtal")) input[name=${k}]`, v);
+    await owner.click('button:has-text("Spara licensavtal")');
+    await owner.locator('text=Licensavtalet är sparat').waitFor();
+  };
+  await agree({ licensee: 'Svensk Tillverkare AB', country: 'SE', rate: '5', minimum: '10000' });
+  await agree({ licensee: 'Deutsche Lizenz GmbH', country: 'DE', rate: '8', treaty_rate: '0' });
+  const rep = async (who, period, sales) => {
+    await owner.goto(LI + '/licenser');
+    const s = owner.locator(`.lic-agreement[data-licensee="${who}"]`);
+    await s.locator('input[name=period]').fill(period); await s.locator('input[name=sales]').fill(sales);
+    await s.locator('button:has-text("Bokför royalty")').click();
+    await owner.locator('.flash').first().waitFor();
+    return nb(await owner.locator('.flash').first().innerText());
+  };
+  t = await rep('Svensk Tillverkare AB', `${YEAR} Q2`, '100000');
+  assert(t.includes('Royalty10000,00krärbokförd(garanteradminimiavgift)'), 'minimiavgiften: ' + t);
+  t = await rep('Svensk Tillverkare AB', `${YEAR} Q2`, '300000');
+  assert(t.includes('redanbokförd'), 'samma period två gånger nekas: ' + t);
+  t = await rep('Deutsche Lizenz GmbH', `${YEAR} Q2`, '500000');
+  assert(t.includes('Royalty40000,00krärbokförd'), 'royalty 8 %: ' + t);
+  await owner.goto(LI + '/licenser');
+  const de = owner.locator('.lic-agreement[data-licensee="Deutsche Lizenz GmbH"] .lic-report');
+  await de.locator('input[name=withheld]').fill('4000');
+  await de.locator('button:has-text("Inbetald")').click();
+  await owner.locator('text=utländsk källskatt 4 000,00 kr').waitFor();
+  await owner.goto(LI + '/licenser');
+  const cr = owner.locator('.lic-credit[data-licensee="Deutsche Lizenz GmbH"]');
+  assert(nb(await cr.locator('.lic-reclaim').innerText()) === '4000,00' && nb(await cr.locator('.lic-creditable').innerText()) === '0,00', 'källskatt över avtalssatsen återsöks');
+  log('royalty: minimiavgift 10 000 kr, 8 % på tysk försäljning, källskatt 4 000 kr utöver avtalets 0 % ska återsökas i Tyskland');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 24: alla steg gick igenom');
