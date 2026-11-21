@@ -3,8 +3,8 @@ import { requireCompany } from '@/lib/server/auth';
 import { Flash, type SP } from '@/components/ui';
 import { kr, today } from '@/lib/format';
 import { TYPE_LABEL } from '@/lib/property-tax';
-import { overview } from '@/lib/services/property-tax';
-import { addProperty, bookTax } from './actions';
+import { overview, propertyForSale } from '@/lib/services/property-tax';
+import { addProperty, bookTax, sellProperty } from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +16,8 @@ export default async function PropertyTax({ params, searchParams }: { params: Pr
   const t = today();
   const year = /^\d{4}$/.test(String(sp.year)) ? Number(sp.year) : Number(t.slice(0, 4));
   const o = await overview(company.id, year);
+  const forSale = new Map(await Promise.all(o.rows.filter((r) => !r.sold_on).map(async (r) => [r.id, (await propertyForSale(company.id, r.id)).book] as const)));
+  const k = (n: number) => (n / 100).toFixed(2).replace('.', ',');
   return (
     <div style={{ maxWidth: 1000 }}>
       <h1>Fastighetsskatt och skattemässiga avskrivningar {year}</h1>
@@ -35,6 +37,18 @@ export default async function PropertyTax({ params, searchParams }: { params: Pr
             <tr><td>Mark ({kr(r.land_cost)} kr) – skrivs inte av</td><td className="num">0,00</td></tr>
             <tr><td>Skattemässigt restvärde byggnad efter året</td><td className="num">{kr(r.dep.residualBuilding)}</td></tr>
           </tbody></table>
+          {r.sold_on && r.sale ? <p className="pt-sold" style={{ margin: 0 }}>Såld {r.sold_on} för {kr(r.sale.price)} kr. Bokfört värde {kr(r.sale.bookValue)} kr – {r.sale.result >= 0 ? 'vinst' : 'förlust'} <b>{kr(Math.abs(r.sale.result))}</b> kr i bokföringen.
+              Skattemässigt: omkostnadsbelopp {kr(r.sale.tax.adjustedBasis)} kr, vinst <b className="pt-tax-gain">{kr(r.sale.tax.gain)}</b> kr, varav återförda värdeminskningsavdrag <span className="pt-recaptured">{kr(r.sale.tax.recaptured)}</span> kr (underlag till N6).</p>
+            : <details className="pt-sell"><summary>Sälj fastigheten</summary>
+              <form action={sellProperty.bind(null, company.id, r.id)} className="stack">
+                <div className="row"><label>Tillträdesdag<input type="date" name="date" defaultValue={t} required /></label><label>Köpeskilling (kr)<input name="price" required /></label>
+                  <label>Försäljningskostnader (kr)<input name="costs" /></label><label>Förbättringsutgifter (kr)<input name="improvements" /></label></div>
+                <div className="row small">
+                  <label>Byggnad 1110<input name="book_building" defaultValue={k(forSale.get(r.id)?.building ?? 0)} /></label><label>Ack. avskr. 1119<input name="book_building_dep" defaultValue={k(forSale.get(r.id)?.buildingDep ?? 0)} /></label>
+                  <label>Mark 1130<input name="book_land" defaultValue={k(forSale.get(r.id)?.land ?? 0)} /></label><label>Markanl. 1150<input name="book_improvement" defaultValue={k(forSale.get(r.id)?.improvement ?? 0)} /></label>
+                  <label>Ack. avskr. 1159<input name="book_improvement_dep" defaultValue={k(forSale.get(r.id)?.improvementDep ?? 0)} /></label></div>
+                <button>Bokför försäljningen</button>
+              </form></details>}
         </section>
       ))}
       {o.rows.length > 0 && (

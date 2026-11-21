@@ -13,3 +13,15 @@ describe('Låneförbudet', () => {
     expect(unregistered(100, 30)).toBe(70);
   });
 });
+
+import { saleLines, taxGain } from '@/lib/property-sale';
+describe('Försäljning av fastighet', () => {
+  it('bokförd vinst och skattepliktig vinst med återföring', () => {
+    const s = saleLines(600000000, 10000000, { building: 400000000, buildingDep: 8000000, land: 100000000, improvement: 0, improvementDep: 0 });
+    expect(s).toMatchObject({ bookValue: 492000000, result: 98000000 });
+    expect(s.lines.reduce((a, l) => a + l.amount, 0)).toBe(0);
+    expect(s.lines.at(-1)).toEqual({ account: 3973, amount: -98000000 });
+    expect(saleLines(100, 0, { building: 300, buildingDep: 0, land: 0, improvement: 0, improvementDep: 0 }).lines.at(-1)).toEqual({ account: 7973, amount: 200 });
+    expect(taxGain({ price: 600000000, costs: 10000000, acquisition: 500000000, improvements: 0, taxDepreciation: 32000000 })).toEqual({ adjustedBasis: 468000000, gain: 122000000, recaptured: 32000000, capital: 90000000 });
+  });
+});

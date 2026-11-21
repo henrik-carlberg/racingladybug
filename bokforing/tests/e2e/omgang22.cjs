@@ -117,6 +117,28 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await owner.locator('.ol-prohibited').innerText()) === '0,00', 'återbetalt');
   log('låneförbudet: lån till ägaren är förbjudet och beskattas som lön i fåmansföretag, näringslån till bolag tillåtet, återbetalning och kontroll före bokslut');
 
+  // ================= Del 2: försäljning av fastighet =================
+  const FF = await newCompany('Fastighetsförsäljning AB', 559120000);
+  await owner.goto(FF + '/fastighet/skatt');
+  await owner.fill('input[name=designation]', 'Lönnen 2'); await owner.selectOption('select[name=type]', 'lokal');
+  await owner.fill('input[name=tax_value]', '3000000'); await owner.fill('input[name=acquired]', `${YEAR - 2}-01-01`);
+  await owner.fill('input[name=building_cost]', '4000000'); await owner.fill('input[name=building_rate]', '4'); await owner.fill('input[name=land_cost]', '1000000');
+  await owner.click('button:has-text("Lägg upp fastigheten")');
+  await owner.locator('text=Fastigheten är upplagd').waitFor();
+  await voucher(FF, 'Fastigheten', [[1110, 4000000], [1130, 1000000], [2350, -5000000]], `${YEAR}-01-02`);
+  await voucher(FF, 'Avskrivning byggnad', [[7820, 80000], [1119, -80000]], `${YEAR}-05-31`);
+  await owner.goto(FF + '/fastighet/skatt');
+  const lp = owner.locator('.tax-property[data-designation="Lönnen 2"]');
+  await lp.locator('summary:has-text("Sälj fastigheten")').click();
+  assert(nb(await lp.locator('input[name=book_building_dep]').inputValue()) === '80000,00', 'bokförda värden från huvudboken');
+  await lp.locator('input[name=date]').fill(`${YEAR}-06-30`); await lp.locator('input[name=price]').fill('6000000'); await lp.locator('input[name=costs]').fill('100000');
+  await lp.locator('button:has-text("Bokför försäljningen")').click();
+  await owner.locator('text=Försäljningen är bokförd: vinst 980 000,00 kr i bokföringen, skattepliktig vinst 1 220 000,00 kr').waitFor();
+  assert(nb(await owner.locator('.pt-recaptured').innerText()) === '320000,00' && await owner.locator('.pt-sell').count() === 0, 'återförda värdeminskningsavdrag');
+  await owner.goto(FF + '/rapporter/huvudbok?account=3973');
+  assert(nb(await text(owner)).includes('980000,00'), 'vinst på 3973');
+  log('fastighetsförsäljning: bokförd vinst 980 000 kr mot bokfört värde, skattepliktig vinst 1 220 000 kr med 320 000 kr återförda värdeminskningsavdrag');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 22: alla steg gick igenom');
