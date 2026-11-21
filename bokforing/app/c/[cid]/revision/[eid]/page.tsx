@@ -6,7 +6,9 @@ import { Flash, type SP } from '@/components/ui';
 import { NotFoundError } from '@/lib/errors';
 import { kr } from '@/lib/format';
 import { SAMPLE_LABEL } from '@/lib/audit-work';
-import { materialityBasis, workspace } from '@/lib/services/audit-work';
+import { auditReport, materialityBasis, reportIndicators, workspace } from '@/lib/services/audit-work';
+import { OPINIONS } from '@/lib/audit-report';
+import { today } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 const ST: Record<string, [string, string]> = { pending: ['Att granska', ''], ok: ['Utan anmärkning', 'ok'], remark: ['Anmärkning', 'danger'] };
@@ -46,6 +48,8 @@ export default async function AuditWorkspace({ params, searchParams }: { params:
   const krIn = (o: number) => (o ? String(o / 100).replace('.', ',') : '');
   const remarks = [...w.samples.filter((s) => s.status === 'remark'), ...w.checkpoints.filter((c) => c.status === 'remark')];
   const ledgerRemarks = w.ledger.filter((l) => l.status === 'remark' && (isAuditor || l.sent));
+  const report = await auditReport(ctx.company.id, w.id);
+  const suggested = !open && !report ? await reportIndicators(ctx.company.id, w.end) : [];
   const unsent = w.samples.filter((s) => s.status === 'remark' && !s.sent).length + w.checkpoints.filter((c) => c.status === 'remark' && !c.sent).length + w.ledger.filter((l) => l.status === 'remark' && !l.sent).length;
   return (
     <div style={{ maxWidth: 1100 }}>
@@ -152,6 +156,27 @@ export default async function AuditWorkspace({ params, searchParams }: { params:
         </>
       )}
       {!open && w.conclusion && <section className="card"><b>Revisorns sammanfattning</b><p style={{ whiteSpace: 'pre-wrap' }}>{w.conclusion}</p></section>}
+      <section id="revisionsberattelse">
+        {report ? (
+          <div className="card stack ar-report" data-opinion={report.opinion}>
+            <h2 style={{ margin: 0 }}>Revisionsberättelse</h2>
+            <p className="small muted" style={{ margin: 0 }}>Till bolagsstämman i {report.company}, org.nr {report.orgnr} · {OPINIONS[report.opinion]}{report.remarkList.length ? ` · ${report.remarkList.length} anmärkning(ar)` : ''}</p>
+            {report.sections.map((s, i) => <div key={i}>{s.heading && <h3 style={{ margin: '.5rem 0 .25rem' }}>{s.heading}</h3>}{s.paragraphs.map((p, j) => <p key={j} style={{ margin: '0 0 .4rem' }}>{p}</p>)}</div>)}
+          </div>
+        ) : !open && isAuditor ? (
+          <Post url={url} eid={w.id} op="report" className="card stack ar-form">
+            <h2 style={{ margin: 0 }}>Revisionsberättelse</h2>
+            {suggested.length > 0 && <div className="ar-warnings" style={{ color: 'var(--warn)' }}><b>Överväg anmärkning:</b><ul>{suggested.map((x) => <li key={x}>{x}</li>)}</ul></div>}
+            <label>Uttalande om årsredovisningen<select name="opinion" defaultValue="clean">{Object.entries(OPINIONS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+            <label>Grund för modifierat uttalande<textarea name="basis" rows={3} /></label>
+            <label>Anmärkningar (en per rad)<textarea name="remarks" rows={3} defaultValue={suggested.join('\n')} /></label>
+            <label className="check"><input type="checkbox" name="adopt" defaultChecked /> Tillstyrker fastställelse av resultat- och balansräkning</label>
+            <label className="check"><input type="checkbox" name="discharge" defaultChecked={!suggested.length} /> Tillstyrker ansvarsfrihet</label>
+            <div className="row"><label>Ort<input name="place" required maxLength={100} /></label><label>Datum<input type="date" name="date" defaultValue={today()} /></label></div>
+            <div><button>Signera revisionsberättelsen</button></div>
+          </Post>
+        ) : null}
+      </section>
     </div>
   );
 }

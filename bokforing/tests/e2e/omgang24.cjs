@@ -10,6 +10,24 @@ const day = (n) => iso(new Date(Date.now() - n * 864e5));
 const YEAR = new Date().getFullYear();
 const MONTH = new Date().getMonth() + 1;
 
+async function invite(owner, B, email, role) {
+  await owner.goto(B + '/installningar');
+  await owner.fill('form:has(select[name=role]) input[name=email]', email);
+  await owner.selectOption('form:has(select[name=role]) select[name=role]', role);
+  await owner.click('button:has-text("Skapa inbjudan")');
+  await owner.waitForURL(/invite=/);
+  return (await owner.locator('code').textContent()).trim();
+}
+async function accept(browser, link, name, password) {
+  const p = await (await browser.newContext()).newPage();
+  p.setDefaultTimeout(20000);
+  await p.goto(link);
+  await p.fill('input[name=name]', name);
+  await p.fill('input[name=password]', password);
+  await p.click('button:has-text("Acceptera")');
+  await p.waitForURL(BASE + '/');
+  return p;
+}
 async function login(browser, email, password) {
   const p = await (await browser.newContext()).newPage();
   p.setDefaultTimeout(20000);
@@ -189,6 +207,48 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   const cr = owner.locator('.lic-credit[data-licensee="Deutsche Lizenz GmbH"]');
   assert(nb(await cr.locator('.lic-reclaim').innerText()) === '4000,00' && nb(await cr.locator('.lic-creditable').innerText()) === '0,00', 'källskatt över avtalssatsen återsöks');
   log('royalty: minimiavgift 10 000 kr, 8 % på tysk försäljning, källskatt 4 000 kr utöver avtalets 0 % ska återsökas i Tyskland');
+
+  // ================= Del 4: revisionsberättelse =================
+  const RB = await newCompany('Granskade AB', 559240000);
+  await voucher(RB, 'Aktiekapital', [[1930, 25000], [2081, -25000]], `${YEAR}-01-02`);
+  await voucher(RB, 'Skatt dragen från skattekontot', [[2510, 3000], [1630, -3000]], `${YEAR}-03-12`);
+  const rv = await accept(browser, await invite(owner, RB, `revisor.omg24.${Date.now()}@example.com`, 'auditor'), 'Rut Revisor', 'revisorlosen24');
+  await rv.goto(RB + '/revision');
+  await rv.selectOption('select[name=fy]', { label: `${YEAR}-01-01 – ${YEAR}-12-31` });
+  await rv.click('button:has-text("Starta granskning")');
+  await rv.waitForURL(/revision\/\d+/);
+  const rvUrl = rv.url().split('?')[0];
+  for (const id of await rv.$$eval('section.checkpoint', (els) => els.map((e) => e.id))) {
+    await rv.locator(`#${id} input[value=ok]`).check(); await rv.locator(`#${id} button:has-text("Spara")`).click();
+    await rv.locator(`#${id} .badge:has-text("Utan anmärkning")`).waitFor();
+  }
+  await rv.fill('textarea[name=conclusion]', 'Inga väsentliga fel i räkenskaperna.');
+  await rv.click('button:has-text("Avsluta granskningen")');
+  await rv.waitForURL((u) => decodeURIComponent(u.href.replace(/\+/g, ' ')).includes('Granskningen är avslutad'));
+  t = await text(rv);
+  assert(t.includes('Överväg anmärkning') && t.includes('skattekontot visar ett underskott på 3') && !(await rv.locator('input[name=discharge]').isChecked()), 'förslag på anmärkning: ' + t.slice(-1500));
+  await rv.fill('.ar-form input[name=place]', 'Stockholm');
+  await rv.fill('.ar-form input[name=date]', `${YEAR}-12-31`);
+  await rv.click('button:has-text("Signera revisionsberättelsen")');
+  await rv.waitForURL(/error=/);
+  assert(decodeURIComponent(rv.url().replace(/\+/g, ' ')).includes('dateras efter'), 'datum efter räkenskapsåret');
+  await rv.goto(rvUrl);
+  await rv.fill('.ar-form input[name=place]', 'Stockholm');
+  await rv.fill('.ar-form input[name=date]', `${YEAR + 1}-02-15`);
+  await rv.click('button:has-text("Signera revisionsberättelsen")');
+  await rv.waitForURL((u) => decodeURIComponent(u.href.replace(/\+/g, ' ')).includes('signerad'));
+  await owner.goto(rvUrl);
+  t = await text(owner);
+  assert(t.includes('Revisionsberättelse') && t.includes('Utan modifiering') && t.includes('Jag tillstyrker att årsstämman fastställer') && t.includes('Jag avstyrker att styrelsens ledamöter')
+    && t.includes(`Stockholm den ${YEAR + 1}-02-15`) && t.includes('Rut Revisor') && !(await owner.locator('.ar-form').count()), 'bolaget ser berättelsen: ' + t.slice(-1500));
+  const again = await rv.request.post(`${RB}/revision/granska`, { form: { op: 'report', eid: rvUrl.split('/').pop(), opinion: 'clean', place: 'X', date: `${YEAR + 1}-03-01` }, headers: { origin: BASE }, maxRedirects: 0 });
+  assert(decodeURIComponent(again.headers().location).includes('redan signerad'), 'kan inte signeras två gånger');
+  await owner.goto(RB + '/bokslut');
+  await owner.locator(`tr:has-text("${YEAR}-01-01") a:has-text("Öppna")`).first().click();
+  await owner.waitForURL(/bokslut\/\d+/);
+  const pdf = await owner.request.get(owner.url().split('?')[0] + '/parm/pdf');
+  assert(pdf.status() === 200 && (await pdf.body()).toString('latin1').includes('Revisionsber'), 'revisionsberättelsen i bokslutspärmen');
+  log('revisionsberättelse: ren berättelse med anmärkning om underskott på skattekontot, avstyrkt ansvarsfrihet, signerad en gång och med i bokslutspärmen');
 
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();

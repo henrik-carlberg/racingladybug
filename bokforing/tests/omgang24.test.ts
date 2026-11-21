@@ -33,3 +33,15 @@ describe('Royalty', () => {
     expect(credit(4000000, 400000, 10)).toEqual({ limit: 824000, creditable: 400000, reclaim: 0 });
   });
 });
+
+import { reportText, suggestedRemarks } from '@/lib/audit-report';
+describe('Revisionsberättelse', () => {
+  it('anmärkningar och text', () => {
+    expect(suggestedRemarks({ forbiddenLoans: 0, deficit: false, taxDeficit: 0 })).toEqual([]);
+    expect(suggestedRemarks({ forbiddenLoans: 100000, deficit: true, taxDeficit: 0 })).toHaveLength(2);
+    const t = reportText({ company: 'A AB', orgnr: '1', start: '2026-01-01', end: '2026-12-31', opinion: 'qualified', basis: 'Lagret har inte inventerats.', remarks: ['X'], adopt: true, discharge: false, auditor: 'R', place: 'S', date: '2027-02-01' });
+    expect(t.map((s) => s.heading)).toContain('Anmärkningar');
+    expect(t[1].paragraphs[0]).toBe('Lagret har inte inventerats.');
+    expect(t[2].paragraphs[2]).toMatch(/avstyrker/);
+  });
+});
