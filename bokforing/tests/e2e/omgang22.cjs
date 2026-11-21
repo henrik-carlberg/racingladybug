@@ -166,6 +166,32 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await text(owner)).includes('50000,00'), 'ianspråktagen fond blir överavskrivning');
   log('ersättningsfond: skada med utrangering och ersättning, avsättning högst ersättningen, ianspråktagande till överavskrivningar och återföring');
 
+  // ================= Del 4: styrelsearvoden =================
+  const SA = await newCompany('Styrelsebolaget AB', 559140000);
+  await owner.goto(SA + '/lon');
+  await owner.fill('input[name=period]', `${YEAR}-${String(MONTH).padStart(2, '0')}`); await owner.fill('input[name=payment_date]', day(0));
+  await owner.click('button:has-text("Ny lönekörning")');
+  await owner.waitForURL(/lon\/\d+\?ok/);
+  const runUrl = owner.url().split('?')[0];
+  const member = async (name, id, mode, recipient, fskatt, business) => {
+    await owner.goto(SA + '/lon/styrelsearvoden');
+    await owner.fill('form:has(button:has-text("Registrera ledamot")) input[name=name]', name); await owner.fill('input[name=id_number]', id);
+    await owner.fill('input[name=annual_fee]', '20000'); await owner.selectOption('select[name=mode]', mode); await owner.selectOption('select[name=recipient]', recipient);
+    if (fskatt) await owner.check('input[name=f_skatt]'); if (business) await owner.check('input[name=in_business]');
+    await owner.click('button:has-text("Registrera ledamot")');
+    await owner.locator('text=Ledamoten är registrerad').waitFor();
+  };
+  await member('Bo Styrelse', '19' + orgnrFor('650404123'), 'salary', 'person', false, false);
+  await member('Konsult AB', '556677-8899', 'invoice', 'company', true, true);
+  await member('Nils Utan', '19' + orgnrFor('700505123'), 'invoice', 'person', false, true);
+  const payM = async (name) => { await owner.goto(SA + '/lon/styrelsearvoden'); await owner.locator(`.bf-row[data-name="${name}"] button`).click(); await owner.locator('.flash').first().waitFor(); return nb(await owner.locator('.flash').first().innerText()); };
+  assert((await payM('Bo Styrelse')).includes('lagtpålönespecen'), 'arvode som lön');
+  assert((await payM('Konsult AB')).includes('skatteavdrag0,00kr,arbetsgivaravgifter0,00kr'), 'F-skatt: inget avdrag');
+  assert((await payM('Nils Utan')).includes('skatteavdrag6000,00kr,arbetsgivaravgifter6284,00kr,utbetalt14000,00kr'), 'utan F-skatt: 30 % skatt och avgifter');
+  await owner.goto(runUrl);
+  assert((await owner.$$eval('input[name^=desc_]', (els) => els.map((e) => e.value))).some((v) => v.startsWith('Styrelsearvode')), 'arvodet på lönespecen');
+  log('styrelsearvoden: arvode som lön i lönekörningen, faktura med F-skatt utan avdrag, utan F-skatt 30 % skatt och arbetsgivaravgifter');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 22: alla steg gick igenom');

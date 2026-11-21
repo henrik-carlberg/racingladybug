@@ -36,3 +36,17 @@ describe('Ersättningsfond', () => {
     expect(useLines(100, 'byggnad')[1].account).toBe(8860);
   });
 });
+
+import { assess as assessFee, invoiceLines, period } from '@/lib/board-fees';
+describe('Styrelsearvoden', () => {
+  it('lön eller faktura, F-skatt och skatteavdrag', () => {
+    expect(assessFee({ mode: 'invoice', recipient: 'company', fSkatt: true, inBusiness: false }).treatment).toBe('salary');
+    const fs = assessFee({ mode: 'invoice', recipient: 'company', fSkatt: true, inBusiness: true });
+    expect(invoiceLines(2000000, fs, 0)).toMatchObject({ tax: 0, fee: 0, net: 2000000 });
+    const no = assessFee({ mode: 'invoice', recipient: 'person', fSkatt: false, inBusiness: true });
+    expect(invoiceLines(2000000, no, 0)).toMatchObject({ tax: 600000, fee: 628400, net: 1400000 });
+    expect(invoiceLines(50000, no, 0).fee).toBe(0);
+    expect(invoiceLines(2000000, no, 0).lines.reduce((a, l) => a + l.amount, 0)).toBe(0);
+    expect(period('2026-05-15')).toBe('2026/27');
+  });
+});
