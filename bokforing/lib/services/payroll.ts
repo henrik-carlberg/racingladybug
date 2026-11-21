@@ -210,7 +210,7 @@ export function parseItems(input: Record<string, unknown>): PayItem[] {
     if (type !== 'salary' && amount < 0) throw new ValidationError(`Negativt belopp är bara tillåtet för lönerader ("${description}")`);
     const item: PayItem = { type, description, amount };
     const code = str(r, 'code');
-    if (code === 'agreement' || code === 'sacrifice' || code === 'vacation') item.code = code;
+    if (code === 'agreement' || code === 'sacrifice' || code === 'vacation' || code === 'loan') item.code = code;
     if (type === 'reimbursement') item.account = optInt(r, 'account', 'Konto') ?? 5800;
     return item;
   });
@@ -220,8 +220,10 @@ export async function updatePayslip(actor: Actor, runId: number, slipId: number,
   const items = parseItems(input);
   return sql.begin(async (tx) => {
     await assertDraft(tx, actor.companyId, runId);
-    const r = await tx`UPDATE payslips SET items = ${tx.json(items as never)} WHERE id = ${slipId} AND run_id = ${runId} RETURNING id`;
+    const r = await tx<{ employee_id: number }[]>`UPDATE payslips SET items = ${tx.json(items as never)} WHERE id = ${slipId} AND run_id = ${runId} RETURNING employee_id`;
     if (!r.length) throw new NotFoundError('Lönespecen');
+    // Tas medarbetarlånets rader bort från lönespecen gäller inte heller avdraget i lånet (det kan läggas in igen)
+    if (!items.some((i) => i.code === 'loan')) await dropLoanInstallments(tx, runId, r[0].employee_id);
     await recomputeSlip(tx, slipId);
     await auditBy(tx, actor, 'update', 'payslip', slipId);
     return fetchRun(tx, actor.companyId, runId);
@@ -244,7 +246,8 @@ export async function addEmployeeToRun(actor: Actor, runId: number, employeeId: 
 export async function removePayslip(actor: Actor, runId: number, slipId: number) {
   return sql.begin(async (tx) => {
     await assertDraft(tx, actor.companyId, runId);
-    await tx`DELETE FROM payslips WHERE id = ${slipId} AND run_id = ${runId}`;
+    const [d] = await tx<{ employee_id: number }[]>`DELETE FROM payslips WHERE id = ${slipId} AND run_id = ${runId} RETURNING employee_id`;
+    if (d) await dropLoanInstallments(tx, runId, d.employee_id);
     await auditBy(tx, actor, 'remove', 'payslip', slipId);
     return fetchRun(tx, actor.companyId, runId);
   });
@@ -278,7 +281,15 @@ export async function bookPayrollRun(actor: Actor, runId: number) {
     ]) : [];
     if (pensionLines.length) for (const [n, name] of [[7411, 'Premier för kollektiva pensionsförsäkringar'], [7533, 'Särskild löneskatt för pensionskostnader'], [2514, 'Beräknad särskild löneskatt på pensionskostnader'], [2990, 'Övriga upplupna kostnader och förutbetalda intäkter'], [7570, 'Premier för arbetsmarknadsförsäkringar']] as const)
       await tx`INSERT INTO accounts (company_id, number, name) VALUES (${actor.companyId}, ${n}, ${name}) ON CONFLICT DO NOTHING`;
-    // Avtalad ränta på medarbetarlån som dras på nettolönen
+    // Avtalad ränta på medarbetarlån som dras på nettolönen. Avdraget i lånet ska stämma med lönespecens rader.
+    const inst = await tx<{ employee_id: number; deduction: number; benefit: number }[]>`SELECT l.employee_id, SUM(i.amortization + i.interest)::float8 AS deduction, SUM(i.benefit)::float8 AS benefit
+      FROM employee_loan_installments i JOIN employee_loans l ON l.id = i.loan_id WHERE i.run_id = ${runId} GROUP BY l.employee_id`;
+    const slipEmp = await tx<{ employee_id: number; items: PayItem[] }[]>`SELECT employee_id, items FROM payslips WHERE run_id = ${runId}`;
+    for (const x of inst) {
+      const its = slipEmp.find((p) => p.employee_id === x.employee_id)?.items ?? [];
+      const sum = (t: string) => its.filter((i) => i.code === 'loan' && i.type === t).reduce((a, i) => a + Number(i.amount), 0);
+      if (sum('net_deduction') !== x.deduction || sum('benefit') !== x.benefit) throw new ValidationError('Medarbetarlånets rader på lönespecen stämmer inte med lånet – återställ raderna eller ta bort dem och lägg in lånet igen');
+    }
     const [li] = await tx<{ interest: number }[]>`SELECT COALESCE(SUM(interest), 0)::float8 AS interest FROM employee_loan_installments WHERE run_id = ${runId}`;
     const loanLines = li.interest ? fromSigned([{ account: 1610, amount: li.interest }, { account: 8310, amount: -li.interest, description: 'Ränta på lån till anställda' }]) : [];
     const v = await createVoucher(tx, {
@@ -319,4 +330,8 @@ export async function buildAgiForRun(actor: Actor, runId: number): Promise<{ fil
     programName: 'Bokforing',
   });
   return { filename: `AGI_${run.period}.xml`, xml };
+}
+
+async function dropLoanInstallments(tx: Tx, runId: number, employeeId: number) {
+  await tx`DELETE FROM employee_loan_installments i USING employee_loans l WHERE l.id = i.loan_id AND i.run_id = ${runId} AND l.employee_id = ${employeeId}`;
 }

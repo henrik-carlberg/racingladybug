@@ -17,8 +17,8 @@ export function loanItems(l: { balance: number; agreedRate: number; installment:
   return {
     amortization, interest, benefit,
     items: [
-      ...(amortization + interest ? [{ type: 'net_deduction' as const, description: `Medarbetarlån: amortering${interest ? ' och ränta' : ''}`, amount: amortization + interest }] : []),
-      ...(benefit ? [{ type: 'benefit' as const, description: 'Ränteförmån medarbetarlån', amount: benefit }] : []),
+      ...(amortization + interest ? [{ type: 'net_deduction' as const, description: `Medarbetarlån: amortering${interest ? ' och ränta' : ''}`, amount: amortization + interest, code: 'loan' as const }] : []),
+      ...(benefit ? [{ type: 'benefit' as const, description: 'Ränteförmån medarbetarlån', amount: benefit, code: 'loan' as const }] : []),
     ],
   };
 }
