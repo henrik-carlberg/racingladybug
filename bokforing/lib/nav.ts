@@ -22,8 +22,10 @@ export function buildNav(o: {
     { id: 'salj', label: t('Sälja'), icon: 'invoice', items: items([
       { path: '/fakturor', label: 'Kundfakturor', perm: 'invoicing', hint: 'Skapa, skicka och följ upp fakturor' },
       { path: '/kunder', label: 'Kunder', perm: 'invoicing' },
+      { path: '/betalningsforelaggande', label: 'Betalningsföreläggande', perm: 'invoicing', hint: 'Obetalda fakturor till Kronofogden' },
       { path: '/kundutlagg', label: 'Utlägg för kunder', perm: 'invoicing', hint: 'Momsfria utlägg för kundens räkning' },
       { path: '/kassa', label: 'Kassa och e-handel', hint: 'Dagskassa och webbutik' },
+      { path: '/konsignation', label: 'Konsignationslager', perm: 'invoicing', hint: 'Varor hos återförsäljare tills de är sålda' },
       { path: '/presentkort', label: 'Presentkort', perm: 'ledger', hint: 'Enfunktions- och flerfunktionsvoucher' },
       { path: '/kassabok', label: 'Kassabok', perm: 'ledger', hint: 'Kontantkassan dag för dag och kassainventering' },
       { path: '/kassa/betalningar', label: 'Kortterminaler och utbetalningar', perm: 'ledger', hint: 'Zettle, SumUp, Stripe, Klarna, Shopify' },

@@ -95,8 +95,10 @@ export async function reserve(companyId: number, fyId: number) {
     FROM invoices i JOIN customers c ON c.id = i.customer_id
     WHERE i.company_id = ${companyId} AND i.status = 'booked' AND i.voucher_id IS NOT NULL AND i.invoice_date <= ${f.end_date} AND i.total > i.paid_amount
     ORDER BY i.due_date`;
+  const assessed = new Map((await sql<{ invoice_id: number; pct: number; note: string }[]>`SELECT invoice_id, pct::float8 AS pct, note FROM bad_debt_assessments WHERE company_id = ${companyId}`).map((a) => [a.invoice_id, a]));
   const cands: ReserveCandidate[] = [];
-  for (const r of rows) cands.push({ id: r.id, number: r.number, customer: r.customer, due: r.due, remaining: r.remaining, collection: r.collection, net: vatShare(await invoiceLines(sql, r.voucher_id), r.remaining).net });
+  for (const r of rows) cands.push({ id: r.id, number: r.number, customer: r.customer, due: r.due, remaining: r.remaining, collection: r.collection, net: vatShare(await invoiceLines(sql, r.voucher_id), r.remaining).net,
+    assessed: assessed.get(r.id) ?? null });
   const [b] = await sql<{ b: number }[]>`SELECT COALESCE(-SUM(l.debit - l.credit), 0)::float8 AS b FROM voucher_lines l JOIN vouchers v ON v.id = l.voucher_id
     WHERE v.company_id = ${companyId} AND v.date <= ${f.end_date} AND l.account_number = ${DOUBTFUL_RESERVE}`;
   const [w] = await sql<{ n: number; amount: number }[]>`SELECT count(*)::int AS n, COALESCE(SUM(written_off_amount - recovered_amount), 0)::float8 AS amount FROM invoices
@@ -118,4 +120,20 @@ export async function bookReserve(actor: Actor, fyId: number) {
     await auditBy(tx, actor, 'bad_debt_reserve', 'fiscal_year', fyId, { target: p.target, change: p.change });
     return p;
   });
+}
+
+/** Individuell bedömning av en osäker fordran: andel som befaras gå förlorad och motivering (tomt = schablonen gäller) */
+export async function assess(actor: Actor, invoiceId: number, input: Record<string, unknown>) {
+  const raw = String(input.pct ?? '').trim();
+  const [inv] = await sql`SELECT 1 FROM invoices WHERE id = ${invoiceId} AND company_id = ${actor.companyId} AND status = 'booked'`;
+  if (!inv) throw new NotFoundError('Fakturan');
+  if (!raw) { await sql`DELETE FROM bad_debt_assessments WHERE invoice_id = ${invoiceId} AND company_id = ${actor.companyId}`; return null; }
+  const pct = Number(raw.replace(',', '.'));
+  if (!Number.isFinite(pct) || pct < 0 || pct > 100) throw new ValidationError('Ange andelen i procent (0–100)');
+  const note = String(input.note ?? '').trim().slice(0, 500);
+  if (!note) throw new ValidationError('Motivera bedömningen (t.ex. kundens betalningsförmåga, avbetalningsplan, tvist)');
+  await sql`INSERT INTO bad_debt_assessments ${sql({ invoice_id: invoiceId, company_id: actor.companyId, pct, note, assessed_by: actor.userId })}
+    ON CONFLICT (invoice_id) DO UPDATE SET pct = EXCLUDED.pct, note = EXCLUDED.note, assessed_by = EXCLUDED.assessed_by, assessed_at = now()`;
+  await auditBy(sql, actor, 'bad_debt_assess', 'invoice', invoiceId, { pct });
+  return pct;
 }
