@@ -22,3 +22,17 @@ describe('Omvänd skattskyldighet för varor', () => {
     expect(goodsRcWarning({ rcKind: 'goods', buyerIsCompany: true, net: 20000000, lines: [{ description: 'Mobiltelefoner' }] })).toBeNull();
   });
 });
+
+import { deduction } from '@/lib/garnishment';
+import { payrollBookingLines } from '@/lib/payroll';
+describe('Löneutmätning', () => {
+  it('förbehållsbelopp och konto 2750', () => {
+    expect(deduction({ netPay: 3000000, monthly: 500000, reserved: 2000000 })).toBe(500000);
+    expect(deduction({ netPay: 2200000, monthly: 500000, reserved: 2000000 })).toBe(200000);
+    expect(deduction({ netPay: 1500000, monthly: 500000, reserved: 2000000 })).toBe(0);
+    const calc = { grossCash: 4000000, benefits: 0, tax: 1000000, employerFee: 1256800, netDeductions: 500000, reimbursements: 0, netPay: 2500000 } as never;
+    const lines = payrollBookingLines([{ calc, items: [{ type: 'net_deduction', description: 'x', amount: 500000, code: 'garnishment' }] }]);
+    expect(lines.find((l) => l.account === 2750)?.credit).toBe(500000);
+    expect(lines.find((l) => l.account === 1610)).toBeUndefined();
+  });
+});

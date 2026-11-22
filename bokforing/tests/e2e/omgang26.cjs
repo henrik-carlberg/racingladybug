@@ -168,6 +168,53 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(/Försäljningnärköparenärskattskyldig[iI]Sverige120000/.test(t), 'ruta 41: ' + t.slice(0, 900));
   log('omvänd skattskyldighet för varor: elektronik under 100 000 kr nekas, varning vid vanlig moms, 120 000 kr utan moms i ruta 41');
 
+  // ================= Del 3: löneutmätning =================
+  const LU = await newCompany('Arbetsgivaren AB', 559330000);
+  await voucher(LU, 'Aktiekapital', [[1930, 500000], [2081, -500000]], `${YEAR}-01-02`);
+  const emp = async (first, last, pn) => {
+    await owner.goto(LU + '/lon/anstallda');
+    await owner.fill('input[name=first_name]', first); await owner.fill('input[name=last_name]', last);
+    await owner.fill('input[name=personal_number]', pn); await owner.fill('input[name=monthly_salary]', '40000'); await owner.fill('input[name=tax_table]', '32');
+    await owner.click('form:has(input[name=first_name]) button:has-text("Spara")'); await owner.waitForURL(/ok=/);
+  };
+  await emp('Ulf', 'Utmätt', '19811218-9876');
+  await emp('Vera', 'Värnad', '19' + orgnrFor('790315123'));
+  const decide = async (name, monthly, reserved) => {
+    await owner.goto(LU + '/lon/utmatning');
+    await owner.selectOption('select[name=employee_id]', { label: name });
+    await owner.fill('input[name=case_no]', `KFM-${name.split(' ')[0]}`); await owner.fill('input[name=monthly_amount]', monthly); await owner.fill('input[name=reserved_amount]', reserved);
+    await owner.fill('input[name=valid_from]', `${YEAR}-01-01`);
+    await owner.click('button:has-text("Registrera beslut")');
+    await owner.locator('text=Beslutet om löneutmätning är registrerat').waitFor();
+  };
+  await decide('Ulf Utmätt', '5000', '20000');
+  await decide('Vera Värnad', '5000', '60000');
+  await owner.goto(LU + '/lon');
+  await owner.fill('input[name=period]', `${YEAR}-${String(MONTH).padStart(2, '0')}`);
+  await owner.fill('input[name=payment_date]', day(0));
+  await owner.click('button:has-text("Ny lönekörning")');
+  await owner.waitForURL(/lon\/\d+\?ok/);
+  const luRun = owner.url().split('?')[0];
+  const applyG = async (name) => {
+    await owner.goto(LU + '/lon/utmatning');
+    await owner.locator(`.ut-decision[data-name="${name}"] button:has-text("Dra på lönen")`).click();
+    await owner.locator('.flash').first().waitFor();
+    return nb(await owner.locator('.flash').first().innerText());
+  };
+  assert((await applyG('Ulf Utmätt')).includes('Löneutmätning5000,00krdras'), 'avdrag enligt beslutet');
+  assert((await applyG('Vera Värnad')).includes('Ingenutmätningdennamånad'), 'förbehållsbeloppet skyddar nettolönen');
+  await owner.goto(luRun);
+  assert((await owner.content()).includes('Löneutmätning, Kronofogden mål KFM-Ulf'), 'raden på lönespecen');
+  await owner.click('button:has-text("Bokför lönekörning")');
+  await owner.locator('text=Lönekörningen är bokförd').waitFor();
+  await owner.goto(LU + '/lon/utmatning');
+  assert(nb(await owner.locator('.ut-unpaid').innerText()) === '5000,00', 'att betala in till Kronofogden');
+  await owner.click('button:has-text("Bokför inbetalning till Kronofogden")');
+  await owner.locator('text=5 000,00 kr är bokfört som inbetalt').waitFor();
+  await owner.goto(LU + '/lon/utmatning');
+  assert(!(await owner.locator('.ut-unpaid').count()) && (await text(owner)).includes('Inbetald'), 'redovisat per månad');
+  log('löneutmätning: 5 000 kr dras på nettolönen mot 2750, förbehållsbeloppet skyddar, inbetalning till Kronofogden och redovisning per månad');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 26: alla steg gick igenom');

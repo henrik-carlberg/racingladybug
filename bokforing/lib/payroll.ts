@@ -85,7 +85,7 @@ export interface PayItem {
   description: string;
   amount: number; // öre. salary kan vara negativ (t.ex. sjukavdrag)
   account?: number; // för reimbursement: kostnadskonto
-  code?: 'agreement' | 'sacrifice' | 'vacation' | 'loan'; // rader som skapats automatiskt (avtalstillägg, löneväxling, semester)
+  code?: 'agreement' | 'sacrifice' | 'vacation' | 'loan' | 'garnishment'; // rader som skapats automatiskt (avtalstillägg, löneväxling, semester)
 }
 
 export const PAY_ITEM_LABELS: Record<PayItemType, string> = {
@@ -180,7 +180,10 @@ export function payrollBookingLines(slips: { calc: PayslipCalc; items: PayItem[]
     e.push({ account: ACC.employerFees, amount: calc.employerFee });
     e.push({ account: ACC.employerFeeDebt, amount: -calc.employerFee });
     for (const i of items.filter((x) => x.type === 'reimbursement')) e.push({ account: i.account ?? 6900, amount: i.amount });
-    if (calc.netDeductions) e.push({ account: ACC.employeeReceivables, amount: -calc.netDeductions });
+    // Löneutmätning innehålls för Kronofogden (2750); övriga nettolöneavdrag minskar fordran på den anställde (1610)
+    const garnished = items.filter((x) => x.type === 'net_deduction' && x.code === 'garnishment').reduce((s, x) => s + x.amount, 0);
+    if (calc.netDeductions - garnished) e.push({ account: ACC.employeeReceivables, amount: -(calc.netDeductions - garnished) });
+    if (garnished) e.push({ account: 2750, amount: -garnished, description: 'Löneutmätning' });
     e.push({ account: ACC.bank, amount: -calc.netPay });
   }
   return fromSigned(e);
