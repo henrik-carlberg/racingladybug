@@ -131,6 +131,40 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await row.locator('.rb-volume').innerText()) === '600000,00', 'bonusfakturan räknas inte in i omsättningen');
   log('kundbonus: trappsteg på omsättningen, upplupen bonus 3730/2990 vid bokslut, reglering med kreditfaktura och momsreduktion, upplupet löses upp');
 
+  // ================= Del 2: förskott till leverantörer =================
+  const supplierInvoice = async (B, sup, no, total, vat, account = '4010') => {
+    await owner.goto(B + '/leverantorsfakturor/ny');
+    await owner.selectOption('select[name=supplier_id]', { label: sup });
+    await owner.fill('input[name=invoice_number]', no); await owner.fill('input[name=invoice_date]', day(10)); await owner.fill('input[name=due_date]', day(-10));
+    await owner.fill('input[name=total]', total); await owner.locator('input[name=total]').blur(); await owner.fill('input[name=vat]', vat);
+    await owner.fill('input[name=account_0]', account); await owner.fill('input[name=amount_0]', String(Number(total) - Number(vat)));
+    await owner.click('button:has-text("Registrera och bokför")'); await owner.waitForURL(/ok=/);
+    return owner.url().split('?')[0];
+  };
+  const FP = await newCompany('Förskottsbetalaren AB', 559510000);
+  await owner.goto(FP + '/leverantorer');
+  await owner.fill('input[name=name]', 'Maskinleverantören AB');
+  await owner.click('button:has-text("Spara leverantör")'); await owner.waitForURL(/ok=/);
+  await owner.goto(FP + '/leverantorsfakturor/forskott');
+  await owner.fill('input[name=amount]', '30000'); await owner.fill('input[name=date]', day(20));
+  await owner.click('button:has-text("Bokför förskott")'); await owner.locator('text=Förskottet är bokfört på 1480').waitFor();
+  assert(nb(await owner.locator('.pp-outstanding').innerText()) === '30000,00' && nb(await owner.locator('.pp-ledger').innerText()) === '30000,00', 'förskott på 1480 och avstämt');
+  const fUrl = await supplierInvoice(FP, 'Maskinleverantören AB', 'M-100', '100000', '20000', '5410');
+  await owner.goto(FP + '/leverantorsfakturor/forskott');
+  await owner.locator('.pp-row button:has-text("Avräkna")').click(); await owner.locator('text=av förskottet är avräknat').waitFor();
+  t = nb(await text(owner));
+  assert(t.includes('kvarattbetalapåfakturan:70000,00'), 'avräknat, mellanskillnaden kvar: ' + t.slice(0, 500));
+  assert(nb(await owner.locator('.pp-outstanding').innerText()) === '0,00' && nb(await owner.locator('.pp-ledger').innerText()) === '0,00', '1480 nollställt');
+  await owner.goto(fUrl);
+  t = nb(await text(owner));
+  assert(t.includes('70000,00'), 'fakturan har 70 000 kr kvar att betala: ' + t.slice(0, 900));
+  // Ett andra förskott som inte används betalas tillbaka
+  await owner.goto(FP + '/leverantorsfakturor/forskott');
+  await owner.fill('input[name=amount]', '5000'); await owner.click('button:has-text("Bokför förskott")'); await owner.locator('text=Förskottet är bokfört på 1480').waitFor();
+  await owner.locator('.pp-row').first().locator('button:has-text("Återbetalt")').click(); await owner.locator('text=Återbetalt förskott 5000').first().waitFor().catch(() => {});
+  assert(nb(await owner.locator('.pp-outstanding').innerText()) === '0,00', 'återbetalt förskott');
+  log('leverantörsförskott: förskott på 1480, avräkning mot slutfakturan lämnar mellanskillnaden att betala, återbetalning, avstämning mot 1480');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 30: alla steg gick igenom');

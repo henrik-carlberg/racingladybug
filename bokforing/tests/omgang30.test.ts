@@ -12,3 +12,11 @@ describe('Kundbonus', () => {
     expect(customerAccrualLines(1200000)).toEqual([{ account: 3730, amount: 1200000 }, { account: 2990, amount: -1200000 }]);
   });
 });
+
+import { prepayLines, settleLines } from '@/lib/supplier-prepayment';
+describe('Leverantörsförskott', () => {
+  it('kontering', () => {
+    expect(prepayLines(3000000)).toEqual([{ account: 1480, amount: 3000000 }, { account: 1930, amount: -3000000 }]);
+    expect(settleLines(3000000)).toEqual([{ account: 2440, amount: 3000000 }, { account: 1480, amount: -3000000 }]);
+  });
+});
