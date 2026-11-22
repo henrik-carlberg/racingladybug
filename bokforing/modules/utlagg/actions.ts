@@ -32,7 +32,8 @@ export async function addLine(cid: number, id: number, kind: string, fd: FormDat
   await attempt(one(cid, id), async () => {
     await svc.addLine(actor, id, {
       kind, date: str(fd, 'date'), description: str(fd, 'description'), category: str(fd, 'category'), amount: kind === 'receipt' ? amount(fd, 'amount', 'Belopp') : undefined,
-      km: str(fd, 'km'), days_full: str(fd, 'days_full'), days_half: str(fd, 'days_half'), nights: str(fd, 'nights'), depart: str(fd, 'depart'), return: str(fd, 'return'),
+      km: str(fd, 'km'), days_full: str(fd, 'days_full'), days_half: str(fd, 'days_half'), nights: str(fd, 'nights'), depart: str(fd, 'depart'), return: str(fd, 'return'), car: str(fd, 'car'), foreign_rate: str(fd, 'foreign_rate'), country: str(fd, 'country'),
+      breakfasts: str(fd, 'breakfasts'), lunches: str(fd, 'lunches'), dinners: str(fd, 'dinners'), long_term: str(fd, 'long_term'), paid: str(fd, 'paid'),
     }, await fileFrom(fd));
   });
   done(one(cid, id), 'Raden är tillagd');

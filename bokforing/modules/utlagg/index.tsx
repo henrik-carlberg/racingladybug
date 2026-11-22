@@ -103,7 +103,8 @@ async function Claim({ companyId, actor, basePath, params }: ModulePageProps) {
             <b>🚗 Resa med egen bil</b>
             <div className="row"><label>Datum<input type="date" name="date" defaultValue={today()} /></label><label>Kilometer<input name="km" inputMode="decimal" required /></label></div>
             <label>Från – till och syfte<input name="description" placeholder="T.ex. Kontoret – kund i Borås, möte" required /></label>
-            <p className="small muted" style={{ margin: 0 }}>Skattefritt {krIn(s.mileage_rate)} kr per mil.</p>
+            <label>Bil<select name="car"><option value="">Egen bil</option><option value="el">Förmånsbil, el (9,50 kr/mil)</option><option value="fossil">Förmånsbil, övriga drivmedel (12 kr/mil)</option></select></label>
+            <p className="small muted" style={{ margin: 0 }}>Skattefritt {krIn(s.mileage_rate)} kr per mil med egen bil.</p>
             <div><button className="secondary">Lägg till resa</button></div>
           </form>
           <form action={a.addLine.bind(null, companyId, c.id, 'allowance')} className="card stack">
@@ -113,6 +114,10 @@ async function Claim({ companyId, actor, basePath, params }: ModulePageProps) {
             <div className="row"><label>Avresedag<input type="date" name="date" defaultValue={today()} /></label></div>
             <div className="row"><label>Hela dagar<input name="days_full" type="number" min={0} defaultValue={0} /></label><label>Halva dagar<input name="days_half" type="number" min={0} defaultValue={0} /></label><label>Nätter<input name="nights" type="number" min={0} defaultValue={0} /></label></div>
             <label>Resmål och syfte<input name="description" required placeholder="T.ex. Stockholm, mässa" /></label>
+            <div className="row"><label>Land (utrikes)<input name="country" maxLength={40} /></label><label>Normalbelopp utrikes (kr/dag)<input name="foreign_rate" inputMode="decimal" /></label>
+              <label>Förrättning<select name="long_term"><option value="">Upp till tre månader</option><option value="3m">Efter tre månader (70 %)</option><option value="2y">Efter två år (50 %)</option></select></label></div>
+            <div className="row"><label>Betalda frukostar<input name="breakfasts" type="number" min={0} defaultValue={0} /></label><label>Luncher<input name="lunches" type="number" min={0} defaultValue={0} /></label><label>Middagar<input name="dinners" type="number" min={0} defaultValue={0} /></label>
+              <label>Utbetalt traktamente om mer än skattefritt (kr)<input name="paid" inputMode="decimal" /></label></div>
             <p className="small muted" style={{ margin: 0 }}>Kräver övernattning minst 50 km från vanliga verksamhetsstället. {krIn(s.allowance_full)} kr hel dag, {krIn(s.allowance_half)} kr halv dag (avresa efter 12 eller hemkomst före 19), {krIn(s.allowance_night)} kr natt.</p>
             <div><button className="secondary">Lägg till traktamente</button></div>
           </form>
