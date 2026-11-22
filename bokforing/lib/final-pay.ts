@@ -31,9 +31,9 @@ export function finalPay(o: FinalPayInput) {
   const vacation = Math.round(perDay * days);
   const advance = o.ownResignation ? Math.round(o.monthly * DAY_PAY * o.advanceDays) : 0;
   const items: PayItem[] = [
-    { type: 'salary', description: `Lön ${o.end.slice(0, 7)}${salary !== o.monthly ? ` (${day} av ${dim} dagar)` : ''}`, amount: salary },
-    ...(vacation ? [{ type: 'salary' as const, description: `Semesterersättning ${Math.round(days * 10) / 10} dagar`, amount: vacation, code: 'vacation' as const }] : []),
-    ...(advance ? [{ type: 'salary' as const, description: `Avdrag förskottssemester ${o.advanceDays} dagar`, amount: -advance }] : []),
+    { type: 'salary', description: `Lön ${o.end.slice(0, 7)}${salary !== o.monthly ? ` (${day} av ${dim} dagar)` : ''}`, amount: salary, code: 'final' },
+    ...(vacation ? [{ type: 'salary' as const, description: `Semesterersättning ${Math.round(days * 10) / 10} dagar`, amount: vacation, code: 'final' as const }] : []),
+    ...(advance ? [{ type: 'salary' as const, description: `Avdrag förskottssemester ${o.advanceDays} dagar`, amount: -advance, code: 'final' as const }] : []),
   ];
   return { salary, vacation, perDay, days, advance, items, gross: salary + vacation - advance };
 }

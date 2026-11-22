@@ -85,7 +85,7 @@ export interface PayItem {
   description: string;
   amount: number; // öre. salary kan vara negativ (t.ex. sjukavdrag)
   account?: number; // för reimbursement: kostnadskonto
-  code?: 'agreement' | 'sacrifice' | 'vacation' | 'loan' | 'garnishment'; // rader som skapats automatiskt (avtalstillägg, löneväxling, semester)
+  code?: 'agreement' | 'sacrifice' | 'vacation' | 'loan' | 'garnishment' | 'final'; // rader som skapats automatiskt (avtalstillägg, löneväxling, semester)
 }
 
 export const PAY_ITEM_LABELS: Record<PayItemType, string> = {

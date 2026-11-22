@@ -102,8 +102,6 @@ export async function saveDraftTx(tx: Tx, actor: Actor, invoiceId: number | null
   const lines = parseLines(input, rcOn, rcKind === 'construction');
   if (rcKind === 'goods') {
     for (const l of lines) if (l.account === defaultSalesAccount(l.vatRate, true)) l.account = GOODS_RC_ACCOUNT;
-    const err = goodsRcError({ category: goodsCategory, net: lines.reduce((s, l) => s + Math.round(l.quantity * l.unitPrice), 0), buyerIsCompany: !!(cust.orgnr || cust.vat_number), buyerCountry: cust.country });
-    if (err) throw new ValidationError(err);
     await tx`INSERT INTO accounts (company_id, number, name) VALUES (${actor.companyId}, ${GOODS_RC_ACCOUNT}, 'Försäljning av varor, omvänd skattskyldighet i Sverige') ON CONFLICT DO NOTHING`;
   }
   // OSS: privatperson i annat EU-land och bolaget registrerat för OSS – köparlandets moms på momspliktiga rader
@@ -138,6 +136,11 @@ export async function saveDraftTx(tx: Tx, actor: Actor, invoiceId: number | null
   }
   const tt = invoiceTotals(lines, { reverseCharge: rcOn, currency, rate });
   const t = tt.sek;
+  // Gränsen på 100 000 kr för elektronik gäller värdet i kronor, även när fakturan är i utländsk valuta
+  if (rcKind === 'goods') {
+    const err = goodsRcError({ category: goodsCategory, net: t.net, buyerIsCompany: !!(cust.orgnr || cust.vat_number), buyerCountry: cust.country });
+    if (err) throw new ValidationError(err);
+  }
   const rr = await readReduction(tx, actor.companyId, invoiceId, input, lines, t, rcOn, invoiceDate);
   const head = {
     customer_id: customerId, invoice_date: invoiceDate, due_date: dueDate, delivery_date: str(input, 'delivery_date'),
