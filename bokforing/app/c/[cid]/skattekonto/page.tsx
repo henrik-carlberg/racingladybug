@@ -17,7 +17,7 @@ export default async function TaxAccount({ params }: { params: Promise<{ cid: st
   return (
     <div>
       <h1>Skattekontot</h1>
-      <p className="muted">Exportera transaktionerna från Skatteverkets e-tjänst Skattekonto (eller kopiera tabellen) och läs in dem här. Moms, arbetsgivaravgifter, avdragen skatt, F-skatt, räntor och avgifter föreslås konterade mot 1630. In- och utbetalningar stäms av via <Link href={`${b}/bank/avstamning`}>bankavstämningen</Link>.</p>
+      <p className="muted">Exportera transaktionerna från Skatteverkets e-tjänst Skattekonto (eller kopiera tabellen) och läs in dem här. Moms, arbetsgivaravgifter, avdragen skatt, F-skatt, räntor och avgifter föreslås konterade mot 1630. In- och utbetalningar stäms av via <Link href={`${b}/bank/avstamning`}>bankavstämningen</Link>. <Link href={`${b}/skattekonto/ranta`}>Ränta och anstånd →</Link></p>
       {r && (
         <div className="card row" style={{ alignItems: 'center' }}>
           <span>Saldo {r.date}: Skatteverket <b>{kr(r.skatteverket)}</b> · bokfört på 1630 <b>{kr(r.ledger)}</b></span>

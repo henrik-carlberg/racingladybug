@@ -240,6 +240,35 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await owner.locator('.kg-qty').innerText()) === '4st' && nb(await owner.locator('.kg-total').innerText()) === '800,00', 'kvar efter retur');
   log('konsignation: utleverans flyttar lagret till 1465, sålt enligt rapport ger fakturautkast och lagerminskning, retur högst det som finns kvar');
 
+  // ================= Del 5: ränta och anstånd på skattekontot =================
+  const TI = await newCompany('Ränteberäkning AB', 559490000);
+  const period = day(45).slice(0, 7);
+  if (Number(period.slice(0, 4)) !== YEAR) await addFy(TI, Number(period.slice(0, 4)));
+  const ndays = new Date(Date.UTC(Number(period.slice(0, 4)), Number(period.slice(5, 7)), 0)).getUTCDate();
+  await voucher(TI, 'Moms att betala', [[1630, -36500], [2650, 36500]], period + '-01');
+  await owner.goto(TI + '/skattekonto/ranta?period=' + period);
+  await owner.fill('input[name=base_rate]', '2,75'); await owner.click('button:has-text("Spara")'); await owner.waitForURL(/ok=/);
+  const expCost = Math.round(36500 * 0.1775 * ndays / 365);
+  assert(nb(await owner.locator('.ti-cost').innerText()) === expCost + ',00', 'kostnadsränta 17,75 % på skulden: ' + await owner.locator('.ti-cost').innerText());
+  // Anstånd med 10 000 kr hela månaden: skulden hos Skatteverket minskar, låg kostnadsränta på anståndet
+  await owner.fill('input[name=amount]', '10000'); await owner.fill('input[name=start_date]', period + '-01'); await owner.fill('input[name=end_date]', day(-10));
+  await owner.fill('input[name=note]', 'Anstånd med moms'); await owner.click('button:has-text("Registrera anstånd")'); await owner.locator('text=Anståndet är registrerat').waitFor();
+  const expCost2 = Math.round((26500 * 0.1775 + 10000 * 0.0375) * ndays / 365);
+  assert(nb(await owner.locator('.ti-cost').innerText()) === expCost2 + ',00', 'ränta med anstånd: ' + await owner.locator('.ti-cost').innerText());
+  assert(await owner.locator('.td-row[data-status="soon"]').count() === 1, 'anståndet går snart ut');
+  await owner.goto(TI);
+  assert((await text(owner)).includes('Anstånd med skatt som går ut inom två veckor'), 'påminnelse om anståndet');
+  await owner.goto(TI + '/skattekonto/ranta?period=' + period);
+  await owner.click('button:has-text("Bokför räntan")'); await owner.locator('text=är bokförd: kostnadsränta').waitFor();
+  await owner.locator('.ti-booked a').click(); await owner.waitForURL(/verifikationer\/\d+/);
+  t = nb(await text(owner));
+  assert(t.includes('8423') && t.includes('1630') && t.includes(expCost2 + ',00'), 'verifikation 8423/1630: ' + t.slice(0, 600));
+  await owner.goto(TI + '/skattekonto/ranta?period=' + period);
+  assert(await owner.locator('button:has-text("Bokför räntan")').count() === 0, 'räntan bokförs bara en gång');
+  await owner.locator('.td-row button:has-text("Avsluta")').click(); await owner.locator('text=Anståndet är avslutat').waitFor();
+  assert(await owner.locator('.td-row[data-status="ended"]').count() === 1, 'anståndet avslutat');
+  log('skattekontoränta: kostnadsränta per dag på skulden, anstånd ger låg ränta och påminnelse, räntan bokförs 8423/1630 en gång per månad');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 29: alla steg gick igenom');

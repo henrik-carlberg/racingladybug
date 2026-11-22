@@ -38,3 +38,17 @@ describe('Konsignation', () => {
     expect(soldLines(80000)).toEqual([{ account: 4990, amount: 80000 }, { account: 1465, amount: -80000 }]);
   });
 });
+
+import { interest as taxInterest, interestLines, rates } from '@/lib/tax-interest';
+describe('Ränta på skattekontot', () => {
+  it('räntesatser och ränta per dag', () => {
+    expect(rates(275)).toEqual({ cost: 1775, low: 375, income: 150 });
+    const debt = Array.from({ length: 30 }, (_, i) => ({ date: `2026-04-${i + 1}`, balance: -3650000, deferred: 0 }));
+    expect(taxInterest(debt, 275).cost).toBe(Math.round(36500 * 0.1775 * 30 / 365) * 100);
+    const plus = debt.map((d) => ({ ...d, balance: 3650000 }));
+    expect(taxInterest(plus, 275)).toMatchObject({ cost: 0, income: Math.round(36500 * 0.015 * 30 / 365) * 100 });
+    const def = debt.map((d) => ({ ...d, deferred: 1000000 }));
+    expect(taxInterest(def, 275).cost).toBe(Math.round((26500 * 0.1775 + 10000 * 0.0375) * 30 / 365) * 100);
+    expect(interestLines(500, 0)).toEqual([{ account: 8423, amount: 500 }, { account: 1630, amount: -500 }]);
+  });
+});
