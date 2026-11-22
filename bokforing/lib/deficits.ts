@@ -1,7 +1,7 @@
 // Underskottsavdrag med belopps- och koncernbidragsspärr vid ägarförändring (inkomstskattelagen 40 kap.). Belopp i öre.
 export const GROUP_CONTRIBUTION_YEARS = 5;
 
-export interface YearIn { year: number; start: string; end: string; taxable: number; groupContribution: number }
+export interface YearIn { year: number; start: string; end: string; taxable: number; groupContribution: number; settlement?: number }
 export interface OwnershipChange { date: string; price: number; contributions: number }
 export interface YearOut {
   incoming: number; cut: number; usedOld: number; usedNew: number; outgoing: number; locked: number; change: boolean; note: string;
@@ -29,6 +29,12 @@ export function rollForward<T extends YearIn>(years: T[], change?: OwnershipChan
       oldD -= cut;
       changeIdx = i;
       note = cut ? `Beloppsspärr: underskott över ${(limit / 100).toLocaleString('sv-SE')} kr (200 % av köpeskillingen) faller bort` : 'Ägarförändring – inom beloppsspärren';
+    }
+    // Ackord (IL 40 kap. 21 §): tidigare års underskott minskas med det belopp som skulderna har satts ned med
+    if (y.settlement) {
+      const fromNew = Math.min(newD, y.settlement), fromOld = Math.min(oldD, y.settlement - fromNew);
+      newD -= fromNew; oldD -= fromOld; cut += fromNew + fromOld;
+      if (fromNew + fromOld) note = [note, `Ackord: underskottet minskas med ${((fromNew + fromOld) / 100).toLocaleString('sv-SE')} kr`].filter(Boolean).join('. ');
     }
     const locked = changeIdx >= 0 && i - changeIdx <= GROUP_CONTRIBUTION_YEARS;
     if (changeIdx >= 0 && !locked && oldD) { newD += oldD; oldD = 0; }

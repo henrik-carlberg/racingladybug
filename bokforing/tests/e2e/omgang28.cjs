@@ -215,6 +215,34 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert((await owner.locator('.db-warnings').innerText()).includes('10 Butiken'), 'varning för kostnadsstället');
   log('budget per kostnadsställe: årsbudget fördelad per månad, utfall från verifikationer, avvikelse och helårsprognos med varning');
 
+  // ================= Del 5: ackord =================
+  const AK = await newCompany('Rekonstruerade AB', 559440000);
+  await addFy(AK, YEAR - 1);
+  await voucher(AK, 'Förlust i fjol', [[5010, 100000], [1930, -100000]], `${YEAR - 1}-06-01`);
+  await owner.goto(AK + '/leverantorer');
+  await owner.fill('input[name=name]', 'Fordringsägaren AB');
+  await owner.click('button:has-text("Spara leverantör")'); await owner.waitForURL(/ok=/);
+  for (const [no, amt] of [['F-1', '50000'], ['F-2', '30000']]) {
+    await owner.goto(AK + '/leverantorsfakturor/ny');
+    await owner.selectOption('select[name=supplier_id]', { label: 'Fordringsägaren AB' });
+    await owner.fill('input[name=invoice_number]', no); await owner.fill('input[name=invoice_date]', day(30)); await owner.fill('input[name=due_date]', day(10));
+    await owner.fill('input[name=total]', amt); await owner.locator('input[name=total]').blur(); await owner.fill('input[name=vat]', '0');
+    await owner.fill('input[name=account_0]', '4010'); await owner.fill('input[name=amount_0]', amt);
+    await owner.click('button:has-text("Registrera och bokför")'); await owner.waitForURL(/ok=/);
+  }
+  await owner.goto(AK + '/ackord');
+  assert(nb(await owner.locator('.ak-deficit').innerText()) === '100000,00', 'underskott från i fjol');
+  await owner.fill('input[name=reconstruction_on]', day(20)); await owner.fill('input[name=decided_on]', day(2)); await owner.fill('input[name=dividend_pct]', '25');
+  await owner.click('button:has-text("Bokför ackordet")');
+  await owner.locator('.flash').first().waitFor();
+  t = nb(await owner.locator('.flash').first().innerText());
+  assert(t.includes('nedsattamed60000,00kr') && t.includes('20000,00krskabetalas'), 'ackord 25 %: ' + t);
+  await owner.goto(AK + '/ackord');
+  assert((await text(owner)).includes('Ackord: underskottet minskas med 60 000 kr') || nb(await text(owner)).includes('underskottetminskasmed60000kr'), 'underskottet minskas: ' + (await text(owner)).slice(0, 1200));
+  await owner.goto(AK + '/leverantorsfakturor');
+  t = nb(await text(owner));
+  log('ackord: dividend 25 %, leverantörsskulder 80 000 kr nedsatta med 60 000 kr som ej skattepliktig ackordsvinst, underskottet från i fjol minskas lika mycket');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 28: alla steg gick igenom');

@@ -1,4 +1,5 @@
 import 'server-only';
+import { SETTLEMENT_ACCOUNT } from '@/lib/debt-settlement';
 import { sql } from '@/lib/db';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { auditBy } from '@/lib/server/audit';
@@ -18,10 +19,11 @@ export async function deficits(companyId: number) {
   const years: (YearIn & { fyId: number; computed: number; adjusted: boolean })[] = [];
   for (const f of fys) {
     const s = await yearStatus(companyId, f.id);
-    const computed = s.resultBeforeTax + s.nonDeductible;
-    let gc = 0;
-    for (const [n, v] of await accountSums(companyId, f.start, f.end)) if (n >= 8820 && n <= 8829) gc -= Number(v);
-    years.push({ fyId: f.id, year: Number(f.end.slice(0, 4)), start: f.start, end: f.end, computed, adjusted: overrides.has(f.id), taxable: overrides.get(f.id) ?? computed, groupContribution: Math.max(0, gc) });
+    let gc = 0, ackord = 0;
+    for (const [n, v] of await accountSums(companyId, f.start, f.end)) { if (n >= 8820 && n <= 8829) gc -= Number(v); if (n === SETTLEMENT_ACCOUNT) ackord -= Number(v); }
+    // Ackordsvinsten är inte skattepliktig men minskar tidigare års underskott
+    const computed = s.resultBeforeTax + s.nonDeductible - ackord;
+    years.push({ fyId: f.id, year: Number(f.end.slice(0, 4)), start: f.start, end: f.end, computed, adjusted: overrides.has(f.id), taxable: overrides.get(f.id) ?? computed, groupContribution: Math.max(0, gc), settlement: Math.max(0, ackord) });
   }
   const [c] = await sql<{ date: string; price: number; contributions: number; note: string }[]>`SELECT to_char(date,'YYYY-MM-DD') AS date, price::float8 AS price, contributions::float8 AS contributions, note FROM ownership_changes WHERE company_id = ${companyId}`;
   const rows = rollForward(years, c ?? null);

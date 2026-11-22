@@ -87,6 +87,7 @@ export function buildNav(o: {
       { path: '/kupongskatt', label: 'Kupongskatt', perm: 'ledger', hint: 'Utdelning till utländska ägare' },
       { path: '/lan-till-agare', label: 'Lån till ägare', perm: 'ledger', hint: 'Låneförbudet för ägare, styrelse och närstående' },
       { path: '/internprissattning', label: 'Internprissättning', perm: 'ledger', hint: 'Koncerninterna priser, räntor och dokumentation' },
+      { path: '/ackord', label: 'Ackord', perm: 'ledger', hint: 'Skuldnedskrivning vid företagsrekonstruktion' },
       { path: '/kontrollbalans', label: 'Kontrollbalansräkning', perm: 'ledger', hint: 'Kapitalbrist, kontrollstämmor och likvidation' },
       { path: '/brf', label: 'Bostadsrättsförening', perm: 'ledger', hint: 'Lägenhetsförteckning, avgifter efter andelstal, underhållsplan och nyckeltal' },
       { path: '/forening', label: 'Förening', perm: 'ledger', hint: 'Medlemsregister, medlemsavgifter, gåvor och årsmöte' },

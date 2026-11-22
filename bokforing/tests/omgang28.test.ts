@@ -41,3 +41,16 @@ describe('Budget per dimension', () => {
     expect(followUp({ kind: 'revenue', budget, actual: Array(12).fill(1100000), month: 6 })).toMatchObject({ warn: false, overYear: false });
   });
 });
+
+import { writedowns } from '@/lib/debt-settlement';
+import { rollForward } from '@/lib/deficits';
+describe('Ackord', () => {
+  it('nedsättning och underskott', () => {
+    const w = writedowns([{ id: 1, remaining: 5000000 }, { id: 2, remaining: 3000000 }], 25);
+    expect([w.total, w.toPay]).toEqual([6000000, 2000000]);
+    expect(w.lines).toEqual([{ account: 2440, amount: 6000000 }, { account: 3996, amount: -6000000 }]);
+    const r = rollForward([{ year: 2025, start: '2025-01-01', end: '2025-12-31', taxable: -10000000, groupContribution: 0 }, { year: 2026, start: '2026-01-01', end: '2026-12-31', taxable: -2000000, groupContribution: 0, settlement: 6000000 }]);
+    expect(r[1].cut).toBe(6000000);
+    expect(r[1].outgoing).toBe(6000000);
+  });
+});
