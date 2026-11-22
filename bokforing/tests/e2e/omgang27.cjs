@@ -147,15 +147,24 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await owner.locator('.ku-open').innerText()) === '3000,00', 'ofakturerade utlägg');
   await owner.click('.ku-invoice button:has-text("Skapa faktura för utläggen")');
   await owner.waitForURL(/fakturor\/\d+/);
+  const outlayInv = owner.url().split('?')[0];
+  // En utläggsrad tas bort från utkastet: utlägget släpps och kan faktureras igen
+  await owner.goto(outlayInv + '/redigera');
+  await owner.locator('tbody tr:has(input[value="Utlägg: Avgift Lantmäteriet"]) button:has-text("✕")').click();
+  await owner.click('button:has-text("Spara utkast")');
+  await owner.waitForURL(/fakturor\/\d+\?ok/);
+  await owner.goto(UK + '/kundutlagg');
+  assert(nb(await owner.locator('.ku-open').innerText()) === '800,00', 'borttagen utläggsrad släpps');
+  await owner.goto(outlayInv);
   await owner.click('button:has-text("Bokför faktura")');
   await owner.locator('text=Fakturan är bokförd').waitFor();
   t = nb(await text(owner));
-  assert(t.includes('3000,00') && t.includes('Utlägg:RegistreringsavgiftBolagsverket'), 'faktura utan moms: ' + t.slice(0, 800));
+  assert(t.includes('2200,00') && t.includes('Utlägg:RegistreringsavgiftBolagsverket'), 'faktura utan moms: ' + t.slice(0, 800));
   await owner.goto(UK + `/rapporter/moms?from=${day(3).slice(0, 7)}-01&to=${day(0)}`);
   t = nb(await text(owner));
   assert(t.includes('ruta06–080') && t.includes('fåtillbaka0'), 'utläggen är inte med i momsdeklarationen: ' + t.slice(0, 600));
   await owner.goto(UK + '/kundutlagg');
-  assert(nb(await owner.locator('.ku-open').innerText()) === '0,00' && !(await owner.locator('.ku-invoice').count()), 'alla utlägg fakturerade');
+  assert(nb(await owner.locator('.ku-open').innerText()) === '800,00' && await owner.locator('.ku-invoice').count() === 1, 'det släppta utlägget kan faktureras igen');
   log('utlägg för kund: kräver kvitto i kundens namn, bokförs mot 1680 och faktureras utan moms utanför momsdeklarationen');
 
   // ================= Del 3: presentkort =================

@@ -163,6 +163,20 @@ export async function saveDraftTx(tx: Tx, actor: Actor, invoiceId: number | null
       invoice_id: id, position: i + 1, description: l.description, quantity: l.quantity, unit: l.unit,
       unit_price: l.unitPrice, vat_rate: l.vatRate, account_number: l.account, labor: !!l.labor, oss_rate: l.ossRate ?? null,
     })))}`;
+    // Utlägg som är kopplade till utkastet men inte längre finns kvar som rad (eller kunden är bytt) släpps så att de kan faktureras igen
+    if (invoiceId) {
+      const linked = await tx<{ id: number; customer_id: number; description: string; amount: number }[]>`SELECT id, customer_id, description, amount::float8 AS amount FROM customer_outlays
+        WHERE invoice_id = ${invoiceId} AND company_id = ${actor.companyId}`;
+      const left = lines.filter((l) => l.account === OUTLAY_ACCOUNT).map((l) => ({ d: l.description, a: Math.round(l.quantity * l.unitPrice) }));
+      const release = linked.filter((o) => {
+        if (o.customer_id !== customerId) return true;
+        const k = left.findIndex((l) => l.d === `Utlägg: ${o.description}` && l.a === o.amount);
+        if (k < 0) return true;
+        left.splice(k, 1);
+        return false;
+      });
+      if (release.length) await tx`UPDATE customer_outlays SET invoice_id = NULL WHERE id IN ${tx(release.map((o) => o.id))}`;
+    }
     await auditBy(tx, actor, invoiceId ? 'update_draft' : 'create_draft', 'invoice', id);
     const out = await fetchInvoice(tx, actor.companyId, id);
     await emit(tx, actor.companyId, invoiceId ? 'invoice.updated' : 'invoice.created', out);
