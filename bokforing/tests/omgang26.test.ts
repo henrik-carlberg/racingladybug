@@ -36,3 +36,15 @@ describe('Löneutmätning', () => {
     expect(lines.find((l) => l.account === 1610)).toBeUndefined();
   });
 });
+
+import { earnedDays, finalPay } from '@/lib/final-pay';
+describe('Slutlön', () => {
+  it('lön, semesterersättning och förskottssemester', () => {
+    const r = finalPay({ monthly: 4000000, end: '2026-11-15', unusedDays: 5, savedDays: 2, earnedDays: 10, advanceDays: 3, rule: 'same', ownResignation: true });
+    expect(r.salary).toBe(2000000);
+    expect(r.vacation).toBe(3420400);
+    expect(r.advance).toBe(552000);
+    expect(finalPay({ monthly: 4000000, end: '2026-11-30', unusedDays: 0, savedDays: 0, earnedDays: 0, advanceDays: 3, rule: 'same', ownResignation: false })).toMatchObject({ salary: 4000000, vacation: 0, advance: 0 });
+    expect(earnedDays({ end: '2026-06-30', start: null, perYear: 25 })).toBe(12.4);
+  });
+});

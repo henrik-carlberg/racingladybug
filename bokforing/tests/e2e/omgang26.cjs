@@ -215,6 +215,42 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(!(await owner.locator('.ut-unpaid').count()) && (await text(owner)).includes('Inbetald'), 'redovisat per månad');
   log('löneutmätning: 5 000 kr dras på nettolönen mot 2750, förbehållsbeloppet skyddar, inbetalning till Kronofogden och redovisning per månad');
 
+  // ================= Del 4: slutlön =================
+  const SL = await newCompany('Slutlönen AB', 559340000);
+  await voucher(SL, 'Aktiekapital', [[1930, 500000], [2081, -500000]], `${YEAR}-01-02`);
+  await owner.goto(SL + '/lon/anstallda');
+  await owner.fill('input[name=first_name]', 'Sara'); await owner.fill('input[name=last_name]', 'Slutar');
+  await owner.fill('input[name=personal_number]', '19811218-9876'); await owner.fill('input[name=monthly_salary]', '40000'); await owner.fill('input[name=tax_table]', '32');
+  await owner.click('form:has(input[name=first_name]) button:has-text("Spara")'); await owner.waitForURL(/ok=/);
+  await owner.goto(SL + '/lon');
+  const MM = String(MONTH).padStart(2, '0');
+  await owner.fill('input[name=period]', `${YEAR}-${MM}`); await owner.fill('input[name=payment_date]', day(0));
+  await owner.click('button:has-text("Ny lönekörning")');
+  await owner.waitForURL(/lon\/\d+\?ok/);
+  const slRun = owner.url().split('?')[0];
+  await owner.goto(SL + '/lon/anstallda');
+  await owner.locator('a:has-text("Sara Slutar")').first().click();
+  await owner.waitForURL(/anstallda\/\d+/);
+  const empUrl = owner.url().split('?')[0];
+  await owner.goto(empUrl + `/slutlon?slut=${YEAR}-${MM}-15`);
+  assert(nb(await owner.locator('input[name=unused_days]').inputValue()) === '25', 'årets outtagna dagar från semestersaldot');
+  await owner.fill('input[name=unused_days]', '5'); await owner.fill('input[name=saved_days]', '2'); await owner.fill('input[name=earned_days]', '10');
+  await owner.selectOption('select[name=reason]', 'arbetsgivare');
+  await owner.click('button:has-text("Lägg slutlönen på lönespecen")');
+  await owner.locator('.flash').first().waitFor();
+  t = nb(await owner.locator('.flash').first().innerText());
+  const dim = new Date(Date.UTC(YEAR, MONTH, 0)).getUTCDate();
+  const salary = (Math.round(4000000 * 15 / dim) / 100).toFixed(2).replace('.', ',');
+  assert(t.includes(`lön${salary}kr`) && t.includes('semesterersättning34204,00krför17dagar') && t.includes('Anställningenäravslutad'), 'slutlön: ' + t);
+  await owner.goto(empUrl + '/slutlon');
+  assert(await owner.locator('.fp-done').count() === 1 && !(await owner.locator('.fp-form').count()), 'slutlönen beräknas en gång');
+  await owner.goto(slRun);
+  t = await owner.content();
+  assert(t.includes('Semesterersättning 17 dagar') && t.includes(`(15 av ${dim} dagar)`), 'raderna på lönespecen');
+  await owner.goto(empUrl + '/intyg');
+  assert((await text(owner)).includes(`${YEAR}-${MM}-15`), 'slutdatum i arbetsgivarintyget');
+  log(`slutlön: lön för 15 av ${dim} dagar, semesterersättning för 17 dagar (outtagna, sparade och intjänade), anställningen avslutas och syns i arbetsgivarintyget`);
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 26: alla steg gick igenom');
