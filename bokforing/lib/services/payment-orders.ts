@@ -8,6 +8,7 @@ import { parseAmount } from '@/lib/money';
 import { today } from '@/lib/format';
 import { APPLICATION_FEE, FEE_COST, FEE_INCOME, FEE_RECEIVABLE, INTEREST_INCOME, MAX_REMINDER_FEE, NEXT, STATUS_LABEL, allocate, interest, type Status } from '@/lib/payment-order';
 import type { Actor } from './actor';
+import { assertNotDisputed } from './disputes';
 import { date, int, str } from './input';
 import { registerPaymentTx } from './invoices';
 
@@ -43,6 +44,7 @@ export async function apply(actor: Actor, input: Record<string, unknown>) {
     if (!i) throw new NotFoundError('Fakturan');
     if (i.status !== 'booked' || i.remaining <= 0 || i.currency !== 'SEK') throw new ConflictError('Fakturan är inte en obetald faktura i kronor');
     if (i.due >= d) throw new ValidationError('Fakturan har inte förfallit');
+    await assertNotDisputed(tx, invoiceId);
     await ensure(tx, actor.companyId);
     const v = await createVoucher(tx, { actor, date: d, description: `Ansökningsavgift betalningsföreläggande, faktura ${i.number} (återkrävs av gäldenären)`,
       lines: fromSigned([{ account: FEE_RECEIVABLE, amount: APPLICATION_FEE }, { account: 1930, amount: -APPLICATION_FEE }]), sourceType: 'payment_order' });

@@ -55,15 +55,15 @@ async function Overview({ companyId, basePath }: ModulePageProps) {
             <td><Link href={`/c/${companyId}/fakturor/${i.id}`}>{i.number}</Link></td><td>{i.customer}</td><td>{i.due_date}</td>
             <td className="num" style={i.days_overdue > 0 ? { color: 'var(--danger)' } : undefined}>{i.days_overdue || ''}</td><td className="num">{kr(i.total)}</td>
             <td className="num">{i.interest ? kr(i.interest) : ''}</td>
-            <td className="small">{i.in_collection ? <span className="badge danger">Inkasso</span> : i.levels.length ? `${i.levels.length} st, senast ${i.last_reminder}` : ''}</td>
+            <td className="small">{i.disputed ? <span className="badge warn">Tvist – pausad</span> : i.in_collection ? <span className="badge danger">Inkasso</span> : i.levels.length ? `${i.levels.length} st, senast ${i.last_reminder}` : ''}</td>
             <td style={{ whiteSpace: 'nowrap' }}>
-              {(i.action === 'reminder1' || i.action === 'reminder2' || (i.days_overdue > 0 && !i.in_collection && i.levels.length < 2)) && (
+              {!i.disputed && (i.action === 'reminder1' || i.action === 'reminder2' || (i.days_overdue > 0 && !i.in_collection && i.levels.length < 2)) && (
                 <form action={a.remind.bind(null, companyId, i.id, basePath)} style={{ display: 'inline' }}>
                   {mail && i.email && <input type="hidden" name="email" value="on" />}
                   <button className="link">{i.levels.includes(1) ? 'Påminnelse 2' : 'Påminnelse 1'}{mail && i.email ? ' (e-post)' : ''}</button>
                 </form>
               )}
-              {api && i.days_overdue > 0 && !caseOf.get(i.id)?.case_id && (i.action === 'collection' || i.in_collection) && <form action={a.handOver.bind(null, companyId, i.id)} style={{ display: 'inline', marginLeft: '.5rem' }}><button className="link">Skicka till inkassobolaget</button></form>}
+              {api && !i.disputed && i.days_overdue > 0 && !caseOf.get(i.id)?.case_id && (i.action === 'collection' || i.in_collection) && <form action={a.handOver.bind(null, companyId, i.id)} style={{ display: 'inline', marginLeft: '.5rem' }}><button className="link">Skicka till inkassobolaget</button></form>}
               {i.action === 'collection' && <form action={a.collection.bind(null, companyId, i.id, true)} style={{ display: 'inline', marginLeft: '.5rem' }}><input type="hidden" name="note" value="" /><button className="link">Markera för inkasso</button></form>}
               {i.in_collection && caseOf.get(i.id)?.case_id && !['recalled', 'closed', 'paid'].includes(caseOf.get(i.id)?.status ?? '') && <form action={a.recall.bind(null, companyId, i.id)} style={{ display: 'inline' }}><button className="link">Återkalla</button></form>}
               {i.in_collection && !caseOf.get(i.id)?.case_id && <form action={a.collection.bind(null, companyId, i.id, false)} style={{ display: 'inline' }}><button className="link">Ta bort inkasso</button></form>}

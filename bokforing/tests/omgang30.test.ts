@@ -32,3 +32,11 @@ describe('Tantiem', () => {
     expect(accrualLines(5000000, 1571000)).toEqual([{ account: 7210, amount: 5000000 }, { account: 2910, amount: -5000000 }, { account: 7519, amount: 1571000 }, { account: 2940, amount: -1571000 }]);
   });
 });
+
+import { reductionLines } from '@/lib/disputes';
+describe('Förlikning', () => {
+  it('nedsättning med momsreduktion', () => {
+    const inv = [{ account: 1510, amount: 1250000 }, { account: 3001, amount: -1000000 }, { account: 2611, amount: -250000 }];
+    expect(reductionLines(inv, 450000)).toEqual([{ account: 3730, amount: 360000 }, { account: 2611, amount: 90000 }, { account: 1510, amount: -450000 }]);
+  });
+});

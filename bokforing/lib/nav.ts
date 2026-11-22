@@ -22,6 +22,7 @@ export function buildNav(o: {
     { id: 'salj', label: t('Sälja'), icon: 'invoice', items: items([
       { path: '/fakturor', label: 'Kundfakturor', perm: 'invoicing', hint: 'Skapa, skicka och följ upp fakturor' },
       { path: '/kunder', label: 'Kunder', perm: 'invoicing' },
+      { path: '/fakturor/tvister', label: 'Tvistiga fakturor', perm: 'invoicing', hint: 'Pausa påminnelser och avsluta med förlikning' },
       { path: '/betalningsforelaggande', label: 'Betalningsföreläggande', perm: 'invoicing', hint: 'Obetalda fakturor till Kronofogden' },
       { path: '/kundutlagg', label: 'Utlägg för kunder', perm: 'invoicing', hint: 'Momsfria utlägg för kundens räkning' },
       { path: '/kassa', label: 'Kassa och e-handel', hint: 'Dagskassa och webbutik' },

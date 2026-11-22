@@ -196,6 +196,39 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert((await text(owner)).includes('Upplöst upplupen tantiem, Tove Tantiem'), 'upplösningsverifikation');
   log('tantiem: 5 % av resultatet före tantiem, upplupen lön 7210/2910 och avgifter 7519/2940 vid bokslut, utbetalning via lönekörningen löser upp skulden');
 
+  // ================= Del 4: tvistiga fakturor och förlikning =================
+  const TV = await newCompany('Tvistbolaget AB', 559530000);
+  if (Number(day(60).slice(0, 4)) !== YEAR) await addFy(TV, YEAR - 1);
+  await owner.goto(TV + '/moduler');
+  await owner.locator('.card:has(h2:text-is("Kundreskontra och påminnelser")) button:has-text("Aktivera")').click(); await owner.waitForURL(/ok=/);
+  await owner.goto(TV + '/kunder');
+  await owner.fill('input[name=name]', 'Missnöjd Kund AB');
+  await owner.click('button:has-text("Spara kund")'); await owner.waitForURL(/ok=/);
+  await invoice(TV, 'Missnöjd Kund AB', 10000, day(60));
+  await owner.goto(TV + '/m/reskontra');
+  assert(await owner.locator('button:has-text("Påminnelse 1")').count() === 1, 'påminnelse möjlig före tvisten');
+  await owner.goto(TV + '/fakturor/tvister');
+  await owner.fill('textarea[name=reason]', 'Kunden anser att leveransen var ofullständig');
+  await owner.click('button:has-text("Markera som tvistig")'); await owner.locator('text=påminnelser och inkasso är pausade').waitFor();
+  await owner.goto(TV + '/m/reskontra');
+  assert((await text(owner)).includes('Tvist – pausad') && await owner.locator('button:has-text("Påminnelse 1")').count() === 0, 'påminnelser pausade');
+  await owner.goto(TV + '/fakturor/tvister');
+  const drow = owner.locator('.dp-row[data-status="open"]');
+  await drow.locator('input[name=agreed]').fill('15000');
+  await drow.locator('button:has-text("Förlikning")').click(); await owner.locator('text=ska vara lägre än det som återstår').waitFor();
+  await drow.locator('input[name=agreed]').fill('8000');
+  await drow.locator('button:has-text("Förlikning")').click(); await owner.locator('text=Förlikningen är bokförd').waitFor();
+  t = nb(await owner.locator('.flash').first().innerText());
+  assert(t.includes('inbetalt8000,00kr') && t.includes('nedsatt4500,00kr'), 'förlikning: ' + t);
+  assert(await owner.locator('.dp-row[data-status="settled"]').count() === 1, 'tvisten avslutad med förlikning');
+  await owner.goto(TV + '/verifikationer');
+  await owner.locator('tr:has-text("Förlikning faktura") a').first().click(); await owner.waitForURL(/verifikationer\/\d+/);
+  t = nb(await text(owner));
+  assert(t.includes('3730') && t.includes('3600,00') && t.includes('2611') && t.includes('900,00') && t.includes('4500,00'), 'nedsättning med momsreduktion: ' + t.slice(0, 700));
+  await owner.goto(TV + '/m/reskontra');
+  assert(!(await text(owner)).includes('Missnöjd Kund AB'), 'fakturan är reglerad');
+  log('tvistiga fakturor: påminnelser och inkasso pausas, förlikning med inbetalning av avtalat belopp och nedsättning av resten med momsreduktion');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 30: alla steg gick igenom');
