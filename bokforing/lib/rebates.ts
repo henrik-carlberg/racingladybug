@@ -36,3 +36,13 @@ export const tiersText = (tiers: Tier[]) => tiers.map((t) => `${(t.from / 100).t
 export const customerAccrualLines = (change: number) => [{ account: CUSTOMER_REBATE_ACCOUNT, amount: change }, { account: CUSTOMER_ACCRUAL_ACCOUNT, amount: -change }];
 /** Upplupen leverantörsbonus: debet 1790, kredit 4730 */
 export const supplierAccrualLines = (change: number) => [{ account: SUPPLIER_ACCRUAL_ACCOUNT, amount: change }, { account: SUPPLIER_REBATE_ACCOUNT, amount: -change }];
+
+/** Mottagen leverantörsbonus: debet bank/leverantörsskuld inkl. moms, kredit 2641 (ingående moms minskar), kredit 1790 (det upplupna) och 4730 för skillnaden */
+export function supplierSettlementLines(amount: number, vat: number, accrued: number, method: 'bank' | 'credit') {
+  return [
+    { account: method === 'bank' ? 1930 : 2440, amount: amount + vat },
+    { account: 2641, amount: -vat },
+    { account: SUPPLIER_ACCRUAL_ACCOUNT, amount: -accrued },
+    { account: SUPPLIER_REBATE_ACCOUNT, amount: -(amount - accrued) },
+  ].filter((l) => l.amount !== 0);
+}

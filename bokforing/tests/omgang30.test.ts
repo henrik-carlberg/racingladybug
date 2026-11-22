@@ -40,3 +40,12 @@ describe('Förlikning', () => {
     expect(reductionLines(inv, 450000)).toEqual([{ account: 3730, amount: 360000 }, { account: 2611, amount: 90000 }, { account: 1510, amount: -450000 }]);
   });
 });
+
+import { supplierAccrualLines, supplierSettlementLines } from '@/lib/rebates';
+describe('Leverantörsbonus', () => {
+  it('kontering', () => {
+    expect(supplierAccrualLines(220000)).toEqual([{ account: 1790, amount: 220000 }, { account: 4730, amount: -220000 }]);
+    expect(supplierSettlementLines(220000, 55000, 220000, 'credit')).toEqual([{ account: 2440, amount: 275000 }, { account: 2641, amount: -55000 }, { account: 1790, amount: -220000 }]);
+    expect(supplierSettlementLines(250000, 62500, 220000, 'bank')).toEqual([{ account: 1930, amount: 312500 }, { account: 2641, amount: -62500 }, { account: 1790, amount: -220000 }, { account: 4730, amount: -30000 }]);
+  });
+});

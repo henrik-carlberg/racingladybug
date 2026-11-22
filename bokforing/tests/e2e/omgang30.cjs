@@ -229,6 +229,35 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(!(await text(owner)).includes('Missnöjd Kund AB'), 'fakturan är reglerad');
   log('tvistiga fakturor: påminnelser och inkasso pausas, förlikning med inbetalning av avtalat belopp och nedsättning av resten med momsreduktion');
 
+  // ================= Del 5: leverantörsbonus =================
+  const LB = await newCompany('Storköparen AB', 559540000);
+  if (Number(day(60).slice(0, 4)) !== YEAR) await addFy(LB, YEAR - 1);
+  await owner.goto(LB + '/leverantorer');
+  await owner.fill('input[name=name]', 'Partihandeln AB');
+  await owner.click('button:has-text("Spara leverantör")'); await owner.waitForURL(/ok=/);
+  await supplierInvoice(LB, 'Partihandeln AB', 'P-1', '150000', '30000');
+  await supplierInvoice(LB, 'Partihandeln AB', 'P-2', '125000', '25000');
+  await owner.goto(LB + '/leverantorsfakturor/bonus');
+  await owner.fill('input[name=start_date]', day(60)); await owner.fill('input[name=end_date]', day(5));
+  await owner.fill('input[name=tiers]', '200000:1; 500000:2');
+  await owner.click('button:has-text("Lägg upp avtal")'); await owner.locator('text=Bonusavtalet är upplagt').waitFor();
+  const brow = owner.locator('.sb-row[data-supplier="Partihandeln AB"]');
+  assert(nb(await brow.locator('.sb-volume').innerText()) === '220000,00', 'inköp exkl. moms');
+  assert(nb(await brow.locator('.sb-amount').innerText()).startsWith('2200,00'), 'bonus 1 %: ' + await brow.locator('.sb-amount').innerText());
+  await owner.click('button:has-text("Bokför upplupen bonus")'); await owner.locator('text=Upplupen leverantörsbonus har ökats med').waitFor();
+  assert(nb(await brow.locator('.sb-accrued').innerText()) === '2200,00', 'upplupen fordran 1790');
+  await brow.locator('select[name=method]').selectOption('credit'); await brow.locator('input[name=credit_number]').fill('BON-1');
+  await brow.locator('button:has-text("Ta emot bonus")').click(); await owner.locator('text=kvitta den mot en faktura').waitFor();
+  t = nb(await owner.locator('.flash').first().innerText()); assert(t.includes('2200,00kr(moms550,00kr)'), 'bonus med moms: ' + t);
+  assert((await brow.innerText()).includes('Mottagen') && nb(await brow.locator('.sb-accrued').innerText()) === '0,00' && nb(await brow.locator('.sb-volume').innerText()) === '220000,00', 'mottagen, upplupet upplöst, volymen oförändrad');
+  await owner.goto(LB + '/leverantorsfakturor/kredit');
+  assert((await text(owner)).includes('BON-1'), 'kreditnotan kan kvittas mot en faktura');
+  await owner.goto(LB + '/verifikationer');
+  await owner.locator('tr:has-text("Leverantörsbonus") a').first().click(); await owner.waitForURL(/verifikationer\/\d+/);
+  t = nb(await text(owner));
+  assert(t.includes('2440') && t.includes('2750,00') && t.includes('2641') && t.includes('550,00') && t.includes('1790'), 'kontering 2440/2641/1790: ' + t.slice(0, 700));
+  log('leverantörsbonus: trappsteg på inköpen, upplupen fordran 1790/4730 vid bokslut, bonus som kreditnota minskar ingående moms och löser upp det upplupna');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 30: alla steg gick igenom');
