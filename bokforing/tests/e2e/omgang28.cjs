@@ -143,6 +143,23 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(t.includes('975,00') && t.includes('1900,00') && t.includes('600,00kröverskattefrittbeloppbetalassomlön') && t.includes('måltidsavdrag225,00kr') && t.includes('(förmånsbil,el)') && t.includes('95,00'), 'traktamentsrader: ' + t.slice(0, 2000));
   log('traktamente: måltidsavdrag (frukost 20 %, lunch 35 %), utrikes normalbelopp, långvarig förrättning 70 %, överskott till lön, förmånsbil el 9,50 kr/mil');
 
+  // ================= Del 2: kassabok =================
+  const KB = await newCompany('Kontantbutiken AB', 559410000);
+  await voucher(KB, 'Växelkassa från banken', [[1910, 5000], [1930, -5000]], day(10));
+  await voucher(KB, 'Förbrukningsmaterial kontant', [[5460, 1200], [1910, -1200]], day(8));
+  await voucher(KB, 'Insättning på banken', [[1930, 4500], [1910, -4500]], day(5));
+  await voucher(KB, 'Kontantförsäljning', [[1910, 1000], [8310, -1000]], day(4));
+  await owner.goto(KB + `/kassabok?from=${day(15)}&to=${day(0)}`);
+  assert(await owner.locator('.cb-negative').count() === 1 && (await owner.locator('.cb-negative').innerText()).includes(day(5)), 'negativt saldo flaggas');
+  assert(await owner.locator('.cb-overdue').count() === 1, 'kassan har inte räknats');
+  assert(nb(await owner.locator('.cb-closing').innerText()) === '300,00', 'utgående saldo');
+  await owner.fill('input[name=counted]', '280'); await owner.fill('input[name=counted_by]', 'Kim Kassör'); await owner.fill('form:has(button:has-text("Spara kassainventering")) input[name=date]', day(1));
+  await owner.click('button:has-text("Spara kassainventering")');
+  await owner.locator('text=underskott 20,00 kr bokfört på 3740').waitFor();
+  await owner.goto(KB + `/kassabok?from=${day(15)}&to=${day(0)}`);
+  assert(!(await owner.locator('.cb-overdue').count()) && nb(await owner.locator('.cb-closing').innerText()) === '280,00', 'kassan stämmer efter inventeringen');
+  log('kassabok: löpande saldo, negativt saldo och oräknad kassa flaggas, kassainventering bokför differensen på 3740');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 28: alla steg gick igenom');

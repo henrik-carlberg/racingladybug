@@ -10,3 +10,14 @@ describe('Traktamente på djupet', () => {
     expect(mileage(100, BENEFIT_CAR_RATE.el)).toBe(9500);
   });
 });
+
+import { countLines, running } from '@/lib/cashbook';
+describe('Kassabok', () => {
+  it('saldo och inventering', () => {
+    const r = running(0, [{ date: '2026-11-01', amount: 500000 }, { date: '2026-11-03', amount: -450000 }, { date: '2026-11-02', amount: -120000 }]);
+    expect(r.map((x) => x.balance)).toEqual([500000, 380000, -70000]);
+    expect(r[2].negative).toBe(true);
+    expect(countLines(28000, 30000)).toEqual({ diff: -2000, lines: [{ account: 1910, amount: -2000 }, { account: 3740, amount: 2000 }] });
+    expect(countLines(100, 100).lines).toEqual([]);
+  });
+});

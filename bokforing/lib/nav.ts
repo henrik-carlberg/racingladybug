@@ -25,6 +25,7 @@ export function buildNav(o: {
       { path: '/kundutlagg', label: 'Utlägg för kunder', perm: 'invoicing', hint: 'Momsfria utlägg för kundens räkning' },
       { path: '/kassa', label: 'Kassa och e-handel', hint: 'Dagskassa och webbutik' },
       { path: '/presentkort', label: 'Presentkort', perm: 'ledger', hint: 'Enfunktions- och flerfunktionsvoucher' },
+      { path: '/kassabok', label: 'Kassabok', perm: 'ledger', hint: 'Kontantkassan dag för dag och kassainventering' },
       { path: '/kassa/betalningar', label: 'Kortterminaler och utbetalningar', perm: 'ledger', hint: 'Zettle, SumUp, Stripe, Klarna, Shopify' },
       { path: '/restaurang', label: 'Hotell och restaurang', perm: 'ledger', hint: 'Z-rapport med dricks, personalmat och representation' },
       { path: '/fakturor/rotrut', label: 'ROT och RUT', perm: 'invoicing' },
