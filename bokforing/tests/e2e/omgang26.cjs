@@ -251,6 +251,42 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert((await text(owner)).includes(`${YEAR}-${MM}-15`), 'slutdatum i arbetsgivarintyget');
   log(`slutlön: lön för 15 av ${dim} dagar, semesterersättning för 17 dagar (outtagna, sparade och intjänade), anställningen avslutas och syns i arbetsgivarintyget`);
 
+  // ================= Del 5: kassaregister med kontrollenhet =================
+  const KR = await newCompany('Butiken AB', 559350000);
+  const reg = async (unit) => {
+    await owner.goto(KR + '/kassa/register');
+    await owner.fill('input[name=control_unit]', unit); await owner.fill('input[name=registered_on]', day(3));
+    await owner.check('input[name=day_7]');
+    await owner.click('button:has-text("Registrera kassaregister")');
+    await owner.locator('.flash').first().waitFor();
+    return nb(await owner.locator('.flash').first().innerText());
+  };
+  assert((await reg('X1')).includes('8–40'), 'ogiltigt tillverkningsnummer');
+  await reg('KE-2026-123456');
+  const zRep = async (register, d) => {
+    await owner.goto(KR + '/kassa');
+    await owner.fill('input[name=date]', d); await owner.fill('input[name=register]', register); await owner.fill('input[name=z_number]', `Z-${d}-${register}`);
+    await owner.fill('input[name=sales_25]', '1250'); await owner.fill('input[name=pay_card]', '1250');
+    await owner.click('button:has-text("Bokför dagskassa")');
+    await owner.locator('text=Dagskassan är bokförd').waitFor();
+  };
+  await zRep('Kassa 1', day(1)); await zRep('Kassa 1', day(2));
+  await owner.goto(KR + '/kassa/register');
+  t = await owner.locator('.kr-register[data-name="Kassa 1"] .kr-missing').innerText();
+  assert(t.includes(day(3)) && !t.includes(day(1)), 'Z-rapport saknas för en öppetdag: ' + t);
+  await zRep('Kassa 1', day(3));
+  await owner.goto(KR + '/kassa/register');
+  assert(await owner.locator('.kr-register[data-name="Kassa 1"] .kr-ok').count() === 1, 'alla öppetdagar har Z-rapport');
+  await zRep('Kassa 2', day(1));
+  await owner.goto(KR + '/kassa/register');
+  assert((await owner.locator('.kr-unregistered').innerText()).includes('Kassa 2'), 'kassa utan anmäld kontrollenhet');
+  assert(nb(await owner.locator('.kr-sales').innerText()) === '5000,00' && (await owner.locator('.kr-obliged').innerText()).includes('Under fyra prisbasbelopp'), 'kassaregisterplikt först över fyra prisbasbelopp');
+  await owner.fill('form:has(button:has-text("Spara X-rapport")) input[name=amount]', '640');
+  await owner.click('button:has-text("Spara X-rapport")');
+  await owner.locator('text=X-rapporten är sparad').waitFor();
+  assert(await owner.locator('.kr-x tr').count() === 1, 'X-rapport sparad');
+  log('kassaregister: kontrollenhet anmäld, saknad Z-rapport för en öppetdag, kassa utan kontrollenhet flaggas, gräns för kassaregisterplikt och X-rapport');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 26: alla steg gick igenom');

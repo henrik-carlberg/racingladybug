@@ -17,7 +17,7 @@ export default async function Sales({ params, searchParams }: { params: Promise<
   const b = `/c/${company.id}`;
   return (
     <div style={{ maxWidth: 1000 }}>
-      <div className="header"><h1>Kassa och e-handel</h1><Link className="btn secondary" href={`${b}/kassa/betalningar`}>Kortterminaler och utbetalningar</Link></div>
+      <div className="header"><h1>Kassa och e-handel</h1><div className="row" style={{ flex: '0 0 auto' }}><Link className="btn secondary" href={`${b}/kassa/register`}>Kassaregister och kontrollenheter</Link><Link className="btn secondary" href={`${b}/kassa/betalningar`}>Kortterminaler och utbetalningar</Link></div></div>
       <Flash searchParams={searchParams} />
 
       <h2>Dagskassa</h2>

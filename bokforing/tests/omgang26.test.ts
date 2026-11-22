@@ -48,3 +48,14 @@ describe('Slutlön', () => {
     expect(earnedDays({ end: '2026-06-30', start: null, perYear: 25 })).toBe(12.4);
   });
 });
+
+import { missingDays, obligationLimit, validSerial } from '@/lib/cash-register';
+describe('Kassaregister', () => {
+  it('saknade dagar och gränser', () => {
+    // 2026-11-16 är en måndag; öppet måndag–fredag
+    expect(missingDays({ from: '2026-11-16', until: '2026-11-22', openDays: [1, 2, 3, 4, 5], reported: new Set(['2026-11-16', '2026-11-18']) })).toEqual(['2026-11-20', '2026-11-19', '2026-11-17']);
+    expect(obligationLimit(2026)).toBe(23680000);
+    expect(validSerial('KE-2026-123456')).toBe(true);
+    expect(validSerial('X1')).toBe(false);
+  });
+});
