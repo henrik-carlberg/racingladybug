@@ -77,6 +77,7 @@ export function buildNav(o: {
       { path: '/lon/skattetabeller', label: 'Skattetabeller', perm: 'payroll' },
       { path: '/lon/bilforman', label: 'Bilförmån', perm: 'payroll' },
       { path: '/lon/avtal', label: 'Kollektivavtal', perm: 'payroll', hint: 'OB, övertid, beredskap, pension' },
+      { path: '/lon/tantiem', label: 'Tantiem', perm: 'payroll', hint: 'Vinstdelning som upplupen lön vid bokslut' },
       { path: '/lon/personaloptioner', label: 'Personaloptioner', perm: 'payroll', hint: 'Kvalificerade personaloptioner med villkor och intjänande' },
       { path: '/lon/hogkostnadsskydd', label: 'Högkostnadsskydd', perm: 'payroll', hint: 'Ersättning för höga sjuklönekostnader' },
       { path: '/lon/utmatning', label: 'Löneutmätning', perm: 'payroll', hint: 'Avdrag enligt beslut från Kronofogden' },

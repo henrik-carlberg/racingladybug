@@ -10,6 +10,7 @@ import { payrollBookingLines, type PayItem, type PayItemType } from '@/lib/payro
 import { buildAgiXml } from '@/lib/agi';
 import { agiId, normalizePersonalNumber } from '@/lib/validate';
 import type { Actor } from './actor';
+import { releaseForRun, syncRun } from './profit-share';
 import { arr, bool, date, has, int, list, optInt, str, type Page } from './input';
 
 // ---------- Anställda ----------
@@ -210,7 +211,7 @@ export function parseItems(input: Record<string, unknown>): PayItem[] {
     if (type !== 'salary' && amount < 0) throw new ValidationError(`Negativt belopp är bara tillåtet för lönerader ("${description}")`);
     const item: PayItem = { type, description, amount };
     const code = str(r, 'code');
-    if (code === 'agreement' || code === 'sacrifice' || code === 'vacation' || code === 'loan' || code === 'garnishment' || code === 'final') item.code = code;
+    if (code === 'agreement' || code === 'sacrifice' || code === 'vacation' || code === 'loan' || code === 'garnishment' || code === 'final' || code === 'tantiem') item.code = code;
     if (type === 'reimbursement') item.account = optInt(r, 'account', 'Konto') ?? 5800;
     return item;
   });
@@ -225,6 +226,7 @@ export async function updatePayslip(actor: Actor, runId: number, slipId: number,
     // Tas medarbetarlånets rader bort från lönespecen gäller inte heller avdraget i lånet (det kan läggas in igen)
     if (!items.some((i) => i.code === 'loan')) await dropLoanInstallments(tx, runId, r[0].employee_id);
     if (!items.some((i) => i.code === 'final')) await undoFinalPay(tx, runId, r[0].employee_id);
+    await syncRun(tx, runId, r[0].employee_id, items);
     if (!items.some((i) => i.code === 'garnishment')) await tx`DELETE FROM garnishment_deductions d USING wage_garnishments g WHERE g.id = d.garnishment_id AND d.run_id = ${runId} AND g.employee_id = ${r[0].employee_id}`;
     await recomputeSlip(tx, slipId);
     await auditBy(tx, actor, 'update', 'payslip', slipId);
@@ -252,6 +254,7 @@ export async function removePayslip(actor: Actor, runId: number, slipId: number)
     if (d) {
       await dropLoanInstallments(tx, runId, d.employee_id);
       await undoFinalPay(tx, runId, d.employee_id);
+      await syncRun(tx, runId, d.employee_id, null);
       await tx`DELETE FROM garnishment_deductions x USING wage_garnishments g WHERE g.id = x.garnishment_id AND x.run_id = ${runId} AND g.employee_id = ${d.employee_id}`;
     }
     await auditBy(tx, actor, 'remove', 'payslip', slipId);
@@ -310,6 +313,7 @@ export async function bookPayrollRun(actor: Actor, runId: number) {
     const v = await createVoucher(tx, {
       actor, date: r.payment_date, description: `Lön ${r.period}`, lines: [...payrollBookingLines(calcs), ...pensionLines, ...loanLines], sourceType: 'payroll', sourceId: runId, series: 'L',
     });
+    await releaseForRun(tx, actor, runId, r.payment_date);
     await tx`UPDATE payroll_runs SET status = 'booked', voucher_id = ${v.id}, booked_by = ${actor.userId}, booked_at = now() WHERE id = ${runId}`;
     await auditBy(tx, actor, 'book', 'payroll_run', runId);
     const out = await fetchRun(tx, actor.companyId, runId);

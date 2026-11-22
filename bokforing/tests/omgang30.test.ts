@@ -20,3 +20,15 @@ describe('Leverantörsförskott', () => {
     expect(settleLines(3000000)).toEqual([{ account: 2440, amount: 3000000 }, { account: 1480, amount: -3000000 }]);
   });
 });
+
+import { accrualLines, profitShare } from '@/lib/profit-share';
+describe('Tantiem', () => {
+  it('beräkning och kontering', () => {
+    expect(profitShare({ kind: 'percent', pct: 500, target: null, amount: null, cap: null }, 100000000)).toBe(5000000);
+    expect(profitShare({ kind: 'percent', pct: 500, target: null, amount: null, cap: 3000000 }, 100000000)).toBe(3000000);
+    expect(profitShare({ kind: 'percent', pct: 500, target: null, amount: null, cap: null }, -100000)).toBe(0);
+    expect(profitShare({ kind: 'target', pct: null, target: 50000000, amount: 2000000, cap: null }, 49999900)).toBe(0);
+    expect(profitShare({ kind: 'target', pct: null, target: 50000000, amount: 2000000, cap: null }, 50000000)).toBe(2000000);
+    expect(accrualLines(5000000, 1571000)).toEqual([{ account: 7210, amount: 5000000 }, { account: 2910, amount: -5000000 }, { account: 7519, amount: 1571000 }, { account: 2940, amount: -1571000 }]);
+  });
+});

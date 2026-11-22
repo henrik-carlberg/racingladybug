@@ -165,6 +165,37 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await owner.locator('.pp-outstanding').innerText()) === '0,00', 'återbetalt förskott');
   log('leverantörsförskott: förskott på 1480, avräkning mot slutfakturan lämnar mellanskillnaden att betala, återbetalning, avstämning mot 1480');
 
+  // ================= Del 3: tantiem =================
+  const TA = await newCompany('Vinstdelaren AB', 559520000);
+  await voucher(TA, 'Försäljning', [[1930, 1000000], [3001, -1000000]], `${YEAR}-01-15`);
+  await owner.goto(TA + '/lon/anstallda');
+  await owner.fill('input[name=first_name]', 'Tove'); await owner.fill('input[name=last_name]', 'Tantiem');
+  await owner.fill('input[name=personal_number]', '19811218-9876'); await owner.fill('input[name=monthly_salary]', '40000'); await owner.fill('input[name=tax_table]', '32');
+  await owner.click('form:has(input[name=first_name]) button:has-text("Spara")'); await owner.waitForURL(/ok=/);
+  await owner.goto(TA + '/lon/tantiem');
+  await owner.fill('input[name=pct]', '5'); await owner.click('button:has-text("Lägg upp tantiemavtal")'); await owner.locator('text=Tantiemavtalet är upplagt').waitFor();
+  const prow = owner.locator('.ps-row[data-employee="Tove Tantiem"]');
+  assert(nb(await prow.locator('.ps-proposal').innerText()) === '50000,00', 'tantiem 5 % av 1 000 000 kr');
+  await owner.click('button:has-text("Bokför upplupen tantiem")'); await owner.locator('text=Upplupen tantiem med sociala avgifter är bokförd').waitFor();
+  assert(nb(await prow.locator('.ps-accrued').innerText()) === '50000,00' && nb(await prow.locator('.ps-fee').innerText()) === '15710,00', 'upplupen lön 2910 och avgifter 2940: ' + await prow.innerText());
+  assert(nb(await owner.locator('.ps-result').innerText()) === '1000000,00', 'resultatet räknas före tantiem');
+  await owner.click('button:has-text("Bokför upplupen tantiem")'); await owner.locator('text=Den upplupna tantiemen stämmer redan').waitFor();
+  await owner.goto(TA + '/lon');
+  await owner.fill('input[name=period]', `${YEAR}-${String(MONTH).padStart(2, '0')}`);
+  await owner.fill('input[name=payment_date]', day(0));
+  await owner.click('button:has-text("Ny lönekörning")'); await owner.waitForURL(/lon\/\d+\?ok/);
+  const tRun = owner.url().split('?')[0];
+  await owner.goto(TA + '/lon/tantiem');
+  await prow.locator('button:has-text("Lägg på lön")').click(); await owner.locator('text=är lagd på lönekörningen').waitFor();
+  await owner.goto(tRun);
+  assert((await owner.content()).includes(`Tantiem ${YEAR}`), 'tantiemen på lönespecen');
+  await owner.click('button:has-text("Bokför lönekörning")'); await owner.locator('text=Lönekörningen är bokförd').waitFor();
+  await owner.goto(TA + '/lon/tantiem');
+  assert((await prow.innerText()).includes('Utbetald'), 'utbetald och upplupet upplöst: ' + await prow.innerText());
+  await owner.goto(TA + '/verifikationer');
+  assert((await text(owner)).includes('Upplöst upplupen tantiem, Tove Tantiem'), 'upplösningsverifikation');
+  log('tantiem: 5 % av resultatet före tantiem, upplupen lön 7210/2910 och avgifter 7519/2940 vid bokslut, utbetalning via lönekörningen löser upp skulden');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 30: alla steg gick igenom');
