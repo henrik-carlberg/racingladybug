@@ -239,8 +239,7 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(t.includes('nedsattamed60000,00kr') && t.includes('20000,00krskabetalas'), 'ackord 25 %: ' + t);
   await owner.goto(AK + '/ackord');
   assert((await text(owner)).includes('Ackord: underskottet minskas med 60 000 kr') || nb(await text(owner)).includes('underskottetminskasmed60000kr'), 'underskottet minskas: ' + (await text(owner)).slice(0, 1200));
-  await owner.goto(AK + '/leverantorsfakturor');
-  t = nb(await text(owner));
+  assert((await text(owner)).includes('Inga öppna leverantörsskulder'), 'samma fakturor kan inte tas med i ett nytt ackord');
   log('ackord: dividend 25 %, leverantörsskulder 80 000 kr nedsatta med 60 000 kr som ej skattepliktig ackordsvinst, underskottet från i fjol minskas lika mycket');
 
   //@@NEXT@@
