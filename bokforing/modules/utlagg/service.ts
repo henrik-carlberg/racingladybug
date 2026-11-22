@@ -11,7 +11,7 @@ import type { Actor } from '@/lib/services/actor';
 import { date, int, optInt, str } from '@/lib/services/input';
 import { updatePayslip } from '@/lib/services/payroll';
 import { insertAttachment, type AttachmentIn } from '@/lib/services/vouchers';
-import { allowance, approvalEntries, mileage, vatPart } from './calc';
+import { BENEFIT_CAR_RATE, allowanceDetailed, approvalEntries, excess, mileage, vatPart } from './calc';
 import { allowanceDays } from '@/lib/cards';
 
 type Db = Tx | typeof sql;
@@ -90,7 +90,11 @@ export async function addLine(actor: Actor, id: number, input: Record<string, un
   } else if (kind === 'mileage') {
     const km = Number(String(input.km ?? '').replace(',', '.'));
     if (!Number.isFinite(km) || km <= 0 || km > 10000) throw new ValidationError('Ange antal kilometer');
-    row = { kind, description: str(input, 'description') || 'Resa med egen bil', amount: mileage(km, s.mileage_rate), vat: 0, account: s.mileage_account, km, days_full: null, days_half: null, nights: null };
+    // Förmånsbil: bara drivmedel ersätts skattefritt (el respektive övriga drivmedel); egen bil enligt inställningen
+    const car = str(input, 'car');
+    const rate = car === 'el' || car === 'fossil' ? BENEFIT_CAR_RATE[car] : s.mileage_rate;
+    const desc = (str(input, 'description') || 'Resa med egen bil') + (car === 'el' || car === 'fossil' ? ` (förmånsbil, ${car === 'el' ? 'el' : 'drivmedel'})` : '');
+    row = { kind, description: desc, amount: mileage(km, rate), vat: 0, account: s.mileage_account, km, days_full: null, days_half: null, nights: null };
   } else if (kind === 'allowance') {
     // Avresa och hemkomst räknas om till hela och halva dagar; annars anges dagarna för hand
     const dep = str(input, 'depart'), ret = str(input, 'return');
@@ -101,7 +105,20 @@ export async function addLine(actor: Actor, id: number, input: Record<string, un
     const full = auto ? auto.full : optInt(input, 'days_full', 'Hela dagar') ?? 0, half = auto ? auto.half : optInt(input, 'days_half', 'Halva dagar') ?? 0, nights = auto ? auto.nights : optInt(input, 'nights', 'Nätter') ?? 0;
     if (auto) input = { ...input, date: dep.slice(0, 10), description: `${str(input, 'description') || 'Tjänsteresa'} (avresa ${dep.replace('T', ' ')}, hemkomst ${ret.replace('T', ' ')})` };
     if (full < 0 || half < 0 || nights < 0 || full + half + nights === 0) throw new ValidationError('Ange antal dagar eller nätter');
-    row = { kind, description: str(input, 'description') || 'Traktamente tjänsteresa', amount: allowance(full, half, nights, { full: s.allowance_full, half: s.allowance_half, night: s.allowance_night }),
+    // Utrikes: landets normalbelopp per hel dag (halv dag och natt hälften); inrikes enligt inställningarna
+    const foreign = str(input, 'foreign_rate') ? Number(String(input.foreign_rate).replace(/\s/g, '').replace(',', '.')) : 0;
+    if (!Number.isFinite(foreign) || foreign < 0 || foreign > 10000) throw new ValidationError('Ange landets normalbelopp i kronor per dag');
+    const normal = foreign ? Math.round(foreign * 100) : s.allowance_full, nightRate = foreign ? Math.round(foreign * 50) : s.allowance_night;
+    const meal = (k: string) => { const v = optInt(input, k, 'Måltider') ?? 0; if (v < 0 || v > full + half) throw new ValidationError('Fler betalda måltider än resdagar'); return v; };
+    const meals = { breakfast: meal('breakfasts'), lunch: meal('lunches'), dinner: meal('dinners') };
+    const longTerm = ['3m', '2y'].includes(str(input, 'long_term')) ? str(input, 'long_term') : '';
+    const calc = allowanceDetailed({ full, half, nights, normal, halfRate: foreign ? Math.round(foreign * 50) : s.allowance_half, night: nightRate, meals, longTerm });
+    const notes = [foreign ? `utrikes ${foreign} kr/dag${str(input, 'country') ? ` (${str(input, 'country').slice(0, 40)})` : ''}` : '', meals.breakfast + meals.lunch + meals.dinner ? `måltidsavdrag ${(calc.meals / 100).toFixed(2).replace('.', ',')} kr` : '',
+      longTerm ? `långvarig förrättning ${longTerm === '3m' ? '70' : '50'} %` : ''].filter(Boolean);
+    const paid = str(input, 'paid') ? Math.round(Number(String(input.paid).replace(/\s/g, '').replace(',', '.')) * 100) : 0;
+    const over = paid ? excess(paid, calc.amount) : 0;
+    if (over) notes.push(`${(over / 100).toFixed(2).replace('.', ',')} kr över skattefritt belopp betalas som lön`);
+    row = { kind, description: (str(input, 'description') || 'Traktamente tjänsteresa') + (notes.length ? ` – ${notes.join(', ')}` : ''), amount: calc.amount,
       vat: 0, account: s.allowance_account, km: null, days_full: full, days_half: half, nights };
   } else throw new ValidationError('Okänd typ');
   const d = date(input, 'date', 'Datum');
