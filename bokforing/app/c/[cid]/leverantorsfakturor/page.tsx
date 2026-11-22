@@ -38,6 +38,7 @@ export default async function SupplierInvoices({ params, searchParams }: { param
         <Link className="btn" href={`${b}/leverantorsfakturor/inkorg`}>Inkorg{inbox > 0 ? ` (${inbox})` : ''}</Link>
         <Link className="btn secondary" href={`${b}/leverantorsfakturor/ny`}>{L("Registrera faktura")}</Link>
         <Link className="btn secondary" href={`${b}/leverantorsfakturor/betalning`}>{L("Betalningsförslag")}</Link>
+        <Link className="btn secondary" href={`${b}/leverantorsfakturor/aterkommande`}>Återkommande</Link>
         <a className="btn secondary" href={`${b}/rapporter/xlsx?r=leverantorsfakturor`} download>Excel</a>
       </Header>
       <Flash searchParams={searchParams} />

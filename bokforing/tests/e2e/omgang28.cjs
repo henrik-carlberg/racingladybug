@@ -160,6 +160,35 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(!(await owner.locator('.cb-overdue').count()) && nb(await owner.locator('.cb-closing').innerText()) === '280,00', 'kassan stämmer efter inventeringen');
   log('kassabok: löpande saldo, negativt saldo och oräknad kassa flaggas, kassainventering bokför differensen på 3740');
 
+  // ================= Del 3: återkommande leverantörsfakturor =================
+  const RS = await newCompany('Hyresgästen AB', 559420000);
+  await owner.goto(RS + '/leverantorer');
+  await owner.fill('input[name=name]', 'Hyresvärden AB');
+  await owner.click('button:has-text("Spara leverantör")'); await owner.waitForURL(/ok=/);
+  const pm = (n) => { const d = new Date(Date.UTC(YEAR, MONTH - 1 + n, 1)); return d.toISOString().slice(0, 7); };
+  await owner.goto(RS + '/leverantorsfakturor/aterkommande');
+  await owner.fill('input[name=description]', 'Hyra kontor'); await owner.fill('input[name=total]', '12500'); await owner.fill('input[name=vat]', '2500');
+  await owner.fill('input[name=start_period]', pm(-2));
+  await owner.click('button:has-text("Spara mall")');
+  await owner.locator('text=Mallen är sparad').waitFor();
+  // Månaden före: faktura med fel belopp
+  await owner.goto(RS + '/leverantorsfakturor/ny');
+  await owner.selectOption('select[name=supplier_id]', { label: 'Hyresvärden AB' });
+  await owner.fill('input[name=invoice_number]', 'H-1'); await owner.fill('input[name=invoice_date]', `${pm(-1)}-02`); await owner.fill('input[name=due_date]', `${pm(-1)}-25`);
+  await owner.fill('input[name=total]', '15000'); await owner.locator('input[name=total]').blur(); await owner.fill('input[name=vat]', '3000');
+  await owner.fill('input[name=account_0]', '5010'); await owner.fill('input[name=amount_0]', '12000');
+  await owner.click('button:has-text("Registrera och bokför")'); await owner.waitForURL(/ok=/);
+  await owner.goto(RS + '/leverantorsfakturor/aterkommande');
+  const month = (p) => owner.locator(`.rs-template[data-desc="Hyra kontor"] .rs-month[data-period="${p}"]`);
+  assert(await month(pm(-2)).evaluate((e) => e.className.includes('rs-missing')), 'två månader sedan saknas');
+  assert(await month(pm(-1)).evaluate((e) => e.className.includes('rs-deviation')), 'förra månaden avviker');
+  assert(await month(pm(0)).evaluate((e) => e.className.includes('rs-upcoming') || e.className.includes('rs-missing')), 'denna månad väntas');
+  await month(pm(-2)).locator('button:has-text("Skapa från mallen")').click();
+  await owner.waitForURL(/leverantorsfakturor\/\d+\?ok/);
+  await owner.goto(RS + '/leverantorsfakturor/aterkommande');
+  assert(await month(pm(-2)).evaluate((e) => e.className.includes('rs-received')), 'skapad från mallen');
+  log('återkommande leverantörsfakturor: mall för hyra, saknad faktura och avvikande belopp flaggas, månadens faktura skapas från mallen');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 28: alla steg gick igenom');

@@ -21,3 +21,14 @@ describe('Kassabok', () => {
     expect(countLines(100, 100).lines).toEqual([]);
   });
 });
+
+import { periodsBetween, status } from '@/lib/recurring-supplier';
+describe('Återkommande leverantörsfakturor', () => {
+  it('status och perioder', () => {
+    expect(status({ expected: 1250000, actual: 1250000, dueDay: 25, period: '2026-10', today: '2026-11-22' })).toBe('received');
+    expect(status({ expected: 1250000, actual: 1500000, dueDay: 25, period: '2026-10', today: '2026-11-22' })).toBe('deviation');
+    expect(status({ expected: 1250000, actual: null, dueDay: 25, period: '2026-10', today: '2026-11-22' })).toBe('missing');
+    expect(status({ expected: 1250000, actual: null, dueDay: 25, period: '2026-11', today: '2026-11-22' })).toBe('upcoming');
+    expect(periodsBetween('2026-11', '2027-02')).toEqual(['2026-11', '2026-12', '2027-01', '2027-02']);
+  });
+});
