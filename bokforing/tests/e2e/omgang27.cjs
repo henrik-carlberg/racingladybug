@@ -127,6 +127,37 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(t.includes('(omvändskattskyldighet)100000') && t.includes('påinköpiruta20–2425000') && t.includes('Ingåendemomsattdraav25000') && t.includes('fåtillbaka0'), 'rutorna 24, 30 och 48: ' + t.slice(0, 1200));
   log('inköp med omvänd byggmoms: fakturan utan moms, 100 000 kr i ruta 24, beräknad moms 25 000 kr i ruta 30 och 48, konto med moms nekas');
 
+  // ================= Del 2: utlägg för kunds räkning =================
+  const UK = await newCompany('Ombudsbyrån AB', 559370000);
+  await owner.goto(UK + '/kunder');
+  await owner.fill('input[name=name]', 'Klienten AB');
+  await owner.click('button:has-text("Spara kund")'); await owner.waitForURL(/ok=/);
+  const outlay = async (desc, amount, ok) => {
+    await owner.goto(UK + '/kundutlagg');
+    await owner.fill('input[name=description]', desc); await owner.fill('input[name=amount]', amount); await owner.fill('input[name=date]', day(3));
+    if (ok) { await owner.check('input[name=on_behalf]'); await owner.check('input[name=receipt]'); }
+    await owner.click('button:has-text("Bokför utlägg")');
+    await owner.locator('.flash').first().waitFor();
+    return nb(await owner.locator('.flash').first().innerText());
+  };
+  assert((await outlay('Kontorsmaterial', '500', false)).includes('vidarefakturering'), 'utan kvitto i kundens namn är det vidarefakturering');
+  await outlay('Registreringsavgift Bolagsverket', '2200', true);
+  await outlay('Avgift Lantmäteriet', '800', true);
+  await owner.goto(UK + '/kundutlagg');
+  assert(nb(await owner.locator('.ku-open').innerText()) === '3000,00', 'ofakturerade utlägg');
+  await owner.click('.ku-invoice button:has-text("Skapa faktura för utläggen")');
+  await owner.waitForURL(/fakturor\/\d+/);
+  await owner.click('button:has-text("Bokför faktura")');
+  await owner.locator('text=Fakturan är bokförd').waitFor();
+  t = nb(await text(owner));
+  assert(t.includes('3000,00') && t.includes('Utlägg:RegistreringsavgiftBolagsverket'), 'faktura utan moms: ' + t.slice(0, 800));
+  await owner.goto(UK + `/rapporter/moms?from=${day(3).slice(0, 7)}-01&to=${day(0)}`);
+  t = nb(await text(owner));
+  assert(t.includes('ruta06–080') && t.includes('fåtillbaka0'), 'utläggen är inte med i momsdeklarationen: ' + t.slice(0, 600));
+  await owner.goto(UK + '/kundutlagg');
+  assert(nb(await owner.locator('.ku-open').innerText()) === '0,00' && !(await owner.locator('.ku-invoice').count()), 'alla utlägg fakturerade');
+  log('utlägg för kund: kräver kvitto i kundens namn, bokförs mot 1680 och faktureras utan moms utanför momsdeklarationen');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 27: alla steg gick igenom');

@@ -12,3 +12,12 @@ describe('Inköp med omvänd skattskyldighet', () => {
     expect([b('24'), b('30'), b('48'), b('49')]).toEqual([10000000, 2500000, 2500000, 0]);
   });
 });
+
+import { invoiceLine, outlayError } from '@/lib/outlays';
+describe('Utlägg för kund', () => {
+  it('villkor och fakturarad', () => {
+    expect(outlayError({ receiptInCustomerName: false, onBehalf: true })).toMatch(/vidarefakturering/);
+    expect(outlayError({ receiptInCustomerName: true, onBehalf: true })).toBeNull();
+    expect(invoiceLine({ description: 'Avgift', amount: 220000 })).toMatchObject({ vat_rate: 0, account: 1680, unit_price: 220000 });
+  });
+});

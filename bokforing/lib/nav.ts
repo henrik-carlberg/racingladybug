@@ -22,6 +22,7 @@ export function buildNav(o: {
     { id: 'salj', label: t('Sälja'), icon: 'invoice', items: items([
       { path: '/fakturor', label: 'Kundfakturor', perm: 'invoicing', hint: 'Skapa, skicka och följ upp fakturor' },
       { path: '/kunder', label: 'Kunder', perm: 'invoicing' },
+      { path: '/kundutlagg', label: 'Utlägg för kunder', perm: 'invoicing', hint: 'Momsfria utlägg för kundens räkning' },
       { path: '/kassa', label: 'Kassa och e-handel', hint: 'Dagskassa och webbutik' },
       { path: '/kassa/betalningar', label: 'Kortterminaler och utbetalningar', perm: 'ledger', hint: 'Zettle, SumUp, Stripe, Klarna, Shopify' },
       { path: '/restaurang', label: 'Hotell och restaurang', perm: 'ledger', hint: 'Z-rapport med dricks, personalmat och representation' },

@@ -1,5 +1,6 @@
 import 'server-only';
 import { GOODS_RC_ACCOUNT, goodsRcError } from '@/lib/goods-rc';
+import { OUTLAY_ACCOUNT } from '@/lib/outlays';
 import { OSS_RATES, OSS_SALES_ACCOUNT, OSS_VAT_ACCOUNT, ossCountry } from '@/lib/oss';
 import { notify } from './push';
 import { enqueue } from '@/lib/server/jobs';
@@ -100,6 +101,8 @@ export async function saveDraftTx(tx: Tx, actor: Actor, invoiceId: number | null
   const rcOn = !!rcKind;
   if (rcKind === 'construction' && !cust.vat_number && !cust.orgnr) throw new ValidationError('Omvänd byggmoms kräver köparens momsregistreringsnummer eller organisationsnummer');
   const lines = parseLines(input, rcOn, rcKind === 'construction');
+  // Utlägg för kundens räkning (1680) är inte omsättning och faktureras utan moms
+  if (lines.some((l) => l.account === OUTLAY_ACCOUNT && l.vatRate !== 0)) throw new ValidationError('Utlägg för kundens räkning (konto 1680) faktureras utan moms – sätt momsen till 0 % eller fakturera kostnaden som vidarefakturering på ett försäljningskonto');
   if (rcKind === 'goods') {
     for (const l of lines) if (l.account === defaultSalesAccount(l.vatRate, true)) l.account = GOODS_RC_ACCOUNT;
     await tx`INSERT INTO accounts (company_id, number, name) VALUES (${actor.companyId}, ${GOODS_RC_ACCOUNT}, 'Försäljning av varor, omvänd skattskyldighet i Sverige') ON CONFLICT DO NOTHING`;
