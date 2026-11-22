@@ -192,6 +192,25 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(t.includes('Utgåendemoms25%250'), 'moms på enfunktionsvouchern vid försäljningen, inte på det utgångna flerfunktionskortet: ' + t.slice(0, 700));
   log('presentkort: enfunktionsvoucher med moms vid försäljning, delvis inlösen, flerfunktionsvoucher som går ut intäktsförs utan moms');
 
+  // ================= Del 4: personalfester =================
+  const PF = await newCompany('Festbolaget AB', 559390000);
+  const party = async (title, f) => {
+    await owner.goto(PF + '/personalfest');
+    await owner.fill('input[name=title]', title); await owner.fill('input[name=date]', day(5));
+    for (const [k, v] of Object.entries(f)) await owner.fill(`input[name=${k}]`, v);
+    await owner.click('button:has-text("Bokför personalfest")');
+    await owner.locator('.flash').first().waitFor();
+    return nb(await owner.locator('.flash').first().innerText());
+  };
+  t = await party('Julfest', { persons: '10', meal: '6000', meal_vat: '720', other: '2500', other_vat: '625' });
+  assert(t.includes('momsattdraav810,00kr') && t.includes('avdragsgillt1800,00kr') && t.includes('ejavdragsgillt7235,00kr') && !t.includes('⚠'), 'moms 300 kr och övrigt 180 kr per person: ' + t);
+  await party('Sommarfest', { persons: '10', meal: '3000', meal_vat: '360' });
+  t = await party('Höstfest', { persons: '10', meal: '3000', meal_vat: '360', guideline: '200' });
+  assert(t.includes('årets3:epersonalfest') && t.includes('riktvärde'), 'förmånsvarning för tredje festen och över riktvärdet: ' + t);
+  await owner.goto(PF + '/personalfest');
+  assert(nb(await owner.locator('.pf-count').innerText()) === '3', 'tre fester i år');
+  log('personalfester: momsavdrag högst 300 kr per person, övriga kostnader 180 kr per person, måltiden ej avdragsgill, varning vid tredje festen');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 27: alla steg gick igenom');

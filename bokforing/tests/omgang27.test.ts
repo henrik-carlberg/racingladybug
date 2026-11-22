@@ -32,3 +32,14 @@ describe('Presentkort', () => {
     expect(expireLines({ kind: 'multi', balance: 100000, rate: 25 })).toEqual([{ account: 2421, amount: 100000 }, { account: 3990, amount: -100000 }]);
   });
 });
+
+import { benefitWarning, eventBooking } from '@/lib/staff-events';
+describe('Personalfester', () => {
+  it('avdrag och varningar', () => {
+    const r = eventBooking({ persons: 10, meal: 600000, mealVat: 72000, other: 250000, otherVat: 62500 });
+    expect(r).toMatchObject({ vatDed: 81000, deductible: 180000, nonDeductible: 723500, total: 984500 });
+    expect(r.lines.reduce((s, l) => s + l.amount, 0)).toBe(0);
+    expect(benefitWarning({ eventsThisYear: 2, perPerson: 10000, guideline: null })).toHaveLength(1);
+    expect(benefitWarning({ eventsThisYear: 0, perPerson: 10000, guideline: 20000 })).toHaveLength(0);
+  });
+});
