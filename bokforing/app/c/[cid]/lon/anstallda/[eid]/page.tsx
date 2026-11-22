@@ -21,7 +21,7 @@ export default async function Employee({ params, searchParams }: { params: Promi
   return (
     <>
       <h1>{e.first_name} {e.last_name}</h1>
-      <p className="small"><Link href={`/c/${company.id}/lon/anstallda/${e.id}/intyg`}>Underlag för arbetsgivarintyg</Link></p>
+      <p className="small"><Link href={`/c/${company.id}/lon/anstallda/${e.id}/intyg`}>Underlag för arbetsgivarintyg</Link> · <Link href={`/c/${company.id}/lon/anstallda/${e.id}/slutlon`}>Slutlön</Link></p>
       <Flash searchParams={searchParams} />
       <form action={saveEmployee.bind(null, company.id, e.id)} className="card stack">
         <EmployeeFields e={e} agreements={agreements} />

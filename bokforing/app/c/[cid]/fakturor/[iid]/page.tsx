@@ -85,6 +85,8 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
         </div>
         <Flash searchParams={searchParams} />
         {creditMsg && !creditMsg.ok && <div className="card small credit-warning" style={{ borderColor: creditMsg.block ? 'var(--danger)' : 'var(--warn)' }}>{creditMsg.block ? '⛔ Fakturan kan inte bokföras: ' : '⚠️ Kreditvarning: '}{creditMsg.reasons.join(' och ')}.</div>}
+        {rcc?.goodsWarning && <div className="card small goods-rc-warning" style={{ borderColor: 'var(--warn)' }}>⚠️ {rcc.goodsWarning}. Välj omvänd skattskyldighet för varor när du redigerar utkastet.</div>}
+        {rcc?.rcKind === 'goods' && <div className="card small goods-rc">Omvänd skattskyldighet för varor – ingen moms debiteras, köparen redovisar momsen. Försäljningen redovisas i ruta 41.</div>}
         {rcc && (rcc.rcKind === 'construction' || rcc.warnings > 0) && (
           <div className="card small rc-check" style={{ borderColor: rcc.warnings ? 'var(--warn)' : undefined }}>
             <b>Kontroll av omvänd byggmoms per rad</b>{rcc.rcKind === 'construction' ? ' – fakturan har omvänd betalningsskyldighet (ruta 41)' : ''}

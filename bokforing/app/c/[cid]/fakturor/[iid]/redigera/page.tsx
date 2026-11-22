@@ -10,9 +10,9 @@ export const dynamic = 'force-dynamic';
 export default async function EditInvoice({ params }: { params: Promise<{ cid: string; iid: string }> }) {
   const { cid, iid } = await params;
   const { company } = await requireCompany(cid, { perm: 'invoicing' });
-  const [inv] = await sql<{ id: number; status: string; customer_id: number; invoice_date: string; due_date: string; delivery_date: string; our_reference: string; your_reference: string; notes: string; advance: boolean; currency: string; exchange_rate: number; language: string }[]>`
+  const [inv] = await sql<{ id: number; status: string; customer_id: number; invoice_date: string; due_date: string; delivery_date: string; our_reference: string; your_reference: string; notes: string; advance: boolean; currency: string; exchange_rate: number; language: string; goods_category: string | null }[]>`
     SELECT id, status, customer_id, to_char(invoice_date,'YYYY-MM-DD') AS invoice_date, to_char(due_date,'YYYY-MM-DD') AS due_date,
-      delivery_date, our_reference, your_reference, notes, advance, currency, exchange_rate::float8 AS exchange_rate, language, reduction_type, buyer_pnr, property, brf_orgnr, apartment_no, work_type, reduction_max::int AS reduction_max FROM invoices WHERE id = ${Number(iid)} AND company_id = ${company.id}`;
+      delivery_date, our_reference, your_reference, notes, advance, currency, exchange_rate::float8 AS exchange_rate, language, reduction_type, buyer_pnr, property, brf_orgnr, apartment_no, work_type, reduction_max::int AS reduction_max, goods_category FROM invoices WHERE id = ${Number(iid)} AND company_id = ${company.id}`;
   if (!inv) notFound();
   if (inv.status !== 'draft') redirect(`/c/${company.id}/fakturor/${inv.id}`);
   const customers = await sql<{ id: number; name: string; reverse_charge: boolean; construction_rc: boolean; currency: string; language: string }[]>`SELECT id, name, reverse_charge, construction_rc, currency, language FROM customers WHERE company_id = ${company.id} ORDER BY name`;
@@ -25,7 +25,7 @@ export default async function EditInvoice({ params }: { params: Promise<{ cid: s
     <>
       <h1>Redigera utkast</h1>
       <InvoiceForm action={saveDraft.bind(null, company.id, inv.id)} customers={[...customers]} accounts={[...accounts]}
-        initial={{ ...inv, lines }} />
+        initial={{ ...inv, lines, goods_rc: inv.goods_category ?? '' }} />
     </>
   );
 }

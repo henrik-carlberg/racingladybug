@@ -29,3 +29,9 @@ export async function adjust(cid: number, id: number, fd: FormData) {
   const r = await run(back(cid, '#jamkning'), () => s.adjust(a, id, obj(fd)));
   done(back(cid, '#jamkning'), `Jämkningen är bokförd: ${r.amount > 0 ? 'ytterligare avdrag' : 'återbetalning'} ${kr(Math.abs(r.amount))} kr`);
 }
+
+export async function dispose(cid: number, id: number, fd: FormData) {
+  const a = userActor(await requireCompany(cid, { perm: 'ledger' }));
+  const r = await run(back(cid, '#jamkning'), () => s.dispose(a, id, obj(fd)));
+  done(back(cid, '#jamkning'), r.amount ? `Slutjämkningen är bokförd för ${r.remaining} år: ${r.amount > 0 ? 'ytterligare avdrag' : 'återbetalning'} ${kr(Math.abs(r.amount))} kr` : 'Avyttringen är registrerad – ingen jämkning behövs');
+}
