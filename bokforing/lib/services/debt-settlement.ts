@@ -13,7 +13,10 @@ import { deficits } from './deficits';
 async function openDebts(db: Tx | typeof sql, companyId: number, lock = false) {
   return db<{ id: number; supplier: string; number: string; remaining: number }[]>`SELECT i.id, s.name AS supplier, i.invoice_number AS number, (i.total - i.paid_amount)::float8 AS remaining
     FROM supplier_invoices i JOIN suppliers s ON s.id = i.supplier_id WHERE i.company_id = ${companyId} AND i.status IN ('booked','approved') AND i.voucher_id IS NOT NULL
-      AND i.currency = 'SEK' AND i.total > i.paid_amount ORDER BY s.name, i.invoice_date ${lock ? db`FOR UPDATE OF i` : db``}`;
+      AND i.currency = 'SEK' AND i.total > i.paid_amount
+      AND NOT EXISTS (SELECT 1 FROM debt_settlement_invoices d WHERE d.supplier_invoice_id = i.id)
+      AND NOT EXISTS (SELECT 1 FROM bank_payment_items bi JOIN bank_payments bp ON bp.id = bi.payment_id WHERE bi.supplier_invoice_id = i.id AND bp.status IN ('authorization','accepted','executed'))
+    ORDER BY s.name, i.invoice_date ${lock ? db`FOR UPDATE OF i` : db``}`;
 }
 
 export async function overview(companyId: number) {
@@ -36,7 +39,9 @@ export async function settle(actor: Actor, input: Record<string, unknown>) {
   const chosen = new Set(String(input.invoices ?? '').split(',').map(Number).filter(Boolean));
   if (!chosen.size) throw new ValidationError('Välj vilka skulder som omfattas av ackordet');
   return sql.begin(async (tx) => {
+    await tx`SELECT pg_advisory_xact_lock(hashtext('debt_settlement'), ${actor.companyId})`;
     const debts = (await openDebts(tx, actor.companyId, true)).filter((d) => chosen.has(d.id));
+    if (debts.length !== chosen.size) throw new ValidationError('Någon av fakturorna omfattas redan av ett ackord, ingår i en pågående bankbetalning eller är betald');
     if (!debts.length) throw new ValidationError('Det finns inga leverantörsskulder att sätta ned');
     const w = writedowns(debts, pct);
     if (!w.total) throw new ValidationError('Ackordet sätter inte ned några skulder');
@@ -47,8 +52,10 @@ export async function settle(actor: Actor, input: Record<string, unknown>) {
       await tx`UPDATE supplier_invoices SET paid_amount = paid_amount + ${r.writedown}, status = CASE WHEN paid_amount + ${r.writedown} >= total THEN 'paid' ELSE status END,
         paid_date = CASE WHEN paid_amount + ${r.writedown} >= total THEN ${decided}::date ELSE paid_date END WHERE id = ${r.id} AND company_id = ${actor.companyId}`;
     }
-    await tx`INSERT INTO debt_settlements ${tx({ company_id: actor.companyId, reconstruction_on: reconstruction, decided_on: decided, dividend_pct: pct, writedown: w.total, to_pay: w.toPay, pay_by: payBy,
-      invoices: tx.json(w.rows as never) as never, voucher_id: v.id, created_by: actor.userId })}`;
+    const [ds] = await tx<{ id: number }[]>`INSERT INTO debt_settlements ${tx({ company_id: actor.companyId, reconstruction_on: reconstruction, decided_on: decided, dividend_pct: pct, writedown: w.total, to_pay: w.toPay, pay_by: payBy,
+      invoices: tx.json(w.rows as never) as never, voucher_id: v.id, created_by: actor.userId })} RETURNING id`;
+    // En faktura omfattas av ett enda ackord (skyddar också mot dubbla inskick)
+    await tx`INSERT INTO debt_settlement_invoices ${tx(w.rows.map((r) => ({ supplier_invoice_id: r.id, settlement_id: ds.id })))}`;
     await auditBy(tx, actor, 'debt_settlement', 'company', actor.companyId, { pct, writedown: w.total });
     return w;
   });

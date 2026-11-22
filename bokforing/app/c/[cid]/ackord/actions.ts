@@ -6,7 +6,8 @@ import { kr } from '@/lib/format';
 import * as svc from '@/lib/services/debt-settlement';
 
 export async function settle(cid: number, fd: FormData) {
-  const actor = userActor(await requireCompany(cid, { perm: 'ledger' }));
+  // Ackordet markerar leverantörsfakturor som betalda: samma behörighet som för betalningar
+  const actor = userActor(await requireCompany(cid, { perm: 'payments' }));
   const base = `/c/${cid}/ackord`;
   const input: Record<string, unknown> = Object.fromEntries([...fd.entries()].filter(([k]) => k !== 'inv').map(([k, v]) => [k, String(v)]));
   input.invoices = fd.getAll('inv').map(String).join(',');
