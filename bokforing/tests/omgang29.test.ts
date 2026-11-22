@@ -29,3 +29,12 @@ describe('Betalningsföreläggande', () => {
     expect(allocate(2000000, { fee: 0, reminder: 0, interest: 16548, capital: 1250000 }).excess).toBe(733452);
   });
 });
+
+import { onHand, shipLines, soldLines } from '@/lib/consignment';
+describe('Konsignation', () => {
+  it('saldo och kontering', () => {
+    expect(onHand([{ kind: 'ship', qty: 10 }, { kind: 'sold', qty: 4 }, { kind: 'return', qty: 2 }])).toBe(4);
+    expect(shipLines(200000)).toEqual([{ account: 1465, amount: 200000 }, { account: 1460, amount: -200000 }]);
+    expect(soldLines(80000)).toEqual([{ account: 4990, amount: 80000 }, { account: 1465, amount: -80000 }]);
+  });
+});

@@ -212,6 +212,34 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert((await owner.locator('.po-status').first().innerText()).includes('Betald') && nb(await owner.locator('.po-remaining').first().innerText()) === '0,00', 'fakturan är betald via Kronofogden');
   log('betalningsföreläggande: underlag med kapital, dröjsmålsränta och avgifter, ansökningsavgift som fordran, inbetalning avräknas mot kostnader, ränta och kapital');
 
+  // ================= Del 4: konsignationslager =================
+  const KG = await newCompany('Lampgrossisten AB', 559480000);
+  await owner.goto(KG + '/kunder');
+  await owner.fill('input[name=name]', 'Butikskedjan AB');
+  await owner.click('button:has-text("Spara kund")'); await owner.waitForURL(/ok=/);
+  await owner.goto(KG + '/konsignation');
+  await owner.fill('input[name=article]', 'Lampa'); await owner.fill('input[name=unit_cost]', '200'); await owner.fill('input[name=unit_price]', '350');
+  await owner.click('button:has-text("Lägg upp artikel")'); await owner.locator('text=Artikeln är upplagd').waitFor();
+  const kmove = async (kind, qty) => {
+    await owner.goto(KG + '/konsignation');
+    const r = owner.locator('.kg-row[data-article="Lampa"]');
+    await r.locator('select[name=kind]').selectOption(kind); await r.locator('input[name=qty]').fill(qty);
+    await r.locator('button:has-text("Bokför")').click();
+    await owner.waitForURL(/(ok|error)=/);
+    return decodeURIComponent(owner.url().replace(/\+/g, ' '));
+  };
+  await kmove('ship', '10');
+  await owner.goto(KG + '/konsignation');
+  assert(nb(await owner.locator('.kg-total').innerText()) === '2000,00', 'lagervärde hos återförsäljaren');
+  assert((await kmove('sold', '4')).includes('kvar hos återförsäljaren: 6 st'), 'sålt enligt rapport');
+  t = nb(await text(owner));
+  assert(t.includes('Lampa(såltur') && t.includes('1400,00'), 'fakturautkast för sålda: ' + t.slice(0, 800));
+  assert((await kmove('return', '10')).includes('har 6 st i konsignation'), 'retur högst det som finns hos återförsäljaren');
+  await kmove('return', '2');
+  await owner.goto(KG + '/konsignation');
+  assert(nb(await owner.locator('.kg-qty').innerText()) === '4st' && nb(await owner.locator('.kg-total').innerText()) === '800,00', 'kvar efter retur');
+  log('konsignation: utleverans flyttar lagret till 1465, sålt enligt rapport ger fakturautkast och lagerminskning, retur högst det som finns kvar');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 29: alla steg gick igenom');
