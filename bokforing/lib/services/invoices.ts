@@ -1,4 +1,5 @@
 import 'server-only';
+import { GOODS_RC_ACCOUNT, goodsRcError } from '@/lib/goods-rc';
 import { OSS_RATES, OSS_SALES_ACCOUNT, OSS_VAT_ACCOUNT, ossCountry } from '@/lib/oss';
 import { notify } from './push';
 import { enqueue } from '@/lib/server/jobs';
@@ -25,7 +26,7 @@ import { arr, date, int, list, optInt, str, type Page } from './input';
 export interface InvoiceOut {
   id: number; object: 'invoice'; number: number | null; status: 'draft' | 'booked' | 'paid' | 'credited' | 'written_off';
   customer_id: number; customer_name: string; invoice_date: string; due_date: string; delivery_date: string;
-  ocr: string | null; our_reference: string; your_reference: string; notes: string; reverse_charge: boolean; currency: string; exchange_rate: number; total_currency: number | null; language: 'sv' | 'en'; fx_result: number;
+  ocr: string | null; our_reference: string; your_reference: string; notes: string; reverse_charge: boolean; goods_category: string | null; rc_kind: string; currency: string; exchange_rate: number; total_currency: number | null; language: 'sv' | 'en'; fx_result: number;
   total_net: number; total_vat: number; rounding: number; total: number; paid_date: string | null;
   credit_of_id: number | null; voucher_id: number | null; payment_voucher_id: number | null; created_at: string;
   reduction_type: ReductionType | null; tax_reduction: number; buyer_pnr: string; property: string; brf_orgnr: string; apartment_no: string; work_type: string;
@@ -37,7 +38,7 @@ async function fetchInvoice(db: Tx | typeof sql, companyId: number, id: number):
   const [i] = await db<Omit<InvoiceOut, 'lines' | 'object'>[]>`
     SELECT i.id, i.invoice_number AS number, i.status, i.customer_id, c.name AS customer_name,
       to_char(i.invoice_date,'YYYY-MM-DD') AS invoice_date, to_char(i.due_date,'YYYY-MM-DD') AS due_date, i.delivery_date,
-      i.ocr, i.our_reference, i.your_reference, i.notes, i.reverse_charge, i.total_net, i.total_vat, i.rounding, i.total,
+      i.ocr, i.our_reference, i.your_reference, i.notes, i.reverse_charge, i.goods_category, i.rc_kind, i.total_net, i.total_vat, i.rounding, i.total,
       to_char(i.paid_date,'YYYY-MM-DD') AS paid_date, i.credit_of_id, i.voucher_id, i.payment_voucher_id, i.created_at,
       i.reduction_type, i.tax_reduction, i.buyer_pnr, i.property, i.brf_orgnr, i.apartment_no, i.work_type, i.reduction_status, i.paid_amount, i.advance,
       i.currency, i.exchange_rate::float8 AS exchange_rate, i.total_currency, i.language, i.fx_result
@@ -93,10 +94,18 @@ export async function saveDraftTx(tx: Tx, actor: Actor, invoiceId: number | null
     SELECT reverse_charge, construction_rc, vat_number, orgnr, payment_terms, currency, language, country FROM customers WHERE id = ${customerId} AND company_id = ${actor.companyId}`;
   if (!cust) throw new ValidationError('Kunden finns inte');
   // Omvänd skattskyldighet: tjänster till EU-företag, eller byggtjänster till byggföretag i Sverige
-  const rcKind = cust.reverse_charge ? 'eu' : cust.construction_rc ? 'construction' : '';
+  // Omvänd skattskyldighet för vissa varor inom Sverige väljs per faktura
+  const goodsCategory = str(input, 'goods_rc');
+  const rcKind = cust.reverse_charge ? 'eu' : cust.construction_rc ? 'construction' : goodsCategory ? 'goods' : '';
   const rcOn = !!rcKind;
   if (rcKind === 'construction' && !cust.vat_number && !cust.orgnr) throw new ValidationError('Omvänd byggmoms kräver köparens momsregistreringsnummer eller organisationsnummer');
   const lines = parseLines(input, rcOn, rcKind === 'construction');
+  if (rcKind === 'goods') {
+    for (const l of lines) if (l.account === defaultSalesAccount(l.vatRate, true)) l.account = GOODS_RC_ACCOUNT;
+    const err = goodsRcError({ category: goodsCategory, net: lines.reduce((s, l) => s + Math.round(l.quantity * l.unitPrice), 0), buyerIsCompany: !!(cust.orgnr || cust.vat_number), buyerCountry: cust.country });
+    if (err) throw new ValidationError(err);
+    await tx`INSERT INTO accounts (company_id, number, name) VALUES (${actor.companyId}, ${GOODS_RC_ACCOUNT}, 'Försäljning av varor, omvänd skattskyldighet i Sverige') ON CONFLICT DO NOTHING`;
+  }
   // OSS: privatperson i annat EU-land och bolaget registrerat för OSS – köparlandets moms på momspliktiga rader
   const oss = ossCountry({ registered: company.oss, country: cust.country, vatNumber: cust.vat_number, reverseCharge: rcOn });
   if (oss) {
@@ -133,7 +142,7 @@ export async function saveDraftTx(tx: Tx, actor: Actor, invoiceId: number | null
   const head = {
     customer_id: customerId, invoice_date: invoiceDate, due_date: dueDate, delivery_date: str(input, 'delivery_date'),
     our_reference: str(input, 'our_reference'), your_reference: str(input, 'your_reference'), notes: str(input, 'notes'),
-    reverse_charge: rcOn, rc_kind: rcKind, oss_country: oss, advance, currency, exchange_rate: rate, language, total_currency: tt.foreign ? tt.doc.total : null, total_net: t.net, total_vat: t.vat, rounding: t.rounding, total: t.total - rr.tax_reduction, ...rr,
+    reverse_charge: rcOn, rc_kind: rcKind, goods_category: rcKind === 'goods' ? goodsCategory : null, oss_country: oss, advance, currency, exchange_rate: rate, language, total_currency: tt.foreign ? tt.doc.total : null, total_net: t.net, total_vat: t.vat, rounding: t.rounding, total: t.total - rr.tax_reduction, ...rr,
   };
   {
     let id = invoiceId ?? 0;

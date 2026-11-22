@@ -22,7 +22,7 @@ export async function saveDraft(cid: number, invoiceId: number | null, _prev: Fo
     const inv = await svc.saveDraft(actor, invoiceId, {
       customer_id: str(fd, 'customer_id'), invoice_date: str(fd, 'invoice_date'), due_date: str(fd, 'due_date'),
       delivery_date: str(fd, 'delivery_date'), our_reference: str(fd, 'our_reference'), your_reference: str(fd, 'your_reference'),
-      notes: str(fd, 'notes'), lines, advance: fd.get('advance') === 'on',
+      notes: str(fd, 'notes'), lines, advance: fd.get('advance') === 'on', goods_rc: str(fd, 'goods_rc'),
       currency: str(fd, 'currency'), exchange_rate: str(fd, 'exchange_rate'), language: str(fd, 'language'),
       reduction_type: str(fd, 'reduction_type'), buyer_pnr: str(fd, 'buyer_pnr'), work_type: str(fd, 'work_type'), property: str(fd, 'property'),
       brf_orgnr: str(fd, 'brf_orgnr'), apartment_no: str(fd, 'apartment_no'), reduction_max: amount(fd, 'reduction_max', 'Kvar av köparens tak') ?? undefined,

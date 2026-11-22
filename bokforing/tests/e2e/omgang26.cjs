@@ -136,6 +136,38 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(await owner.locator('.inv-disposed').count() === 2 && !(await card('Fräsmaskin').locator('button:has-text("Jämka")').count()), 'slutjämkade investeringar kan inte jämkas igen');
   log('jämkning: 20 år för ny-, till- och ombyggnad, beloppsgränser, slutjämkning vid försäljning med moms (+190 000 kr) och uttag (−40 000 kr)');
 
+  // ================= Del 2: omvänd skattskyldighet för varor =================
+  const OR = await newCompany('Mobilgrossisten AB', 559320000);
+  await owner.goto(OR + '/kunder');
+  await owner.fill('input[name=name]', 'Elektronikkedjan AB'); await owner.fill('input[name=orgnr]', orgnrFor('556688990'));
+  await owner.click('button:has-text("Spara kund")'); await owner.waitForURL(/ok=/);
+  const rcInvoice = async (goods, desc, amount) => {
+    await owner.goto(OR + '/fakturor/ny');
+    await owner.selectOption('select[name=customer_id]', { label: 'Elektronikkedjan AB' });
+    await owner.fill('input[name=invoice_date]', day(1));
+    if (goods) await owner.selectOption('select[name=goods_rc]', goods);
+    const r0 = owner.locator('tbody tr').first();
+    await r0.locator('td:nth-child(1) input').fill(desc); await r0.locator('td:nth-child(2) input').fill('1');
+    await r0.locator('td:nth-child(3) input').fill('st'); await r0.locator('td:nth-child(4) input').fill(amount);
+    await owner.click('button:has-text("Spara utkast")');
+    await owner.waitForURL(/fakturor\/(\d+\?ok|ny)/).catch(() => {});
+    await owner.waitForLoadState('networkidle');
+  };
+  await rcInvoice('electronics', 'Mobiltelefoner 40 st', '80000');
+  assert((await text(owner)).includes('Under 100 000 kr exkl. moms gäller vanlig moms'), 'elektronik under 100 000 kr');
+  await rcInvoice('', 'Mobiltelefoner 100 st', '200000');
+  assert(await owner.locator('.goods-rc-warning').count() === 1, 'varning: vanlig moms på mobiltelefoner över gränsen');
+  await rcInvoice('electronics', 'Mobiltelefoner 60 st', '120000');
+  assert(await owner.locator('.goods-rc').count() === 1, 'omvänd skattskyldighet på fakturan');
+  t = nb(await text(owner));
+  assert(t.includes('120000,00') && !t.includes('30000,00'), 'ingen moms debiteras: ' + t.slice(0, 600));
+  await owner.click('button:has-text("Bokför faktura")');
+  await owner.locator('text=Fakturan är bokförd').waitFor();
+  await owner.goto(OR + `/rapporter/moms?from=${day(1).slice(0, 7)}-01&to=${day(0)}`);
+  t = nb(await text(owner));
+  assert(/Försäljningnärköparenärskattskyldig[iI]Sverige120000/.test(t), 'ruta 41: ' + t.slice(0, 900));
+  log('omvänd skattskyldighet för varor: elektronik under 100 000 kr nekas, varning vid vanlig moms, 120 000 kr utan moms i ruta 41');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 26: alla steg gick igenom');

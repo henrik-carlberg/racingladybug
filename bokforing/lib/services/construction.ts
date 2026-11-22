@@ -1,4 +1,5 @@
 import 'server-only';
+import { goodsRcWarning } from '@/lib/goods-rc';
 import { sql } from '@/lib/db';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import { auditBy } from '@/lib/server/audit';
@@ -157,10 +158,11 @@ export async function openInvoices(companyId: number) {
 
 // ---------- Kontroll av omvänd byggmoms ----------
 export async function invoiceRcCheck(companyId: number, invoiceId: number) {
-  const [i] = await sql<{ rc_kind: string; orgnr: string; vat_number: string }[]>`SELECT i.rc_kind, c.orgnr, c.vat_number FROM invoices i JOIN customers c ON c.id = i.customer_id
+  const [i] = await sql<{ rc_kind: string; orgnr: string; vat_number: string; net: number }[]>`SELECT i.rc_kind, c.orgnr, c.vat_number, i.total_net::float8 AS net FROM invoices i JOIN customers c ON c.id = i.customer_id
     WHERE i.id = ${invoiceId} AND i.company_id = ${companyId}`;
   if (!i) return null;
   const lines = await sql<{ description: string }[]>`SELECT description FROM invoice_lines WHERE invoice_id = ${invoiceId} ORDER BY position`;
   const verdicts = rcCheck({ rcKind: i.rc_kind, customerIsCompany: !!(i.orgnr || i.vat_number), lines });
-  return { rcKind: i.rc_kind, lines: lines.map((l, k) => ({ ...l, ...verdicts[k] })), warnings: verdicts.filter((v) => v.status === 'warn').length };
+  const goodsWarning = goodsRcWarning({ rcKind: i.rc_kind, buyerIsCompany: !!(i.orgnr || i.vat_number), net: i.net, lines });
+  return { rcKind: i.rc_kind, lines: lines.map((l, k) => ({ ...l, ...verdicts[k] })), warnings: verdicts.filter((v) => v.status === 'warn').length, goodsWarning };
 }

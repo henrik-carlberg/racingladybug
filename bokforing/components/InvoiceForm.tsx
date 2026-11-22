@@ -10,7 +10,7 @@ type Row = { description: string; quantity: string; unit: string; price: string;
 type Customer = { id: number; name: string; reverse_charge: boolean; construction_rc?: boolean; currency?: string; language?: string };
 
 export interface InvoiceInitial {
-  customer_id?: number; advance?: boolean; currency?: string; exchange_rate?: number | string; language?: string; invoice_date: string; due_date?: string; delivery_date?: string; our_reference?: string; your_reference?: string; notes?: string; lines?: Row[];
+  customer_id?: number; advance?: boolean; currency?: string; exchange_rate?: number | string; language?: string; invoice_date: string; due_date?: string; delivery_date?: string; our_reference?: string; your_reference?: string; notes?: string; lines?: Row[]; goods_rc?: string;
   reduction_type?: ReductionType | null; buyer_pnr?: string; property?: string; brf_orgnr?: string; apartment_no?: string; work_type?: string; reduction_max?: number | null;
 }
 
@@ -24,13 +24,15 @@ export function InvoiceForm({ action, customers, accounts, initial }: {
   const [customerId, setCustomerId] = useState(String(initial.customer_id ?? ''));
   const cust = customers.find((c) => String(c.id) === customerId);
   const construction = !!cust?.construction_rc;
-  const rc = (cust?.reverse_charge ?? false) || construction;
+  const [goodsRc, setGoodsRc] = useState(initial.goods_rc ?? '');
+  const goods = !!goodsRc && !construction && !cust?.reverse_charge;
+  const rc = (cust?.reverse_charge ?? false) || construction || goods;
   const [currency, setCurrency] = useState(initial.currency ?? 'SEK');
   const [rate, setRate] = useState(initial.exchange_rate ? String(initial.exchange_rate).replace('.', ',') : '');
   const [lang, setLang] = useState(initial.language ?? 'sv');
   const foreign = currency !== 'SEK';
   const [advance, setAdvance] = useState(!!initial.advance);
-  const salesAcc = (vat: number) => (advance ? 2420 : construction ? 3231 : defaultSalesAccount(vat, rc));
+  const salesAcc = (vat: number) => (advance ? 2420 : construction ? 3231 : goods ? 3232 : defaultSalesAccount(vat, rc));
   const blank = (): Row => ({ description: '', quantity: '1', unit: 'st', price: '', vat: '25', account: String(salesAcc(25)) });
   const [rows, setRows] = useState<Row[]>(initial.lines?.length ? initial.lines : [blank()]);
   const [rr, setRr] = useState<string>(initial.reduction_type ?? '');
@@ -82,6 +84,19 @@ export function InvoiceForm({ action, customers, accounts, initial }: {
           <label>Er referens<input name="your_reference" defaultValue={initial.your_reference} /></label>
           <label>Leveransdatum/-period (tomt = fakturadatum)<input name="delivery_date" defaultValue={initial.delivery_date} placeholder="T.ex. 2026-05-01 – 2026-05-31" /></label>
         </div>
+        {!construction && !cust?.reverse_charge && (
+          <label style={{ maxWidth: 520 }}>Omvänd skattskyldighet för varor (köparen redovisar momsen)
+            <select name="goods_rc" value={goodsRc} onChange={(e) => {
+              const v = e.target.value; setGoodsRc(v);
+              const from = (vat: number) => (goodsRc ? 3232 : defaultSalesAccount(vat, !!cust?.reverse_charge)), to = (vat: number) => (v ? 3232 : defaultSalesAccount(vat, false));
+              setRows((r) => r.map((x) => (x.account === String(from(Number(x.vat))) ? { ...x, account: String(to(Number(x.vat))) } : x)));
+            }}>
+              <option value="">Nej – vanlig moms</option>
+              <option value="electronics">Mobiltelefoner, datorkretsar, surfplattor m.m. (minst 100 000 kr)</option>
+              <option value="metals">Metaller</option><option value="gold">Guld</option><option value="scrap">Avfall och skrot</option>
+            </select>
+          </label>
+        )}
         {rc && <p className="small muted" style={{ margin: 0 }}>Kunden har omvänd skattskyldighet – ingen moms debiteras och texten "Omvänd betalningsskyldighet" skrivs på fakturan. <Help term="omvand_moms" /></p>}
       </div>
       <datalist id="sales-accounts">{accounts.filter((a) => a.number >= 3000 && a.number < 4000).map((a) => <option key={a.number} value={a.number}>{a.name}</option>)}</datalist>

@@ -26,7 +26,7 @@ export function vatReport(sums: AccountSums): { boxes: VatBox[]; toPay: number }
   const box36 = neg(sum(sums, (n) => n === 3105));
   const box39 = neg(sum(sums, (n) => n === 3308));
   const box40 = neg(sum(sums, (n) => n === 3305));
-  const box41 = neg(sum(sums, (n) => n === 3231));
+  const box41 = neg(sum(sums, (n) => n === 3231 || n === 3232));
   const box42 = neg(sum(sums, (n) => n === 3004));
   // Vinstmarginalbeskattning: beskattningsunderlaget (marginalen exkl. moms) bokas på 3213 vid periodens avräkning
   const box07 = neg(sum(sums, (n) => n === 3213));
