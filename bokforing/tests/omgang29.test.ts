@@ -20,3 +20,12 @@ describe('Befarade kundförluster', () => {
     expect(r.others.map((o) => o.id)).toEqual([4]);
   });
 });
+
+import { allocate, interest } from '@/lib/payment-order';
+describe('Betalningsföreläggande', () => {
+  it('ränta och avräkningsordning', () => {
+    expect(interest(1250000, 10, '2026-09-23', '2026-11-22')).toBe(20548);
+    expect(allocate(40000, { fee: 30000, reminder: 6000, interest: 20548, capital: 1250000 })).toEqual({ fee: 30000, reminder: 6000, interest: 4000, capital: 0, excess: 0 });
+    expect(allocate(2000000, { fee: 0, reminder: 0, interest: 16548, capital: 1250000 }).excess).toBe(733452);
+  });
+});

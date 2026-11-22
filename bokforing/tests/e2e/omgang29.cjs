@@ -176,6 +176,42 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   await owner.locator('text=Reserven för befarade kundförluster är ökad med 8 000,00 kr').waitFor();
   log('befarade kundförluster: individuell bedömning per faktura med motivering ersätter schablonen, reserven 8 000 kr bokförs exkl. moms');
 
+  // ================= Del 3: betalningsföreläggande =================
+  const BFO = await newCompany('Borgenären AB', 559470000);
+  await owner.goto(BFO + '/kunder');
+  await owner.fill('input[name=name]', 'Gäldenären AB'); await owner.fill('input[name=orgnr]', orgnrFor('556123456'));
+  await owner.click('button:has-text("Spara kund")'); await owner.waitForURL(/ok=/);
+  await invoice(BFO, 'Gäldenären AB', 10000, day(90));
+  await owner.goto(BFO + '/betalningsforelaggande');
+  await owner.fill('input[name=reminder_fee]', '100');
+  await owner.click('button:has-text("Registrera ansökan")');
+  await owner.locator('.flash').first().waitFor();
+  assert(nb(await owner.locator('.flash').first().innerText()).includes('högst60kr'), 'påminnelseavgift högst 60 kr');
+  await owner.goto(BFO + '/betalningsforelaggande');
+  await owner.fill('input[name=reminder_fee]', '60');
+  await owner.click('button:has-text("Registrera ansökan")');
+  await owner.locator('text=Ansökan är registrerad: kapital 12 500,00 kr').waitFor();
+  await owner.goto(BFO + '/betalningsforelaggande');
+  const po = owner.locator('.po-order').first();
+  const expInt = Math.round(1250000 * 10 * 60 / 100 / 365);
+  assert(nb(await po.locator('.po-interest').innerText()) === (expInt / 100).toFixed(2).replace('.', ','), 'dröjsmålsränta 10 % i 60 dagar');
+  await po.locator('select[name=status]').selectOption('ruling'); await po.locator('input[name=case_no]').fill('KFM-1');
+  await po.locator('button:has-text("Uppdatera")').click(); await owner.locator('text=Statusen är uppdaterad').waitFor();
+  const pay = async (amt) => {
+    await owner.goto(BFO + '/betalningsforelaggande');
+    await owner.locator('.po-order').first().locator('input[name=amount]').fill(amt);
+    await owner.locator('.po-order').first().locator('button:has-text("Registrera inbetalning")').click();
+    await owner.locator('.flash').first().waitFor();
+    return nb(await owner.locator('.flash').first().innerText());
+  };
+  assert((await pay('400')).includes('kostnader360,00kr,ränta40,00kr,kapital0,00kr'), 'kostnader först, sedan ränta');
+  assert((await pay('100000')).includes('meränskulden'), 'mer än skulden nekas');
+  t = await pay(String((1250000 + expInt - 4000) / 100).replace('.', ','));
+  assert(t.includes('kapital12500,00kr'), 'resten betalar ränta och kapital: ' + t);
+  await owner.goto(BFO + '/betalningsforelaggande');
+  assert((await owner.locator('.po-status').first().innerText()).includes('Betald') && nb(await owner.locator('.po-remaining').first().innerText()) === '0,00', 'fakturan är betald via Kronofogden');
+  log('betalningsföreläggande: underlag med kapital, dröjsmålsränta och avgifter, ansökningsavgift som fordran, inbetalning avräknas mot kostnader, ränta och kapital');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 29: alla steg gick igenom');
