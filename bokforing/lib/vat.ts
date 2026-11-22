@@ -36,6 +36,9 @@ export function vatReport(sums: AccountSums): { boxes: VatBox[]; toPay: number }
   const box12 = neg(sum(sums, (n) => inRange(n, 2630, 2633) || inRange(n, 2636, 2639)));
   const box20 = sum(sums, (n) => inRange(n, 4515, 4517));
   const box21 = sum(sums, (n) => n === 4535);
+  // Inköp med omvänd skattskyldighet inom Sverige: varor (ruta 23) och tjänster (ruta 24)
+  const box23 = sum(sums, (n) => inRange(n, 4415, 4417));
+  const box24 = sum(sums, (n) => inRange(n, 4425, 4427));
   const box30 = neg(sum(sums, (n) => n === 2614));
   const box31 = neg(sum(sums, (n) => n === 2624));
   const box32 = neg(sum(sums, (n) => n === 2634));
@@ -58,6 +61,8 @@ export function vatReport(sums: AccountSums): { boxes: VatBox[]; toPay: number }
     { box: '12', label: 'Utgående moms 6 %', amount: box12 },
     ...(box20 ? [{ box: '20', label: 'Inköp av varor från annat EU-land', amount: box20 }] : []),
     { box: '21', label: 'Inköp av tjänster från annat EU-land (25 %)', amount: box21 },
+    ...(box23 ? [{ box: '23', label: 'Inköp av varor i Sverige som köparen är skattskyldig för', amount: box23 }] : []),
+    ...(box24 ? [{ box: '24', label: 'Övriga inköp av tjänster i Sverige (omvänd skattskyldighet)', amount: box24 }] : []),
     { box: '30', label: 'Utgående moms 25 % på inköp i ruta 20–24', amount: box30 },
     ...(box31 ? [{ box: '31', label: 'Utgående moms 12 % på inköp i ruta 20–24', amount: box31 }] : []),
     ...(box32 ? [{ box: '32', label: 'Utgående moms 6 % på inköp i ruta 20–24', amount: box32 }] : []),

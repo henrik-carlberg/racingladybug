@@ -72,6 +72,7 @@ export function SupplierInvoiceForm({ action, suppliers, accounts, today, costCe
           <label>Belopp i valutan (om ej SEK)<input name="total_currency" inputMode="decimal" placeholder="T.ex. 1 200,00" /></label>
           <label>Att betala i kronor (inkl. moms)<input name="total" value={total} onChange={(e) => setTotal(e.target.value)} onBlur={onTotalBlur} inputMode="decimal" required /></label>
           <label>Varav moms<input name="vat" value={vat} onChange={(e) => setVat(e.target.value)} inputMode="decimal" /></label>
+          <label>Omvänd skattskyldighet<select name="rc_kind" defaultValue=""><option value="">Nej</option><option value="construction">Byggtjänster</option><option value="goods">Mobiler, datorkretsar, metaller, guld, skrot</option></select></label>
           <div style={{ flex: '0 0 auto' }}><button type="button" className="secondary" onClick={vat25}>25 % moms</button></div>
         </div>
         <div className="row">
