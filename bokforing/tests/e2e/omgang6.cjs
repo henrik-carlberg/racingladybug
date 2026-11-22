@@ -277,7 +277,8 @@ async function accept(browser, link, name, password) {
   await owner.click('button:has-text("Spara utskick")');
   await owner.waitForURL(/error=/);
   assert(decodeURIComponent(owner.url()).includes('Ogiltig e-postadress'), 'ogiltig mottagare nekas');
-  const day = Math.min(new Date().getUTCDate(), 28);
+  const sthlmDay = Number(new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm' }).slice(8, 10));
+  const day = Math.min(sthlmDay, 28);
   await owner.goto(B + '/rapporter/utskick');
   await owner.fill('input[name=recipients]', 'styrelsen@example.com, banken@example.com');
   await owner.fill('input[name=day]', String(day));
@@ -287,7 +288,7 @@ async function accept(browser, link, name, password) {
   const cj = await cron.json();
   const out = cj.rapportutskick ?? cj.result?.rapportutskick ?? cj.out?.rapportutskick ?? JSON.stringify(cj).match(/"rapportutskick":\{[^}]*\}/)?.[0];
   assert(cron.status() === 200 && JSON.stringify(out).includes('"due"'), 'daglig körning hittar utskick: ' + JSON.stringify(cj).slice(0, 400));
-  if (day === new Date().getUTCDate()) assert(/"due":\s*[1-9]/.test(JSON.stringify(out)), 'utskicket är aktuellt i dag: ' + JSON.stringify(out));
+  if (day === sthlmDay) assert(/"due":\s*[1-9]/.test(JSON.stringify(out)), 'utskicket är aktuellt i dag: ' + JSON.stringify(out));
   log('schemalagd månadsrapport: mottagare kontrolleras, utskicket hittas av den dagliga körningen');
 
   // ================= Del 5: kvitton utan uppkoppling och jobbkö =================
