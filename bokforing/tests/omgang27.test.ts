@@ -43,3 +43,12 @@ describe('Personalfester', () => {
     expect(benefitWarning({ eventsThisYear: 0, perPerson: 10000, guideline: 20000 })).toHaveLength(0);
   });
 });
+
+import { room } from '@/lib/ef-pension';
+describe('Pensionssparande EF', () => {
+  it('utrymme och tak', () => {
+    expect(room({ income: 40000000, year: 2026, paid: 10000000 })).toEqual({ max: 14000000, left: 4000000, slp: 2426000, excess: 0 });
+    expect(room({ income: 1000000000, year: 2026, paid: 0 }).max).toBe(59200000);
+    expect(room({ income: -500000, year: 2026, paid: 0 }).max).toBe(0);
+  });
+});

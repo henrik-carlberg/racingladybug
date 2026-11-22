@@ -211,6 +211,39 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await owner.locator('.pf-count').innerText()) === '3', 'tre fester i år');
   log('personalfester: momsavdrag högst 300 kr per person, övriga kostnader 180 kr per person, måltiden ej avdragsgill, varning vid tredje festen');
 
+  // ================= Del 5: pensionssparande för enskild näringsidkare =================
+  const pnr = (nine) => { let s = 0; for (let i = 0; i < 9; i++) { const v = +nine[i] * (i % 2 ? 1 : 2); s += v > 9 ? v - 9 : v; } return nine + ((10 - (s % 10)) % 10); };
+  const nr = pnr(`7708${String(10 + (Date.now() % 18)).padStart(2, '0')}${String(Date.now() % 1000).padStart(3, '0')}`);
+  await owner.goto(BASE + '/');
+  await owner.fill('input[name=name]', 'Konsulten Enskild Firma');
+  await owner.selectOption('select[name=company_type]', 'EF');
+  await owner.fill('input[name=orgnr]', `19${nr.slice(0, 6)}-${nr.slice(6)}`);
+  await owner.fill('input[name=fy_start]', `${YEAR}-01-01`); await owner.fill('input[name=fy_end]', `${YEAR}-12-31`);
+  await owner.click('button:has-text("Skapa bolag")');
+  await owner.waitForURL(/kom-igang/);
+  const EP = owner.url().replace(/\/kom-igang.*/, '');
+  await voucher(EP, 'Konsultintäkter', [[1930, 500000], [3001, -400000], [2611, -100000]], `${YEAR}-03-01`);
+  const prem = async (amount) => {
+    await owner.goto(EP + `/pensionssparande?ar=${YEAR}`);
+    await owner.fill('form:has(button:has-text("Bokför premie")) input[name=amount]', amount); await owner.fill('input[name=insurer]', 'Pensionsbolaget');
+    await owner.fill('form:has(button:has-text("Bokför premie")) input[name=date]', day(2));
+    await owner.click('button:has-text("Bokför premie")');
+    await owner.locator('.flash').first().waitFor();
+    return nb(await owner.locator('.flash').first().innerText());
+  };
+  await owner.goto(EP + `/pensionssparande?ar=${YEAR}`);
+  assert(nb(await owner.locator('.ep-max').innerText()) === '140000,00', '35 % av inkomsten 400 000 kr');
+  assert((await prem('150000')).includes('räckertill140000kr'), 'över avdragsutrymmet nekas');
+  await prem('100000');
+  await owner.goto(EP + `/pensionssparande?ar=${YEAR}`);
+  assert(nb(await owner.locator('.ep-left').innerText()) === '40000,00' && nb(await owner.locator('.ep-slp').innerText()) === '24260,00', 'kvar och särskild löneskatt');
+  await owner.check('input[name=has_occupational]'); await owner.click('form:has(input[name=has_occupational]) button:has-text("Spara")');
+  await owner.locator('text=Uppgifterna är sparade').waitFor();
+  assert((await prem('10000')).includes('saknartjänstepension'), 'tjänstepension i anställning stänger avdraget');
+  await owner.goto(GC + '/pensionssparande');
+  assert(await owner.locator('.ep-not-ef').count() === 1, 'gäller bara enskild firma');
+  log('pensionssparande: avdragsutrymme 35 % (högst 10 prisbasbelopp), premie som privat uttag, kvar att sätta in, särskild löneskatt 24,26 %');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 27: alla steg gick igenom');

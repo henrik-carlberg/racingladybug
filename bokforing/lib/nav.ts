@@ -97,6 +97,7 @@ export function buildNav(o: {
       { path: '/nyckeltal', label: 'Nyckeltal', perm: 'ledger', hint: 'För vd, ekonomi och styrelse' },
       { path: '/personalfest', label: 'Personalfester', perm: 'ledger', hint: 'Intern representation, momsavdrag och förmånsgränser' },
       { path: '/sponsring', label: 'Sponsring och gåvor', perm: 'ledger', hint: 'Avdragsrätt för sponsring och gåvor till affärskontakter' },
+      { path: '/pensionssparande', label: 'Pensionssparande', perm: 'ledger', hint: 'Avdrag för eget pensionssparande (enskild firma)' },
       { path: '/skog', label: 'Skogsbruk', perm: 'ledger', hint: 'Skogskonto, skogsskadekonto och skogsavdrag (enskild firma)' },
       { path: '/intrastat', label: 'Intrastat', perm: 'ledger', hint: 'Varuhandel med EU-länder till SCB' },
       { path: '/vmb', label: 'Vinstmarginalbeskattning', perm: 'ledger', hint: 'Moms på marginalen för begagnade varor och konst' },
