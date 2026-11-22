@@ -28,7 +28,7 @@ export default async function Budget({ params, searchParams }: { params: Promise
         <h1>Budget {year}</h1>
         <form className="row" style={{ margin: 0 }}><label>År<input name="year" defaultValue={year} inputMode="numeric" style={{ width: '6rem' }} /></label><div style={{ flex: '0 0 auto', alignSelf: 'end' }}><button className="secondary">Visa</button></div></form>
       </div>
-      <p className="muted">Budget per konto och månad, i kronor. Intäkter och kostnader anges som positiva belopp. Utfallet jämförs till och med {upTo ? MONTHS[upTo - 1] : 'årets början'}.</p>
+      <p className="muted">Budget per konto och månad, i kronor. Intäkter och kostnader anges som positiva belopp. Utfallet jämförs till och med {upTo ? MONTHS[upTo - 1] : 'årets början'}. <a href={`/c/${company.id}/rapporter/budget/dimensioner`}>Budget per kostnadsställe och projekt</a></p>
       {!hasBudget && (
         <form action={copy.bind(null, company.id, year)} className="card row" style={{ alignItems: 'end' }}>
           <span style={{ flex: '1 1 260px' }}>Börja med förra årets utfall och justera sedan.</span>

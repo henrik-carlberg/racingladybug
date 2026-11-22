@@ -32,3 +32,12 @@ describe('Återkommande leverantörsfakturor', () => {
     expect(periodsBetween('2026-11', '2027-02')).toEqual(['2026-11', '2026-12', '2027-01', '2027-02']);
   });
 });
+
+import { followUp } from '@/lib/dim-budget';
+describe('Budget per dimension', () => {
+  it('avvikelse och prognos', () => {
+    const budget = Array(12).fill(1000000), actual = [...Array(10).fill(0), 15000000, 0];
+    expect(followUp({ kind: 'cost', budget, actual, month: 11 })).toMatchObject({ ytdB: 11000000, ytdA: 15000000, forecast: 16000000, yearB: 12000000, warn: true, overYear: true });
+    expect(followUp({ kind: 'revenue', budget, actual: Array(12).fill(1100000), month: 6 })).toMatchObject({ warn: false, overYear: false });
+  });
+});

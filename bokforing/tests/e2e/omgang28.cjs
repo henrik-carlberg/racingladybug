@@ -189,6 +189,32 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(await month(pm(-2)).evaluate((e) => e.className.includes('rs-received')), 'skapad från mallen');
   log('återkommande leverantörsfakturor: mall för hyra, saknad faktura och avvikande belopp flaggas, månadens faktura skapas från mallen');
 
+  // ================= Del 4: budget per kostnadsställe =================
+  const BD = await newCompany('Budgetbolaget AB', 559430000);
+  await owner.goto(BD + '/installningar/kostnadsstallen');
+  await owner.fill('input[name=code]', '10'); await owner.fill('input[name=name]', 'Butiken');
+  await owner.click('button:has-text("Lägg till")');
+  await owner.locator('text=Kostnadsstället är skapat').waitFor();
+  await owner.goto(BD + '/verifikationer/ny');
+  await owner.fill('input[name=date]', day(3));
+  await owner.fill('input[name=description]', 'Hyra och material butiken');
+  const vr = owner.locator('tbody tr');
+  await vr.nth(0).locator('td').nth(0).locator('input').fill('5010'); await vr.nth(0).locator('td').nth(2).locator('input').fill('150000');
+  await vr.nth(0).locator('select[aria-label=Kostnadsställe]').selectOption({ label: '10 Butiken' });
+  await vr.nth(1).locator('td').nth(0).locator('input').fill('1930'); await vr.nth(1).locator('td').nth(3).locator('input').fill('150000');
+  await owner.click('button:text-is("Bokför")');
+  await owner.waitForURL(/verifikationer\/\d+/);
+  await owner.goto(BD + `/rapporter/budget/dimensioner?ar=${YEAR}`);
+  await owner.fill('input[name=yearly]', '120000');
+  await owner.click('button:has-text("Spara budget")');
+  await owner.locator('text=Budgeten är sparad').waitFor();
+  const row = owner.locator('.db-row[data-name="10 Butiken"][data-kind="cost"]');
+  const ytdBudget = 10000 * MONTH;
+  assert(nb(await row.locator('td').nth(2).innerText()) === `${ytdBudget}`.replace(/\B(?=(\d{3})+(?!\d))/g, '') + ',00' && nb(await row.locator('td').nth(3).innerText()) === '150000,00', 'budget och utfall hittills');
+  assert(nb(await row.locator('.db-forecast').innerText()) === `${150000 + 10000 * (12 - MONTH)},00`, 'prognos: utfall plus resterande budget');
+  assert((await owner.locator('.db-warnings').innerText()).includes('10 Butiken'), 'varning för kostnadsstället');
+  log('budget per kostnadsställe: årsbudget fördelad per månad, utfall från verifikationer, avvikelse och helårsprognos med varning');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 28: alla steg gick igenom');
