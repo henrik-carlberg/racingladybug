@@ -25,6 +25,7 @@ export function buildNav(o: {
       { path: '/betalningsforelaggande', label: 'Betalningsföreläggande', perm: 'invoicing', hint: 'Obetalda fakturor till Kronofogden' },
       { path: '/kundutlagg', label: 'Utlägg för kunder', perm: 'invoicing', hint: 'Momsfria utlägg för kundens räkning' },
       { path: '/kassa', label: 'Kassa och e-handel', hint: 'Dagskassa och webbutik' },
+      { path: '/kundbonus', label: 'Kundbonus', perm: 'invoicing', hint: 'Bonus i efterhand med trappsteg på omsättningen' },
       { path: '/konsignation', label: 'Konsignationslager', perm: 'invoicing', hint: 'Varor hos återförsäljare tills de är sålda' },
       { path: '/presentkort', label: 'Presentkort', perm: 'ledger', hint: 'Enfunktions- och flerfunktionsvoucher' },
       { path: '/kassabok', label: 'Kassabok', perm: 'ledger', hint: 'Kontantkassan dag för dag och kassainventering' },
