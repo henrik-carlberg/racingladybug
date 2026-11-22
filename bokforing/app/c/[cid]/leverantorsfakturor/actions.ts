@@ -21,7 +21,7 @@ export async function registerSupplierInvoice(cid: number, fd: FormData) {
       due_date: str(fd, 'due_date'), payment_reference: str(fd, 'payment_reference'), description: str(fd, 'description'),
       total: amount(fd, 'total', 'Totalbelopp'), vat: amount(fd, 'vat', 'Moms') ?? 0, lines,
       currency: str(fd, 'currency'), total_currency: amount(fd, 'total_currency', 'Belopp i valutan') ?? undefined,
-      cost_center_id: str(fd, 'cost_center_id') || undefined, project_id: str(fd, 'project_id') || undefined,
+      cost_center_id: str(fd, 'cost_center_id') || undefined, project_id: str(fd, 'project_id') || undefined, rc_kind: str(fd, 'rc_kind'),
     }, await fileFrom(fd))).id;
   });
   done(`/c/${cid}/leverantorsfakturor/${id}`, 'Fakturan är registrerad och bokförd');

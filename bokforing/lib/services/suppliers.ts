@@ -8,6 +8,7 @@ import { createVoucher } from '@/lib/server/ledger';
 import { auditBy } from '@/lib/server/audit';
 import { emit } from '@/lib/server/events';
 import { supplierInvoiceLines, supplierPaymentLines, type CostLine } from '@/lib/supplier';
+import { COST_ACCOUNT, RC_VAT_IN, RC_VAT_OUT, isRcCost, rcCostLines, type PurchaseRc } from '@/lib/purchase-rc';
 import { replaceAccount } from '@/lib/ledger-lines';
 import { proportionalLines } from '@/lib/partial';
 import { ACC } from '@/lib/bas';
@@ -135,6 +136,18 @@ export async function registerSupplierInvoice(actor: Actor, input: Record<string
         costCenterId: dimId(r.cost_center_id) ?? cc, projectId: dimId(r.project_id) ?? pr,
       }));
   if (costs.length === 0) throw new ValidationError('Ange minst en konteringsrad');
+  // Omvänd skattskyldighet: leverantören tar inte ut moms; köparen bokför beräknad moms som både utgående (ruta 30) och ingående (ruta 48)
+  const rcKind = (['construction', 'goods'].includes(str(input, 'rc_kind')) ? str(input, 'rc_kind') : '') as '' | PurchaseRc;
+  let rcVat = 0;
+  if (rcKind) {
+    if (vat) throw new ValidationError('Vid omvänd skattskyldighet ska fakturan inte innehålla moms – ange 0 i moms');
+    const r = rcCostLines(costs, rcKind);
+    costs.splice(0, costs.length, ...r.lines);
+    rcVat = r.vat;
+    for (const [n, name] of [[COST_ACCOUNT[rcKind], rcKind === 'construction' ? 'Inköpta tjänster i Sverige, omvänd betalningsskyldighet, 25 %' : 'Inköpta varor i Sverige, omvänd betalningsskyldighet, 25 %'],
+      [RC_VAT_IN, 'Ingående moms, omvänd betalningsskyldighet i Sverige'], [RC_VAT_OUT, 'Utgående moms omvänd betalningsskyldighet, 25 %']] as const)
+      await sql`INSERT INTO accounts (company_id, number, name) VALUES (${actor.companyId}, ${n}, ${name}) ON CONFLICT DO NOTHING`;
+  } else if (vat && costs.some((c) => isRcCost(c.account))) throw new ValidationError('Kontot avser inköp med omvänd skattskyldighet – leverantören ska då inte ta ut moms. Välj omvänd skattskyldighet eller ett annat konto.');
   const invoiceNumber = str(input, 'invoice_number', { required: true, label: 'Leverantörens fakturanummer' });
   const currency = (str(input, 'currency') || 'SEK').toUpperCase();
   if (!(CURRENCIES as readonly string[]).includes(currency)) throw new ValidationError(`Valuta stöds inte: ${currency}`);
@@ -146,7 +159,7 @@ export async function registerSupplierInvoice(actor: Actor, input: Record<string
       const [{ id }] = await tx<{ id: number }[]>`INSERT INTO supplier_invoices ${tx({
         company_id: actor.companyId, supplier_id: supplierId, invoice_number: invoiceNumber, invoice_date: d,
         due_date: date(input, 'due_date', 'Förfallodatum', false) || d, payment_reference: str(input, 'payment_reference'),
-        description: str(input, 'description'), total, vat, status: 'booked', cost_lines: tx.json(costs as never), currency, total_currency: totalCurrency, registered_by: actor.userId,
+        description: str(input, 'description'), total, vat, status: 'booked', cost_lines: tx.json(costs as never), rc_kind: rcKind, rc_vat: rcVat, currency, total_currency: totalCurrency, registered_by: actor.userId,
       })} RETURNING id`;
       const [{ m }] = await tx<{ m: string }[]>`SELECT accounting_method AS m FROM companies WHERE id = ${actor.companyId}`;
       const v = m === 'cash' ? null : await createVoucher(tx, {
