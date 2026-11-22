@@ -144,6 +144,38 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(t.includes('Ingåendemomsattdraav2000'), 'ingående moms minskad med krediterna: ' + t.slice(0, 600));
   log('leverantörskrediter: kreditnota kvittas mot obetald faktura, högst fakturans belopp, kredit på betald faktura återbetalas, ingående moms minskar');
 
+  // ================= Del 2: individuell bedömning av osäkra kundfordringar =================
+  const BF = await newCompany('Fordringsägaren AB', 559460000);
+  await owner.goto(BF + '/kunder');
+  await owner.fill('input[name=name]', 'Osäkra kunden AB');
+  await owner.click('button:has-text("Spara kund")'); await owner.waitForURL(/ok=/);
+  await invoice(BF, 'Osäkra kunden AB', 10000, day(200));
+  await invoice(BF, 'Osäkra kunden AB', 8000, day(60));
+  await owner.goto(BF + '/bokslut');
+  await owner.locator(`tr:has-text("${YEAR}-01-01") a:has-text("Öppna")`).first().click();
+  await owner.waitForURL(/bokslut\/\d+/);
+  const kf = owner.url().split('?')[0] + '/kundforluster';
+  await owner.goto(kf);
+  assert(nb(await owner.locator('.bd-target').innerText()) === '10000,00', 'schablon: förfallen mer än 90 dagar till 100 %');
+  const rows = owner.locator('.bd-row');
+  assert(await rows.count() === 2, 'båda förfallna fakturorna visas för bedömning');
+  const assessRow = async (i, pct, note) => {
+    await owner.goto(kf);
+    const r = owner.locator('.bd-row').nth(i);
+    await r.locator('input[name=pct]').fill(pct); await r.locator('input[name=note]').fill(note);
+    await r.locator('button:has-text("Spara")').click();
+    await owner.locator('.flash').first().waitFor();
+    return nb(await owner.locator('.flash').first().innerText());
+  };
+  assert((await assessRow(0, '40', '')).includes('Motiverabedömningen'), 'motivering krävs');
+  await assessRow(0, '40', 'Avbetalningsplan, kunden har betalat delar');
+  await assessRow(1, '50', 'Kunden har aviserat likviditetsproblem');
+  await owner.goto(kf);
+  assert(nb(await owner.locator('.bd-target').innerText()) === '8000,00', 'reserv efter individuell bedömning (40 % av 10 000 + 50 % av 8 000)');
+  await owner.click('button:has-text("Bokför reserven")');
+  await owner.locator('text=Reserven för befarade kundförluster är ökad med 8 000,00 kr').waitFor();
+  log('befarade kundförluster: individuell bedömning per faktura med motivering ersätter schablonen, reserven 8 000 kr bokförs exkl. moms');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 29: alla steg gick igenom');

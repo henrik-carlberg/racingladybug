@@ -32,13 +32,19 @@ export function recoveryLines(invoiceLines: { account: number; amount: number }[
   return [{ account: bank, amount }, { account: CONFIRMED_LOSS, amount: -s.net }, ...s.vat.map((v) => ({ account: v.account, amount: -v.amount }))].filter((l) => l.amount);
 }
 
-export interface ReserveCandidate { id: number; number: number | null; customer: string; due: string; remaining: number; net: number; collection: boolean }
+export interface ReserveCandidate { id: number; number: number | null; customer: string; due: string; remaining: number; net: number; collection: boolean; assessed?: { pct: number; note: string } | null }
 /** Befarade kundförluster: förfallna mer än 90 dagar eller hos inkasso. Reserven räknas exklusive moms (momsen sätts ned först när förlusten är konstaterad). */
 export function reserveProposal(candidates: ReserveCandidate[], end: string, currentReserve: number) {
   const limit = new Date(Date.parse(end) - OVERDUE_DAYS * 864e5).toISOString().slice(0, 10);
-  const doubtful = candidates.filter((c) => c.collection || c.due < limit);
-  const target = doubtful.reduce((s, c) => s + c.net, 0);
+  // Individuell bedömning går före schablonen (förfallen mer än 90 dagar eller hos inkasso = 100 %)
+  const rows = candidates.map((c) => {
+    const pct = c.assessed ? c.assessed.pct : c.collection || c.due < limit ? 100 : 0;
+    return { ...c, pct, reserve: Math.round((c.net * pct) / 100) };
+  });
+  const doubtful = rows.filter((r) => r.pct > 0);
+  const others = rows.filter((r) => r.pct === 0 && r.due < end);
+  const target = doubtful.reduce((s, c) => s + c.reserve, 0);
   const change = target - currentReserve;
   const lines: SignedLine[] = change ? [{ account: DOUBTFUL_LOSS, amount: change }, { account: DOUBTFUL_RESERVE, amount: -change }] : [];
-  return { doubtful, target, current: currentReserve, change, lines, limit };
+  return { doubtful, others, target, current: currentReserve, change, lines, limit };
 }
