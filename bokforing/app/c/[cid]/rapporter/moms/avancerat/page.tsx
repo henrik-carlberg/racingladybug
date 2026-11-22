@@ -3,7 +3,8 @@ import { requireCompany } from '@/lib/server/auth';
 import { Flash, type SP } from '@/components/ui';
 import { kr, today } from '@/lib/format';
 import { investments, proportionPreview, runs } from '@/lib/services/vat-advanced';
-import { adjust, investment, proportion, settings } from './actions';
+import { adjust, dispose, investment, proportion, settings } from './actions';
+import { KIND_LABEL } from '@/lib/vat-advanced';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,10 +44,10 @@ export default async function VatAdvanced({ params, searchParams }: { params: Pr
         <tbody>{rs.map((r) => <tr key={r.period_from}><td>{r.period_from} – {r.period_to}</td><td className="num">{r.pct} %</td><td className="num">{kr(r.common_vat)}</td><td className="num">{kr(r.non_deductible)}</td></tr>)}</tbody></table>}
 
       <h2 id="jamkning">Jämkning av investeringsvaror</h2>
-      <p className="small muted">Ingående moms på ny-, till- eller ombyggnad av fastighet (minst 100 000 kr) jämkas under tio år och på maskiner och inventarier (minst 50 000 kr) under fem år, om andelen momspliktig användning ändras med minst tio procentenheter.</p>
+      <p className="small muted">Ingående moms på fastighetsinvesteringar (minst 100 000 kr) jämkas under tio år vid förvärv och tjugo år vid ny-, till- eller ombyggnad, och på maskiner och inventarier (minst 50 000 kr exkl. moms) under fem år, om andelen momspliktig användning ändras med minst tio procentenheter. Säljs eller tas investeringen ur verksamheten under korrigeringstiden slutjämkas alla återstående år på en gång.</p>
       <form action={investment.bind(null, c.id)} className="card row">
         <label style={{ flex: '2 1 200px' }}>Investering<input name="description" required placeholder="T.ex. ombyggnad av lokalen" /></label>
-        <label>Typ<select name="kind"><option value="fastighet">Fastighet (10 år)</option><option value="inventarie">Maskin/inventarie (5 år)</option></select></label>
+        <label>Typ<select name="kind">{Object.entries(KIND_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
         <label>Färdigställd<input type="date" name="completed_on" required /></label>
         <label>Ingående moms (kr)<input name="vat_amount" inputMode="decimal" required style={{ width: 120 }} /></label>
         <label>Avdragsandel då %<input name="orig_pct" defaultValue="100" inputMode="decimal" style={{ width: 80 }} /></label>
@@ -54,10 +55,13 @@ export default async function VatAdvanced({ params, searchParams }: { params: Pr
       </form>
       {inv.map((i) => (
         <div key={i.id} className="card investment">
-          <b>{i.description}</b> <span className="small muted">{i.kind === 'fastighet' ? 'Fastighet' : 'Inventarie'} · färdigställd {i.completed_on} · moms {kr(i.vat_amount)} kr · avdrag {i.orig_pct} % · korrigeringstid t.o.m. {i.lastYear}</span>
+          <b>{i.description}</b> <span className="small muted">{KIND_LABEL[i.kind]} · färdigställd {i.completed_on} · moms {kr(i.vat_amount)} kr · avdrag {i.orig_pct} % · korrigeringstid t.o.m. {i.lastYear}</span>
           {i.adjustments.length > 0 && <ul className="small">{i.adjustments.map((a) => <li key={a.year} className="adj-row">{a.year}: användning {a.new_pct} % → {a.amount > 0 ? 'ytterligare avdrag' : 'återbetalning'} {kr(Math.abs(a.amount))} kr</li>)}</ul>}
+          {i.disposed_year ? <p className="small muted inv-disposed">Avyttrad {i.disposed_year} ({i.disposal === 'taxable' ? 'momspliktigt' : 'momsfritt'}) och slutjämkad.</p> : <>
           <form action={adjust.bind(null, c.id, i.id)} className="row"><label>År<input name="year" defaultValue={year} inputMode="numeric" style={{ width: 80 }} /></label>
             <label>Momspliktig användning i år %<input name="new_pct" inputMode="decimal" style={{ width: 90 }} required /></label><button className="secondary small">Jämka</button></form>
+          <form action={dispose.bind(null, c.id, i.id)} className="row inv-dispose"><label>Avyttringsår<input name="year" defaultValue={year} inputMode="numeric" style={{ width: 80 }} /></label>
+            <label>Avyttring<select name="disposal"><option value="taxable">Försäljning med moms</option><option value="exempt">Momsfri försäljning eller uttag</option></select></label><button className="secondary small">Slutjämka</button></form></>}
         </div>))}
     </div>
   );

@@ -7,7 +7,7 @@ import { fromSigned } from '@/lib/ledger-lines';
 import { parseAmount } from '@/lib/money';
 import { today } from '@/lib/format';
 import { checkVat } from '@/lib/server/vies';
-import { adjustment, adjustmentLines, CORRECTION_YEARS, deductionShare, parseVatNumber, proportionLines, type InvestmentKind, type ProportionVoucher } from '@/lib/vat-advanced';
+import { adjustment, adjustmentLines, CORRECTION_YEARS, disposalAdjustment, MIN_VAT, deductionShare, parseVatNumber, proportionLines, type InvestmentKind, type ProportionVoucher } from '@/lib/vat-advanced';
 import type { Actor } from './actor';
 import { date, int, str } from './input';
 
@@ -88,9 +88,11 @@ export async function runs(companyId: number) {
 
 // ---------- Jämkning ----------
 export async function addInvestment(actor: Actor, input: Record<string, unknown>) {
-  const kind = str(input, 'kind') === 'inventarie' ? 'inventarie' : 'fastighet';
+  const k = str(input, 'kind');
+  const kind: InvestmentKind = k === 'inventarie' ? 'inventarie' : k === 'nybyggnad' ? 'nybyggnad' : 'fastighet';
   const vat = parseAmount(String(input.vat_amount ?? ''));
   if (vat == null || vat <= 0) throw new ValidationError('Ange den ingående momsen i kronor');
+  if (vat < MIN_VAT[kind]) throw new ValidationError(kind === 'inventarie' ? 'Jämkning gäller inventarier för minst 50 000 kr exkl. moms (ingående moms minst 12 500 kr)' : 'Jämkning gäller fastighetsinvesteringar med ingående moms på minst 100 000 kr');
   const [r] = await sql<{ id: number }[]>`INSERT INTO vat_investments ${sql({ company_id: actor.companyId, description: str(input, 'description', { required: true, label: 'Beskrivning', max: 300 }),
     kind, completed_on: date(input, 'completed_on', 'Färdigställd'), vat_amount: vat, orig_pct: pctOf(input.orig_pct, 'avdragsandel vid investeringen') })} RETURNING id`;
   await auditBy(sql, actor, 'create', 'vat_investment', r.id);
@@ -102,9 +104,10 @@ export async function adjust(actor: Actor, id: number, input: Record<string, unk
   const year = int(input, 'year', 'År');
   const newPct = pctOf(input.new_pct, 'ny avdragsandel');
   return sql.begin(async (tx) => {
-    const [i] = await tx<{ description: string; kind: InvestmentKind; completed: string; vat: number; orig: number }[]>`SELECT description, kind, to_char(completed_on,'YYYY-MM-DD') AS completed,
-      vat_amount::float8 AS vat, orig_pct::float8 AS orig FROM vat_investments WHERE id = ${id} AND company_id = ${actor.companyId} FOR UPDATE`;
+    const [i] = await tx<{ description: string; kind: InvestmentKind; completed: string; vat: number; orig: number; disposed_year: number | null }[]>`SELECT description, kind, to_char(completed_on,'YYYY-MM-DD') AS completed,
+      vat_amount::float8 AS vat, orig_pct::float8 AS orig, disposed_year FROM vat_investments WHERE id = ${id} AND company_id = ${actor.companyId} FOR UPDATE`;
     if (!i) throw new NotFoundError('Investeringen');
+    if (i.disposed_year) throw new ConflictError(`Investeringen är avyttrad ${i.disposed_year} och slutjämkad`);
     const [dup] = await tx`SELECT 1 FROM vat_adjustments a WHERE a.investment_id = ${id} AND a.year = ${year}
       AND (a.voucher_id IS NULL OR NOT EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = a.voucher_id))`;
     if (dup) throw new ConflictError(`Jämkningen för ${year} är redan gjord`);
@@ -121,9 +124,39 @@ export async function adjust(actor: Actor, id: number, input: Record<string, unk
   });
 }
 
+/** Slutjämkning när investeringsvaran säljs eller tas ur verksamheten under korrigeringstiden */
+export async function dispose(actor: Actor, id: number, input: Record<string, unknown>) {
+  const year = int(input, 'year', 'År');
+  const taxable = str(input, 'disposal') === 'taxable';
+  return sql.begin(async (tx) => {
+    const [i] = await tx<{ description: string; kind: InvestmentKind; completed: string; vat: number; orig: number; disposed_year: number | null }[]>`SELECT description, kind, to_char(completed_on,'YYYY-MM-DD') AS completed,
+      vat_amount::float8 AS vat, orig_pct::float8 AS orig, disposed_year FROM vat_investments WHERE id = ${id} AND company_id = ${actor.companyId} FOR UPDATE`;
+    if (!i) throw new NotFoundError('Investeringen');
+    if (i.disposed_year) throw new ConflictError('Investeringen är redan avyttrad');
+    const [later] = await tx`SELECT 1 FROM vat_adjustments a WHERE a.investment_id = ${id} AND a.year >= ${year}
+      AND (a.voucher_id IS NULL OR NOT EXISTS (SELECT 1 FROM vouchers r WHERE r.corrects_id = a.voucher_id))`;
+    if (later) throw new ConflictError(`Det finns redan en jämkning för ${year} eller senare`);
+    const a = disposalAdjustment({ vat: i.vat, kind: i.kind, completedYear: Number(i.completed.slice(0, 4)), origPct: i.orig }, year, taxable);
+    if (!a.remaining) throw new ValidationError('Korrigeringstiden är slut – ingen jämkning vid avyttringen');
+    let voucherId: number | null = null;
+    if (a.amount) {
+      const fy = await fiscalYearFor(tx, actor.companyId, `${year}-12-31`) ?? await fiscalYearFor(tx, actor.companyId, `${year}-06-30`);
+      if (!fy) throw new ValidationError(`Det finns inget räkenskapsår för ${year}`);
+      await tx`INSERT INTO accounts (company_id, number, name) VALUES (${actor.companyId}, 3999, 'Övriga rörelseintäkter'), (${actor.companyId}, 7999, 'Övriga rörelsekostnader') ON CONFLICT DO NOTHING`;
+      voucherId = (await createVoucher(tx, { actor, date: fy.end_date, description: `Jämkning av ingående moms vid ${taxable ? 'momspliktig' : 'momsfri'} avyttring ${year}: ${i.description} (${a.remaining} år)`,
+        lines: fromSigned(adjustmentLines(a.amount)), sourceType: 'vat_adjustment', sourceId: id })).id;
+    }
+    await tx`DELETE FROM vat_adjustments WHERE investment_id = ${id} AND year = ${year}`;
+    await tx`INSERT INTO vat_adjustments ${tx({ investment_id: id, year, new_pct: taxable ? 100 : 0, amount: a.amount, voucher_id: voucherId })}`;
+    await tx`UPDATE vat_investments SET disposed_year = ${year}, disposal = ${taxable ? 'taxable' : 'exempt'} WHERE id = ${id}`;
+    await auditBy(tx, actor, 'vat_adjustment_disposal', 'vat_investment', id, { year, amount: a.amount });
+    return a;
+  });
+}
+
 export async function investments(companyId: number) {
-  const rows = await sql<{ id: number; description: string; kind: InvestmentKind; completed_on: string; vat_amount: number; orig_pct: number }[]>`
-    SELECT id, description, kind, to_char(completed_on,'YYYY-MM-DD') AS completed_on, vat_amount::float8 AS vat_amount, orig_pct::float8 AS orig_pct FROM vat_investments WHERE company_id = ${companyId} ORDER BY completed_on DESC`;
+  const rows = await sql<{ id: number; description: string; kind: InvestmentKind; completed_on: string; vat_amount: number; orig_pct: number; disposed_year: number | null; disposal: string | null }[]>`
+    SELECT id, description, kind, to_char(completed_on,'YYYY-MM-DD') AS completed_on, vat_amount::float8 AS vat_amount, orig_pct::float8 AS orig_pct, disposed_year, disposal FROM vat_investments WHERE company_id = ${companyId} ORDER BY completed_on DESC`;
   const adj = rows.length ? await sql<{ investment_id: number; year: number; new_pct: number; amount: number }[]>`SELECT investment_id, year, new_pct::float8 AS new_pct, amount::float8 AS amount FROM vat_adjustments
     WHERE investment_id IN ${sql(rows.map((r) => r.id))} ORDER BY year` : [];
   return rows.map((r) => ({ ...r, years: CORRECTION_YEARS[r.kind], lastYear: Number(r.completed_on.slice(0, 4)) + CORRECTION_YEARS[r.kind] - 1, adjustments: adj.filter((a) => a.investment_id === r.id) }));

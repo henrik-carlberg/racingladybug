@@ -35,8 +35,23 @@ export function proportionLines(vouchers: ProportionVoucher[], commonAccounts: n
   return { lines, commonVat: Math.round(commonVat), nonDeductible };
 }
 
-export type InvestmentKind = 'fastighet' | 'inventarie';
-export const CORRECTION_YEARS: Record<InvestmentKind, number> = { fastighet: 10, inventarie: 5 };
+export type InvestmentKind = 'fastighet' | 'nybyggnad' | 'inventarie';
+/** Korrigeringstid: förvärv av fastighet 10 år, ny-, till- eller ombyggnad 20 år, maskiner och inventarier 5 år */
+export const CORRECTION_YEARS: Record<InvestmentKind, number> = { fastighet: 10, nybyggnad: 20, inventarie: 5 };
+export const KIND_LABEL: Record<InvestmentKind, string> = { fastighet: 'Fastighet, förvärv (10 år)', nybyggnad: 'Ny-, till- eller ombyggnad (20 år)', inventarie: 'Maskin/inventarie (5 år)' };
+/** Gränser för investeringsvaror: fastighetsinvestering med ingående moms minst 100 000 kr; inventarier med ingående moms motsvarande minst 50 000 kr exkl. moms (25 %) */
+export const MIN_VAT: Record<InvestmentKind, number> = { fastighet: 10000000, nybyggnad: 10000000, inventarie: 1250000 };
+
+/**
+ * Avyttring under korrigeringstiden: jämkning på en gång för återstående år från och med avyttringsåret.
+ * Momspliktig försäljning (eller frivillig skattskyldighet) räknas som 100 % användning, momsfri försäljning eller uttag som 0 %.
+ */
+export function disposalAdjustment(o: { vat: number; kind: InvestmentKind; completedYear: number; origPct: number }, year: number, taxable: boolean) {
+  const years = CORRECTION_YEARS[o.kind];
+  const remaining = o.completedYear + years - year;
+  if (year < o.completedYear || remaining <= 0) return { amount: 0, remaining: 0 };
+  return { amount: Math.round(((o.vat / years) * remaining * ((taxable ? 100 : 0) - o.origPct)) / 100), remaining };
+}
 /**
  * Jämkning (ML 2023:200 kap. 12): ändras användningen för momspliktig verksamhet under korrigeringstiden ska avdraget jämkas
  * med en tiondel (fastighet) respektive en femtedel (inventarie) av momsen per år, i proportion till ändringen.
