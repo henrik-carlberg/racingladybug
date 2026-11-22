@@ -210,14 +210,19 @@ async function login(browser, email, pw) {
   const annaRow = page.locator('tr:has-text("Anna Andersson")').first();
   await annaRow.locator('summary:has-text("Rätta")').click();
   const cin = await annaRow.locator('input[name=check_in]').inputValue();
-  const corrected = cin.slice(0, 11) + '07:55';
+  // Rättad instämpling fem minuter tidigare (fungerar oavsett när testet körs)
+  const pad = (n) => String(n).padStart(2, '0');
+  const [ch, cm] = cin.slice(11, 16).split(':').map(Number);
+  const early = Math.max(0, ch * 60 + cm - 5);
+  const correctedTime = `${pad(Math.floor(early / 60))}:${pad(early % 60)}`;
+  const corrected = cin.slice(0, 11) + correctedTime;
   await annaRow.locator('input[name=check_in]').fill(corrected);
   await annaRow.locator('input[name=reason]').fill('Stämplade in efter ankomst');
   await annaRow.locator('button:has-text("Spara rättelse")').click();
   await waitMsg(page, 'Rättelsen är sparad');
   await page.goto(B + '/personalliggare/kontroll');
   t = await text(page);
-  assert(t.includes('Testbolaget AB') && t.includes('556026-9986') && t.includes('Salongen') && t.includes('19811218-9876') && t.includes('07:55') && t.includes('Stämplade in efter ankomst'), 'kontrollvy: ' + t.slice(0, 2000));
+  assert(t.includes('Testbolaget AB') && t.includes('556026-9986') && t.includes('Salongen') && t.includes('19811218-9876') && t.includes(correctedTime) && t.includes('Stämplade in efter ankomst'), 'kontrollvy: ' + t.slice(0, 2000));
   log('rättelse med orsak och ursprungligt värde; kontrollvy med bolag, org.nr, personnummer och rättelser');
 
   // ================= Kundportal =================
