@@ -21,3 +21,14 @@ describe('Utlägg för kund', () => {
     expect(invoiceLine({ description: 'Avgift', amount: 220000 })).toMatchObject({ vat_rate: 0, account: 1680, unit_price: 220000 });
   });
 });
+
+import { expireLines, redeemLines, saleLines } from '@/lib/gift-cards';
+describe('Presentkort', () => {
+  it('enfunktion och flerfunktion', () => {
+    expect(saleLines({ kind: 'single', amount: 125000, rate: 25, payAccount: 1580 })).toEqual([{ account: 1580, amount: 125000 }, { account: 2421, amount: -100000 }, { account: 2611, amount: -25000 }]);
+    expect(saleLines({ kind: 'multi', amount: 100000, rate: 25, payAccount: 1930 })).toEqual([{ account: 1930, amount: 100000 }, { account: 2421, amount: -100000 }]);
+    expect(redeemLines({ kind: 'single', amount: 50000, rate: 25, face: 125000 })).toEqual([{ account: 2421, amount: 40000 }, { account: 3001, amount: -40000 }]);
+    expect(redeemLines({ kind: 'multi', amount: 50000, rate: 25, face: 100000 })).toEqual([{ account: 2421, amount: 50000 }, { account: 3001, amount: -40000 }, { account: 2611, amount: -10000 }]);
+    expect(expireLines({ kind: 'multi', balance: 100000, rate: 25 })).toEqual([{ account: 2421, amount: 100000 }, { account: 3990, amount: -100000 }]);
+  });
+});

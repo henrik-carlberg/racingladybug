@@ -158,6 +158,40 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await owner.locator('.ku-open').innerText()) === '0,00' && !(await owner.locator('.ku-invoice').count()), 'alla utlägg fakturerade');
   log('utlägg för kund: kräver kvitto i kundens namn, bokförs mot 1680 och faktureras utan moms utanför momsdeklarationen');
 
+  // ================= Del 3: presentkort =================
+  const GC = await newCompany('Presentbutiken AB', 559380000);
+  const sellGc = async (code, kind, amount, d, valid) => {
+    await owner.goto(GC + '/presentkort');
+    const f = owner.locator('.gc-sell');
+    await f.locator('input[name=code]').fill(code); await f.locator('select[name=kind]').selectOption(kind); await f.locator('input[name=amount]').fill(amount);
+    await f.locator('input[name=date]').fill(d); await f.locator('input[name=valid_to]').fill(valid);
+    await f.locator('button:has-text("Bokför försäljning")').click();
+    await owner.locator('.flash').first().waitFor();
+  };
+  const redeemGc = async (code, amount, d) => {
+    await owner.goto(GC + '/presentkort');
+    const f = owner.locator('.gc-redeem');
+    await f.locator('input[name=code]').fill(code); await f.locator('input[name=amount]').fill(amount); await f.locator('input[name=date]').fill(d);
+    await f.locator('button:has-text("Bokför inlösen")').click();
+    await owner.locator('.flash').first().waitFor();
+    return nb(await owner.locator('.flash').first().innerText());
+  };
+  await sellGc('PK-1', 'single', '1250', day(10), day(-300));
+  await sellGc('PK-2', 'multi', '1000', day(40), day(5));
+  assert((await redeemGc('PK-1', '2000', day(2))).includes('Kvarpåkortet:1250kr'), 'mer än kortets värde nekas');
+  assert((await redeemGc('PK-1', '500', day(2))).includes('kvarpåkortet750,00kr'), 'delvis inlösen');
+  assert((await redeemGc('PK-2', '100', day(2))).includes('gickut'), 'utgånget kort kan inte lösas in');
+  await owner.goto(GC + '/presentkort');
+  assert(nb(await owner.locator('.gc-outstanding').innerText()) === '1750,00', 'utestående före intäktsföring');
+  await owner.click('button:has-text("Intäktsför utgångna presentkort")');
+  await owner.locator('text=1 utgångna presentkort (1 000,00 kr) är intäktsförda').waitFor();
+  await owner.goto(GC + '/presentkort');
+  assert(nb(await owner.locator('.gc-outstanding').innerText()) === '750,00', 'utestående efter intäktsföring');
+  await owner.goto(GC + `/rapporter/moms?from=${day(40).slice(0, 7)}-01&to=${day(0)}`);
+  t = nb(await text(owner));
+  assert(t.includes('Utgåendemoms25%250'), 'moms på enfunktionsvouchern vid försäljningen, inte på det utgångna flerfunktionskortet: ' + t.slice(0, 700));
+  log('presentkort: enfunktionsvoucher med moms vid försäljning, delvis inlösen, flerfunktionsvoucher som går ut intäktsförs utan moms');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 27: alla steg gick igenom');
