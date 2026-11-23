@@ -89,15 +89,16 @@ export async function reserve(companyId: number, fyId: number) {
   const f = await fy(companyId, fyId);
   const collections = await sql<{ to_regclass: string | null }[]>`SELECT to_regclass('rk_collections')::text`;
   const hasColl = !!collections[0]?.to_regclass;
-  const rows = await sql<{ id: number; number: number | null; customer: string; due: string; remaining: number; voucher_id: number; collection: boolean }[]>`
+  const rows = await sql<{ id: number; number: number | null; customer: string; due: string; remaining: number; voucher_id: number; collection: boolean; disputed: boolean }[]>`
     SELECT i.id, i.invoice_number AS number, c.name AS customer, to_char(i.due_date,'YYYY-MM-DD') AS due, (i.total - i.paid_amount)::float8 AS remaining, i.voucher_id,
-      ${hasColl ? sql`EXISTS (SELECT 1 FROM rk_collections r WHERE r.invoice_id = i.id)` : sql`false`} AS collection
+      ${hasColl ? sql`EXISTS (SELECT 1 FROM rk_collections r WHERE r.invoice_id = i.id)` : sql`false`} AS collection,
+      EXISTS (SELECT 1 FROM invoice_disputes d WHERE d.invoice_id = i.id AND d.status = 'open') AS disputed
     FROM invoices i JOIN customers c ON c.id = i.customer_id
     WHERE i.company_id = ${companyId} AND i.status = 'booked' AND i.voucher_id IS NOT NULL AND i.invoice_date <= ${f.end_date} AND i.total > i.paid_amount
     ORDER BY i.due_date`;
   const assessed = new Map((await sql<{ invoice_id: number; pct: number; note: string }[]>`SELECT invoice_id, pct::float8 AS pct, note FROM bad_debt_assessments WHERE company_id = ${companyId}`).map((a) => [a.invoice_id, a]));
   const cands: ReserveCandidate[] = [];
-  for (const r of rows) cands.push({ id: r.id, number: r.number, customer: r.customer, due: r.due, remaining: r.remaining, collection: r.collection, net: vatShare(await invoiceLines(sql, r.voucher_id), r.remaining).net,
+  for (const r of rows) cands.push({ id: r.id, number: r.number, customer: r.customer, due: r.due, remaining: r.remaining, collection: r.collection, disputed: r.disputed, net: vatShare(await invoiceLines(sql, r.voucher_id), r.remaining).net,
     assessed: assessed.get(r.id) ?? null });
   const [b] = await sql<{ b: number }[]>`SELECT COALESCE(-SUM(l.debit - l.credit), 0)::float8 AS b FROM voucher_lines l JOIN vouchers v ON v.id = l.voucher_id
     WHERE v.company_id = ${companyId} AND v.date <= ${f.end_date} AND l.account_number = ${DOUBTFUL_RESERVE}`;

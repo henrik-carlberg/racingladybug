@@ -4,6 +4,7 @@ import { redirect, notFound } from 'next/navigation';
 import { createHash, randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { sql } from '@/lib/db';
+import { today } from '@/lib/format';
 import { access, billingEnforced, type Access } from '@/lib/billing';
 import { canView, hasPermission, PERMISSIONS, type Permission } from '@/lib/permissions';
 import { cache } from 'react';
@@ -150,7 +151,7 @@ export async function companyAccess(companyId: number): Promise<Access> {
       to_char(c.created_at + interval '30 days','YYYY-MM-DD') AS created
     FROM companies c LEFT JOIN subscriptions s ON s.company_id = c.id WHERE c.id = ${companyId}`;
   if (!r) return { state: 'locked' };
-  const a = access({ exempt: r.exempt, status: r.status, trialEndsAt: r.trial ?? r.created, periodEnd: r.period, today: new Date().toISOString().slice(0, 10) });
+  const a = access({ exempt: r.exempt, status: r.status, trialEndsAt: r.trial ?? r.created, periodEnd: r.period, today: today() });
   return billingEnforced() || a.state !== 'locked' ? a : { state: 'active' };
 }
 

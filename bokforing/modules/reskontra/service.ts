@@ -16,6 +16,7 @@ import { COLLECTION_STATUS, isCollectionStatus, mobileE164, smsReminder } from '
 import { sendSms, smsConfigured } from '@/lib/server/sms';
 import { collectionConfigured, createCase, getCase, recallCase } from '@/lib/server/collection';
 import { registerPaymentTx } from '@/lib/services/invoices';
+import { assertNotDisputed } from '@/lib/services/disputes';
 
 const appOrigin = () => (process.env.APP_ORIGIN || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : 'http://localhost:3000')).replace(/\/$/, '');
 async function ensureToken(invoiceId: number) {
@@ -61,7 +62,7 @@ export const interestRate = (s: Settings) => (s.reference_rate == null ? 0 : Mat
 
 export interface OpenInvoice {
   id: number; number: number; customer_id: number; customer: string; email: string; phone: string; invoice_date: string; due_date: string; total: number; days_overdue: number;
-  levels: number[]; last_reminder: string | null; in_collection: boolean; interest: number; action: ReturnType<typeof nextAction>;
+  levels: number[]; last_reminder: string | null; in_collection: boolean; disputed: boolean; interest: number; action: ReturnType<typeof nextAction>;
 }
 
 export async function openInvoices(companyId: number, f: { customer_id?: number } = {}, at = today()): Promise<OpenInvoice[]> {
@@ -73,12 +74,15 @@ export async function openInvoices(companyId: number, f: { customer_id?: number 
         WHERE x.cum > i.paid_amount), to_char(i.due_date,'YYYY-MM-DD')) AS due_date, (i.total - i.paid_amount)::bigint AS total,
       COALESCE((SELECT array_agg(level ORDER BY level) FROM rk_reminders r WHERE r.invoice_id = i.id), '{}') AS levels,
       (SELECT to_char(max(date),'YYYY-MM-DD') FROM rk_reminders r WHERE r.invoice_id = i.id) AS last_reminder,
-      EXISTS (SELECT 1 FROM rk_collections k WHERE k.invoice_id = i.id) AS in_collection
+      EXISTS (SELECT 1 FROM rk_collections k WHERE k.invoice_id = i.id) AS in_collection,
+      EXISTS (SELECT 1 FROM invoice_disputes d WHERE d.invoice_id = i.id AND d.status = 'open') AS disputed
     FROM invoices i JOIN customers c ON c.id = i.customer_id
     WHERE i.company_id = ${companyId} AND i.status = 'booked' AND i.total > 0 ${f.customer_id ? sql`AND i.customer_id = ${f.customer_id}` : sql``}
     ORDER BY i.due_date, i.invoice_number`;
   return rows.map((r) => {
     const total = Number(r.total), days = daysBetween(r.due_date, at);
+    // Tvistig faktura: påminnelser, ränta och inkasso pausas
+    if (r.disputed) return { ...r, total, days_overdue: Math.max(0, days), interest: 0, action: null };
     return { ...r, total, days_overdue: Math.max(0, days), interest: lateInterest(total, r.due_date, at, interestRate(s)), action: nextAction(Math.max(0, days), r.levels, r.in_collection, s) };
   });
 }
@@ -136,6 +140,7 @@ export async function createReminder(actor: Actor, invoiceId: number, opts: { em
   const [inv] = (await openInvoices(actor.companyId)).filter((i) => i.id === invoiceId);
   if (!inv) throw new ValidationError('Fakturan är inte obetald');
   if (inv.days_overdue <= 0) throw new ValidationError('Fakturan har inte förfallit');
+  if (inv.disputed) throw new ConflictError('Fakturan är tvistig – påminnelser är pausade');
   if (inv.in_collection) throw new ConflictError('Fakturan är lämnad till inkasso');
   const level = inv.levels.includes(1) ? 2 : 1;
   if (inv.levels.includes(2)) throw new ConflictError('Två påminnelser är redan skickade – överväg inkasso');
@@ -207,6 +212,7 @@ export async function chargeFees(actor: Actor, customerId: number) {
 export async function markCollection(actor: Actor, invoiceId: number, note: string) {
   const [i] = await sql`SELECT 1 FROM invoices WHERE id = ${invoiceId} AND company_id = ${actor.companyId} AND status = 'booked'`;
   if (!i) throw new ValidationError('Fakturan är inte obetald');
+  await assertNotDisputed(sql, invoiceId);
   await sql`INSERT INTO rk_collections (invoice_id, company_id, date, note, created_by) VALUES (${invoiceId}, ${actor.companyId}, ${today()}, ${note}, ${actor.userId})
     ON CONFLICT (invoice_id) DO UPDATE SET note = EXCLUDED.note`;
   await auditBy(sql, actor, 'collection', 'invoice', invoiceId);
@@ -218,6 +224,7 @@ export async function handOver(actor: Actor, invoiceId: number) {
   const [inv] = (await openInvoices(actor.companyId)).filter((i) => i.id === invoiceId);
   if (!inv) throw new ValidationError('Fakturan är inte obetald');
   if (inv.days_overdue <= 0) throw new ValidationError('Fakturan har inte förfallit');
+  if (inv.disputed) throw new ConflictError('Fakturan är tvistig – inkasso är pausat');
   const [cur] = await sql<{ case_id: string | null }[]>`SELECT case_id FROM rk_collections WHERE invoice_id = ${invoiceId}`;
   if (cur?.case_id) throw new ConflictError('Fakturan är redan lämnad till inkassobolaget');
   const [d] = await sql<{ name: string; orgnr: string; email: string; phone: string; address: string; postal_code: string; city: string; country: string; number: number; date: string; due: string; total: number; ocr: string | null; currency: string; co: string; co_orgnr: string }[]>`
