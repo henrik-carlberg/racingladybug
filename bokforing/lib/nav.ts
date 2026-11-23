@@ -58,6 +58,7 @@ export function buildNav(o: {
     { id: 'bank', label: t('Bank'), icon: 'bank', items: items([
       { path: '/bank/avstamning', label: 'Bankavstämning', perm: 'ledger', hint: 'Bokför transaktionerna från banken' },
       { path: '/bank', label: 'Bankkonton', perm: 'ledger' },
+      { path: '/klientmedel', label: 'Klientmedel', perm: 'ledger', hint: 'Medel som förvaltas åt klienter, saldo per klient och avstämning' },
       { path: '/bank/regler', label: 'Konteringsregler', perm: 'ledger' },
       { path: '/kort', label: 'Företagskort', perm: 'ledger', hint: 'Kortköp som saknar kvitto' },
       { path: '/skattekonto', label: 'Skattekontot', perm: 'ledger' },
