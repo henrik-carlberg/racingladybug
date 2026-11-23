@@ -28,3 +28,16 @@ describe('Kommissionsförsäljning', () => {
     expect(payoutLines(140000)).toEqual([{ account: 2895, amount: 140000 }, { account: 1930, amount: -140000 }]);
   });
 });
+
+import { reduction, saleLines as powerSale, yearSummary } from '@/lib/power';
+describe('Egen elproduktion', () => {
+  it('skattereduktion, kontering och sammanställning', () => {
+    expect(reduction(2025, 1500, 250)).toEqual({ basis: 250, rate: 60, amount: 15000 });
+    expect(reduction(2025, 40000, 50000)).toMatchObject({ basis: 30000, amount: 1800000 });
+    expect(reduction(2099, 100, 100)).toMatchObject({ rate: null, amount: null });
+    expect(powerSale(42000, 25, 3060)).toEqual([{ account: 1930, amount: 52500 }, { account: 3060, amount: -42000 }, { account: 2611, amount: -10500 }]);
+    expect(powerSale(42000, 0, 3060)).toHaveLength(2);
+    expect(yearSummary([{ produced_kwh: 1200, sold_kwh: 700, sold_amount: 42000 }, { produced_kwh: 1300, sold_kwh: 800, sold_amount: 48000 }], 20000, 1100000))
+      .toEqual({ produced: 2500, sold: 1500, own: 1000, revenue: 110000, payback: 10 });
+  });
+});

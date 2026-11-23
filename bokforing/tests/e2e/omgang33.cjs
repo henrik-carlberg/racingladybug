@@ -178,6 +178,43 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   t = nb(await text(owner)); assert(t.includes('3045') && t.includes('2611') && t.includes('2641') && t.includes('2895') && t.includes('1000,00'), 'kontering med huvudmannens moms: ' + t.slice(0, 700));
   log('kommissionsförsäljning: moms på hela priset, provisionen som intäkt och resten som skuld till huvudmannen, huvudmannens moms vid momsregistrering, återlämning och avräkningsnota');
 
+  // ================= Del 3: egen elproduktion =================
+  const PY = YEAR - 1;
+  await owner.goto(BASE + '/');
+  await owner.fill('input[name=name]', 'Solgårdens firma');
+  await owner.selectOption('select[name=company_type]', 'EF');
+  await owner.fill('input[name=orgnr]', `19${orgnrFor('750101' + String(100 + (Date.now() % 800)).padStart(3, '0'))}`);
+  await owner.fill('input[name=fy_start]', `${PY}-01-01`); await owner.fill('input[name=fy_end]', `${PY}-12-31`);
+  await owner.click('button:has-text("Skapa bolag")'); await owner.waitForURL(/kom-igang/);
+  const EP = owner.url().replace(/\/kom-igang.*/, '');
+  await owner.goto(EP + '/elproduktion');
+  await owner.fill('form:has(button:has-text("Lägg upp anläggning")) input[name=name]', 'Solceller ladugård'); await owner.fill('input[name=capacity_kw]', '12');
+  await owner.fill('input[name=investment]', '11000'); await owner.fill('input[name=start_date]', `${PY}-03-01`);
+  await owner.click('button:has-text("Lägg upp anläggning")'); await owner.locator('text=Anläggningen är upplagd').waitFor();
+  const month = async (period, produced, sold, bought, amount) => {
+    await owner.goto(EP + `/elproduktion?year=${PY}`);
+    const f = owner.locator('form:has(button:has-text("Registrera månad"))');
+    await f.locator('input[name=period]').fill(period); await f.locator('input[name=produced_kwh]').fill(produced); await f.locator('input[name=sold_kwh]').fill(sold);
+    await f.locator('input[name=bought_kwh]').fill(bought); await f.locator('input[name=sold_amount]').fill(amount);
+    await f.locator('button').click();
+  };
+  await month(`${PY}-06`, '100', '700', '0', '0'); await owner.locator('text=Såld el kan inte vara mer än den producerade').waitFor();
+  await month(`${PY}-06`, '1200', '700', '100', '420'); await owner.locator('text=försäljningen 420,00 kr').waitFor();
+  await month(`${PY}-07`, '1300', '800', '150', '480'); await owner.locator('text=Månaden är registrerad').waitFor();
+  await owner.goto(EP + `/elproduktion?year=${PY}`);
+  const cf = owner.locator('form:has(button:has-text("Bokför försäljning"))');
+  await cf.locator('input[name=quantity]').fill('10'); await cf.locator('input[name=amount]').fill('200'); await cf.locator('input[name=date]').fill(`${PY}-12-15`);
+  await cf.locator('button').click(); await owner.locator('text=Försäljningen 200,00 kr exkl. moms är bokförd').waitFor();
+  const pl = owner.locator('.pw-plant[data-name="Solceller ladugård"]');
+  assert(nb(await pl.locator('.pw-produced').innerText()) === '2500kWh' && nb(await pl.locator('.pw-sold').innerText()) === '1500kWh' && nb(await pl.locator('.pw-own').innerText()) === '1000kWh', 'produktionsår');
+  assert(nb(await pl.locator('.pw-revenue').innerText()) === '1100,00' && nb(await pl.locator('.pw-payback').innerText()) === '10år', 'intäkter och återbetalningstid');
+  t = nb(await pl.locator('.pw-reduction').innerText());
+  assert(t.includes('250kWh') && (PY <= 2025 ? t.includes('150,00kr') : t.includes('kontrolleraholsSkatteverket')), 'skattereduktion begränsad av köpt el: ' + t);
+  await owner.goto(EP + '/verifikationer');
+  await owner.locator(`tr:has-text("Såld el ${PY}-06") a`).first().click(); await owner.waitForURL(/verifikationer\/\d+/);
+  t = nb(await text(owner)); assert(t.includes('3060') && t.includes('2611') && t.includes('525,00'), 'elförsäljning med moms: ' + t.slice(0, 600));
+  log('egen elproduktion: producerad och såld el per månad med moms på försäljningen, elcertifikat, egen förbrukning, återbetalningstid och underlag för skattereduktion');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 33: alla steg gick igenom');
