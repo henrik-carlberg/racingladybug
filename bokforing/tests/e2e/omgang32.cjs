@@ -163,6 +163,35 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   t = nb(await text(owner)); assert(t.includes('2899') && t.includes('3990') && t.includes('900,00'), 'förverkad 2899/3990: ' + t.slice(0, 600));
   log('returemballage: pant utan moms mot pantskuld 2899 på fakturan, kreditering vid retur, saldo per kund, förverkad pant som intäkt');
 
+  // ================= Del 3: uthyrning av utrustning =================
+  const UH = await newCompany('Maskinuthyrning AB', 559720000);
+  if (Number(day(20).slice(0, 4)) !== YEAR) await addFy(UH, YEAR - 1);
+  await owner.goto(UH + '/kunder');
+  await owner.fill('input[name=name]', 'Byggare AB'); await owner.click('button:has-text("Spara kund")'); await owner.waitForURL(/ok=/);
+  await owner.goto(UH + '/uthyrning');
+  await owner.fill('input[name=serial]', 'GRV-01'); await owner.fill('form:has(button:has-text("Lägg upp utrustning")) input[name=name]', 'Minigrävare');
+  await owner.fill('input[name=day_rate]', '1000'); await owner.fill('input[name=week_rate]', '5000'); await owner.fill('input[name=month_rate]', '15000');
+  await owner.click('button:has-text("Lägg upp utrustning")'); await owner.locator('text=Utrustningen är upplagd').waitFor();
+  const rrow = () => owner.locator('.rn-row[data-serial="GRV-01"]');
+  await rrow().locator('input[name=start_date]').fill(day(20)); await rrow().locator('input[name=expected_end]').fill(day(5));
+  await rrow().locator('button:has-text("Lämna ut")').click(); await owner.locator('text=Utrustningen är utlämnad').waitFor();
+  t = await rrow().locator('.rn-status').innerText();
+  assert(t.includes('Uthyrd till Byggare AB') && t.includes('Skulle ha lämnats'), 'uthyrd och försenad: ' + t);
+  await owner.goto(UH + '/uthyrning');
+  await rrow().locator('input[name=until]').fill(day(11)); await rrow().locator('button:has-text("Fakturera period")').click(); await owner.waitForURL(/fakturor\/\d+\?ok/);
+  t = nb(await text(owner)); assert(t.includes('(10dagar)') && t.includes('8000,00'), 'vecka + tre dagar: ' + t.slice(0, 900));
+  await owner.click('button:has-text("Bokför faktura")'); await owner.locator('text=Fakturan är bokförd').waitFor();
+  await owner.goto(UH + '/uthyrning');
+  await rrow().locator('input[name=damage]').fill('2500'); await rrow().locator('input[name=damage_note]').fill('Trasig skopa'); await rrow().locator('input[name=late]').fill('1000');
+  await rrow().locator('button:has-text("Återlämnad")').click(); await owner.waitForURL(/fakturor\/\d+\?ok/);
+  t = nb(await text(owner));
+  assert(t.includes('(11dagar)') && t.includes('9000,00') && t.includes('SkadeavgiftGRV-01:Trasigskopa') && t.includes('Förseningsavgift'), 'slutfaktura: ' + t.slice(0, 1200));
+  await owner.click('button:has-text("Bokför faktura")'); await owner.locator('text=Fakturan är bokförd').waitFor();
+  await owner.goto(UH + '/uthyrning');
+  assert((await rrow().locator('.rn-status').innerText()) === 'Tillgänglig', 'tillgänglig igen');
+  assert(nb(await rrow().locator('.rn-util').innerText()) === '23,3%' && nb(await rrow().locator('.rn-revenue').innerText()) === '20500,00', 'beläggning och intäkt: ' + await rrow().innerText());
+  log('uthyrning: individ med serienummer, fakturering per period med billigaste av dag-/veckopris, återlämning med skade- och förseningsavgift, beläggning och intäkt per individ');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 32: alla steg gick igenom');

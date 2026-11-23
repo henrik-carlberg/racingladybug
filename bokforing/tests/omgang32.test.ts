@@ -26,3 +26,20 @@ describe('Returemballage', () => {
     expect(forfeitLines(90000)).toEqual([{ account: 2899, amount: 90000 }, { account: 3990, amount: -90000 }]);
   });
 });
+
+import { billingPeriod, rentFor, utilization } from '@/lib/rental';
+describe('Uthyrning', () => {
+  it('hyra, period och beläggning', () => {
+    const r = { day: 100000, week: 500000, month: 1500000 };
+    expect(rentFor(3, r)).toBe(300000);
+    expect(rentFor(6, r)).toBe(500000);
+    expect(rentFor(10, r)).toBe(800000);
+    expect(rentFor(25, r)).toBe(1500000);
+    expect(rentFor(31, r)).toBe(1600000);
+    expect(rentFor(4, { day: 100000, week: null, month: null })).toBe(400000);
+    expect(billingPeriod({ start: '2026-11-01', invoicedUntil: null, returnedOn: null, until: '2026-11-10' })).toEqual({ from: '2026-11-01', to: '2026-11-10', days: 10 });
+    expect(billingPeriod({ start: '2026-11-01', invoicedUntil: '2026-11-10', returnedOn: '2026-11-15', until: '2026-11-30' })).toEqual({ from: '2026-11-11', to: '2026-11-15', days: 5 });
+    expect(billingPeriod({ start: '2026-11-01', invoicedUntil: '2026-11-10', returnedOn: null, until: '2026-11-10' })).toBeNull();
+    expect(utilization([{ start: '2026-11-01', end: '2026-11-05' }], '2026-11-01', '2026-11-10').pct).toBe(50);
+  });
+});
