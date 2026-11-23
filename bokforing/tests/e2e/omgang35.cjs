@@ -167,6 +167,54 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(neg(await owner.locator('.sn-item[data-label="Förlorar Storkunden AB"] .sn-impact').innerText()) === '-240000,00', 'förlorad kund 20 000 kr per månad');
   log('scenarioplanering: bas från årstakten, förlorad kund och nyanställning med arbetsgivaravgift, jämförelse av resultat och lägsta kassa, påverkan per förändring');
 
+  // ================= Del 3: evenemang och biljetter =================
+  const EV = await newCompany('Konferensbolaget AB', 559970000);
+  await owner.goto(EV + '/kunder');
+  await owner.fill('input[name=name]', 'Banken AB'); await owner.click('button:has-text("Spara kund")'); await owner.waitForURL(/ok=/);
+  await owner.goto(EV + '/leverantorer');
+  await owner.fill('input[name=name]', 'Lokalen AB'); await owner.click('button:has-text("Spara leverantör")'); await owner.waitForURL(/ok=/);
+  await owner.goto(EV + '/evenemang');
+  await owner.fill('form:has(button:has-text("Lägg upp evenemang")) input[name=name]', 'Sommarkonferens'); await owner.fill('form:has(button:has-text("Lägg upp evenemang")) input[name=date]', day(-20));
+  await owner.fill('input[name=budget_cost]', '7000');
+  await owner.click('button:has-text("Lägg upp evenemang")'); await owner.locator('text=Evenemanget är upplagt').waitFor();
+  const ev = () => owner.locator('.ev-event[data-name="Sommarkonferens"]');
+  for (const [n, p, v, c] of [['Konferens', '1250', '25', '3'], ['Middag', '1120', '12', '']]) {
+    await owner.goto(EV + '/evenemang');
+    const f = ev().locator('form:has(button:has-text("Lägg till biljettyp"))');
+    await f.locator('input[name=name]').fill(n); await f.locator('input[name=price]').fill(p); await f.locator('select[name=vat_rate]').selectOption(v); await f.locator('input[name=capacity]').fill(c);
+    await f.locator('button').click(); await owner.locator('text=Biljettypen är upplagd').waitFor();
+  }
+  const sellT = async (type, q, buyer) => {
+    await owner.goto(EV + '/evenemang');
+    const f = ev().locator('form:has(button:has-text("Sälj biljetter"))');
+    await f.locator('select[name=type_id]').selectOption({ label: type }); await f.locator('input[name=quantity]').fill(q); await f.locator('input[name=buyer]').fill(buyer);
+    await f.locator('button').click();
+  };
+  await sellT('Konferens', '2', 'Anna'); await owner.locator('text=Biljetter för 2 500,00 kr är sålda').waitFor();
+  await sellT('Konferens', '1', 'Bertil'); await owner.locator('text=är sålda').waitFor();
+  await sellT('Konferens', '1', 'Cecilia'); await owner.locator('text=Bara 0 platser kvar').waitFor();
+  await sellT('Middag', '1', 'Anna'); await owner.locator('text=Biljetter för 1 120,00 kr är sålda').waitFor();
+  await owner.goto(EV + '/evenemang');
+  await ev().locator('.ev-ticket[data-buyer="Bertil"] button:has-text("Återbetala")').click(); await owner.locator('text=1 250,00 kr är återbetalt').waitFor();
+  assert(nb(await ev().locator('.ev-type[data-name="Konferens"] .ev-left').innerText()) === '1', 'plats frigjord efter återbetalning');
+  await ev().locator('input[name=amount]').fill('10000'); await ev().locator('button:has-text("Fakturera sponsring")').click(); await owner.waitForURL(/fakturor\/\d+\?ok/);
+  assert(nb(await text(owner)).includes('12500,00'), 'sponsorfaktura med moms');
+  await owner.click('button:has-text("Bokför faktura")'); await owner.locator('text=Fakturan är bokförd').waitFor();
+  await owner.goto(EV + '/leverantorsfakturor/ny');
+  await owner.selectOption('select[name=supplier_id]', { label: 'Lokalen AB' });
+  await owner.fill('input[name=invoice_number]', 'L-1'); await owner.fill('input[name=invoice_date]', day(2)); await owner.fill('input[name=due_date]', day(-28));
+  await owner.fill('input[name=total]', '10000'); await owner.locator('input[name=total]').blur(); await owner.fill('input[name=vat]', '2000');
+  await owner.fill('input[name=account_0]', '5010'); await owner.fill('input[name=amount_0]', '8000');
+  await owner.click('button:has-text("Registrera och bokför")'); await owner.waitForURL(/ok=/);
+  await owner.goto(EV + '/evenemang');
+  await ev().locator('button:has-text("Koppla kostnad")').click(); await owner.locator('text=Kostnaden är kopplad').waitFor();
+  await ev().locator('button:text-is("Genomfört")').click(); await owner.locator('text=13 000,00 kr är intäktsfört').waitFor();
+  assert(nb(await ev().locator('.ev-revenue').innerText()) === '13000,00' && nb(await ev().locator('.ev-costs').innerText()) === '8000,00' && nb(await ev().locator('.ev-result').innerText()) === '5000,00', 'resultat per event');
+  await owner.goto(EV + '/verifikationer');
+  await owner.locator('tr:has-text("Genomfört evenemang Sommarkonferens") a').first().click(); await owner.waitForURL(/verifikationer\/\d+/);
+  t = nb(await text(owner)); assert(t.includes('2970') && t.includes('13000,00') && t.includes('3001') && t.includes('12000,00') && t.includes('3002') && t.includes('1000,00'), 'intäktsföring per momssats: ' + t.slice(0, 700));
+  log('evenemang: biljettyper med momssats och kapacitet, biljetter och sponsring som förutbetald intäkt, återbetalning, kostnader och resultat per event, intäktsföring när eventet genomförs');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 35: alla steg gick igenom');

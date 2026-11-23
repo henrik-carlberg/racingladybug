@@ -35,6 +35,7 @@ export function buildNav(o: {
       { path: '/franchise', label: 'Franchise', perm: 'invoicing', hint: 'Royalty på franchisetagarnas omsättning, inträdesavgifter och marknadsföringsfond' },
       { path: '/kommission', label: 'Kommissionsförsäljning', perm: 'invoicing', hint: 'Försäljning för huvudmäns räkning med provision och avräkningsnotor' },
       { path: '/kundutlagg', label: 'Utlägg för kunder', perm: 'invoicing', hint: 'Momsfria utlägg för kundens räkning' },
+      { path: '/evenemang', label: 'Evenemang och biljetter', perm: 'invoicing', hint: 'Biljetter som förutbetald intäkt, sponsring och resultat per event' },
       { path: '/tidsbokning', label: 'Tidsbokning', perm: 'invoicing', hint: 'Bokningslänk, förskott och avbokningsregler' },
       { path: '/kassa', label: 'Kassa och e-handel', hint: 'Dagskassa och webbutik' },
       { path: '/kundbonus', label: 'Kundbonus', perm: 'invoicing', hint: 'Bonus i efterhand med trappsteg på omsättningen' },

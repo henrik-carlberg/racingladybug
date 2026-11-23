@@ -31,3 +31,13 @@ describe('Scenarioplanering', () => {
     expect(loan.closingCash).toBe(36000000 + 60000000);
   });
 });
+
+import { eventResult, recognitionLines, refundLines, saleLines } from '@/lib/events';
+describe('Evenemang', () => {
+  it('biljetter, återbetalning och intäktsföring', () => {
+    expect(saleLines(250000, 25)).toEqual([{ account: 1930, amount: 250000 }, { account: 2970, amount: -200000 }, { account: 2611, amount: -50000 }]);
+    expect(refundLines(112000, 12)).toEqual([{ account: 2970, amount: 100000 }, { account: 2621, amount: 12000 }, { account: 1930, amount: -112000 }]);
+    expect(recognitionLines([{ net: 200000, vat_rate: 25 }, { net: 100000, vat_rate: 12 }], 1000000)).toEqual([{ account: 2970, amount: 1300000 }, { account: 3001, amount: -1200000 }, { account: 3002, amount: -100000 }]);
+    expect(eventResult({ tickets: 300000, sponsors: 1000000, costs: 800000, budget: 700000 })).toEqual({ revenue: 1300000, costs: 800000, result: 500000, vsBudget: 100000 });
+  });
+});
