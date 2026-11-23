@@ -265,6 +265,38 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await ua().locator('.sk-warning').innerText()).includes('5timmarmer'), 'varning för mer fakturerad tid');
   log('underkonsulter: kundpris med påslag, vidarefakturering av rapporterad tid, avstämning mot underkonsultens faktura, marginal och varning för ofakturerad tid');
 
+  // ================= Del 5: remburser och bankgarantier =================
+  const RB = await newCompany('Importören AB', 559940000);
+  const tf = async (f) => {
+    await owner.goto(RB + '/remburser');
+    const cf = owner.locator('form:has(button:text-is("Registrera"))');
+    await cf.locator('select[name=kind]').selectOption(f.kind);
+    for (const k of ['counterparty', 'reference', 'amount', 'currency', 'amount_sek', 'blocked', 'expires_on']) await cf.locator(`input[name=${k}]`).fill(f[k] ?? (k === 'currency' ? 'SEK' : ''));
+    await cf.locator('button:text-is("Registrera")').click(); await owner.locator('text=Registrerat').waitFor().catch(async () => { throw new Error('remburs: ' + (await text(owner)).slice(0, 400)); });
+    return nb(await owner.locator('.flash').first().innerText());
+  };
+  t = await tf({ kind: 'lc_import', counterparty: 'Exportören GmbH', reference: 'LC-77', amount: '50000', currency: 'EUR', amount_sek: '575000', blocked: '100000', expires_on: day(-20) });
+  assert(t.includes('100000,00krspärrademedelsomställdsäkerhet'), 'spärrade medel: ' + t);
+  t = await tf({ kind: 'guarantee_given', counterparty: 'Hyresvärden AB', reference: 'BG-1', amount: '200000', expires_on: `${YEAR + 2}-06-30` });
+  assert(t.includes('200000,00krsomeventualförpliktelse'), 'ställd garanti: ' + t);
+  assert(nb(await owner.locator('.tf-guarantees').innerText()) === '200000,00' && nb(await owner.locator('.tf-blocked').innerText()) === '100000,00' && nb(await owner.locator('.tf-expiring').innerText()) === '1', 'översikt');
+  const lc = () => owner.locator('.tf-row[data-counterparty="Exportören GmbH"]');
+  assert(await lc().locator('.tf-doc').count() === 5 && (await lc().locator('.tf-soon').innerText()).includes('20 dagar kvar'), 'dokumentkrav och påminnelse');
+  await lc().locator('button:has-text("Utnyttjad")').click(); await owner.locator('text=Alla dokument enligt rembursvillkoren är inte klara').waitFor();
+  for (let i = 0; i < 5; i++) { await owner.goto(RB + '/remburser'); await lc().locator('.tf-doc').nth(i).click(); await owner.waitForURL(/ok=/); }
+  await owner.locator('text=Alla dokument är klara').waitFor();
+  await lc().locator('input[name=amount]').fill('1500'); await lc().locator('button:has-text("Bokför avgift")').click(); await owner.locator('text=Bankavgiften 1 500,00 kr är bokförd').waitFor();
+  await lc().locator('button:has-text("Utnyttjad")').click(); await owner.locator('text=Utnyttjad – åtagandet har upphört').waitFor();
+  assert(nb(await owner.locator('.tf-blocked').innerText()) === '0,00' && await owner.locator('.tf-row[data-status="utilized"]').count() === 1, 'spärren upphör');
+  await owner.goto(RB + '/bokslut');
+  await owner.locator(`tr:has-text("${YEAR}-01-01") a:has-text("Öppna")`).first().click(); await owner.waitForURL(/bokslut\/\d+/);
+  await owner.goto(owner.url().split('?')[0] + '/avsattningar');
+  t = nb(await text(owner)); assert(t.includes('BankgarantiBG-1tillHyresvärdenAB') && t.includes('200000,00'), 'eventualförpliktelse i bokslutet: ' + t.slice(0, 1500));
+  await owner.goto(RB + '/verifikationer');
+  await owner.locator('tr:has-text("Bankavgift importremburs") a').first().click(); await owner.waitForURL(/verifikationer\/\d+/);
+  t = nb(await text(owner)); assert(t.includes('6570') && t.includes('1500,00'), 'bankavgift 6570: ' + t.slice(0, 500));
+  log('remburser och bankgarantier: dokumentkrav som checklista, påminnelse före utgång, bankavgifter, spärrade medel som ställd säkerhet och ställd garanti som eventualförpliktelse');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 34: alla steg gick igenom');

@@ -55,3 +55,15 @@ describe('Underkonsulter', () => {
     expect(r).toEqual({ hours: 180, billedHours: 100, supplierHours: 105, revenue: 10000000, cost: 8400000, margin: 1600000, warning: 5 });
   });
 });
+
+import { commitmentsFor, daysLeft, docsReady, feeLines } from '@/lib/trade-finance';
+describe('Remburser och garantier', () => {
+  it('åtaganden, dokument och avgifter', () => {
+    expect(commitmentsFor('guarantee_given', 20000000, 0)).toEqual({ guarantee: 20000000, pledge: 0 });
+    expect(commitmentsFor('lc_import', 57500000, 10000000)).toEqual({ guarantee: 0, pledge: 10000000 });
+    expect(commitmentsFor('guarantee_received', 100, 0)).toEqual({ guarantee: 0, pledge: 0 });
+    expect(docsReady([{ done: true }, { done: false }])).toBe(false);
+    expect(daysLeft('2026-12-13', '2026-11-23')).toBe(20);
+    expect(feeLines(150000)).toEqual([{ account: 6570, amount: 150000 }, { account: 1930, amount: -150000 }]);
+  });
+});

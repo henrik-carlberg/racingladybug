@@ -58,6 +58,7 @@ export function buildNav(o: {
     { id: 'kop', label: t('Köpa och betala'), icon: 'inbox', items: items([
       { path: '/leverantorsfakturor/inkorg', label: 'Inkorg för fakturor', perm: 'purchasing', hint: 'Fakturor som kommit in via e-post och Peppol' },
       { path: '/leverantorsfakturor', label: 'Leverantörsfakturor', perm: 'purchasing' },
+      { path: '/remburser', label: 'Remburser och bankgarantier', perm: 'ledger', hint: 'Dokumentkrav, bankavgifter och ansvarsförbindelser' },
       { path: '/utlandsbetalningar', label: 'Utlandsbetalningar', perm: 'payments', hint: 'Betala i valuta med IBAN och BIC, kursdifferens och avgifter' },
       { path: '/leverantorsfakturor/betalning', label: 'Betalningar', perm: 'payments', hint: 'Betala attesterade fakturor' },
       { path: '/leverantorer', label: 'Leverantörer' },
