@@ -232,6 +232,39 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   t = nb(await text(owner)); assert(t.includes('2320') && t.includes('100000,00') && t.includes('2081') && t.includes('2097'), 'konvertering 2320/2081/2097: ' + t.slice(0, 700));
   log('konvertibler och optioner: konvertibelt lån 2320 med periodiserad ränta, optionspremie till fritt eget kapital, konvertering och teckning till nya aktier i aktieboken, utspädning');
 
+  // ================= Del 4: underkonsulter =================
+  const UK = await newCompany('Konsultmäklaren AB', 559930000);
+  await owner.goto(UK + '/leverantorer');
+  await owner.fill('input[name=name]', 'Saras Konsult AB'); await owner.click('button:has-text("Spara leverantör")'); await owner.waitForURL(/ok=/);
+  await owner.goto(UK + '/kunder');
+  await owner.fill('input[name=name]', 'Storkund AB'); await owner.click('button:has-text("Spara kund")'); await owner.waitForURL(/ok=/);
+  await owner.goto(UK + '/underkonsulter');
+  await owner.fill('input[name=consultant]', 'Sara Konsult'); await owner.fill('form:has(button:has-text("Lägg upp uppdrag")) input[name=name]', 'Systemutveckling');
+  await owner.fill('input[name=cost_rate]', '800'); await owner.fill('input[name=markup_pct]', '25');
+  await owner.click('button:has-text("Lägg upp uppdrag")'); await owner.locator('text=Uppdraget är upplagt').waitFor();
+  const ua = () => owner.locator('.sk-assignment[data-consultant="Sara Konsult"]');
+  assert((await ua().innerText()).includes('kund 1 000,00 kr/tim (påslag 25 %)') || nb(await ua().innerText()).includes('kund1000,00kr/tim(påslag25%)'), 'kundpris med påslag');
+  for (const [p, hrs] of [[`${YEAR}-01`, '100'], [`${YEAR}-02`, '80']]) {
+    await owner.goto(UK + '/underkonsulter');
+    await ua().locator('input[name=period]').fill(p); await ua().locator('input[name=hours]').fill(hrs);
+    await ua().locator('button:has-text("Registrera tid")').click(); await owner.locator('text=Tiden är registrerad').waitFor();
+  }
+  await owner.goto(UK + '/underkonsulter');
+  await ua().locator(`.sk-period[data-period="${YEAR}-01"] button:has-text("Vidarefakturera")`).click(); await owner.waitForURL(/fakturor\/\d+\?ok/);
+  t = nb(await text(owner)); assert(t.includes('Systemutveckling–SaraKonsult') && t.includes('100000,00') && t.includes('125000,00'), 'vidarefakturering 100 tim × 1 000 kr: ' + t.slice(0, 900));
+  await owner.click('button:has-text("Bokför faktura")'); await owner.locator('text=Fakturan är bokförd').waitFor();
+  await owner.goto(UK + '/leverantorsfakturor/ny');
+  await owner.selectOption('select[name=supplier_id]', { label: 'Saras Konsult AB' });
+  await owner.fill('input[name=invoice_number]', 'SK-1'); await owner.fill('input[name=invoice_date]', day(3)); await owner.fill('input[name=due_date]', day(-27));
+  await owner.fill('input[name=total]', '105000'); await owner.locator('input[name=total]').blur(); await owner.fill('input[name=vat]', '21000');
+  await owner.fill('input[name=account_0]', '4600'); await owner.fill('input[name=amount_0]', '84000');
+  await owner.click('button:has-text("Registrera och bokför")'); await owner.waitForURL(/ok=/);
+  await owner.goto(UK + '/underkonsulter');
+  await ua().locator(`.sk-period[data-period="${YEAR}-01"] button:has-text("Stäm av")`).click(); await owner.locator('text=Fakturan motsvarar 105 timmar – 5 timmar mer än rapporterat').waitFor();
+  assert(nb(await ua().locator('.sk-revenue').innerText()) === '100000,00' && nb(await ua().locator('.sk-cost').innerText()) === '84000,00' && nb(await ua().locator('.sk-margin').innerText()) === '16000,00', 'marginal per uppdrag');
+  assert(nb(await ua().locator('.sk-warning').innerText()).includes('5timmarmer'), 'varning för mer fakturerad tid');
+  log('underkonsulter: kundpris med påslag, vidarefakturering av rapporterad tid, avstämning mot underkonsultens faktura, marginal och varning för ofakturerad tid');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 34: alla steg gick igenom');

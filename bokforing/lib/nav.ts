@@ -52,6 +52,7 @@ export function buildNav(o: {
       { path: '/uppdrag', label: 'Uppdrag & timbanker' },
       { path: '/tid/belaggning', label: 'Beläggning' },
       { path: '/successiv', label: 'Fastprisuppdrag', perm: 'ledger', hint: 'Successiv vinstavräkning med färdigställandegrad och förlustreserv' },
+      { path: '/underkonsulter', label: 'Underkonsulter', perm: 'invoicing', hint: 'Inhyrda konsulter, vidarefakturering och avstämning' },
       { path: '/bygg', label: 'Bygg och entreprenad', perm: 'ledger', hint: 'ÄTA-arbeten, innehållna belopp och kontroll av omvänd byggmoms' },
     ]) },
     { id: 'kop', label: t('Köpa och betala'), icon: 'inbox', items: items([

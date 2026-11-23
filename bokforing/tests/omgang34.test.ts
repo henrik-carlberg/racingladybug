@@ -45,3 +45,13 @@ describe('Konvertibler och optioner', () => {
     expect(d.find((x) => x.name === 'A')).toMatchObject({ pct: 100, diluted: 32.3 });
   });
 });
+
+import { assignmentResult, invoicedHours, markupPct } from '@/lib/subcontractors';
+describe('Underkonsulter', () => {
+  it('påslag, timmar och marginal', () => {
+    expect(markupPct(80000, 100000)).toBe(25);
+    expect(invoicedHours(8400000, 80000)).toBe(105);
+    const r = assignmentResult([{ hours: 100, billed: true, supplier_hours: 105 }, { hours: 80, billed: false, supplier_hours: null }], 80000, 100000);
+    expect(r).toEqual({ hours: 180, billedHours: 100, supplierHours: 105, revenue: 10000000, cost: 8400000, margin: 1600000, warning: 5 });
+  });
+});
