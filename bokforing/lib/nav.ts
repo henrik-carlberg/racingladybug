@@ -22,6 +22,7 @@ export function buildNav(o: {
     { id: 'salj', label: t('Sälja'), icon: 'invoice', items: items([
       { path: '/fakturor', label: 'Kundfakturor', perm: 'invoicing', hint: 'Skapa, skicka och följ upp fakturor' },
       { path: '/kunder', label: 'Kunder', perm: 'invoicing' },
+      { path: '/anbud', label: 'Anbud och ramavtal', perm: 'invoicing', hint: 'Anbudsregister och avrop mot takbelopp' },
       { path: '/indexering', label: 'Indexuppräkning', perm: 'invoicing', hint: 'KPI-uppräkning av återkommande avtal' },
       { path: '/prisavtal', label: 'Kundprisavtal', perm: 'invoicing', hint: 'Kundgrupper, nettopriser och volymrabatter' },
       { path: '/service', label: 'Service och garanti', perm: 'invoicing', hint: 'Garantiärenden mot avsättningen och fakturerad service' },
