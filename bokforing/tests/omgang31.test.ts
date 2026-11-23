@@ -62,3 +62,23 @@ describe('Körjournal', () => {
     expect(privateUseLines(150000)).toEqual([{ account: 2013, amount: 150000 }, { account: 3990, amount: -150000 }]);
   });
 });
+
+import { interestLines, monthlyInterest, sweepLines } from '@/lib/cash-pool';
+describe('Koncernkonto', () => {
+  it('ränta på dagligt saldo och kontering', () => {
+    const r = monthlyInterest([{ date: '2026-10-01', amount: 10000000 }], '2026-10', 2, 4);
+    expect(r.interest).toBe(Math.round(10000000 * 0.02 / 365 * 31));
+    expect(r.average).toBe(10000000);
+    const b = monthlyInterest([{ date: '2026-10-16', amount: -5000000 }], '2026-10', 2, 4);
+    expect(b.interest).toBe(Math.round(-5000000 * 0.04 / 365 * 16));
+    expect(b.closing).toBe(-5000000);
+    const prior = monthlyInterest([{ date: '2026-09-10', amount: 3650000 }, { date: '2026-10-11', amount: -3650000 }], '2026-10', 1, 1);
+    expect(prior.interest).toBe(1000);
+    expect(sweepLines(100, 'member', 1930)).toEqual([{ account: 1660, amount: 100 }, { account: 1930, amount: -100 }]);
+    expect(sweepLines(-100, 'master', 1930)).toEqual([{ account: 1930, amount: -100 }, { account: 2860, amount: 100 }]);
+    expect(interestLines(500, 'member')).toEqual([{ account: 1660, amount: 500 }, { account: 8310, amount: -500 }]);
+    expect(interestLines(500, 'master')).toEqual([{ account: 8420, amount: 500 }, { account: 2860, amount: -500 }]);
+    expect(interestLines(-500, 'member')).toEqual([{ account: 8420, amount: 500 }, { account: 1660, amount: -500 }]);
+    expect(interestLines(-500, 'master')).toEqual([{ account: 2860, amount: 500 }, { account: 8310, amount: -500 }]);
+  });
+});

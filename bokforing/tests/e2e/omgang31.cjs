@@ -289,6 +289,55 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   t = nb(await text(owner)); assert(t.includes('7331') && t.includes('2018') && t.includes('300,00'), 'avdrag 7331/2018: ' + t.slice(0, 600));
   log('körjournal: resor per fordon med mätarställning och kund, privat andel, uttag för privat körning till självkostnad och avdrag för egen bil i tjänsten i enskild firma');
 
+  // ================= Del 5: koncernkonto =================
+  const MB = await newCompany('Moderbolaget Pool AB', 559630000);
+  const D1 = await newCompany('Dotter Ett AB', 559640000);
+  const D2 = await newCompany('Dotter Två AB', 559650000);
+  const PREV = MONTH === 1 ? `${YEAR - 1}-12` : `${YEAR}-${String(MONTH - 1).padStart(2, '0')}`;
+  if (MONTH === 1) for (const B of [MB, D1, D2]) await addFy(B, YEAR - 1);
+  const cidOf = (u) => u.replace(/.*\/c\//, '');
+  await owner.goto(`${BASE}/koncern?c=${cidOf(MB)}&c=${cidOf(D1)}&c=${cidOf(D2)}&moder=${cidOf(MB)}`);
+  for (let i = 0; i < 2; i++) {
+    await owner.locator('.group-link button:has-text("Koppla som dotterbolag")').first().click(); await owner.waitForLoadState('networkidle');
+    await owner.goto(`${BASE}/koncern?c=${cidOf(MB)}&c=${cidOf(D1)}&c=${cidOf(D2)}&moder=${cidOf(MB)}`);
+  }
+  assert(await owner.locator('.group-link button:has-text("Ta bort koppling")').count() === 2, 'två dotterbolag kopplade');
+  await owner.goto(MB + `/koncernkonto?period=${PREV}`);
+  await owner.fill('input[name=deposit_rate]', '2'); await owner.fill('input[name=borrow_rate]', '4');
+  await owner.click('button:has-text("Lägg upp koncernkonto")'); await owner.locator('text=Koncernkontot är upplagt').waitFor();
+  for (const name of ['Dotter Ett AB', 'Dotter Två AB']) {
+    await owner.goto(MB + `/koncernkonto?period=${PREV}`);
+    await owner.selectOption('form:has(button:has-text("Anslut")) select[name=company_id]', { label: name });
+    await owner.click('button:has-text("Anslut")'); await owner.locator('text=Dotterbolaget är anslutet').waitFor();
+  }
+  const sweepTo = async (name, dir, amount, d) => {
+    await owner.goto(MB + `/koncernkonto?period=${PREV}`);
+    await owner.selectOption('form:has(button:has-text("Bokför överföring")) select[name=company_id]', { label: name });
+    await owner.selectOption('select[name=direction]', dir); await owner.fill('input[name=amount]', amount); await owner.fill('form:has(button:has-text("Bokför överföring")) input[name=date]', d);
+    await owner.click('button:has-text("Bokför överföring")'); await owner.locator('text=är bokförd i båda bolagen').waitFor();
+  };
+  await sweepTo('Dotter Ett AB', 'in', '100000', `${PREV}-01`);
+  await sweepTo('Dotter Två AB', 'out', '50000', `${PREV}-16`);
+  const dim = new Date(Date.UTC(Number(PREV.slice(0, 4)), Number(PREV.slice(5)), 0)).getUTCDate();
+  const i1 = Math.round(10000000 * 0.02 / 365 * dim), i2 = -Math.round(5000000 * 0.04 / 365 * (dim - 15));
+  const krs = (o) => (o / 100).toFixed(2).replace('.', ',').replace('-', '−');
+  const prow = (name) => owner.locator(`.cp-row[data-company="${name}"]`);
+  assert(nb(await prow('Dotter Ett AB').locator('.cp-interest').innerText()).replace('-', '−') === krs(i1), `ränta på insättning ${krs(i1)}: ` + await prow('Dotter Ett AB').innerText());
+  assert(nb(await prow('Dotter Två AB').locator('.cp-interest').innerText()).replace('-', '−') === krs(i2), `ränta på utlåning ${krs(i2)}: ` + await prow('Dotter Två AB').innerText());
+  assert(nb(await owner.locator('.cp-total').innerText()) === '50000,00', 'koncernen netto 50 000 kr');
+  await owner.click(`button:has-text("Bokför internränta för ${PREV}")`); await owner.locator('text=är bokförd för 2 bolag').waitFor();
+  assert((await prow('Dotter Ett AB').locator('.cp-interest').innerText()).includes('bokförd') && await owner.locator('.cp-check:text-is("Stämmer")').count() === 2, 'ränta bokförd och avstämd: ' + await owner.locator('.cp-members').innerText());
+  await owner.click(`button:has-text("Bokför internränta för ${PREV}")`); await owner.locator('text=ingen ränta att bokföra').waitFor();
+  await owner.goto(D1 + '/koncernkonto');
+  t = nb(await owner.locator('.cp-member').innerText()); assert(t.includes(krs(100000 * 100 + i1).replace(/(\d)(?=(\d{3})+,)/g, '$1')) && t.includes('fordranpåmoderbolaget'), 'dotterbolagets vy: ' + t);
+  await owner.goto(D1 + '/verifikationer');
+  await owner.locator('tr:has-text("internränta") a').first().click(); await owner.waitForURL(/verifikationer\/\d+/);
+  t = nb(await text(owner)); assert(t.includes('1660') && t.includes('8310'), 'dotterbolaget: ränteintäkt 1660/8310: ' + t.slice(0, 600));
+  await owner.goto(D2 + '/verifikationer');
+  await owner.locator('tr:has-text("överföring från huvudkontot") a').first().click(); await owner.waitForURL(/verifikationer\/\d+/);
+  t = nb(await text(owner)); assert(t.includes('1930') && t.includes('1660') && t.includes('50000,00'), 'dotterbolaget lånar från huvudkontot: ' + t.slice(0, 600));
+  log('koncernkonto: överföringar bokförs i dotterbolaget (1660) och moderbolaget (2860), internränta på dagligt saldo med olika in- och utlåningsränta, avstämning mellan bolagen');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 31: alla steg gick igenom');
