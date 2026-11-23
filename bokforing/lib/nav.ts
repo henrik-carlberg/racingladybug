@@ -117,6 +117,7 @@ export function buildNav(o: {
       { path: '/rapporter', label: 'Resultat & balans' },
       { path: '/rapporter/budget', label: 'Budget' },
       { path: '/rapporter/moms', label: 'Moms', hint: 'Momsdeklarationen' },
+      { path: '/punktskatter', label: 'Punktskatter', perm: 'ledger', hint: 'Energiskatt, kemikalieskatt och andra punktskatter' },
       { path: '/rapporter/moms/avancerat', label: 'Blandad verksamhet och jämkning', perm: 'ledger', hint: 'Proportionering av ingående moms och jämkning av investeringsvaror' },
       { path: '/rapporter/eu', label: 'EU-handel' },
       { path: '/rapporter/huvudbok', label: 'Huvudbok' },

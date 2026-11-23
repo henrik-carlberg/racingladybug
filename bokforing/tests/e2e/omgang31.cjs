@@ -157,6 +157,47 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await owner.locator('.rt-line td:nth-child(3)').innerText()) === '1', 'kvar att returnera efter avslag');
   log('returer: kreditering av returnerade rader med moms och återtag i lager, ersättningsvara ur lagret med kassation, avslag, orsaksstatistik per artikel');
 
+  // ================= Del 2: punktskatter =================
+  const PS = await newCompany('Kemiprodukter AB', 559610000);
+  await owner.goto(PS + '/moduler');
+  await owner.locator('.card:has(h2:text-is("Inköp, lager och logistik")) button:has-text("Aktivera")').click(); await owner.waitForURL(/ok=/);
+  await owner.goto(PS + '/m/lager/artiklar');
+  await owner.fill('input[name=sku]', 'K-1'); await owner.fill('input[name=name]', 'Rengöringsmedel');
+  await owner.fill('input[name=purchase_price]', '40'); await owner.fill('input[name=sales_price]', '100'); await owner.fill('input[name=opening_qty]', '100');
+  await owner.click('button:has-text("Lägg upp artikel")'); await owner.locator('text=Artikeln är upplagd').waitFor();
+  await owner.goto(PS + '/kunder');
+  await owner.fill('input[name=name]', 'Städbolaget AB');
+  await owner.click('button:has-text("Spara kund")'); await owner.waitForURL(/ok=/);
+  const PER = `${YEAR}-${String(MONTH).padStart(2, '0')}`;
+  await owner.goto(PS + `/punktskatter?period=${PER}`);
+  await owner.fill('input[name=name]', 'Kemikalieskatt'); await owner.fill('input[name=rate]', '1,5'); await owner.check('input[name=invoice_line]');
+  await owner.click('button:has-text("Lägg upp skatteslag")'); await owner.locator('text=Skatteslaget är upplagt').waitFor();
+  await owner.fill('input[name=factor]', '0,5'); await owner.click('button:has-text("Koppla artikel")'); await owner.locator('text=Artikeln är kopplad').waitFor();
+  await owner.goto(PS + '/m/lager/order');
+  await owner.selectOption('select[name=customer_id]', { label: 'Städbolaget AB' });
+  await owner.selectOption('select[name=product_0]', await owner.locator('select[name=product_0] option:has-text("K-1 ")').first().getAttribute('value'));
+  await owner.fill('input[name=qty_0]', '10');
+  await owner.click('button:has-text("Skapa kundorder")'); await owner.locator('text=Kundordern är skapad').waitFor();
+  await owner.click('button:has-text("Leverera och dra från lagret")'); await owner.locator('text=Ordern är levererad').waitFor();
+  await owner.click('button:has-text("Skapa faktura från leveransen")'); await owner.locator('text=Fakturautkastet är skapat').waitFor();
+  t = nb(await text(owner));
+  assert(t.includes('Kemikalieskatt5kg') && t.includes('7,50') && t.includes('1007,50'), 'punktskatt som fakturarad: ' + t.slice(0, 1200));
+  await owner.goto(PS + `/punktskatter?period=${PER}`);
+  await owner.fill('input[name=quantity]', '20'); await owner.fill('input[name=note]', 'Eget uttag till lokalvård');
+  await owner.click('button:has-text("Registrera uttag")'); await owner.locator('text=Uttaget är registrerat').waitFor();
+  assert(nb(await owner.locator('.ex-return tr[data-type="Kemikalieskatt"] .ex-qty').innerText()) === '25kg', 'underlag 5 kg levererat + 20 kg uttag');
+  assert(nb(await owner.locator('.ex-total').innerText()) === '38,00', 'skatt 37,50 avrundad till hela kronor: ' + await owner.locator('.ex-total').innerText());
+  await owner.click(`button:has-text("Bokför punktskatt för ${PER}")`); await owner.locator('text=Punktskatten för').waitFor().catch(async () => { throw new Error('deklaration: ' + (await text(owner)).slice(0, 500)); });
+  assert(nb(await owner.locator('.ex-ledger').innerText()) === '38,00', 'skuld på 2660');
+  await owner.fill('input[name=quantity]', '1'); await owner.click('button:has-text("Registrera uttag")'); await owner.locator('text=Perioden är redan deklarerad').waitFor();
+  await owner.locator(`.ex-row[data-period="${PER}"] button:has-text("Betald")`).click(); await owner.locator('text=till skattekontot').waitFor();
+  assert(nb(await owner.locator('.ex-ledger').innerText()) === '0,00', '2660 nollställd efter betalning');
+  await owner.goto(PS + '/verifikationer');
+  await owner.locator(`tr:has-text("Punktskatt ${PER}: Kemikalieskatt") a`).first().click(); await owner.waitForURL(/verifikationer\/\d+/);
+  t = nb(await text(owner));
+  assert(t.includes('6900') && t.includes('2660') && t.includes('38,00'), 'kontering 6900/2660: ' + t.slice(0, 600));
+  log('punktskatter: underlag från lagerleveranser × faktor och egna uttag, punktskatt som fakturarad, deklaration mot 2660 och betalning via skattekontot');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 31: alla steg gick igenom');

@@ -17,3 +17,18 @@ describe('Returer', () => {
     expect(s.products).toEqual([{ product: 'A-1 X', qty: 3, cases: 3 }]);
   });
 });
+
+import { bookingLines, computeReturn, dueDate, parseRate, paymentLines } from '@/lib/excise';
+describe('Punktskatter', () => {
+  it('skattesats, beräkning och kontering', () => {
+    expect(parseRate('1,5')).toBe(150);
+    expect(parseRate('0,439')).toBe(43.9);
+    expect(parseRate('0')).toBeNull();
+    const r = computeReturn([{ id: 1, name: 'Kemikalieskatt', unit: 'kg', rate: 150, cost_account: 6900, delivered: 5, manual: 20 }, { id: 2, name: 'Energiskatt', unit: 'kWh', rate: 43.9, cost_account: 6900, delivered: 0, manual: 0 }]);
+    expect(r.lines).toHaveLength(1);
+    expect(r.total).toBe(3800);
+    expect(bookingLines(r.lines)).toEqual([{ account: 6900, amount: 3800 }, { account: 2660, amount: -3800 }]);
+    expect(paymentLines(3800)).toEqual([{ account: 2660, amount: 3800 }, { account: 1630, amount: -3800 }]);
+    expect(dueDate('2026-12')).toBe('2027-01-26');
+  });
+});

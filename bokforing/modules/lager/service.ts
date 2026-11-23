@@ -489,7 +489,9 @@ export async function invoiceSO(actor: Actor, id: number, input: Record<string, 
     const inv = await saveDraftTx(tx, actor, null, {
       customer_id: o.customer_id, invoice_date: str(input, 'invoice_date') || today(), delivery_date: o.shipped_date ?? '', your_reference: o.your_reference,
       notes: `Kundorder ${o.number}${o.tracking ? `. Sändning ${o.carrier} ${o.tracking}` : ''}.`,
-      lines: o.lines.map((l) => ({ description: `${l.sku} ${l.name}`, quantity: l.qty, unit: l.unit, unit_price: l.unit_price, vat_rate: l.vat_rate })),
+      lines: [...o.lines.map((l) => ({ description: `${l.sku} ${l.name}`, quantity: l.qty, unit: l.unit, unit_price: l.unit_price, vat_rate: l.vat_rate })),
+        // Punktskatt som egen rad för artiklar kopplade till ett skatteslag med fakturarad
+        ...await (await import('@/lib/services/excise')).invoiceLinesFor(tx, actor.companyId, o.lines.map((l) => ({ product_id: l.product_id, qty: l.qty, vat_rate: l.vat_rate })))],
     });
     await tx`UPDATE inv_sales_orders SET status = 'invoiced', invoice_id = ${inv.id} WHERE id = ${id}`;
     await auditBy(tx, actor, 'invoice', 'inv.sales_order', id, { invoice: inv.id });
