@@ -200,6 +200,38 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await owner.locator('.prov-balance').first().innerText()) === '500,00', 'kvar i garantiavsättningen');
   log('service och garanti: garanti från fakturadatum, arbete och material ur garantiavsättningen 2220, service utanför garantin som faktura, förslag till avsättning och statistik per vara');
 
+  // ================= Del 3: konvertibler och teckningsoptioner =================
+  const KV = await newCompany('Tillväxtbolaget AB', 559920000);
+  if (Number(day(73).slice(0, 4)) !== YEAR) await addFy(KV, YEAR - 1);
+  await owner.goto(KV + '/aktiebok');
+  await owner.fill('input[name=share_capital]', '25000'); await owner.fill('input[name=date]', day(200));
+  await owner.fill('input[name=name_0]', 'Grundare Gun'); await owner.fill('input[name=id_0]', '19800101-0019'); await owner.fill('input[name=shares_0]', '1000');
+  await owner.click('button:has-text("Lägg upp aktieboken")'); await owner.locator('text=Aktieboken är upplagd').waitFor();
+  const inst = async (f) => {
+    await owner.goto(KV + '/aktiebok/instrument');
+    await owner.selectOption('select[name=kind]', f.kind);
+    for (const k of ['holder_name', 'amount', 'strike', 'shares', 'interest_pct', 'issued_on', 'expires_on']) await owner.fill(`input[name=${k}]`, f[k] ?? '');
+    await owner.click('button:has-text("Registrera")'); await owner.locator('text=Instrumentet är registrerat').waitFor();
+    return nb(await owner.locator('.flash').first().innerText());
+  };
+  t = await inst({ kind: 'convertible', holder_name: 'Investor AB', amount: '100000', strike: '50', interest_pct: '5', issued_on: day(73), expires_on: `${YEAR + 3}-12-31` });
+  assert(t.includes('2000aktier'), 'konvertibel 100 000 / 50 kr: ' + t);
+  t = await inst({ kind: 'warrant', holder_name: 'VD Vera', amount: '2000', strike: '40', shares: '100', issued_on: day(10), expires_on: `${YEAR + 3}-06-30` });
+  assert(t.includes('100aktier'), 'optioner');
+  assert(nb(await owner.locator('.si-dilution tr[data-name="Grundare Gun"] .si-diluted').innerText()) === '32,3%', 'utspädning före konvertering: ' + await owner.locator('.si-dilution').innerText());
+  const si = (h) => owner.locator(`.si-row[data-holder="${h}"]`);
+  await si('Investor AB').locator('button:has-text("Periodisera ränta")').click(); await owner.locator('text=Upplupen ränta 1 000,00 kr är bokförd').waitFor();
+  await si('Investor AB').locator('button:has-text("Konvertera till aktier")').click(); await owner.locator('text=2000 nya aktier (nr 1001–3000)').waitFor();
+  t = nb(await owner.locator('.flash').first().innerText()); assert(t.includes('ökatmed50000,00kr'), 'aktiekapital 2 000 × 25 kr: ' + t);
+  await si('VD Vera').locator('button:has-text("Teckna aktier")').click(); await owner.locator('text=100 nya aktier (nr 3001–3100)').waitFor();
+  assert(nb(await owner.locator('.si-dilution tr[data-name="Investor AB"]').innerText()).includes('64,5%') && nb(await owner.locator('.si-dilution tr[data-name="VD Vera"]').innerText()).includes('3,2%'), 'ägarandelar efter konvertering och teckning');
+  await owner.goto(KV + '/aktiebok');
+  t = nb(await text(owner)); assert(t.includes('77500,00') && t.includes('InvestorAB') && t.includes('1001–3000'), 'aktiebok: ' + t.slice(0, 1200));
+  await owner.goto(KV + '/verifikationer');
+  await owner.locator('tr:has-text("Konvertering: 2000 aktier") a').first().click(); await owner.waitForURL(/verifikationer\/\d+/);
+  t = nb(await text(owner)); assert(t.includes('2320') && t.includes('100000,00') && t.includes('2081') && t.includes('2097'), 'konvertering 2320/2081/2097: ' + t.slice(0, 700));
+  log('konvertibler och optioner: konvertibelt lån 2320 med periodiserad ränta, optionspremie till fritt eget kapital, konvertering och teckning till nya aktier i aktieboken, utspädning');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 34: alla steg gick igenom');

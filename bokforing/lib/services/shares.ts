@@ -225,6 +225,17 @@ export async function registerIssue(actor: Actor, issueId: number, d: string) {
   });
 }
 
+/** Nya aktier förs in i aktieboken med löpande nummer (t.ex. vid konvertering eller teckning med optioner) */
+export async function addSharesTx(tx: Tx, actor: Actor, o: { name: string; holder_id: string; address: string; shares: number; share_class: 'A' | 'B'; date: string; capital: number; kind: string; text: string }) {
+  const [{ max }] = await tx<{ max: number }[]>`SELECT COALESCE(max(to_no), 0)::int AS max FROM share_holdings WHERE company_id = ${actor.companyId}`;
+  await tx`INSERT INTO share_holdings (company_id, holder_name, holder_id, address, share_class, from_no, to_no, acquired_on)
+    VALUES (${actor.companyId}, ${o.name}, ${o.holder_id}, ${o.address}, ${o.share_class}, ${max + 1}, ${max + o.shares}, ${o.date})`;
+  await tx`UPDATE share_settings SET share_capital = share_capital + ${o.capital}, total_shares = total_shares + ${o.shares}, updated_at = now() WHERE company_id = ${actor.companyId}`;
+  await event(tx, actor, o.kind, o.date, `${o.text} (nr ${max + 1}–${max + o.shares}), aktiekapitalet ökat med ${kr(o.capital)} kr`, { holder: o.name, shares: o.shares });
+  await syncOwners(tx, actor.companyId);
+  return { from: max + 1, to: max + o.shares };
+}
+
 // ---------- Styrelseprotokoll ----------
 export async function boardMinutes(actor: Actor, input: { date: string; place: string; present: string; items: string; signers: { name: string; email: string }[] }) {
   ownerOnly(actor);

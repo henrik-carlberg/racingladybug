@@ -31,3 +31,17 @@ describe('Service och garanti', () => {
     expect(warrantyRate(150000, 10000000)).toBe(1.5);
   });
 });
+
+import { accruedInterest, conversionLines, dilution, exerciseLines, issueLines } from '@/lib/share-instruments';
+describe('Konvertibler och optioner', () => {
+  it('ränta, konvertering, teckning och utspädning', () => {
+    expect(issueLines('warrant', 200000)).toEqual([{ account: 1930, amount: 200000 }, { account: 2097, amount: -200000 }]);
+    expect(accruedInterest({ amount: 10000000, pct: 5, from: '2026-01-01', to: '2026-03-15', booked: 0 })).toBe(100000);
+    expect(accruedInterest({ amount: 10000000, pct: 5, from: '2026-01-01', to: '2026-03-15', booked: 100000 })).toBe(0);
+    expect(conversionLines(10000000, 2000, 2500).lines).toEqual([{ account: 2320, amount: 10000000 }, { account: 2081, amount: -5000000 }, { account: 2097, amount: -5000000 }]);
+    expect(() => conversionLines(100, 2000, 2500)).toThrow();
+    expect(exerciseLines(100, 4000, 2500)).toMatchObject({ total: 400000, capital: 250000 });
+    const d = dilution([{ name: 'A', shares: 1000 }], [{ name: 'B', shares: 2000 }, { name: 'C', shares: 100 }]);
+    expect(d.find((x) => x.name === 'A')).toMatchObject({ pct: 100, diluted: 32.3 });
+  });
+});
