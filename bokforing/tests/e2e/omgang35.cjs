@@ -252,6 +252,44 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(!(await text(owner)).includes('Erik Erfaren') || (await owner.locator('tr:has-text("Erik Erfaren")').innerText()).match(/avslutad|inaktiv/i), 'anställningen är avslutad');
   log('uppsägning: uppsägningstid enligt LAS efter anställningstid, avgångsvederlag som engångsbelopp med skatt och avgift, skuld för arbetsbefriad tid och vederlag, avslutad anställning');
 
+  // ================= Del 5: leverantörsbedömning =================
+  const LV = await newCompany('Inköparen AB', 559990000);
+  for (const n of ['Bra Leverantör AB', 'Riskabel AB']) {
+    await owner.goto(LV + '/leverantorer'); await owner.fill('input[name=name]', n); await owner.click('button:has-text("Spara leverantör")'); await owner.waitForURL(/ok=/);
+  }
+  const supInv = async (sup, no, total, vat) => {
+    await owner.goto(LV + '/leverantorsfakturor/ny');
+    await owner.selectOption('select[name=supplier_id]', { label: sup });
+    await owner.fill('input[name=invoice_number]', no); await owner.fill('input[name=invoice_date]', day(5)); await owner.fill('input[name=due_date]', day(-25));
+    await owner.fill('input[name=total]', total); await owner.locator('input[name=total]').blur(); await owner.fill('input[name=vat]', vat);
+    await owner.fill('input[name=account_0]', '4010'); await owner.fill('input[name=amount_0]', String(Number(total) - Number(vat)));
+    await owner.click('button:has-text("Registrera och bokför")'); await owner.waitForURL(/ok=/);
+    return owner.url().split('?')[0];
+  };
+  const braUrl = await supInv('Bra Leverantör AB', 'B-1', '50000', '10000');
+  const riskUrl = await supInv('Riskabel AB', 'R-1', '75000', '15000');
+  await owner.goto(riskUrl);
+  t = nb(await owner.locator('.sa-warning').innerText()); assert(t.includes('F-skattsaknas') && t.includes('Momsregistreringsaknas'), 'varning på fakturan: ' + t);
+  const sa = (n) => owner.locator(`.sa-row[data-name="${n}"]`);
+  const check = async (n, kind, checkedOn, months = '12') => {
+    await owner.goto(LV + '/leverantorer/bedomning');
+    const f = sa(n).locator('form:has(button:has-text("Registrera"))');
+    await f.locator('select[name=kind]').selectOption(kind); await f.locator('input[name=checked_on]').fill(checkedOn); await f.locator('input[name=valid_months]').fill(months);
+    await f.locator('button').click(); await owner.locator('text=är registrerad, giltig till').waitFor();
+  };
+  await check('Bra Leverantör AB', 'f_tax', day(10)); await check('Bra Leverantör AB', 'vat', day(10));
+  await owner.goto(LV + '/leverantorer/bedomning');
+  await sa('Riskabel AB').locator('select[name=level]').selectOption('high'); await sa('Riskabel AB').locator('button:has-text("Spara")').click(); await owner.locator('text=Risknivån är sparad').waitFor();
+  await check('Riskabel AB', 'f_tax', day(400)); await check('Riskabel AB', 'vat', day(10));
+  await owner.goto(LV + '/leverantorer/bedomning');
+  assert((await sa('Bra Leverantör AB').getAttribute('data-ok')) === '1', 'godkänd leverantör');
+  t = nb(await sa('Riskabel AB').locator('.sa-problems').innerText());
+  assert(t.includes('F-skatthargåttut') && t.includes('Kreditupplysningsaknas') && t.includes('Uppförandekodsaknas') && !t.includes('Momsregistrering'), 'brister vid hög risk: ' + t);
+  assert(nb(await sa('Riskabel AB').locator('.sa-share').innerText()).startsWith('60%') && nb(await sa('Bra Leverantör AB').locator('.sa-share').innerText()).startsWith('40%'), 'andel av inköpen');
+  await owner.goto(braUrl);
+  assert(await owner.locator('.sa-warning').count() === 0, 'ingen varning för godkänd leverantör');
+  log('leverantörsbedömning: risknivå styr kraven, kontroller med giltighetstid, utgångna och saknade kontroller, varning på fakturan före betalning, andel av inköpen');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 35: alla steg gick igenom');

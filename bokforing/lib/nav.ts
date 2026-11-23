@@ -65,6 +65,7 @@ export function buildNav(o: {
       { path: '/leverantorsfakturor/betalning', label: 'Betalningar', perm: 'payments', hint: 'Betala attesterade fakturor' },
       { path: '/leverantorer', label: 'Leverantörer' },
       { path: '/tull', label: 'Import och tull', perm: 'ledger', hint: 'Tullverkets beslut, importmoms ruta 50/60 och tull på varorna' },
+      { path: '/leverantorer/bedomning', label: 'Leverantörsbedömning', perm: 'purchasing', hint: 'Risknivå, kontroller med giltighetstid och beroende' },
       { path: '/leverantorsavtal', label: 'Leverantörsavtal', perm: 'purchasing', hint: 'Uppsägningstider, förlängningar och prishöjningar' },
       { path: '/kontroll', label: 'Varningar och kontroll', perm: 'ledger', hint: 'Nya bankuppgifter, dubbletter och ovanliga utbetalningar' },
     ]) },

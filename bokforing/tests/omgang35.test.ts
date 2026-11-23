@@ -56,3 +56,16 @@ describe('Uppsägning och avgångsvederlag', () => {
     expect(accrualLines(100, 31)).toEqual([{ account: 7210, amount: 100 }, { account: 2910, amount: -100 }, { account: 7510, amount: 31 }, { account: 2940, amount: -31 }]);
   });
 });
+
+import { assess, dependency } from '@/lib/supplier-assessment';
+describe('Leverantörsbedömning', () => {
+  it('krav per risknivå och giltighet', () => {
+    const t = '2026-11-23';
+    expect(assess('low', [{ kind: 'f_tax', ok: true, checked_on: '2026-11-01', valid_until: '2027-11-01' }, { kind: 'vat', ok: true, checked_on: '2026-11-01', valid_until: '2027-11-01' }], t).ok).toBe(true);
+    const r = assess('high', [{ kind: 'f_tax', ok: true, checked_on: '2025-10-01', valid_until: '2026-10-01' }, { kind: 'vat', ok: false, checked_on: '2026-11-01', valid_until: '2027-11-01' }], t);
+    expect(r.ok).toBe(false);
+    expect(r.problems).toEqual(['F-skatt har gått ut', 'Momsregistrering ej godkänd', 'Kreditupplysning saknas', 'Ansvarsförsäkring saknas', 'Kollektivavtal saknas', 'Uppförandekod saknas']);
+    expect(assess('low', [{ kind: 'f_tax', ok: true, checked_on: '2026-01-01', valid_until: '2026-12-01' }, { kind: 'vat', ok: true, checked_on: '2026-01-01', valid_until: '2027-12-01' }], t).rows[0].state).toBe('expiring');
+    expect(dependency(6000000, 10000000)).toBe(60);
+  });
+});

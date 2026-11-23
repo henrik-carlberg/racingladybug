@@ -34,10 +34,13 @@ export default async function SupplierInvoice({ params, searchParams }: { params
   const lager = await isModuleEnabled(company.id, 'lager');
   const pos = lager && !i.purchase_order_id ? await (await import('@/modules/lager/service')).openPOsFor(company.id, i.supplier_id) : [];
   const [po] = i.purchase_order_id ? await sql<{ number: number }[]>`SELECT number FROM inv_purchase_orders WHERE id = ${i.purchase_order_id}` : [];
+  // Leverantörsbedömningen: kontroller som saknas eller har gått ut visas innan fakturan attesteras och betalas
+  const supplierWarnings = i.status === 'paid' ? [] : await (await import('@/lib/services/supplier-assessment')).warnings(company.id, i.supplier_id);
   return (
     <>
       <h1>{i.supplier} – faktura {i.invoice_number} <Status s={i.status} overdue={i.due_date < today()} /></h1>
       <Flash searchParams={searchParams} />
+      {supplierWarnings.length > 0 && <p className="flash error sa-warning" role="alert">Leverantörsbedömning: {supplierWarnings.join(', ')}. <a href={`/c/${company.id}/leverantorer/bedomning`}>Kontrollera leverantören</a> innan fakturan betalas.</p>}
       <div className="card grid">
         <div><div className="muted small">Fakturadatum</div>{i.invoice_date}</div>
         <div><div className="muted small">Förfallodatum</div>{i.due_date}</div>
