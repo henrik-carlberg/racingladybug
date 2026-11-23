@@ -192,6 +192,37 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await rrow().locator('.rn-util').innerText()) === '23,3%' && nb(await rrow().locator('.rn-revenue').innerText()) === '20500,00', 'beläggning och intäkt: ' + await rrow().innerText());
   log('uthyrning: individ med serienummer, fakturering per period med billigaste av dag-/veckopris, återlämning med skade- och förseningsavgift, beläggning och intäkt per individ');
 
+  // ================= Del 4: lojalitetsprogram =================
+  const LY = await newCompany('Kundklubben AB', 559730000);
+  if (Number(day(30).slice(0, 4)) !== YEAR) await addFy(LY, YEAR - 1);
+  await owner.goto(LY + '/kunder');
+  await owner.fill('input[name=name]', 'Stamkund AB'); await owner.click('button:has-text("Spara kund")'); await owner.waitForURL(/ok=/);
+  await owner.goto(LY + '/lojalitet');
+  await owner.fill('input[name=kr_per_point]', '10'); await owner.fill('input[name=point_value]', '0,10'); await owner.fill('input[name=redemption_rate]', '80');
+  await owner.fill('input[name=start_date]', day(30));
+  await owner.click('button:has-text("Starta programmet")'); await owner.locator('text=Programmet är sparat').waitFor();
+  await owner.fill('input[name=joined_on]', day(30)); await owner.click('button:has-text("Lägg till medlem")'); await owner.locator('text=Kunden är medlem').waitFor();
+  await invoice(LY, 'Stamkund AB', 4000, day(10));
+  await invoice(LY, 'Stamkund AB', 1505, day(8));
+  await owner.goto(LY + '/lojalitet');
+  await owner.click('button:has-text("Registrera poäng från fakturor")'); await owner.locator('text=550 poäng har registrerats från 2 fakturor').waitFor();
+  await owner.click('button:has-text("Justera skulden")'); await owner.locator('text=Skulden för bonuspoäng är justerad till 44,00 kr').waitFor();
+  assert(nb(await owner.locator('.ly-booked').innerText()) === '44,00' && nb(await owner.locator('.ly-points').innerText()) === '550', 'skuld 550 p × 0,10 × 80 %');
+  await owner.fill('input[name=points]', '600'); await owner.click('button:has-text("Lös in poäng")'); await owner.locator('text=har 550 poäng').waitFor();
+  await owner.fill('input[name=points]', '200'); await owner.click('button:has-text("Lös in poäng")'); await owner.waitForURL(/fakturor\/\d+\?ok/);
+  t = nb(await text(owner)); assert(t.includes('Inlöstabonuspoäng(200p)') && t.includes('-25,00'), 'rabatt med moms: ' + t.slice(0, 900));
+  await owner.click('button:has-text("Bokför faktura")'); await owner.locator('text=Fakturan är bokförd').waitFor();
+  await owner.goto(LY + '/lojalitet');
+  await owner.click('button:has-text("Registrera poäng från fakturor")'); await owner.locator('text=0 poäng har registrerats').waitFor();
+  assert(nb(await owner.locator('.ly-row[data-name="Stamkund AB"] .ly-balance').innerText()) === '350', 'saldo efter inlösen');
+  await owner.click('button:has-text("Låt gamla poäng förfalla")'); await owner.locator('text=Inga poäng har förfallit').waitFor();
+  await owner.click('button:has-text("Justera skulden")'); await owner.locator('text=justerad till 28,00 kr').waitFor();
+  await owner.click('button:has-text("Justera skulden")'); await owner.locator('text=Skulden för bonuspoäng stämmer redan').waitFor();
+  await owner.goto(LY + '/verifikationer');
+  await owner.locator('tr:has-text("Skuld för utestående bonuspoäng: 550") a').first().click(); await owner.waitForURL(/verifikationer\/\d+/);
+  t = nb(await text(owner)); assert(t.includes('3790') && t.includes('2970') && t.includes('44,00'), 'skuld 3790/2970: ' + t.slice(0, 600));
+  log('lojalitetsprogram: poäng på fakturerade köp, skuld som förutbetald intäkt med förväntad inlösen, inlösen som rabatt med moms, förfall och justering');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 32: alla steg gick igenom');

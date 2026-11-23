@@ -43,3 +43,16 @@ describe('Uthyrning', () => {
     expect(utilization([{ start: '2026-11-01', end: '2026-11-05' }], '2026-11-01', '2026-11-10').pct).toBe(50);
   });
 });
+
+import { adjustmentLines, liabilityFor, pointStatus, pointsFor, redemptionValue } from '@/lib/loyalty';
+describe('Lojalitetsprogram', () => {
+  it('poäng, skuld och förfall', () => {
+    expect(pointsFor(150500, 10)).toBe(150);
+    expect(pointsFor(-100, 10)).toBe(0);
+    expect(redemptionValue(200, { point_value: 10 })).toBe(2000);
+    expect(liabilityFor(550, { point_value: 10, redemption_rate: 80 })).toBe(4400);
+    expect(pointStatus([{ date: '2024-01-01', kind: 'earn', points: 100 }, { date: '2026-01-01', kind: 'earn', points: 50 }, { date: '2026-02-01', kind: 'redeem', points: 30 }], '2024-11-23'))
+      .toEqual({ balance: 120, expiring: 70 });
+    expect(adjustmentLines(-1600)).toEqual([{ account: 3790, amount: -1600 }, { account: 2970, amount: 1600 }]);
+  });
+});
