@@ -131,6 +131,7 @@ export function buildNav(o: {
       { path: '/klimat', label: 'Klimatbokföring', perm: 'ledger', hint: 'Utsläpp ur bokföringen per scope' },
       { path: '/rapporter', label: 'Resultat & balans' },
       { path: '/rapporter/budget', label: 'Budget' },
+      { path: '/scenarier', label: 'Scenarioplanering', perm: 'ledger', hint: 'Tänk om-scenarier för resultat och kassa' },
       { path: '/rapporter/moms', label: 'Moms', hint: 'Momsdeklarationen' },
       { path: '/punktskatter', label: 'Punktskatter', perm: 'ledger', hint: 'Energiskatt, kemikalieskatt och andra punktskatter' },
       { path: '/rapporter/moms/avancerat', label: 'Blandad verksamhet och jämkning', perm: 'ledger', hint: 'Proportionering av ingående moms och jämkning av investeringsvaror' },

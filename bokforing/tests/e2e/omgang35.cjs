@@ -136,6 +136,37 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(await fa().locator('.fa-expiring').count() === 0, 'förlängt');
   log('anbud och ramavtal: anbud med kalkyl och vinstprocent, vunnet anbud blir ramavtal, avrop mot takbelopp med varning vid 80 % och 100 %, förlängning');
 
+  // ================= Del 2: scenarioplanering =================
+  const SC = await newCompany('Prognosbolaget AB', 559960000);
+  if (Number(day(30).slice(0, 4)) !== YEAR) await addFy(SC, YEAR - 1);
+  await owner.goto(SC + '/kunder');
+  await owner.fill('input[name=name]', 'Storkunden AB'); await owner.click('button:has-text("Spara kund")'); await owner.waitForURL(/ok=/);
+  await voucher(SC, 'Försäljning kontant', [[1930, 960000], [3001, -960000]], day(30));
+  await voucher(SC, 'Varuinköp', [[4010, 600000], [1930, -600000]], day(25));
+  await invoice(SC, 'Storkunden AB', 240000, day(20));
+  const NY = YEAR + 1;
+  await owner.goto(SC + `/scenarier?year=${NY}`);
+  await owner.fill('form:has(button:has-text("Skapa scenario")) input[name=name]', 'Pessimistiskt'); await owner.click('button:has-text("Skapa scenario")'); await owner.locator('text=Scenariot är skapat').waitFor();
+  const addItem = async (f) => {
+    await owner.goto(SC + `/scenarier?year=${NY}`);
+    const fm = owner.locator('.sn-scenario[data-name="Pessimistiskt"] form:has(button:has-text("Lägg till"))');
+    await fm.locator('select[name=kind]').selectOption(f.kind);
+    for (const k of ['label', 'from_month', 'pct', 'amount', 'years']) await fm.locator(`input[name=${k}]`).fill(f[k] ?? (k === 'from_month' ? '1' : ''));
+    if (f.customer) await fm.locator('select[name=customer_id]').selectOption({ label: f.customer });
+    await fm.locator('button').click(); await owner.locator('text=Förändringen är tillagd').waitFor();
+  };
+  await addItem({ kind: 'lost_customer', customer: 'Storkunden AB' });
+  await addItem({ kind: 'hire', label: 'Ny säljare', from_month: '4', amount: '40000' });
+  const sr = (n) => owner.locator(`.sn-row[data-name="${n}"]`);
+  const neg = (s) => nb(s).replace('−', '-');
+  assert(neg(await sr('Bas').locator('.sn-result').innerText()) === '600000,00' && neg(await sr('Bas').locator('.sn-lowest').innerText()) === '410000,00', 'bas: årstakt 100 000 − 50 000 per månad: ' + await sr('Bas').innerText());
+  assert(neg(await sr('Pessimistiskt').locator('.sn-result').innerText()) === '-113112,00' && neg(await sr('Pessimistiskt').locator('.sn-diff').innerText()) === '-713112,00', 'scenario: ' + await sr('Pessimistiskt').innerText());
+  assert(neg(await sr('Pessimistiskt').locator('.sn-lowest').innerText()) === '246888,00' && (await sr('Pessimistiskt').innerText()).includes('dec'), 'lägsta kassa i december');
+  const items = owner.locator('.sn-scenario[data-name="Pessimistiskt"] .sn-item');
+  assert((await items.first().getAttribute('data-label')) === 'Ny säljare' || neg(await owner.locator('.sn-item[data-label="Ny säljare"] .sn-impact').innerText()) === '-473112,00', 'påverkan per post');
+  assert(neg(await owner.locator('.sn-item[data-label="Förlorar Storkunden AB"] .sn-impact').innerText()) === '-240000,00', 'förlorad kund 20 000 kr per månad');
+  log('scenarioplanering: bas från årstakten, förlorad kund och nyanställning med arbetsgivaravgift, jämförelse av resultat och lägsta kassa, påverkan per förändring');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 35: alla steg gick igenom');
