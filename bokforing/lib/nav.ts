@@ -30,6 +30,7 @@ export function buildNav(o: {
       { path: '/uthyrning', label: 'Uthyrning av utrustning', perm: 'invoicing', hint: 'Hyresavtal per individ, fakturering per period och beläggning' },
       { path: '/lojalitet', label: 'Lojalitetsprogram', perm: 'invoicing', hint: 'Bonuspoäng som förutbetald intäkt, inlösen och förfall' },
       { path: '/franchise', label: 'Franchise', perm: 'invoicing', hint: 'Royalty på franchisetagarnas omsättning, inträdesavgifter och marknadsföringsfond' },
+      { path: '/kommission', label: 'Kommissionsförsäljning', perm: 'invoicing', hint: 'Försäljning för huvudmäns räkning med provision och avräkningsnotor' },
       { path: '/kundutlagg', label: 'Utlägg för kunder', perm: 'invoicing', hint: 'Momsfria utlägg för kundens räkning' },
       { path: '/kassa', label: 'Kassa och e-handel', hint: 'Dagskassa och webbutik' },
       { path: '/kundbonus', label: 'Kundbonus', perm: 'invoicing', hint: 'Bonus i efterhand med trappsteg på omsättningen' },

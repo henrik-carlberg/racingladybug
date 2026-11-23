@@ -145,6 +145,39 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(nb(await owner.locator('.pa-margins tr[data-customer="Specialkund AB"] .pa-pct').innerText()) === '25%', 'marginal specialkund');
   log('kundprisavtal: grupprabatt, volymrabatt från 50 st och kundens nettopris sätts automatiskt på kundordern, varning när avtal går ut, marginal per kund');
 
+  // ================= Del 2: kommissionsförsäljning =================
+  const KS = await newCompany('Second hand-butiken AB', 559810000);
+  await owner.goto(KS + '/kommission');
+  for (const [n, pct, vat] of [['Privat Säljare', '30', false], ['Antikhandlaren AB', '20', true]]) {
+    await owner.fill('form:has(button:has-text("Lägg upp huvudman")) input[name=name]', n); await owner.fill('input[name=commission_pct]', pct);
+    if (vat) await owner.check('input[name=vat_registered]'); else await owner.uncheck('input[name=vat_registered]');
+    await owner.click('button:has-text("Lägg upp huvudman")'); await owner.locator('text=Huvudmannen är upplagd').waitFor();
+    await owner.goto(KS + '/kommission');
+  }
+  for (const [pr, d, ask] of [['Privat Säljare', 'Teakbyrå', '2500'], ['Antikhandlaren AB', 'Spegel', '1250'], ['Privat Säljare', 'Lampa', '400']]) {
+    await owner.goto(KS + '/kommission');
+    await owner.selectOption('form:has(button:has-text("Ta emot vara")) select[name=principal_id]', { label: pr });
+    await owner.fill('form:has(button:has-text("Ta emot vara")) input[name=description]', d); await owner.fill('input[name=ask_price]', ask);
+    await owner.click('button:has-text("Ta emot vara")'); await owner.locator('text=Varan är mottagen i kommission').waitFor();
+  }
+  const cm = (d) => owner.locator(`.cm-row[data-description="${d}"]`);
+  await owner.goto(KS + '/kommission');
+  await cm('Teakbyrå').locator('button:has-text("Sålt")').click(); await owner.locator('text=Försäljningen är bokförd').waitFor();
+  t = nb(await owner.locator('.flash').first().innerText()); assert(t.includes('provision600,00kr') && t.includes('moms500,00kr') && t.includes('huvudmannen1400,00kr'), 'privat huvudman: ' + t);
+  await owner.goto(KS + '/kommission');
+  await cm('Spegel').locator('button:has-text("Sålt")').click(); await owner.locator('text=Försäljningen är bokförd').waitFor();
+  t = nb(await owner.locator('.flash').first().innerText()); assert(t.includes('provision200,00kr') && t.includes('huvudmannen1000,00kr'), 'momsregistrerad huvudman: ' + t);
+  await owner.goto(KS + '/kommission');
+  await cm('Lampa').locator('button:has-text("Återlämna")').click(); await owner.locator('text=Varan är återlämnad').waitFor();
+  assert(nb(await owner.locator('.cm-debt').innerText()) === '2400,00', 'skuld till huvudmän 2895');
+  await owner.locator('.cm-prow[data-name="Privat Säljare"] button:has-text("Avräkna och betala ut")').click(); await owner.locator('text=Avräkningen är bokförd').waitFor();
+  assert(nb(await owner.locator('.cm-nota-total').innerText()) === '1400,00' && (await owner.locator('.cm-nota').innerText()).includes('Teakbyrå'), 'avräkningsnota');
+  assert(nb(await owner.locator('.cm-debt').innerText()) === '1000,00', 'kvar att avräkna');
+  await owner.goto(KS + '/verifikationer');
+  await owner.locator('tr:has-text("Kommissionsförsäljning: Spegel") a').first().click(); await owner.waitForURL(/verifikationer\/\d+/);
+  t = nb(await text(owner)); assert(t.includes('3045') && t.includes('2611') && t.includes('2641') && t.includes('2895') && t.includes('1000,00'), 'kontering med huvudmannens moms: ' + t.slice(0, 700));
+  log('kommissionsförsäljning: moms på hela priset, provisionen som intäkt och resten som skuld till huvudmannen, huvudmannens moms vid momsregistrering, återlämning och avräkningsnota');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 33: alla steg gick igenom');

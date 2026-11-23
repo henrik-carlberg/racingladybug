@@ -14,3 +14,17 @@ describe('Kundprisavtal', () => {
     expect(expiresSoon('2027-03-01', '2026-11-23')).toBe(false);
   });
 });
+
+import { payoutLines, saleLines, saleSplit } from '@/lib/commission-sales';
+describe('Kommissionsförsäljning', () => {
+  it('fördelning och kontering', () => {
+    const p = saleSplit({ gross: 250000, vatRate: 25, commissionPct: 30, principalVatRegistered: false });
+    expect(p).toEqual({ net: 200000, vat: 50000, commission: 60000, share: 140000, principalVat: 0, payable: 140000 });
+    const r = saleSplit({ gross: 125000, vatRate: 25, commissionPct: 20, principalVatRegistered: true });
+    expect(r).toMatchObject({ commission: 20000, share: 80000, principalVat: 20000, payable: 100000 });
+    const lines = saleLines(r, 25, 1930);
+    expect(lines.reduce((s, l) => s + l.amount, 0)).toBe(0);
+    expect(lines).toContainEqual({ account: 2641, amount: 20000 });
+    expect(payoutLines(140000)).toEqual([{ account: 2895, amount: 140000 }, { account: 1930, amount: -140000 }]);
+  });
+});
