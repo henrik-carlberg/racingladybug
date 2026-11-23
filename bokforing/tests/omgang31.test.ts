@@ -32,3 +32,16 @@ describe('Punktskatter', () => {
     expect(dueDate('2026-12')).toBe('2027-01-26');
   });
 });
+
+import { assessmentLines, compensation, paymentLines as claimPayment, scrapLines, stockLossLines } from '@/lib/damage-claims';
+describe('Försäkringsskador', () => {
+  it('ersättning och kontering', () => {
+    expect(compensation(4000000, 500000)).toBe(3500000);
+    expect(compensation(300000, 500000)).toBe(0);
+    expect(scrapLines(5000000, 1000000, { asset: 1220, accDep: 1229 })).toEqual([{ account: 1220, amount: -5000000 }, { account: 1229, amount: 1000000 }, { account: 7973, amount: 4000000 }]);
+    expect(stockLossLines(50000)).toEqual([{ account: 4960, amount: 50000 }, { account: 1460, amount: -50000 }]);
+    expect(stockLossLines(0)).toEqual([]);
+    expect(assessmentLines(3500000)).toEqual([{ account: 1689, amount: 3500000 }, { account: 3994, amount: -3500000 }]);
+    expect(claimPayment(3500000)).toEqual([{ account: 1930, amount: 3500000 }, { account: 1689, amount: -3500000 }]);
+  });
+});

@@ -198,6 +198,49 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   assert(t.includes('6900') && t.includes('2660') && t.includes('38,00'), 'kontering 6900/2660: ' + t.slice(0, 600));
   log('punktskatter: underlag från lagerleveranser × faktor och egna uttag, punktskatt som fakturarad, deklaration mot 2660 och betalning via skattekontot');
 
+  // ================= Del 3: försäkringsskador =================
+  const FS = await newCompany('Skadebolaget AB', 559620000);
+  await owner.goto(FS + '/anlaggningar');
+  await owner.fill('form:has(button:has-text("Lägg upp tillgång")) input[name=name]', 'Lastmaskin');
+  await owner.fill('input[name=cost]', '50000'); await owner.fill('input[name=acquired_on]', day(30));
+  await owner.click('button:has-text("Lägg upp tillgång")'); await owner.waitForURL(/ok=/);
+  await owner.goto(FS + '/moduler');
+  await owner.locator('.card:has(h2:text-is("Inköp, lager och logistik")) button:has-text("Aktivera")').click(); await owner.waitForURL(/ok=/);
+  await owner.goto(FS + '/m/lager/artiklar');
+  await owner.fill('input[name=sku]', 'V-1'); await owner.fill('input[name=name]', 'Pappersrulle');
+  await owner.fill('input[name=purchase_price]', '100'); await owner.fill('input[name=sales_price]', '250'); await owner.fill('input[name=opening_qty]', '20');
+  await owner.click('button:has-text("Lägg upp artikel")'); await owner.locator('text=Artikeln är upplagd').waitFor();
+  await owner.goto(FS + '/forsakringsskador');
+  await owner.fill('input[name=description]', 'Brand i lagerlokalen'); await owner.fill('input[name=insurer]', 'Försäkringsbolaget'); await owner.fill('input[name=claim_ref]', 'S-123');
+  await owner.selectOption('select[name=kind]', 'asset'); await owner.selectOption('select[name=asset_id]', { label: 'Lastmaskin' });
+  await owner.click('button:has-text("Anmäl skada")'); await owner.locator('text=Skadan är registrerad').waitFor();
+  t = nb(await owner.locator('.flash').first().innerText()); assert(t.includes('50000,00kr'), 'utrangerat bokfört värde: ' + t);
+  await owner.fill('input[name=description]', 'Vattenskada på varor'); await owner.selectOption('select[name=kind]', 'inventory');
+  await owner.selectOption('select[name=product_id]', { index: 1 }); await owner.fill('input[name=quantity]', '5');
+  await owner.click('button:has-text("Anmäl skada")'); await owner.locator('text=500,00 kr har skrivits bort').waitFor();
+  let crow = owner.locator('.dc-row[data-description="Brand i lagerlokalen"]');
+  await crow.locator('input[name=assessed]').fill('40000'); await crow.locator('input[name=deductible]').fill('5000');
+  await crow.locator('button:has-text("Registrera besked")').click(); await owner.locator('text=är bokförd som fordran').waitFor();
+  t = nb(await owner.locator('.flash').first().innerText());
+  assert(t.includes('Ersättningen35000,00kr') && t.includes('självrisk5000,00kr') && t.includes('ersättningsfond'), 'besked: ' + t);
+  assert(nb(await owner.locator('.dc-receivable').innerText()) === '35000,00', 'fordran 1689');
+  crow = owner.locator('.dc-row[data-description="Vattenskada på varor"]');
+  await crow.locator('input[name=denied]').check(); await crow.locator('button:has-text("Registrera besked")').click(); await owner.locator('text=avslutat utan ersättning').waitFor();
+  await owner.locator('.dc-row[data-description="Brand i lagerlokalen"] button:has-text("Utbetald")').click(); await owner.locator('text=Utbetalningen 35000,00 kr är bokförd').first().waitFor().catch(() => {});
+  assert(nb(await owner.locator('.dc-receivable').innerText()) === '0,00' && await owner.locator('.dc-row[data-status="paid"]').count() === 1, 'utbetald');
+  await owner.goto(FS + '/anlaggningar');
+  assert(await owner.locator('button:has-text("Bokför avyttring")').count() === 0, 'tillgången är utrangerad');
+  await owner.goto(FS + '/verifikationer');
+  await owner.locator('tr:has-text("utrangering av Lastmaskin") a').first().click(); await owner.waitForURL(/verifikationer\/\d+/);
+  t = nb(await text(owner)); assert(t.includes('7973') && t.includes('1220') && t.includes('50000,00'), 'utrangering 7973/1220: ' + t.slice(0, 600));
+  await owner.goto(FS + '/verifikationer');
+  await owner.locator('tr:has-text("bortskrivna ur lagret") a').first().click(); await owner.waitForURL(/verifikationer\/\d+/);
+  t = nb(await text(owner)); assert(t.includes('4960') && t.includes('1460') && t.includes('500,00'), 'lagerförlust 4960/1460: ' + t.slice(0, 600));
+  await owner.goto(FS + '/verifikationer');
+  await owner.locator('tr:has-text("självrisk 5") a').first().click(); await owner.waitForURL(/verifikationer\/\d+/);
+  t = nb(await text(owner)); assert(t.includes('1689') && t.includes('3994') && t.includes('35000,00'), 'ersättning 1689/3994: ' + t.slice(0, 600));
+  log('försäkringsskador: förstörd tillgång utrangeras, förstörda varor skrivs bort ur lagret, besked med självrisk som fordran 1689/3994, underlag för ersättningsfond, utbetalning');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 31: alla steg gick igenom');
