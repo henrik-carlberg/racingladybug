@@ -40,7 +40,7 @@ export default async function SupplierInvoice({ params, searchParams }: { params
     <>
       <h1>{i.supplier} – faktura {i.invoice_number} <Status s={i.status} overdue={i.due_date < today()} /></h1>
       <Flash searchParams={searchParams} />
-      {supplierWarnings.length > 0 && <p className="flash error sa-warning" role="alert">Leverantörsbedömning: {supplierWarnings.join(', ')}. <a href={`/c/${company.id}/leverantorer/bedomning`}>Kontrollera leverantören</a> innan fakturan betalas.</p>}
+      {supplierWarnings.length > 0 && <p className="card small sa-warning" role="note" style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}>Leverantörsbedömning: {supplierWarnings.join(', ')}. <a href={`/c/${company.id}/leverantorer/bedomning`}>Kontrollera leverantören</a> innan fakturan betalas.</p>}
       <div className="card grid">
         <div><div className="muted small">Fakturadatum</div>{i.invoice_date}</div>
         <div><div className="muted small">Förfallodatum</div>{i.due_date}</div>
