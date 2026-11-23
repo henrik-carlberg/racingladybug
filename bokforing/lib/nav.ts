@@ -25,6 +25,10 @@ export function buildNav(o: {
       { path: '/fakturor/returer', label: 'Returer och reklamationer', perm: 'invoicing', hint: 'Kreditering, ersättningsvara och återtag i lager' },
       { path: '/fakturor/tvister', label: 'Tvistiga fakturor', perm: 'invoicing', hint: 'Pausa påminnelser och avsluta med förlikning' },
       { path: '/betalningsforelaggande', label: 'Betalningsföreläggande', perm: 'invoicing', hint: 'Obetalda fakturor till Kronofogden' },
+      { path: '/emballage', label: 'Returemballage och pant', perm: 'invoicing', hint: 'Pant på pallar, fat och backar per kund' },
+      { path: '/uthyrning', label: 'Uthyrning av utrustning', perm: 'invoicing', hint: 'Hyresavtal per individ, fakturering per period och beläggning' },
+      { path: '/lojalitet', label: 'Lojalitetsprogram', perm: 'invoicing', hint: 'Bonuspoäng som förutbetald intäkt, inlösen och förfall' },
+      { path: '/franchise', label: 'Franchise', perm: 'invoicing', hint: 'Royalty på franchisetagarnas omsättning, inträdesavgifter och marknadsföringsfond' },
       { path: '/kundutlagg', label: 'Utlägg för kunder', perm: 'invoicing', hint: 'Momsfria utlägg för kundens räkning' },
       { path: '/kassa', label: 'Kassa och e-handel', hint: 'Dagskassa och webbutik' },
       { path: '/kundbonus', label: 'Kundbonus', perm: 'invoicing', hint: 'Bonus i efterhand med trappsteg på omsättningen' },
@@ -58,6 +62,7 @@ export function buildNav(o: {
     { id: 'bank', label: t('Bank'), icon: 'bank', items: items([
       { path: '/bank/avstamning', label: 'Bankavstämning', perm: 'ledger', hint: 'Bokför transaktionerna från banken' },
       { path: '/bank', label: 'Bankkonton', perm: 'ledger' },
+      { path: '/klientmedel', label: 'Klientmedel', perm: 'ledger', hint: 'Medel som förvaltas åt klienter, saldo per klient och avstämning' },
       { path: '/bank/regler', label: 'Konteringsregler', perm: 'ledger' },
       { path: '/kort', label: 'Företagskort', perm: 'ledger', hint: 'Kortköp som saknar kvitto' },
       { path: '/skattekonto', label: 'Skattekontot', perm: 'ledger' },
