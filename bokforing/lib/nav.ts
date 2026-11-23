@@ -141,6 +141,7 @@ export function buildNav(o: {
       { path: '/revision', label: 'Revision', perm: 'ledger', hint: 'Revisorns stickprov och anmärkningar' },
       { path: '/anlaggningar', label: 'Anläggningsregister' },
       { path: '/korjournal', label: 'Körjournal', perm: 'ledger', hint: 'Resor per fordon, privat körning och avdrag för egen bil' },
+      { path: '/lantbruk', label: 'Lantbruk', perm: 'ledger', hint: 'EU-stöd som fordran och djurinventering' },
       { path: '/elproduktion', label: 'Egen elproduktion', perm: 'ledger', hint: 'Solceller: producerad och såld el, elcertifikat och skattereduktion' },
       { path: '/forsakringsskador', label: 'Försäkringsskador', perm: 'ledger', hint: 'Skadeärenden, självrisk och försäkringsersättning' },
       { path: '/periodiseringar', label: 'Periodiseringar' },

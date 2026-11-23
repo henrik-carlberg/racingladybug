@@ -215,6 +215,38 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   t = nb(await text(owner)); assert(t.includes('3060') && t.includes('2611') && t.includes('525,00'), 'elförsäljning med moms: ' + t.slice(0, 600));
   log('egen elproduktion: producerad och såld el per månad med moms på försäljningen, elcertifikat, egen förbrukning, återbetalningstid och underlag för skattereduktion');
 
+  // ================= Del 4: lantbruk =================
+  const LB = await newCompany('Gården AB', 559820000);
+  if (Number(day(1).slice(0, 4)) !== YEAR) await addFy(LB, YEAR - 1);
+  await owner.goto(LB + '/lantbruk');
+  await owner.fill('input[name=kind]', 'Gårdsstöd'); await owner.fill('input[name=applied]', '120000');
+  await owner.click('button:has-text("Registrera ansökan")'); await owner.locator('text=Stödansökan är registrerad').waitFor();
+  const srow = () => owner.locator('.fm-row[data-kind="Gårdsstöd"]');
+  await srow().locator('form:has(button:has-text("Bokför fordran")) input[name=amount]').fill('115000');
+  await srow().locator('button:has-text("Bokför fordran")').click(); await owner.locator('text=Fordran 115 000,00 kr är bokförd för stödåret').waitFor();
+  assert(nb(await owner.locator('.fm-receivable').innerText()) === '115000,00', 'fordran 1684');
+  await srow().locator('form:has(button:has-text("Utbetalt")) input[name=amount]').fill('116500');
+  await srow().locator('button:has-text("Utbetalt")').click(); await owner.locator('text=skillnad mot fordran 1 500,00 kr').waitFor();
+  assert(nb(await owner.locator('.fm-receivable').innerText()) === '0,00' && await owner.locator('.fm-row[data-status="paid"]').count() === 1, 'fordran upplöst');
+  for (const [n, v] of [['Mjölkkor', '15000'], ['Kalvar', '3000']]) {
+    await owner.fill('form:has(button:has-text("Spara djurslag")) input[name=name]', n); await owner.fill('input[name=value_per_head]', v);
+    await owner.click('button:has-text("Spara djurslag")'); await owner.locator('text=Djurslaget är sparat').waitFor();
+    await owner.goto(LB + '/lantbruk');
+  }
+  const countHerd = async (d, cows, calves) => {
+    await owner.goto(LB + '/lantbruk');
+    await owner.fill('input[aria-label="Antal Mjölkkor"]', cows); await owner.fill('input[aria-label="Antal Kalvar"]', calves);
+    await owner.fill('form:has(button:has-text("Värdera och bokför")) input[name=date]', d);
+    await owner.click('button:has-text("Värdera och bokför")'); await owner.locator('text=Djurinventeringen är värderad').waitFor();
+    return nb(await owner.locator('.flash').first().innerText());
+  };
+  t = await countHerd(day(1), '40', '10'); assert(t.includes('630000,00kr') && t.includes('förändring630000,00kr'), 'första inventeringen: ' + t);
+  t = await countHerd(day(0), '38', '15'); assert(t.includes('615000,00kr') && (t.includes('-15000,00') || t.includes('−15000,00')), 'minskat djurlager: ' + t);
+  await owner.goto(LB + '/verifikationer');
+  await owner.locator('tr:has-text("40 Mjölkkor") a').first().click(); await owner.waitForURL(/verifikationer\/\d+/);
+  t = nb(await text(owner)); assert(t.includes('1450') && t.includes('4950') && t.includes('630000,00'), 'djurlager 1450/4950: ' + t.slice(0, 600));
+  log('lantbruk: EU-stöd som fordran för stödåret, utbetalning med skillnad mot intäkten, djurinventering per djurslag med bokförd lagerförändring');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 33: alla steg gick igenom');

@@ -41,3 +41,14 @@ describe('Egen elproduktion', () => {
       .toEqual({ produced: 2500, sold: 1500, own: 1000, revenue: 110000, payback: 10 });
   });
 });
+
+import { changeLines, paymentLines as subsidyPayment, receivableLines, valuation } from '@/lib/farming';
+describe('Lantbruk', () => {
+  it('stöd och djurvärdering', () => {
+    expect(receivableLines(11500000)).toEqual([{ account: 1684, amount: 11500000 }, { account: 3981, amount: -11500000 }]);
+    expect(subsidyPayment(11650000, 11500000)).toEqual([{ account: 1930, amount: 11650000 }, { account: 1684, amount: -11500000 }, { account: 3981, amount: -150000 }]);
+    expect(subsidyPayment(100, 0)).toEqual([{ account: 1930, amount: 100 }, { account: 3981, amount: -100 }]);
+    expect(valuation([{ type: 'Ko', heads: 38, value_per_head: 1500000 }, { type: 'Kalv', heads: 15, value_per_head: 300000 }, { type: 'Get', heads: 0, value_per_head: 1 }]).value).toBe(61500000);
+    expect(changeLines(-1500000)).toEqual([{ account: 1450, amount: -1500000 }, { account: 4950, amount: 1500000 }]);
+  });
+});
