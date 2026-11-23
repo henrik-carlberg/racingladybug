@@ -52,3 +52,15 @@ describe('Lantbruk', () => {
     expect(changeLines(-1500000)).toEqual([{ account: 1450, amount: -1500000 }, { account: 4950, amount: 1500000 }]);
   });
 });
+
+import { change, indexFactor, indexedPrice } from '@/lib/indexation';
+describe('Indexuppräkning', () => {
+  it('faktor, golv och andel', () => {
+    expect(indexFactor({ base: 400, current: 412, share: 100, floor: true })).toBe(1.03);
+    expect(indexFactor({ base: 400, current: 412, share: 50, floor: true })).toBe(1.015);
+    expect(indexFactor({ base: 400, current: 390, share: 100, floor: true })).toBe(1);
+    expect(indexFactor({ base: 400, current: 390, share: 100, floor: false })).toBe(0.975);
+    expect(indexedPrice(25000, 1.03)).toBe(25750);
+    expect(change(150000, 154500)).toEqual({ diff: 4500, pct: 3 });
+  });
+});

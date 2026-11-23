@@ -247,6 +247,42 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   t = nb(await text(owner)); assert(t.includes('1450') && t.includes('4950') && t.includes('630000,00'), 'djurlager 1450/4950: ' + t.slice(0, 600));
   log('lantbruk: EU-stöd som fordran för stödåret, utbetalning med skillnad mot intäkten, djurinventering per djurslag med bokförd lagerförändring');
 
+  // ================= Del 5: indexuppräkning =================
+  const IX = await newCompany('Supportbolaget AB', 559830000);
+  await owner.goto(IX + '/moduler');
+  await owner.locator('.card:has(h2:text-is("Avtal och abonnemang")) button:has-text("Aktivera")').click(); await owner.waitForURL(/ok=/);
+  await owner.goto(IX + '/kunder');
+  await owner.fill('input[name=name]', 'Avtalskunden AB'); await owner.click('button:has-text("Spara kund")'); await owner.waitForURL(/ok=/);
+  await owner.goto(IX + '/m/avtal/nytt');
+  await owner.selectOption('select[name=customer_id]', { label: 'Avtalskunden AB' });
+  await owner.fill('input[name=name]', 'Supportavtal'); await owner.fill('input[name=start_date]', day(0));
+  await owner.fill('input[name=d_0]', 'Support'); await owner.fill('input[name=p_0]', '1000');
+  await owner.fill('input[name=d_1]', 'Hosting'); await owner.fill('input[name=q_1]', '2'); await owner.fill('input[name=p_1]', '250');
+  await owner.click('button:has-text("Skapa avtal")'); await owner.locator('text=Avtalet är skapat').waitFor();
+  const AV = owner.url().split('?')[0];
+  const P0 = `${YEAR - 2}-10`, P1 = `${YEAR - 1}-10`;
+  for (const [p, v] of [[P0, '400'], [P1, '412']]) {
+    await owner.goto(IX + `/indexering?period=${P1}`);
+    const f = owner.locator('form:has(button:has-text("Spara indexvärde"))');
+    await f.locator('input[name=period]').fill(p); await f.locator('input[name=value]').fill(v);
+    await f.locator('button').click(); await owner.locator('text=Indexvärdet är sparat').waitFor();
+  }
+  await owner.goto(IX + `/indexering?period=${P1}`);
+  await owner.fill('input[name=base_period]', P0); await owner.click('button:has-text("Koppla avtal")'); await owner.locator('text=Avtalet är kopplat till indexet').waitFor();
+  const ix = owner.locator('.ix-row[data-name="Supportavtal"]');
+  assert(nb(await ix.locator('.ix-factor').innerText()) === '1,03' && nb(await ix.locator('.ix-new-total').innerText()) === '1545,00' && nb(await ix.locator('.ix-change').innerText()).includes('45,00(+3%)'), 'förslag KPI +3 %: ' + await ix.innerText());
+  t = nb(await ix.innerText()); assert(t.includes('1000,00→1030,00') && t.includes('250,00→257,50'), 'nya radpriser: ' + t);
+  await owner.click('button:has-text("Tillämpa uppräkningen")'); await owner.locator('text=Priserna är uppräknade för 1 avtal (2 rader)').waitFor();
+  assert((await ix.innerText()).includes('Uppräknat') && await owner.locator('button:has-text("Tillämpa uppräkningen")').count() === 0, 'redan uppräknat');
+  await ix.locator('a:has-text("Meddelande till kunden")').click(); await owner.locator('.ix-notice').waitFor();
+  t = nb(await owner.locator('.ix-notice').innerText()); assert(t.includes('AvtalskundenAB') && t.includes('3%') && t.includes('1000,00') && t.includes('1030,00'), 'meddelande: ' + t);
+  await owner.goto(AV);
+  const priceShown = nb(await text(owner)).includes('1030,00') || (await owner.locator('input[name=p_0]').count() && nb(await owner.locator('input[name=p_0]').inputValue()) === '1030');
+  assert(priceShown, 'avtalets pris är uppdaterat: ' + AV + ' ' + (await text(owner)).slice(0, 600));
+  await owner.goto(IX + `/indexering?period=${P1}`);
+  assert(nb(await owner.locator('.ix-history').innerText()).includes('1000,00→1030,00'), 'prishistorik');
+  log('indexuppräkning: avtal kopplat till KPI med basmånad, förslag med nya radpriser, tillämpning som uppdaterar avtalet, prishistorik och meddelande till kunden');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 33: alla steg gick igenom');
