@@ -151,6 +151,55 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   t = nb(await text(owner)); assert(t.includes('2420') && t.includes('400,00') && t.includes('2611') && t.includes('50,00') && t.includes('200,00'), 'behållen avgift och återbetalning: ' + t.slice(0, 700));
   log('tidsbokning: publik bokningslänk med lediga tider utan krock, förskott som förutbetald intäkt med moms vid betalning, avbokning i tid, uteblivet besök med avgift, intäkt vid utförd tjänst');
 
+  // ================= Del 2: service- och garantiärenden =================
+  const SG = await newCompany('Maskinservice AB', 559910000);
+  if (Number(day(10).slice(0, 4)) !== YEAR) await addFy(SG, YEAR - 1);
+  await owner.goto(SG + '/kunder');
+  await owner.fill('input[name=name]', 'Verkstaden AB'); await owner.click('button:has-text("Spara kund")'); await owner.waitForURL(/ok=/);
+  await invoice(SG, 'Verkstaden AB', 100000, day(10));
+  await owner.goto(SG + '/bokslut');
+  await owner.locator(`tr:has-text("${day(10).slice(0, 4)}-01-01") a:has-text("Öppna")`).first().click(); await owner.waitForURL(/bokslut\/\d+/);
+  const SGF = owner.url().split('?')[0];
+  await owner.goto(SGF + '/avsattningar');
+  await owner.fill('.add-provision input[name=description]', 'Garanti maskiner');
+  await owner.click('button:has-text("Lägg upp avsättning")'); await owner.locator('text=Avsättningen är upplagd').waitFor();
+  const gp = owner.locator('details.provision[data-desc="Garanti maskiner"]');
+  await gp.locator('summary').click(); await gp.locator('.warranty input[name=rate_pct]').fill('2');
+  await gp.locator('.warranty button').click(); await owner.locator('text=Garantiavsättningen är ökad till 2 000,00 kr').waitFor();
+  const openCase = async (item, months) => {
+    await owner.goto(SG + '/service');
+    await owner.selectOption('form:has(button:has-text("Registrera ärende")) select[name=customer_id]', { label: 'Verkstaden AB' });
+    await owner.selectOption('select[name=invoice_id]', { index: 1 });
+    await owner.fill('input[name=item]', item); await owner.fill('input[name=warranty_months]', months); await owner.fill('input[name=fault]', 'Läcker olja');
+    await owner.selectOption('select[name=cause]', 'material');
+    await owner.click('button:has-text("Registrera ärende")'); await owner.locator(`text=Ärende`).first().waitFor();
+    return nb(await owner.locator('.flash').first().innerText());
+  };
+  t = await openCase('Hydraulpump', '12'); assert(t.includes('inomgarantin'), 'inom garantin: ' + t);
+  const sc = (item) => owner.locator(`.sc-row[data-item="${item}"][data-status="open"]`);
+  for (const [k, d, q, p] of [['labor', 'Felsökning och byte', '2', '600'], ['material', 'Packning', '1', '300']]) {
+    await owner.goto(SG + '/service');
+    const f = sc('Hydraulpump').locator('form:has(button:has-text("Lägg till"))');
+    await f.locator('select[name=kind]').selectOption(k); await f.locator('input[name=description]').fill(d); await f.locator('input[name=quantity]').fill(q); await f.locator('input[name=unit_price]').fill(p);
+    await f.locator('button').click(); await owner.locator('text=Raden är tillagd').waitFor();
+  }
+  await owner.goto(SG + '/service');
+  await sc('Hydraulpump').locator('button:has-text("Avsluta ärendet")').click(); await owner.locator('text=Garantiärendet är avslutat').waitFor();
+  t = nb(await owner.locator('.flash').first().innerText()); assert(t.includes('kostnad1500,00kr') && t.includes('1500,00krurgarantiavsättningen'), 'garantikostnad ur avsättningen: ' + t);
+  t = await openCase('Kompressor', '0'); assert(t.includes('utanförgarantin'), 'utanför garantin: ' + t);
+  await owner.goto(SG + '/service');
+  const f2 = sc('Kompressor').locator('form:has(button:has-text("Lägg till"))');
+  await f2.locator('input[name=description]').fill('Service'); await f2.locator('input[name=unit_price]').fill('800'); await f2.locator('button').click(); await owner.locator('text=Raden är tillagd').waitFor();
+  await owner.goto(SG + '/service');
+  await sc('Kompressor').locator('button:has-text("Avsluta ärendet")').click(); await owner.waitForURL(/fakturor\/\d+\?ok/);
+  t = nb(await text(owner)); assert(t.includes('Arbete:Service') && t.includes('1000,00'), 'servicefaktura: ' + t.slice(0, 900));
+  await owner.goto(SG + '/service');
+  assert(nb(await owner.locator('.sc-rate').innerText()) === '1,5%', 'förslag 1 500 / 100 000: ' + await owner.locator('.sc-rate').innerText());
+  assert(nb(await owner.locator('.sc-items tr[data-item="Hydraulpump"]').innerText()) === 'Hydraulpump111500,00Materialfel', 'per vara');
+  await owner.goto(SGF + '/avsattningar');
+  assert(nb(await owner.locator('.prov-balance').first().innerText()) === '500,00', 'kvar i garantiavsättningen');
+  log('service och garanti: garanti från fakturadatum, arbete och material ur garantiavsättningen 2220, service utanför garantin som faktura, förslag till avsättning och statistik per vara');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 34: alla steg gick igenom');

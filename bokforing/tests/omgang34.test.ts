@@ -17,3 +17,17 @@ describe('Tidsbokning', () => {
     expect(keepOnCancel({ price: 50000, hoursBefore: 2, cancelHours: 24, noShowPct: 50 })).toBe(25000);
   });
 });
+
+import { fromProvision, inWarranty, provisionUseLines, warrantyRate, warrantyUntil } from '@/lib/service-cases';
+describe('Service och garanti', () => {
+  it('garantitid och avsättning', () => {
+    expect(warrantyUntil('2026-01-31', 12)).toBe('2027-01-31');
+    expect(inWarranty('2026-01-31', 12, '2026-11-23')).toBe(true);
+    expect(inWarranty('2026-01-31', 0, '2026-11-23')).toBe(false);
+    expect(inWarranty(null, 12, '2026-11-23')).toBe(false);
+    expect(fromProvision(150000, 200000)).toBe(150000);
+    expect(fromProvision(150000, 50000)).toBe(50000);
+    expect(provisionUseLines(150000, 2220, 6990)).toEqual([{ account: 2220, amount: 150000 }, { account: 6990, amount: -150000 }]);
+    expect(warrantyRate(150000, 10000000)).toBe(1.5);
+  });
+});

@@ -24,6 +24,7 @@ export function buildNav(o: {
       { path: '/kunder', label: 'Kunder', perm: 'invoicing' },
       { path: '/indexering', label: 'Indexuppräkning', perm: 'invoicing', hint: 'KPI-uppräkning av återkommande avtal' },
       { path: '/prisavtal', label: 'Kundprisavtal', perm: 'invoicing', hint: 'Kundgrupper, nettopriser och volymrabatter' },
+      { path: '/service', label: 'Service och garanti', perm: 'invoicing', hint: 'Garantiärenden mot avsättningen och fakturerad service' },
       { path: '/fakturor/returer', label: 'Returer och reklamationer', perm: 'invoicing', hint: 'Kreditering, ersättningsvara och återtag i lager' },
       { path: '/fakturor/tvister', label: 'Tvistiga fakturor', perm: 'invoicing', hint: 'Pausa påminnelser och avsluta med förlikning' },
       { path: '/betalningsforelaggande', label: 'Betalningsföreläggande', perm: 'invoicing', hint: 'Obetalda fakturor till Kronofogden' },
