@@ -28,6 +28,7 @@ export function buildNav(o: {
       { path: '/emballage', label: 'Returemballage och pant', perm: 'invoicing', hint: 'Pant på pallar, fat och backar per kund' },
       { path: '/uthyrning', label: 'Uthyrning av utrustning', perm: 'invoicing', hint: 'Hyresavtal per individ, fakturering per period och beläggning' },
       { path: '/lojalitet', label: 'Lojalitetsprogram', perm: 'invoicing', hint: 'Bonuspoäng som förutbetald intäkt, inlösen och förfall' },
+      { path: '/franchise', label: 'Franchise', perm: 'invoicing', hint: 'Royalty på franchisetagarnas omsättning, inträdesavgifter och marknadsföringsfond' },
       { path: '/kundutlagg', label: 'Utlägg för kunder', perm: 'invoicing', hint: 'Momsfria utlägg för kundens räkning' },
       { path: '/kassa', label: 'Kassa och e-handel', hint: 'Dagskassa och webbutik' },
       { path: '/kundbonus', label: 'Kundbonus', perm: 'invoicing', hint: 'Bonus i efterhand med trappsteg på omsättningen' },

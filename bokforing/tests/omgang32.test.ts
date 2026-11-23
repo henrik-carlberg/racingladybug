@@ -56,3 +56,17 @@ describe('Lojalitetsprogram', () => {
     expect(adjustmentLines(-1600)).toEqual([{ account: 3790, amount: -1600 }, { account: 2970, amount: 1600 }]);
   });
 });
+
+import { elapsedMonths, fees, fundUseLines, missingPeriods, recognitionLines, recognizedEntry } from '@/lib/franchise';
+describe('Franchise', () => {
+  it('avgifter, periodisering och saknade rapporter', () => {
+    expect(fees(20000000, 6, 2)).toEqual({ royalty: 1200000, marketing: 400000 });
+    expect(elapsedMonths('2026-01-01', '2030-12-31', '2026-11-23')).toEqual({ elapsed: 11, total: 60 });
+    expect(elapsedMonths('2026-01-15', '2031-01-14', '2025-12-01')).toEqual({ elapsed: 0, total: 60 });
+    expect(recognizedEntry(12000000, '2026-01-01', '2030-12-31', '2026-11-23')).toBe(2200000);
+    expect(recognizedEntry(12000000, '2026-01-01', '2030-12-31', '2035-01-01')).toBe(12000000);
+    expect(missingPeriods('2026-08-10', '2030-12-31', ['2026-09'], '2026-11-23')).toEqual(['2026-08', '2026-10']);
+    expect(recognitionLines(100)).toEqual([{ account: 2973, amount: 100 }, { account: 3042, amount: -100 }]);
+    expect(fundUseLines(100)).toEqual([{ account: 2974, amount: 100 }, { account: 3043, amount: -100 }]);
+  });
+});

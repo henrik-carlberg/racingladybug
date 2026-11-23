@@ -223,6 +223,43 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   t = nb(await text(owner)); assert(t.includes('3790') && t.includes('2970') && t.includes('44,00'), 'skuld 3790/2970: ' + t.slice(0, 600));
   log('lojalitetsprogram: poäng på fakturerade köp, skuld som förutbetald intäkt med förväntad inlösen, inlösen som rabatt med moms, förfall och justering');
 
+  // ================= Del 5: franchise =================
+  const FR = await newCompany('Pizzakedjan AB', 559740000);
+  await owner.goto(FR + '/kunder');
+  await owner.fill('input[name=name]', 'Pizzerian Uppsala AB'); await owner.click('button:has-text("Spara kund")'); await owner.waitForURL(/ok=/);
+  await owner.goto(FR + '/franchise');
+  await owner.fill('input[name=unit]', 'Uppsala'); await owner.fill('input[name=start_date]', `${YEAR}-01-01`); await owner.fill('input[name=end_date]', `${YEAR + 4}-12-31`);
+  await owner.fill('input[name=entry_fee]', '120000'); await owner.fill('input[name=royalty_pct]', '6'); await owner.fill('input[name=marketing_pct]', '2');
+  await owner.click('button:has-text("Lägg upp avtal")'); await owner.waitForURL(/fakturor\/\d+\?ok/);
+  t = nb(await text(owner)); assert(t.includes('InträdesavgiftfranchiseUppsala') && t.includes('150000,00'), 'inträdesavgift med moms: ' + t.slice(0, 900));
+  await owner.click('button:has-text("Bokför faktura")'); await owner.locator('text=Fakturan är bokförd').waitFor();
+  await owner.goto(FR + '/franchise');
+  assert(nb(await owner.locator('.fr-deferred').innerText()) === '120000,00', 'förutbetald inträdesavgift 2973');
+  await owner.click('button:has-text("Intäktsför inträdesavgifter")'); await owner.locator('text=av inträdesavgifterna är intäktsförda').waitFor();
+  const rec = 200000 * MONTH;
+  assert(nb(await owner.locator('.fr-deferred').innerText()) === ((12000000 - rec) / 100).toFixed(2).replace('.', ','), `${MONTH} av 60 månader intäktsförda`);
+  await owner.click('button:has-text("Intäktsför inträdesavgifter")'); await owner.locator('text=redan periodiserade').waitFor();
+  const frow = owner.locator('.fr-row[data-name="Pizzerian Uppsala AB"]');
+  await frow.locator('input[name=period]').fill(`${YEAR}-01`); await frow.locator('input[name=turnover]').fill('200000');
+  await frow.locator('button:has-text("Registrera rapport")').click(); await owner.waitForURL(/fakturor\/\d+\?ok/);
+  t = nb(await text(owner)); assert(t.includes(`Royalty${YEAR}-01:6%av200000,00kr`) && t.includes('12000,00') && t.includes('Marknadsavgift') && t.includes('4000,00'), 'royalty och marknadsavgift: ' + t.slice(0, 1200));
+  await owner.click('button:has-text("Bokför faktura")'); await owner.locator('text=Fakturan är bokförd').waitFor();
+  await owner.goto(FR + '/franchise');
+  assert(nb(await owner.locator('.fr-fund').innerText()) === '4000,00', 'marknadsföringsfond 2974');
+  assert(nb(await frow.locator('.fr-turnover').innerText()) === '200000,00' && !(await frow.locator('.fr-missing').innerText()).includes(`${YEAR}-01`), 'rapporterad period');
+  await frow.locator('input[name=period]').fill(`${YEAR}-01`); await frow.locator('input[name=turnover]').fill('1000');
+  await frow.locator('button:has-text("Registrera rapport")').click(); await owner.locator('text=Perioden är redan rapporterad').waitFor();
+  await owner.goto(FR + '/franchise');
+  await owner.fill('form:has(button:has-text("Bokför användning")) input[name=description]', 'Gemensam reklamkampanj');
+  await owner.fill('form:has(button:has-text("Bokför användning")) input[name=amount]', '5000'); await owner.click('button:has-text("Bokför användning")'); await owner.locator('text=Fonden har').waitFor();
+  await owner.fill('form:has(button:has-text("Bokför användning")) input[name=description]', 'Gemensam reklamkampanj');
+  await owner.fill('form:has(button:has-text("Bokför användning")) input[name=amount]', '1500'); await owner.click('button:has-text("Bokför användning")'); await owner.locator('text=av marknadsföringsfonden är använt').waitFor();
+  assert(nb(await owner.locator('.fr-fund').innerText()) === '2500,00', 'fonden efter användning');
+  await owner.goto(FR + '/verifikationer');
+  await owner.locator('tr:has-text("Periodisering av inträdesavgifter") a').first().click(); await owner.waitForURL(/verifikationer\/\d+/);
+  t = nb(await text(owner)); assert(t.includes('2973') && t.includes('3042'), 'periodisering 2973/3042: ' + t.slice(0, 600));
+  log('franchise: inträdesavgift mot förutbetalda intäkter som periodiseras per avtalsmånad, royalty och marknadsavgift på rapporterad omsättning, marknadsföringsfond som skuld');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 32: alla steg gick igenom');
