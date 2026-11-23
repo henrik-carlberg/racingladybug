@@ -450,10 +450,14 @@ export async function createSO(actor: Actor, input: Record<string, unknown>): Pr
       company_id: actor.companyId, number, customer_id: customerId, warehouse_id: wid, order_date: date(input, 'order_date', 'Orderdatum', false) || today(),
       delivery_address: str(input, 'delivery_address'), your_reference: str(input, 'your_reference'), notes: str(input, 'notes'), created_by: actor.userId,
     })} RETURNING id`;
+    const { customerPrice } = await import('@/lib/services/customer-prices');
+    const orderDate = date(input, 'order_date', 'Orderdatum', false) || today();
     for (const l of lines) {
       const [p] = await tx<{ sales_price: number }[]>`SELECT sales_price::int AS sales_price FROM inv_products WHERE id = ${l.product_id} AND company_id = ${actor.companyId}`;
       if (!p) throw new ValidationError('Artikeln finns inte');
-      await tx`INSERT INTO inv_sales_order_lines (order_id, product_id, qty, unit_price) VALUES (${id}, ${l.product_id}, ${l.qty}, ${l.unit_price ?? p.sales_price})`;
+      // Utan angivet pris gäller kundens pris: grupprabatt, kundavtal eller volymrabatt
+      const price = l.unit_price ?? (await customerPrice(tx, actor.companyId, customerId, l.product_id, l.qty, orderDate))?.price ?? p.sales_price;
+      await tx`INSERT INTO inv_sales_order_lines (order_id, product_id, qty, unit_price) VALUES (${id}, ${l.product_id}, ${l.qty}, ${price})`;
     }
     await auditBy(tx, actor, 'create', 'inv.sales_order', id, { number });
     const out = await getSO(actor.companyId, id, tx);
