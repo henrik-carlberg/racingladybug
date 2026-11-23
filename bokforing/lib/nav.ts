@@ -25,6 +25,7 @@ export function buildNav(o: {
       { path: '/fakturor/returer', label: 'Returer och reklamationer', perm: 'invoicing', hint: 'Kreditering, ersättningsvara och återtag i lager' },
       { path: '/fakturor/tvister', label: 'Tvistiga fakturor', perm: 'invoicing', hint: 'Pausa påminnelser och avsluta med förlikning' },
       { path: '/betalningsforelaggande', label: 'Betalningsföreläggande', perm: 'invoicing', hint: 'Obetalda fakturor till Kronofogden' },
+      { path: '/emballage', label: 'Returemballage och pant', perm: 'invoicing', hint: 'Pant på pallar, fat och backar per kund' },
       { path: '/kundutlagg', label: 'Utlägg för kunder', perm: 'invoicing', hint: 'Momsfria utlägg för kundens räkning' },
       { path: '/kassa', label: 'Kassa och e-handel', hint: 'Dagskassa och webbutik' },
       { path: '/kundbonus', label: 'Kundbonus', perm: 'invoicing', hint: 'Bonus i efterhand med trappsteg på omsättningen' },

@@ -133,6 +133,36 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   t = nb(await text(owner)); assert(t.includes('2890') && t.includes('1940') && t.includes('31250,00'), 'arvode 2890/1940: ' + t.slice(0, 600));
   log('klientmedel: avskilt konto 1940 med skuld 2890, saldo per klient som inte får bli negativt, arvode mot faktura till eget konto, saldobesked och avstämning');
 
+  // ================= Del 2: returemballage och pant =================
+  const PE = await newCompany('Pallbolaget AB', 559710000);
+  await owner.goto(PE + '/kunder');
+  await owner.fill('input[name=name]', 'Grossist AB'); await owner.click('button:has-text("Spara kund")'); await owner.waitForURL(/ok=/);
+  await owner.goto(PE + '/emballage');
+  await owner.fill('form:has(button:has-text("Lägg upp förpackning")) input[name=name]', 'EUR-pall'); await owner.fill('input[name=deposit]', '150');
+  await owner.click('button:has-text("Lägg upp förpackning")'); await owner.locator('text=Förpackningstypen är upplagd').waitFor();
+  const pk = async (btn, q) => {
+    await owner.goto(PE + '/emballage');
+    const f = owner.locator(`form:has(button:has-text("${btn}"))`);
+    await f.locator('input[name=quantity]').fill(q); await f.locator('button').click();
+  };
+  await pk('Fakturera pant', '10'); await owner.waitForURL(/fakturor\/\d+\?ok/);
+  t = nb(await text(owner)); assert(t.includes('PantEUR-pall') && t.includes('1500,00'), 'pant på fakturan: ' + t.slice(0, 900));
+  await owner.click('button:has-text("Bokför faktura")'); await owner.locator('text=Fakturan är bokförd').waitFor();
+  await pk('Kreditera pant', '4'); await owner.waitForURL(/fakturor\/\d+\?ok/);
+  assert(nb(await text(owner)).includes('-600,00'), 'kredit av pant');
+  await owner.click('button:has-text("Bokför faktura")'); await owner.locator('text=Fakturan är bokförd').waitFor();
+  await pk('Kreditera pant', '7'); await owner.locator('text=har bara 6 EUR-pall utlämnade').waitFor();
+  await owner.goto(PE + '/emballage');
+  const prw = owner.locator('.pk-row[data-customer="Grossist AB"]');
+  assert(nb(await prw.locator('.pk-qty').innerText()) === '6' && nb(await prw.locator('.pk-value').innerText()) === '900,00', 'sex pallar hos kunden');
+  assert(nb(await owner.locator('.pk-ledger').innerText()) === '900,00' && nb(await owner.locator('.pk-total').innerText()) === '900,00', 'pantskuld 2899 stämmer');
+  await prw.locator('button:has-text("Förverka panten")').click(); await owner.locator('text=är förverkad och intäktsförd').waitFor();
+  assert(nb(await owner.locator('.pk-ledger').innerText()) === '0,00' && await owner.locator('.pk-row').count() === 0, 'förverkad pant');
+  await owner.goto(PE + '/verifikationer');
+  await owner.locator('tr:has-text("Förverkad pant") a').first().click(); await owner.waitForURL(/verifikationer\/\d+/);
+  t = nb(await text(owner)); assert(t.includes('2899') && t.includes('3990') && t.includes('900,00'), 'förverkad 2899/3990: ' + t.slice(0, 600));
+  log('returemballage: pant utan moms mot pantskuld 2899 på fakturan, kreditering vid retur, saldo per kund, förverkad pant som intäkt');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 32: alla steg gick igenom');

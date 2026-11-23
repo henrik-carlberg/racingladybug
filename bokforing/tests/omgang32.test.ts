@@ -12,3 +12,17 @@ describe('Klientmedel', () => {
     expect(reconcile({ clients: 500, bank: 400, liability: 500 })).toMatchObject({ ok: false, bankDiff: -100 });
   });
 });
+
+import { balances, forfeitLines } from '@/lib/packaging';
+describe('Returemballage', () => {
+  it('saldo per kund och förverkan', () => {
+    const b = balances([
+      { customer: 'A', type: 'Pall', kind: 'out', quantity: 10, deposit: 15000, date: '2026-01-01' },
+      { customer: 'A', type: 'Pall', kind: 'return', quantity: 4, deposit: 15000, date: '2026-02-01' },
+      { customer: 'B', type: 'Pall', kind: 'out', quantity: 2, deposit: 15000, date: '2026-10-01' },
+      { customer: 'B', type: 'Pall', kind: 'forfeit', quantity: 2, deposit: 15000, date: '2026-11-01' },
+    ], '2026-11-23');
+    expect(b).toEqual([{ customer: 'A', type: 'Pall', qty: 6, value: 90000, lastOut: '2026-01-01', lastReturn: '2026-02-01', stale: true }]);
+    expect(forfeitLines(90000)).toEqual([{ account: 2899, amount: 90000 }, { account: 3990, amount: -90000 }]);
+  });
+});
