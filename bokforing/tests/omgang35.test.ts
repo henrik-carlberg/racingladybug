@@ -41,3 +41,18 @@ describe('Evenemang', () => {
     expect(eventResult({ tickets: 300000, sponsors: 1000000, costs: 800000, budget: 700000 })).toEqual({ revenue: 1300000, costs: 800000, result: 500000, vsBudget: 100000 });
   });
 });
+
+import { accrualLines, lastDay, noticeMonths, obligation, severanceCalc } from '@/lib/terminations';
+describe('Uppsägning och avgångsvederlag', () => {
+  it('LAS, sista dag och skuld', () => {
+    expect(noticeMonths('employee', '2010-01-01', '2026-11-23')).toBe(1);
+    expect(noticeMonths('employer', '2025-01-01', '2026-11-23')).toBe(1);
+    expect(noticeMonths('employer', '2019-03-01', '2026-11-23')).toBe(4);
+    expect(noticeMonths('employer', '2010-01-01', '2026-11-23')).toBe(6);
+    expect(lastDay('2026-11-30', 3)).toBe('2027-02-28');
+    expect(severanceCalc(10000000, 30, 31.42)).toEqual({ gross: 10000000, tax: 3000000, net: 7000000, fee: 3142000, cost: 13142000 });
+    expect(obligation({ monthlySalary: 4000000, noticeMonths: 4, gardenLeave: true, severance: 10000000, feeRate: 31.42 })).toEqual({ salary: 26000000, fee: 8169200, total: 34169200 });
+    expect(obligation({ monthlySalary: 4000000, noticeMonths: 1, gardenLeave: false, severance: 0, feeRate: 31.42 }).total).toBe(0);
+    expect(accrualLines(100, 31)).toEqual([{ account: 7210, amount: 100 }, { account: 2910, amount: -100 }, { account: 7510, amount: 31 }, { account: 2940, amount: -31 }]);
+  });
+});

@@ -215,6 +215,43 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   t = nb(await text(owner)); assert(t.includes('2970') && t.includes('13000,00') && t.includes('3001') && t.includes('12000,00') && t.includes('3002') && t.includes('1000,00'), 'intäktsföring per momssats: ' + t.slice(0, 700));
   log('evenemang: biljettyper med momssats och kapacitet, biljetter och sponsring som förutbetald intäkt, återbetalning, kostnader och resultat per event, intäktsföring när eventet genomförs');
 
+  // ================= Del 4: uppsägning och avgångsvederlag =================
+  const UP = await newCompany('Omställningen AB', 559980000);
+  for (const [fn, ln, pnr, start] of [['Erik', 'Erfaren', '19811218-9876', `${YEAR - 7}-03-01`], ['Nina', 'Ny', '19' + orgnrFor('950505123'), day(200)]]) {
+    await owner.goto(UP + '/lon/anstallda');
+    await owner.fill('input[name=first_name]', fn); await owner.fill('input[name=last_name]', ln);
+    await owner.fill('input[name=personal_number]', pnr); await owner.fill('input[name=monthly_salary]', '40000'); await owner.fill('input[name=tax_table]', '32');
+    await owner.fill('input[name=employment_start]', start);
+    await owner.click('form:has(input[name=first_name]) button:has-text("Spara")'); await owner.waitForURL(/ok=/);
+  }
+  const term = async (name, f) => {
+    await owner.goto(UP + '/lon/uppsagning');
+    const fm = owner.locator('form:has(button:has-text("Registrera uppsägning"))');
+    await fm.locator('select[name=employee_id]').selectOption({ label: name });
+    await fm.locator('select[name=initiated_by]').selectOption(f.by);
+    if (f.garden) await fm.locator('input[name=garden_leave]').check();
+    await fm.locator('input[name=severance]').fill(f.severance ?? '');
+    await fm.locator('button').click(); await owner.locator('text=Uppsägningen är registrerad').waitFor();
+    return nb(await owner.locator('.flash').first().innerText());
+  };
+  const addM = (d, m) => { const x = new Date(`${d}T00:00:00Z`); const dd = x.getUTCDate(); x.setUTCDate(1); x.setUTCMonth(x.getUTCMonth() + m); const max = new Date(Date.UTC(x.getUTCFullYear(), x.getUTCMonth() + 1, 0)).getUTCDate(); x.setUTCDate(Math.min(dd, max)); return x.toISOString().slice(0, 10); };
+  t = await term(`Erik Erfaren (anställd ${YEAR - 7}-03-01)`, { by: 'employer', garden: true, severance: '100000' });
+  assert(t.includes('4månadersuppsägningstid') && t.includes(addM(day(0), 4)), 'LAS 4 månader efter 7 års anställning: ' + t);
+  t = await term(`Nina Ny (anställd ${day(200)})`, { by: 'employee' });
+  assert(t.includes('1månadersuppsägningstid'), 'egen uppsägning 1 månad: ' + t);
+  const tr = (n) => owner.locator(`.tm-row[data-name="${n}"]`);
+  assert(nb(await tr('Erik Erfaren').locator('.tm-net').innerText()) === '70000,00', 'avgångsvederlag netto efter 30 % skatt');
+  assert(nb(await tr('Erik Erfaren').locator('.tm-obligation').innerText()).startsWith('341692,00'), 'skuld 4 × 40 000 + 100 000 med 31,42 %: ' + await tr('Erik Erfaren').innerText());
+  assert(nb(await tr('Nina Ny').locator('.tm-obligation').innerText()) === '0,00' && await tr('Nina Ny').locator('button:has-text("Bokför skuld")').count() === 0, 'ingen skuld när den anställda arbetar');
+  await tr('Erik Erfaren').locator('button:has-text("Bokför skuld")').click(); await owner.locator('text=Skulden 341 692,00 kr är bokförd').waitFor();
+  await tr('Erik Erfaren').locator('button:has-text("Avsluta anställningen")').click(); await owner.locator('text=Anställningen är avslutad').waitFor();
+  await owner.goto(UP + '/verifikationer');
+  await owner.locator('tr:has-text("Uppsägning Erik Erfaren: skuld") a').first().click(); await owner.waitForURL(/verifikationer\/\d+/);
+  t = nb(await text(owner)); assert(t.includes('7210') && t.includes('260000,00') && t.includes('2940') && t.includes('81692,00'), 'skuld 7210/2910 och 7510/2940: ' + t.slice(0, 700));
+  await owner.goto(UP + '/lon/anstallda');
+  assert(!(await text(owner)).includes('Erik Erfaren') || (await owner.locator('tr:has-text("Erik Erfaren")').innerText()).match(/avslutad|inaktiv/i), 'anställningen är avslutad');
+  log('uppsägning: uppsägningstid enligt LAS efter anställningstid, avgångsvederlag som engångsbelopp med skatt och avgift, skuld för arbetsbefriad tid och vederlag, avslutad anställning');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 35: alla steg gick igenom');
