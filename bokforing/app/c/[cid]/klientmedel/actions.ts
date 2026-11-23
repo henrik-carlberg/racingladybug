@@ -20,9 +20,11 @@ export async function clientAction(cid: number, fd: FormData) {
   done(base(cid, id), 'Klienten är upplagd');
 }
 export async function entryAction(cid: number, clientId: number, fd: FormData) {
-  const actor = userActor(await requireCompany(cid, { perm: fd.get('kind') === 'deposit' ? 'ledger' : 'payments' }));
+  // Samma värde styr både behörigheten och vad som bokförs (ett formulär kan innehålla flera "kind")
+  const input = form(fd);
+  const actor = userActor(await requireCompany(cid, { perm: input.kind === 'deposit' ? 'ledger' : 'payments' }));
   let r = { kind: '', amount: 0 };
-  await attempt(base(cid, clientId), async () => { r = await svc.addEntry(actor, clientId, form(fd)); });
+  await attempt(base(cid, clientId), async () => { r = await svc.addEntry(actor, clientId, input); });
   done(base(cid, clientId), `${{ deposit: 'Insättningen', payout: 'Utbetalningen', fee: 'Arvodet' }[r.kind]} på ${kr(r.amount)} kr är bokförd${r.kind === 'fee' ? ' och fakturan är betald' : ''}`);
 }
 export async function closeAction(cid: number, clientId: number) {
