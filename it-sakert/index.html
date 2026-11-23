@@ -445,7 +445,6 @@
   .form-note { font-size: .82rem; color: var(--hero-muted); margin: 0; }
   .form-ok { display: none; padding: 14px 16px; border-radius: 10px; background: rgba(18,185,129,.15); color: #6ee7b7; font-weight: 500; }
 
-  footer { padding: 40px 0 48px; color: var(--muted); font-size: .9rem; }
   .foot { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 28px; }
   .foot .logo { color: var(--text); font-size: 1.05rem; }
   .foot .logo svg { width: 26px; height: 26px; }
@@ -472,6 +471,95 @@
     .step::after { display: none; }
     .contact-wrap { padding: 36px 24px; }
   }
+
+  /* ===== Visuellt lyft ===== */
+  .hero { position: relative; }
+  .hero::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+    background-image: linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px);
+    background-size: 44px 44px; -webkit-mask-image: radial-gradient(ellipse at 75% 35%, #000 20%, transparent 70%); mask-image: radial-gradient(ellipse at 75% 35%, #000 20%, transparent 70%); }
+  .hero > .wrap { position: relative; }
+  .hero { padding-bottom: 150px; }
+
+  .stats { padding: 0; position: relative; z-index: 2; }
+  .stats-card { margin-top: -64px; display: grid; grid-template-columns: repeat(4, 1fr); background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 24px 60px rgba(15,27,45,.12); overflow: hidden; }
+  .stats-card > div { padding: 24px 26px; border-left: 1px solid var(--line); display: grid; gap: 4px; }
+  .stats-card > div:first-child { border-left: 0; }
+  .stats-card b { font-size: 1.9rem; letter-spacing: -.03em; line-height: 1.1;
+    background: linear-gradient(135deg, var(--brand), #12b981); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .stats-card span { color: var(--muted); font-size: .9rem; line-height: 1.4; }
+  #tjanster { padding-top: 80px; }
+
+  .section-head .kicker { display: inline-flex; align-items: center; gap: 8px; }
+  .section-head .kicker::before { content: ""; width: 22px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, var(--brand), #12b981); }
+
+  .grid-3 .card { position: relative; overflow: hidden; }
+  .grid-3 .card::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, var(--c1, var(--brand)), var(--c2, #12b981)); transform: scaleX(0); transform-origin: left; transition: transform .35s ease; }
+  .grid-3 .card:hover::before { transform: scaleX(1); }
+  .grid-3 .card .icon { background: linear-gradient(135deg, color-mix(in srgb, var(--c1, var(--brand)) 18%, var(--surface)), color-mix(in srgb, var(--c2, #12b981) 14%, var(--surface))); color: var(--c1, var(--brand)); }
+  .grid-3 .card:nth-child(1) { --c1: #0b5fff; --c2: #4d8bff; }
+  .grid-3 .card:nth-child(2) { --c1: #7c3aed; --c2: #0b5fff; }
+  .grid-3 .card:nth-child(3) { --c1: #0891b2; --c2: #12b981; }
+  .grid-3 .card:nth-child(4) { --c1: #d97706; --c2: #f59e0b; }
+  .grid-3 .card:nth-child(5) { --c1: #db2777; --c2: #7c3aed; }
+  .grid-3 .card:nth-child(6) { --c1: #059669; --c2: #0891b2; }
+  .grid-3 .card.incident::before { display: none; }
+  .grid-3 .card.incident .icon { background: color-mix(in srgb, #ef4444 14%, var(--surface)); color: #dc2626; }
+
+  .cta-band { padding: 0 0 96px; }
+  .alt + .cta-band { padding-top: 96px; }
+  .cta-inner { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 32px; padding: 44px 48px; border-radius: 22px; color: #fff;
+    background: radial-gradient(500px 260px at 90% 10%, rgba(18,185,129,.35), transparent 60%), linear-gradient(120deg, #0b4fdb, #0b1626 70%); box-shadow: 0 30px 70px rgba(11,79,219,.25); }
+  h1, h2, h3 { text-wrap: balance; }
+  .cta-inner h2 { color: #fff; margin: 0 0 8px; font-size: clamp(1.5rem, 3vw, 2.1rem); }
+  .cta-inner p { margin: 0; color: #c9d6ea; max-width: 520px; }
+  .cta-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn.btn-light { background: #fff; color: #0b1626; }
+
+  .faq-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 48px; align-items: start; }
+  .faq-layout .faq { max-width: none; }
+  .faq-aside { position: sticky; top: 96px; display: grid; gap: 10px; padding: 26px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); box-shadow: 0 14px 40px rgba(15,27,45,.06); }
+  .faq-aside h3 { margin: 0; font-size: 1.15rem; }
+  .faq-aside p { margin: 0 0 6px; color: var(--muted); font-size: .95rem; }
+  .faq-link { color: var(--brand); font-weight: 600; text-decoration: none; }
+  .faq-link:hover { text-decoration: underline; }
+  .faq-aside .btn { justify-self: start; margin-top: 8px; }
+
+  .site-foot { margin-top: 24px; padding: 64px 0 32px; background: var(--hero-bg); color: var(--hero-muted); font-size: .92rem;
+    background-image: radial-gradient(600px 260px at 10% 0%, rgba(77,139,255,.18), transparent 60%); }
+  .foot-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 32px; padding-bottom: 36px; border-bottom: 1px solid rgba(255,255,255,.08); }
+  .site-foot h4 { margin: 0 0 12px; color: #fff; font-size: .95rem; }
+  .site-foot .foot-grid > nav, .site-foot .foot-grid > div:last-child { display: grid; gap: 8px; align-content: start; }
+  .site-foot a { color: var(--hero-muted); text-decoration: none; }
+  .site-foot a:hover { color: #fff; }
+  .site-foot .logo { color: #fff; font-size: 1.15rem; }
+  .site-foot .logo svg { width: 30px; height: 30px; }
+  .site-foot .logo .mark { color: #7fb0ff; }
+  .foot-brand p { margin: 14px 0 0; max-width: 300px; line-height: 1.55; }
+  .foot-247 { display: inline-flex; align-items: center; gap: 8px; color: #6ee7b7 !important; font-weight: 600; }
+  .foot-247 i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgba(18,185,129,.25); }
+  .foot-bottom { display: flex; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; padding-top: 22px; font-size: .82rem; }
+
+  /* In-animationer (bara när JavaScript körs) */
+  .js .reveal { opacity: 0; translate: 0 18px; transition: opacity .6s ease var(--rd, 0s), translate .6s ease var(--rd, 0s), border-color .2s, transform .2s, box-shadow .2s; }
+  .js .reveal.in { opacity: 1; translate: 0 0; }
+  @media (prefers-reduced-motion: reduce) { .js .reveal { opacity: 1; translate: none; transition: none; } }
+
+  @media (max-width: 920px) {
+    .stats-card { grid-template-columns: 1fr 1fr; }
+    .stats-card > div:nth-child(3) { border-left: 0; }
+    .stats-card > div:nth-child(n+3) { border-top: 1px solid var(--line); }
+    .faq-layout { grid-template-columns: 1fr; }
+    .faq-aside { position: static; }
+    .foot-grid { grid-template-columns: 1fr 1fr; }
+    .cta-inner { padding: 32px 24px; grid-template-columns: 1fr; }
+  }
+  @media (max-width: 560px) {
+    .stats-card > div { padding: 18px 16px; }
+    .stats-card b { font-size: 1.45rem; }
+    .foot-grid { grid-template-columns: 1fr; }
+    .hero { padding-bottom: 110px; }
+  }
+
   @media (max-width: 1000px) {
     .menu-toggle { display: block; }
     .nav ul, .nav > .btn { display: none; }
@@ -566,6 +654,17 @@
           <div class="meter"><i></i></div>
           <div class="status-row">Säkerhetskopiering <span class="pill">Verifierad</span></div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="stats" aria-label="IT-Säkert i korthet">
+    <div class="wrap">
+      <div class="stats-card">
+        <div><b>24/7</b><span>Incidentjour vid akuta incidenter</span></div>
+        <div><b>30 år</b><span>Erfarenhet inom IT</span></div>
+        <div><b>20+ år</b><span>Med informationssäkerhet och GRC</span></div>
+        <div><b>Kungsbacka</b><span>På plats i Halland och Göteborg, på distans i hela Sverige</span></div>
       </div>
     </div>
   </section>
@@ -978,6 +1077,21 @@
     </div>
   </section>
 
+  <section class="cta-band" aria-label="Boka säkerhetskoll">
+    <div class="wrap">
+      <div class="cta-inner">
+        <div>
+          <h2>Osäker på hur säkra ni är i dag?</h2>
+          <p>Boka en kostnadsfri säkerhetskoll. Vi går igenom er IT-miljö och ger raka besked om vad som behöver göras först.</p>
+        </div>
+        <div class="cta-actions">
+          <a class="btn btn-light" href="#kontakt">Boka kostnadsfri säkerhetskoll</a>
+          <a class="btn ghost" href="tel:+46705147283">Ring 070-514 72 83</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section id="om-oss">
     <div class="wrap about">
       <div>
@@ -1018,6 +1132,7 @@
         <div class="kicker">Vanliga frågor</div>
         <h2>Det här undrar många</h2>
       </div>
+      <div class="faq-layout">
       <div class="faq">
         <details><summary>Vad kostar en säkerhetskoll?</summary><p>Det första mötet och säkerhetskollen är kostnadsfria och helt utan förpliktelser. Vi går igenom hur ni arbetar i dag och vad som är viktigast att åtgärda. Vill ni gå vidare får ni en offert med fast pris eller en timbank, så att ni vet vad det kostar innan arbetet börjar.</p></details>
         <details><summary>Omfattas vi av cybersäkerhetslagen (NIS2)?</summary><p>Lagen gäller främst medelstora och stora verksamheter – från 50 anställda, eller med en omsättning och balansomslutning över 10 miljoner euro – inom vissa sektorer, till exempel energi, transport, hälso- och sjukvård, digital infrastruktur, livsmedel och tillverkning. Vissa verksamheter omfattas oavsett storlek. Även om ni inte omfattas själva kan era kunder ställa samma krav på er som leverantör. Vi hjälper er att reda ut om och hur lagen gäller er.</p></details>
@@ -1027,6 +1142,14 @@
         <details><summary>Vad räknas som jourtid?</summary><p>Arbete vardagar före 07.00 och efter 18.00 samt på helger och helgdagar. Jourtid räknas med påslag 2,0, så en timme på jourtid drar två timmar från timbanken.</p></details>
         <details><summary>Kan ni utbilda vår personal?</summary><p>Ja. Vi håller praktiska utbildningar om nätfiske, lösenord och säkert distansarbete på plats hos er, och korta pass för ledningen. För den som vill lära sig mer i egen takt finns onlinekurser på <a href="https://studieplaner.se/">Studieplaner.se</a>, bland annat i cybersäkerhetslagen för ledningen, ISO 27001 och GRC.</p></details>
         <details><summary>Var finns ni?</summary><p>Vi utgår från Kungsbacka och arbetar på plats i Halland och Göteborgsområdet. Säkerhetsgranskningar, integrationer och incidenthjälp kan vi också göra på distans, i hela Sverige.</p></details>
+      </div>
+      <aside class="faq-aside">
+        <h3>Hittar ni inte svaret?</h3>
+        <p>Ring eller mejla, så svarar vi gärna. Vid akuta incidenter svarar vi dygnet runt.</p>
+        <a class="faq-link" href="tel:+46705147283">070-514 72 83</a>
+        <a class="faq-link" href="mailto:hello@itsakert.se">hello@itsakert.se</a>
+        <a class="btn" href="#kontakt">Ställ en fråga</a>
+      </aside>
       </div>
     </div>
   </section>
@@ -1082,18 +1205,48 @@
   </section>
 </main>
 
-<footer>
-  <div class="wrap foot">
-    <a href="#top" class="logo">
+<footer class="site-foot">
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a href="#top" class="logo">
       <svg viewBox="0 0 64 64" aria-hidden="true">
         <defs><linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4d8bff"/><stop offset="1" stop-color="#0b4fdb"/></linearGradient></defs>
         <path d="M32 4 9 12.5v16.2C9 43.5 18.8 55.9 32 60c13.2-4.1 23-16.5 23-31.3V12.5L32 4Z" fill="url(#lg2)"/>
         <g fill="#0f1b2d"><rect x="18" y="18" width="28" height="11" rx="3"/><path d="M26.5 26h11l1.6 21a3 3 0 0 1-3 3.2h-8.2a3 3 0 0 1-3-3.2Z"/></g>
         <g fill="#fff"><circle cx="32" cy="23.5" r="3.1"/><rect x="29.8" y="31" width="4.4" height="15" rx="2.2"/></g>
       </svg>
-      <span>IT-<b class="mark">Säkert</b></span>
-    </a>
-    <span>© <span id="year"></span> IT-Säkert. Alla rättigheter förbehållna. Foton: Vitaly Gariev, Centre for Ageing Better / Unsplash.</span>
+          <span>IT-<b class="mark">Säkert</b></span>
+        </a>
+        <p>IT-säkerhet, incidenthjälp och systemintegration för små och medelstora företag.</p>
+        <p class="foot-247"><i></i>Incidentjour dygnet runt</p>
+      </div>
+      <nav aria-label="Tjänster">
+        <h4>Tjänster</h4>
+        <a href="#tjanster">Säkerhet och NIS2</a>
+        <a href="#incident">Åtgärder vid incidenter</a>
+        <a href="#integrationer">Systemintegration</a>
+        <a href="#timbank">Timbank</a>
+        <a href="#utbildningar">Utbildningar</a>
+      </nav>
+      <nav aria-label="Företaget">
+        <h4>Företaget</h4>
+        <a href="#om-oss">Om oss</a>
+        <a href="#sa-arbetar-vi">Så arbetar vi</a>
+        <a href="#fragor">Vanliga frågor</a>
+        <a href="https://studieplaner.se/" target="_blank" rel="noopener">Studieplaner.se</a>
+      </nav>
+      <div>
+        <h4>Kontakt</h4>
+        <a href="mailto:hello@itsakert.se">hello@itsakert.se</a>
+        <a href="tel:+46705147283">070-514 72 83</a>
+        <span>Kungsbacka, Sverige</span>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>© <span id="year"></span> IT-Säkert. Alla rättigheter förbehållna.</span>
+      <span>Foton: Vitaly Gariev, Centre for Ageing Better / Unsplash</span>
+    </div>
   </div>
 </footer>
 
@@ -1155,6 +1308,25 @@
     update();
   })();
 
+
+
+  // In-animationer när delar scrollas in
+  (function () {
+    if (!("IntersectionObserver" in window)) return;
+    document.documentElement.classList.add("js");
+    const sel = ".section-head, .stats-card, .grid-3 > .card, .int-card, .plan, .tb-uses > div, .course-group, .step, .value, .viz, .calc, .tb-guide, .cta-inner, .faq-aside, .founder";
+    const els = document.querySelectorAll(sel);
+    els.forEach(el => {
+      el.classList.add("reveal");
+      const sib = [...el.parentElement.children].filter(c => c.matches(sel));
+      const i = sib.indexOf(el);
+      if (i > 0) el.style.setProperty("--rd", Math.min(i, 5) * 0.07 + "s");
+    });
+    const io = new IntersectionObserver(entries => entries.forEach(e => {
+      if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+    }), { rootMargin: "0px 0px -8% 0px" });
+    els.forEach(el => io.observe(el));
+  })();
 
   // Flikar för flödesexemplen
   (function () {
