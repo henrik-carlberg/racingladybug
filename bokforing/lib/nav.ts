@@ -132,6 +132,7 @@ export function buildNav(o: {
       { path: '/bokslut', label: 'Bokslut & deklaration', perm: 'ledger' },
       { path: '/revision', label: 'Revision', perm: 'ledger', hint: 'Revisorns stickprov och anmärkningar' },
       { path: '/anlaggningar', label: 'Anläggningsregister' },
+      { path: '/korjournal', label: 'Körjournal', perm: 'ledger', hint: 'Resor per fordon, privat körning och avdrag för egen bil' },
       { path: '/forsakringsskador', label: 'Försäkringsskador', perm: 'ledger', hint: 'Skadeärenden, självrisk och försäkringsersättning' },
       { path: '/periodiseringar', label: 'Periodiseringar' },
       { path: '/bidrag', label: 'Bidrag', perm: 'ledger', hint: 'Offentliga bidrag periodiserade mot kostnaderna, återbetalningsrisk och rapport' },

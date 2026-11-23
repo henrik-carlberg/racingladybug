@@ -45,3 +45,20 @@ describe('Försäkringsskador', () => {
     expect(claimPayment(3500000)).toEqual([{ account: 1930, amount: 3500000 }, { account: 1689, amount: -3500000 }]);
   });
 });
+
+import { costPerMil, deductionLines, perMil, privateUseLines, summary, tripKm } from '@/lib/vehicle-log';
+describe('Körjournal', () => {
+  it('sträcka, sammanställning och avräkning', () => {
+    expect(tripKm({ odoStart: 1000, odoEnd: 1250 })).toBe(250);
+    expect(() => tripKm({ odoStart: 1300, odoEnd: 1200 })).toThrow();
+    expect(tripKm({ km: 12.34 })).toBe(12.3);
+    expect(() => tripKm({})).toThrow();
+    const s = summary([{ km: 250, private: false, customer: 'A' }, { km: 250, private: true, customer: null }, { km: 50, private: false, customer: 'A' }]);
+    expect(s).toMatchObject({ business: 300, private: 250, total: 550, privateShare: 45.5, customers: [{ customer: 'A', km: 300 }] });
+    expect(costPerMil(300000, 500)).toBe(6000);
+    expect(perMil(250, 6000)).toBe(150000);
+    expect(perMil(120, 2500)).toBe(30000);
+    expect(deductionLines(30000)).toEqual([{ account: 7331, amount: 30000 }, { account: 2018, amount: -30000 }]);
+    expect(privateUseLines(150000)).toEqual([{ account: 2013, amount: 150000 }, { account: 3990, amount: -150000 }]);
+  });
+});

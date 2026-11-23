@@ -241,6 +241,54 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   t = nb(await text(owner)); assert(t.includes('1689') && t.includes('3994') && t.includes('35000,00'), 'ersättning 1689/3994: ' + t.slice(0, 600));
   log('försäkringsskador: förstörd tillgång utrangeras, förstörda varor skrivs bort ur lagret, besked med självrisk som fordran 1689/3994, underlag för ersättningsfond, utbetalning');
 
+  // ================= Del 4: körjournal =================
+  await owner.goto(BASE + '/');
+  await owner.fill('input[name=name]', 'Åkarfirman');
+  await owner.selectOption('select[name=company_type]', 'EF');
+  await owner.fill('input[name=orgnr]', `19${orgnrFor('790101' + String(100 + (Date.now() % 800)).padStart(3, '0'))}`);
+  await owner.fill('input[name=fy_start]', `${YEAR}-01-01`); await owner.fill('input[name=fy_end]', `${YEAR}-12-31`);
+  await owner.click('button:has-text("Skapa bolag")'); await owner.waitForURL(/kom-igang/);
+  const KJ = owner.url().replace(/\/kom-igang.*/, '');
+  await owner.goto(KJ + '/kunder');
+  await owner.fill('input[name=name]', 'Byggkunden AB'); await owner.click('form button:has-text("Spara")'); await owner.waitForURL(/ok=/);
+  await voucher(KJ, 'Drivmedel', [[5611, 3000], [1930, -3000]], `${YEAR}-01-05`);
+  await owner.goto(KJ + '/korjournal');
+  for (const [reg, own] of [['ABC123', 'company'], ['XYZ789', 'private']]) {
+    await owner.fill('input[name=reg_no]', reg); await owner.selectOption('select[name=owner]', own);
+    await owner.click('button:has-text("Lägg till fordon")'); await owner.locator('text=Fordonet är upplagt').waitFor();
+  }
+  const trip = async (reg, f) => {
+    await owner.goto(KJ + '/korjournal');
+    await owner.selectOption('select[name=vehicle_id]', { label: reg });
+    await owner.fill('input[name=date]', f.date ?? `${YEAR}-01-10`);
+    for (const k of ['odo_start', 'odo_end', 'km', 'purpose', 'from_place', 'to_place']) await owner.fill(`input[name=${k}]`, f[k] ?? '');
+    if (f.private) await owner.check('input[name=private]'); else await owner.uncheck('input[name=private]');
+    await owner.selectOption('select[name=customer_id]', f.customer ? { label: f.customer } : { index: 0 });
+    await owner.click('button:has-text("Spara resa")');
+  };
+  await trip('ABC123', { odo_start: '1300', odo_end: '1200', purpose: 'Leverans' }); await owner.locator('text=ska vara högre än vid avfärd').waitFor().catch(async () => { throw new Error('mätare: ' + owner.url() + ' ' + (await text(owner)).slice(0, 800)); });
+  await trip('ABC123', { odo_start: '1000', odo_end: '1250', purpose: 'Materialleverans', from_place: 'Kontoret', to_place: 'Bygget', customer: 'Byggkunden AB' }); await owner.locator('text=250 km').first().waitFor();
+  await trip('ABC123', { km: '250', private: true, date: `${YEAR}-01-12` }); await owner.locator('text=Resan är sparad').waitFor();
+  await trip('XYZ789', { km: '120', purpose: 'Kundmöte', customer: 'Byggkunden AB' }); await owner.locator('text=Resan är sparad').waitFor();
+  const veh = (reg) => owner.locator(`.vl-vehicle[data-reg="${reg}"]`);
+  assert(nb(await veh('ABC123').locator('.vl-business').innerText()) === '250km' && nb(await veh('ABC123').locator('.vl-private').innerText()) === '250km' && nb(await veh('ABC123').locator('.vl-share').innerText()) === '50%', 'tjänst och privat');
+  assert(nb(await veh('ABC123').locator('.vl-customers').innerText()).includes('ByggkundenAB250km'), 'per kund');
+  assert(nb(await owner.locator('.vl-cpm').innerText()) === '60,00', 'självkostnad 3 000 kr / 50 mil');
+  t = nb(await veh('ABC123').locator('.vl-proposal').innerText()); assert(t.includes('250km') && t.includes('1500,00kr'), 'uttag 25 mil × 60 kr: ' + t);
+  t = nb(await veh('XYZ789').locator('.vl-proposal').innerText()); assert(t.includes('120km') && t.includes('25,00kr/mil') && t.includes('300,00kr'), 'avdrag 12 mil × 25 kr: ' + t);
+  await veh('ABC123').locator('button:has-text("Bokför årsavräkning")').click(); await veh('ABC123').locator('.vl-settled').waitFor();
+  await owner.goto(KJ + '/korjournal');
+  await veh('XYZ789').locator('button:has-text("Bokför årsavräkning")').click(); await veh('XYZ789').locator('.vl-settled').waitFor();
+  assert(await owner.locator('.vl-settled').count() === 2, 'båda avräknade');
+  await trip('XYZ789', { km: '10', purpose: 'Sen resa' }); await owner.locator('text=Året är redan avräknat').waitFor();
+  await owner.goto(KJ + '/verifikationer');
+  await owner.locator('tr:has-text("Privat körning") a').first().click(); await owner.waitForURL(/verifikationer\/\d+/);
+  t = nb(await text(owner)); assert(t.includes('2013') && t.includes('3990') && t.includes('1500,00'), 'uttag 2013/3990: ' + t.slice(0, 600));
+  await owner.goto(KJ + '/verifikationer');
+  await owner.locator('tr:has-text("Egen bil i tjänsten") a').first().click(); await owner.waitForURL(/verifikationer\/\d+/);
+  t = nb(await text(owner)); assert(t.includes('7331') && t.includes('2018') && t.includes('300,00'), 'avdrag 7331/2018: ' + t.slice(0, 600));
+  log('körjournal: resor per fordon med mätarställning och kund, privat andel, uttag för privat körning till självkostnad och avdrag för egen bil i tjänsten i enskild firma');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 31: alla steg gick igenom');
