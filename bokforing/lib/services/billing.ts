@@ -7,6 +7,7 @@ import { TRIAL_DAYS, monthlyPrice } from '@/lib/billing';
 import { companyAccess } from '@/lib/server/auth';
 import { addDays, today } from '@/lib/format';
 import type { Actor } from './actor';
+import { APP_NAME } from '@/lib/brand';
 
 export async function startTrial(db: typeof sql | Tx, companyId: number) {
   await db`INSERT INTO subscriptions (company_id, status, trial_ends_at) VALUES (${companyId}, 'trialing', ${addDays(today(), TRIAL_DAYS)}) ON CONFLICT DO NOTHING`;
@@ -24,7 +25,7 @@ export async function billingOverview(companyId: number) {
   return { ...s, access: await companyAccess(companyId), price: monthlyPrice(await enabledModuleIds(companyId)), stripe: stripeConfigured() };
 }
 
-const productName = (name: string) => `Bokföring – ${name}`;
+const productName = (name: string) => `${APP_NAME} – ${name}`;
 
 /** Stripe Checkout för abonnemang. Priset = grundpris + aktiverade moduler. */
 export async function checkout(actor: Actor, origin: string, email: string) {

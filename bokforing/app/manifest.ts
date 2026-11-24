@@ -1,9 +1,10 @@
 import type { MetadataRoute } from 'next';
+import { APP_NAME } from '@/lib/brand';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Bokföring',
-    short_name: 'Bokföring',
+    name: APP_NAME,
+    short_name: APP_NAME,
     description: 'Bokföring, fakturering, lön och hela verksamheten',
     start_url: '/',
     scope: '/',

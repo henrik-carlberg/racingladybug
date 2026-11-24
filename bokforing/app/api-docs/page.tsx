@@ -2,9 +2,10 @@ import { headers } from 'next/headers';
 import { buildOpenApi } from '@/lib/api/openapi';
 import { allScopes } from '@/lib/api/scopes';
 import { allEventTypes } from '@/lib/server/integrations';
+import { APP_NAME } from '@/lib/brand';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'API-dokumentation – Bokföring' };
+export const metadata = { title: `API-dokumentation – ${APP_NAME}` };
 
 type Op = { summary: string; description: string; tags: string[]; parameters?: { name: string; in: string; description?: string }[]; requestBody?: { content: { 'application/json': { schema: unknown } } } };
 
@@ -22,7 +23,7 @@ export default async function ApiDocs() {
   const base = `${origin}/api/v1`;
   return (
     <main style={{ maxWidth: 980, margin: '0 auto' }}>
-      <h1>Bokföring API v1</h1>
+      <h1>{APP_NAME} API v1</h1>
       <p>REST-API för bokföring, fakturering, leverantörsbetalningar och lön. Maskinläsbar specifikation: <a href="/api/v1/openapi.json">openapi.json</a> (OpenAPI 3.1 – kan importeras i Postman, Insomnia, Zapier/Make m.fl.).</p>
 
       <h2>Kom igång</h2>

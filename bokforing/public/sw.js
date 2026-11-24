@@ -59,8 +59,8 @@ self.addEventListener('fetch', (e) => {
 // Pushnotiser: visa notisen och öppna rätt sida när man trycker på den
 self.addEventListener('push', (e) => {
   let d = {};
-  try { d = e.data ? e.data.json() : {}; } catch { d = { title: 'Bokföring', body: e.data ? e.data.text() : '' }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'Bokföring', { body: d.body || '', tag: d.tag, icon: '/icon.svg', badge: '/icon.svg', data: { url: d.url || '/' } }));
+  try { d = e.data ? e.data.json() : {}; } catch { d = { title: 'Ordna', body: e.data ? e.data.text() : '' }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'Ordna', { body: d.body || '', tag: d.tag, icon: '/icon.svg', badge: '/icon.svg', data: { url: d.url || '/' } }));
 });
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();

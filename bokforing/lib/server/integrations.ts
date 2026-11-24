@@ -7,6 +7,7 @@ import { MODULES } from '@/modules/registry';
 import type { Actor } from '@/lib/services/actor';
 import { auditBy } from './audit';
 import { assertSafeUrl, scheduleWebhookDispatch } from './webhooks';
+import { APP_NAME } from '@/lib/brand';
 
 export const allEventTypes = () => [...CORE_EVENTS, ...MODULES.flatMap((m) => m.events ?? [])];
 const newSecret = () => 'whsec_' + randomBytes(24).toString('base64url');
@@ -54,7 +55,7 @@ export async function sendTestEvent(actor: Actor, id: number) {
   await own(actor, id);
   await sql.begin(async (tx) => {
     const [ev] = await tx<{ id: number }[]>`INSERT INTO events (public_id, company_id, type, data)
-      VALUES (${'evt_' + randomBytes(12).toString('hex')}, ${actor.companyId}, 'webhook.test', ${tx.json({ message: 'Testhändelse från Bokföring' })}) RETURNING id`;
+      VALUES (${'evt_' + randomBytes(12).toString('hex')}, ${actor.companyId}, 'webhook.test', ${tx.json({ message: `Testhändelse från ${APP_NAME}` })}) RETURNING id`;
     await tx`INSERT INTO webhook_deliveries (endpoint_id, event_id) VALUES (${id}, ${ev.id})`;
   });
   scheduleWebhookDispatch();

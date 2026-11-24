@@ -1,5 +1,6 @@
 // Engångskoder enligt RFC 6238 (TOTP, HMAC-SHA1, 30 s, 6 siffror) – fungerar med Google Authenticator, Microsoft Authenticator, 1Password m.fl.
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { APP_NAME } from '@/lib/brand';
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
@@ -49,7 +50,7 @@ export function totpStep(secret: string, code: string, time = Date.now()): numbe
 }
 export const verifyTotp = (secret: string, code: string, time = Date.now()) => totpStep(secret, code, time) !== null;
 
-export function otpauthUri(secret: string, account: string, issuer = 'Bokföring'): string {
+export function otpauthUri(secret: string, account: string, issuer = APP_NAME): string {
   return `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(account)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
 }
 

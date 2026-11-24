@@ -2,8 +2,9 @@ import Link from 'next/link';
 import { PublicHeader } from '@/components/PublicHeader';
 import { currentUser } from '@/lib/server/auth';
 import { HELP, helpGroups } from '@/lib/help';
+import { APP_NAME } from '@/lib/brand';
 
-export const metadata = { title: 'Hjälp – Bokföring' };
+export const metadata = { title: `Hjälp – ${APP_NAME}` };
 
 export default async function Help({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const user = await currentUser();

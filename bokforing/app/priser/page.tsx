@@ -3,8 +3,9 @@ import { PublicHeader } from '@/components/PublicHeader';
 import { currentUser } from '@/lib/server/auth';
 import { BASE_PRICE, FREE_MODULES, MODULE_PRICE, TRIAL_DAYS } from '@/lib/billing';
 import { MODULES } from '@/modules/registry';
+import { APP_NAME } from '@/lib/brand';
 
-export const metadata = { title: 'Priser – Bokföring' };
+export const metadata = { title: `Priser – ${APP_NAME}` };
 
 export default async function Pricing() {
   const user = await currentUser();
