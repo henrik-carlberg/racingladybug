@@ -57,8 +57,11 @@ export async function add(actor: Actor, input: Record<string, unknown>) {
 }
 
 /** En avgift som bokförts på ett avdragsgillt konto flyttas till 6992 (eller markeras som granskad) */
-export async function review(actor: Actor, voucherId: number, account: number, action: 'reclassed' | 'ignored') {
+export async function review(actor: Actor, voucherId: number, accountIn: number, action: 'reclassed' | 'ignored') {
+  const account = Number(accountIn);
+  if (!Number.isInteger(account) || !Number.isInteger(Number(voucherId))) throw new ValidationError('Ogiltig verifikationsrad');
   return sql.begin(async (tx) => {
+    await tx`SELECT pg_advisory_xact_lock(${Number(voucherId)}, ${account})`;
     const [l] = await tx<{ amount: number; description: string; date: string; closed: boolean }[]>`SELECT SUM(l.debit - l.credit)::float8 AS amount, v.description, to_char(v.date,'YYYY-MM-DD') AS date,
         EXISTS (SELECT 1 FROM fiscal_years f WHERE f.company_id = v.company_id AND v.date BETWEEN f.start_date AND f.end_date AND f.closed) AS closed
       FROM vouchers v JOIN voucher_lines l ON l.voucher_id = v.id AND l.account_number = ${account} WHERE v.id = ${voucherId} AND v.company_id = ${actor.companyId} GROUP BY v.id`;
