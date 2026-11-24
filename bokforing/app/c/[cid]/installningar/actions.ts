@@ -146,6 +146,7 @@ export async function removeMember(cid: number, userId: number) {
   await attempt(back(cid), async () => {
     if (userId === user.id) throw new Error('Du kan inte ta bort dig själv');
     await sql`DELETE FROM memberships WHERE company_id = ${company.id} AND user_id = ${userId}`;
+    await sql`DELETE FROM whistle_handlers WHERE company_id = ${company.id} AND user_id = ${userId}`;
     await audit(sql, { companyId: company.id, userId: user.id, action: 'remove', entity: 'membership', entityId: userId });
   });
   done(back(cid), 'Användaren har tagits bort från bolaget');
