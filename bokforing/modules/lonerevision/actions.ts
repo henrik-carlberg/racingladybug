@@ -7,7 +7,7 @@ import { userActor } from '@/lib/services/actor';
 import * as svc from './service';
 
 async function ctx(cid: number) {
-  const c = await requireCompany(cid);
+  const c = await requireCompany(cid, { perm: 'payroll' });
   if (!(await isModuleEnabled(c.company.id, 'lonerevision'))) throw new Error('Lönerevisionsmodulen är inte aktiverad');
   return userActor(c);
 }

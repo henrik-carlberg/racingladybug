@@ -36,8 +36,11 @@ export async function addControl(actor: Actor, input: Record<string, unknown>) {
   if (!Object.prototype.hasOwnProperty.call(FREQUENCIES, freq)) throw new ValidationError('Välj frekvens');
   const riskId = optInt(input, 'risk_id');
   if (riskId) { const [r] = await sql`SELECT 1 FROM ic_risks WHERE id = ${riskId} AND company_id = ${actor.companyId}`; if (!r) throw new NotFoundError('Risken'); }
+  const start = String(input.start_period ?? '').trim() || periodOf(freq, today());
+  const valid = freq === 'monthly' ? /^\d{4}-(0[1-9]|1[0-2])$/ : freq === 'quarterly' ? /^\d{4}-K[1-4]$/ : /^\d{4}$/;
+  if (!valid.test(start)) throw new ValidationError(freq === 'monthly' ? 'Ange startperioden som ÅÅÅÅ-MM' : freq === 'quarterly' ? 'Ange startperioden som ÅÅÅÅ-K1' : 'Ange startåret');
   await sql`INSERT INTO ic_controls ${sql({ company_id: actor.companyId, risk_id: riskId ?? null, name: str(input, 'name', { required: true, label: 'Kontroll', max: 150 }), kind, frequency: freq,
-    owner: str(input, 'owner', { max: 100 }), start_period: String(input.start_period ?? '').trim() || periodOf(freq, today()), created_by: actor.userId })}`;
+    owner: str(input, 'owner', { max: 100 }), start_period: start, created_by: actor.userId })}`;
 }
 
 /** Utförd kontroll för en period, med eller utan avvikelse */

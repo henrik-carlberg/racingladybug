@@ -198,9 +198,9 @@ async function Mapping({ companyId, basePath }: ModulePageProps) {
         {groups.map((g) => (
           <tr key={g.group} className="ps-group" data-key={g.group} data-flag={g.flag ? '1' : '0'}>
             <td>{g.group}</td>
-            <td className="num">{g.women}</td><td className="num">{g.women >= 2 || (g.women === 1 && g.men === 0) ? kr(g.avgWomen) : g.women ? '–' : ''}</td>
-            <td className="num">{g.men}</td><td className="num">{g.men >= 2 || (g.men === 1 && g.women === 0) ? kr(g.avgMen) : g.men ? '–' : ''}</td>
-            <td className="num" style={g.flag ? { color: 'var(--danger)' } : undefined}>{g.ratio != null ? (g.women >= 2 && g.men >= 2 ? pct(g.ratio) : g.flag ? 'skillnad' : '') : ''}</td>
+            <td className="num">{g.women}</td><td className="num">{g.women >= 2 ? kr(g.avgWomen) : g.women ? '–' : ''}</td>
+            <td className="num">{g.men}</td><td className="num">{g.men >= 2 ? kr(g.avgMen) : g.men ? '–' : ''}</td>
+            <td className="num" style={g.flag ? { color: 'var(--danger)' } : undefined}>{g.ratio != null && g.women >= 2 && g.men >= 2 ? pct(g.ratio) : ''}</td>
             <td className="small ps-analysis">{g.analysis ? <>{g.analysis.objective ? 'Saklig: ' : 'Osaklig: '}{g.analysis.cause}{g.analysis.action && ` · åtgärd: ${g.analysis.action}`}{g.analysis.due_date && ` senast ${g.analysis.due_date}`}</>
               : g.flag ? <form action={saveAnalysis.bind(null, companyId)} className="stack" style={{ gap: '.25rem' }}>
                 <input type="hidden" name="kind" value={kind} /><input type="hidden" name="group_key" value={g.group} />
@@ -227,7 +227,7 @@ async function Mapping({ companyId, basePath }: ModulePageProps) {
       <h2>Kravnivå per medarbetare</h2>
       <div className="table-wrap"><table className="small"><tbody>{m.people.map((e) => <tr key={e.id} className="ps-emp" data-name={e.name}><td>{e.name}</td><td>{e.title}</td>
         <td><form action={setLevel.bind(null, companyId, e.id)} className="row" style={{ gap: '.25rem' }}><input name="title" placeholder="Befattning (om HR-modulen inte används)" /><select name="job_level" defaultValue={e.level ?? ''}><option value="">Kravnivå</option>{[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}</select><button className="link">Spara</button></form></td></tr>)}</tbody></table></div>
-      <p className="small muted">Snittlön visas bara när gruppen har minst två personer av samma kön, så att enskildas löner inte kan utläsas. Kön hämtas från personnumret.</p>
+      <p className="small muted">Snittlön och jämförelse visas bara när gruppen har minst två personer av varje kön, så att enskildas löner inte kan utläsas. Mindre grupper analyseras i den samlade bedömningen. Kön hämtas från personnumret.</p>
     </>
   );
 }

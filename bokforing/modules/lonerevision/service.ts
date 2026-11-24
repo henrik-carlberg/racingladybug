@@ -259,11 +259,11 @@ export async function payMapping(companyId: number) {
   const analyses = await sql<{ kind: 'equal' | 'equivalent'; group_key: string; objective: boolean; cause: string; action: string; due_date: string | null }[]>`
     SELECT kind, group_key, objective, cause, action, to_char(due_date,'YYYY-MM-DD') AS due_date FROM pay_survey_analyses WHERE company_id = ${companyId} AND year = ${year}`;
   const people = rows.map((r) => ({ ...r, sex: legalSex(r.personal_number) }));
-  const withAnalysis = (kind: 'equal' | 'equivalent', gs: PayGroup[]) => gs.map((g) => ({ ...g, flag: flagged(g), analysis: analyses.find((a) => a.kind === kind && a.group_key === g.group) ?? null }));
+  const withAnalysis = (kind: 'equal' | 'equivalent', gs: PayGroup[]) => gs.map((g) => ({ ...g, flag: g.women >= 2 && g.men >= 2 && flagged(g), analysis: analyses.find((a) => a.kind === kind && a.group_key === g.group) ?? null }));
   const equal = withAnalysis('equal', payGroups(people.map((r) => ({ group: r.title, sex: r.sex, salary: r.salary }))));
   const equivalent = withAnalysis('equivalent', levelGroups(people));
   const open = [...equal, ...equivalent].filter((g) => g.flag && !g.analysis).length;
-  return { year, employees: rows.length, people: people.map(({ personal_number: _p, ...r }) => r), groups: equal, equivalent, open };
+  return { year, employees: rows.length, people: people.map((r) => ({ id: r.id, name: r.name, title: r.title, level: r.level })), groups: equal, equivalent, open };
 }
 
 export async function setLevel(actor: Actor, employeeId: number, input: Record<string, unknown>) {
