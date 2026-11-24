@@ -4,7 +4,7 @@ import type { ModuleDefinition, ModulePageProps } from '@/lib/modules/types';
 import { kr, today } from '@/lib/format';
 import * as svc from './service';
 import { STATUS_LABEL, type ReviewOut } from './service';
-import { apply, approve, cancel, create, evenly, letters, reopen, retro, saveProposals } from './actions';
+import { apply, approve, cancel, create, evenly, letters, reopen, retro, saveAnalysis, saveProposals, setLevel } from './actions';
 
 const pct = (n: number) => `${String(n).replace('.', ',')} %`;
 const krInput = (ore: number) => (ore / 100).toFixed(2).replace('.', ',').replace(/,00$/, '');
@@ -190,30 +190,44 @@ async function Review({ companyId, actor, params, basePath }: ModulePageProps) {
 
 async function Mapping({ companyId, basePath }: ModulePageProps) {
   const m = await svc.payMapping(companyId);
+  const table = (kind: 'equal' | 'equivalent', title: string, groups: typeof m.groups) => <>
+    <h2>{title}</h2>
+    <div className="table-wrap"><table className={`ps-${kind}`}>
+      <thead><tr><th>Grupp</th><th className="num">Kvinnor</th><th className="num">Snittlön kvinnor</th><th className="num">Män</th><th className="num">Snittlön män</th><th className="num">Kvinnors lön av mäns</th><th>Analys</th></tr></thead>
+      <tbody>
+        {groups.map((g) => (
+          <tr key={g.group} className="ps-group" data-key={g.group} data-flag={g.flag ? '1' : '0'}>
+            <td>{g.group}</td>
+            <td className="num">{g.women}</td><td className="num">{g.women >= 2 || (g.women === 1 && g.men === 0) ? kr(g.avgWomen) : g.women ? '–' : ''}</td>
+            <td className="num">{g.men}</td><td className="num">{g.men >= 2 || (g.men === 1 && g.women === 0) ? kr(g.avgMen) : g.men ? '–' : ''}</td>
+            <td className="num" style={g.flag ? { color: 'var(--danger)' } : undefined}>{g.ratio != null ? (g.women >= 2 && g.men >= 2 ? pct(g.ratio) : g.flag ? 'skillnad' : '') : ''}</td>
+            <td className="small ps-analysis">{g.analysis ? <>{g.analysis.objective ? 'Saklig: ' : 'Osaklig: '}{g.analysis.cause}{g.analysis.action && ` · åtgärd: ${g.analysis.action}`}{g.analysis.due_date && ` senast ${g.analysis.due_date}`}</>
+              : g.flag ? <form action={saveAnalysis.bind(null, companyId)} className="stack" style={{ gap: '.25rem' }}>
+                <input type="hidden" name="kind" value={kind} /><input type="hidden" name="group_key" value={g.group} />
+                <select name="objective"><option value="yes">Skillnaden har sakliga skäl</option><option value="no">Skillnaden är osaklig – åtgärd krävs</option></select>
+                <input name="cause" placeholder="Orsak (erfarenhet, marknad, prestation …)" required /><input name="action" placeholder="Åtgärd" /><input type="date" name="due_date" aria-label="Åtgärdad senast" />
+                <button className="link">Spara analys</button></form> : ''}</td>
+          </tr>
+        ))}
+        {groups.length === 0 && <tr><td colSpan={7} className="muted">{kind === 'equal' ? 'Inga aktiva anställda med månadslön.' : 'Ange kravnivå per medarbetare nedan.'}</td></tr>}
+      </tbody>
+    </table></div></>;
   return (
     <>
       <div className="header">
-        <h1>Lönekartläggning</h1>
+        <h1>Lönekartläggning {m.year}</h1>
         <div className="actions" style={{ margin: 0 }}><Link className="btn secondary" href={basePath}>Lönerevision</Link></div>
       </div>
       <p className="small">Arbetsgivare ska varje år kartlägga och analysera löner för att upptäcka osakliga skillnader mellan kvinnor och män (diskrimineringslagen 3 kap. 8–12 §§).
-        Med minst tio anställda ska arbetet dokumenteras. Tabellen visar nuvarande månadslöner per befattning (från HR-modulen) och juridiskt kön enligt personnumret – ett underlag
-        som behöver kompletteras med en bedömning av likvärdigt arbete och orsakerna till skillnader.</p>
-      <div className="table-wrap"><table>
-        <thead><tr><th>Befattning</th><th className="num">Kvinnor</th><th className="num">Snittlön kvinnor</th><th className="num">Män</th><th className="num">Snittlön män</th><th className="num">Kvinnors lön av mäns</th></tr></thead>
-        <tbody>
-          {m.groups.map((g) => (
-            <tr key={g.group}>
-              <td>{g.group}</td>
-              <td className="num">{g.women}</td><td className="num">{g.women >= 2 || (g.women === 1 && g.men === 0) ? kr(g.avgWomen) : g.women ? '–' : ''}</td>
-              <td className="num">{g.men}</td><td className="num">{g.men >= 2 || (g.men === 1 && g.women === 0) ? kr(g.avgMen) : g.men ? '–' : ''}</td>
-              <td className="num" style={g.ratio != null && g.ratio < 95 ? { color: 'var(--danger)' } : undefined}>{g.ratio != null && g.women >= 2 && g.men >= 2 ? pct(g.ratio) : ''}</td>
-            </tr>
-          ))}
-          {m.groups.length === 0 && <tr><td colSpan={6} className="muted">Inga aktiva anställda med månadslön.</td></tr>}
-        </tbody>
-      </table></div>
-      <p className="small muted">Snittlön visas bara när gruppen har minst två personer av samma kön, så att enskildas löner inte kan utläsas. Ange befattning under HR → medarbetare.</p>
+        Med minst tio anställda ska arbetet dokumenteras. Lika arbete jämförs per befattning (från HR-modulen eller medarbetarens befattning) och likvärdigt arbete per kravnivå 1–6 enligt en arbetsvärdering.
+        Skillnader där kvinnors lön är under 95 % av mäns (eller tvärtom) flaggas och ska analyseras: har de sakliga skäl, eller krävs en åtgärd som ska vara genomförd inom tre år?</p>
+      {m.open > 0 && <div className="card small ps-open">{m.open} {m.open === 1 ? 'skillnad saknar' : 'skillnader saknar'} analys.</div>}
+      {table('equal', 'Lika arbete (befattning)', m.groups)}
+      {table('equivalent', 'Likvärdigt arbete (kravnivå)', m.equivalent)}
+      <h2>Kravnivå per medarbetare</h2>
+      <div className="table-wrap"><table className="small"><tbody>{m.people.map((e) => <tr key={e.id} className="ps-emp" data-name={e.name}><td>{e.name}</td><td>{e.title}</td>
+        <td><form action={setLevel.bind(null, companyId, e.id)} className="row" style={{ gap: '.25rem' }}><input name="title" placeholder="Befattning (om HR-modulen inte används)" /><select name="job_level" defaultValue={e.level ?? ''}><option value="">Kravnivå</option>{[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}</select><button className="link">Spara</button></form></td></tr>)}</tbody></table></div>
+      <p className="small muted">Snittlön visas bara när gruppen har minst två personer av samma kön, så att enskildas löner inte kan utläsas. Kön hämtas från personnumret.</p>
     </>
   );
 }

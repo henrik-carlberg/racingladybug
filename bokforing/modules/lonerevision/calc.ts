@@ -72,3 +72,11 @@ export function payGroups(rows: { group: string; sex: 'K' | 'M' | null; salary: 
     return { group, women: g.w.length, men: g.m.length, avgWomen: aw, avgMen: am, ratio: aw != null && am ? Math.round((aw / am) * 1000) / 10 : null };
   });
 }
+
+/** Skillnad som ska analyseras: kvinnors lön under 95 % av mäns (eller tvärtom) när båda könen finns i gruppen */
+export const FLAG_RATIO = 95;
+export const flagged = (g: PayGroup) => g.ratio != null && (g.ratio < FLAG_RATIO || g.ratio > 10000 / FLAG_RATIO);
+/** Likvärdigt arbete: grupper per kravnivå (1–6) enligt en arbetsvärdering */
+export function levelGroups(rows: { level: number | null; sex: 'K' | 'M' | null; salary: number }[]) {
+  return payGroups(rows.filter((r) => r.level != null).map((r) => ({ group: `Kravnivå ${r.level}`, sex: r.sex, salary: r.salary })));
+}
