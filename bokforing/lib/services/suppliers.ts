@@ -215,6 +215,8 @@ export async function paySupplierInvoices(actor: Actor, ids: number[], input: Re
   if (ids.length === 0) throw new ValidationError('Välj minst en faktura');
   return sql.begin(async (tx) => {
     const out: SupplierInvoiceOut[] = [];
+    const blocked = await blockedInvoices(tx, actor.companyId, ids, { forPayment: true });
+    for (const id of ids) { const b = blocked.get(id); if (b && b.includes('sanktionslista')) throw new ConflictError(`Fakturan kan inte betalas: ${b}`); }
     for (const id of ids) out.push(await paySupplierInvoiceTx(tx, actor, id, input));
     return out;
   });

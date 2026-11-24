@@ -280,7 +280,7 @@ export async function bookInvoice(actor: Actor, invoiceId: number): Promise<Invo
     const tt = invoiceTotals(lines, { reverseCharge: inv.reverse_charge, currency: inv.currency, rate: inv.exchange_rate });
     const t = tt.sek;
     // Kreditkontroll: kreditgräns och riskklass (stoppar om kunden har policy "stoppa")
-    { const [ci] = await tx<{ customer_id: number }[]>`SELECT customer_id FROM invoices WHERE id = ${invoiceId}`; const { creditGuard } = await import('./credit'); await creditGuard(tx, actor.companyId, ci.customer_id, t.total); }
+    { const [ci] = await tx<{ customer_id: number }[]>`SELECT customer_id FROM invoices WHERE id = ${invoiceId}`; const { creditGuard } = await import('./credit'); await creditGuard(tx, actor.companyId, ci.customer_id, t.total); const { sanctionGuard } = await import('./sanctions'); await sanctionGuard(tx, actor.companyId, 'customer', ci.customer_id); }
     if (tt.foreign && (await accountingMethod(tx, actor.companyId)) === 'cash') throw new ValidationError('Fakturor i utländsk valuta kräver faktureringsmetoden');
     let reduction = 0;
     if (inv.reduction_type) {
