@@ -4,11 +4,12 @@ import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import { auditBy } from '@/lib/server/audit';
 import { emit } from '@/lib/server/events';
 import { formatAmount } from '@/lib/money';
+import { today } from '@/lib/format';
 import type { Actor } from '@/lib/services/actor';
 import { arr, date, int, optInt, str } from '@/lib/services/input';
 import { updateEmployee, updatePayslip } from '@/lib/services/payroll';
 import { createDocument, sendDocument } from '@/lib/services/documents';
-import { legalSex, payGroups, raiseByPercent, raisePercent, retroAmount, summarize, type ReviewSummary } from './calc';
+import { flagged, legalSex, levelGroups, payGroups, raiseByPercent, raisePercent, retroAmount, summarize, type PayGroup, type ReviewSummary } from './calc';
 
 export type ReviewStatus = 'planning' | 'approved' | 'applied' | 'cancelled';
 export const STATUS_LABEL: Record<ReviewStatus, string> = { planning: 'Planering', approved: 'Godkänd', applied: 'Genomförd', cancelled: 'Avbruten' };
@@ -248,12 +249,50 @@ export async function addRetroToRun(actor: Actor, id: number, runId: number) {
   return { added, period: run.period };
 }
 
-/** Underlag för lönekartläggning: nuvarande löner per befattning och kön */
+/** Underlag för lönekartläggning: löner per befattning (lika arbete) och kravnivå (likvärdigt arbete) med dokumenterad analys */
 export async function payMapping(companyId: number) {
-  const rows = await sql<{ title: string; personal_number: string; salary: number }[]>`
-    SELECT COALESCE(NULLIF(h.title, ''), 'Ingen befattning angiven') AS title, e.personal_number, e.monthly_salary::int AS salary
-    FROM employees e LEFT JOIN hr_profiles h ON h.employee_id = e.id WHERE e.company_id = ${companyId} AND e.active AND e.monthly_salary > 0`;
-  return { employees: rows.length, groups: payGroups(rows.map((r) => ({ group: r.title, sex: legalSex(r.personal_number), salary: r.salary }))) };
+  const year = Number(today().slice(0, 4));
+  const rows = await sql<{ id: number; name: string; title: string; personal_number: string; salary: number; level: number | null }[]>`
+    SELECT e.id, e.first_name || ' ' || e.last_name AS name, COALESCE(NULLIF(h.title, ''), NULLIF(e.title, ''), 'Ingen befattning angiven') AS title, e.personal_number, e.monthly_salary::int AS salary, l.job_level AS level
+    FROM employees e LEFT JOIN hr_profiles h ON h.employee_id = e.id LEFT JOIN pay_survey_levels l ON l.employee_id = e.id
+    WHERE e.company_id = ${companyId} AND e.active AND e.monthly_salary > 0 ORDER BY 2`;
+  const analyses = await sql<{ kind: 'equal' | 'equivalent'; group_key: string; objective: boolean; cause: string; action: string; due_date: string | null }[]>`
+    SELECT kind, group_key, objective, cause, action, to_char(due_date,'YYYY-MM-DD') AS due_date FROM pay_survey_analyses WHERE company_id = ${companyId} AND year = ${year}`;
+  const people = rows.map((r) => ({ ...r, sex: legalSex(r.personal_number) }));
+  const withAnalysis = (kind: 'equal' | 'equivalent', gs: PayGroup[]) => gs.map((g) => ({ ...g, flag: g.women >= 2 && g.men >= 2 && flagged(g), analysis: analyses.find((a) => a.kind === kind && a.group_key === g.group) ?? null }));
+  const equal = withAnalysis('equal', payGroups(people.map((r) => ({ group: r.title, sex: r.sex, salary: r.salary }))));
+  const equivalent = withAnalysis('equivalent', levelGroups(people));
+  const open = [...equal, ...equivalent].filter((g) => g.flag && !g.analysis).length;
+  return { year, employees: rows.length, people: people.map((r) => ({ id: r.id, name: r.name, title: r.title, level: r.level })), groups: equal, equivalent, open };
+}
+
+export async function setLevel(actor: Actor, employeeId: number, input: Record<string, unknown>) {
+  const [e] = await sql`SELECT 1 FROM employees WHERE id = ${employeeId} AND company_id = ${actor.companyId}`;
+  if (!e) throw new NotFoundError('Medarbetaren');
+  const level = Number(input.job_level);
+  if (!Number.isInteger(level) || level < 1 || level > 6) throw new ValidationError('Kravnivån ska vara 1–6');
+  await sql`INSERT INTO pay_survey_levels (employee_id, company_id, job_level) VALUES (${employeeId}, ${actor.companyId}, ${level}) ON CONFLICT (employee_id) DO UPDATE SET job_level = EXCLUDED.job_level`;
+  const title = String(input.title ?? '').trim().slice(0, 100);
+  if (title) await sql`UPDATE employees SET title = ${title} WHERE id = ${employeeId} AND company_id = ${actor.companyId}`;
+}
+
+/** Analys av en flaggad skillnad: saklig orsak eller åtgärd med tidplan (ska dokumenteras med minst tio anställda) */
+export async function saveAnalysis(actor: Actor, input: Record<string, unknown>) {
+  const kind = input.kind === 'equivalent' ? 'equivalent' : 'equal';
+  const group = String(input.group_key ?? '').trim().slice(0, 150);
+  if (!group) throw new ValidationError('Välj grupp');
+  const objective = input.objective === 'yes';
+  const cause = String(input.cause ?? '').trim().slice(0, 2000);
+  if (!cause) throw new ValidationError('Beskriv orsaken till skillnaden');
+  const action = String(input.action ?? '').trim().slice(0, 2000);
+  const due = String(input.due_date ?? '').trim() || null;
+  if (!objective && (!action || !due)) throw new ValidationError('En osaklig skillnad kräver en åtgärd och när den ska vara genomförd (senast inom tre år)');
+  if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) throw new ValidationError('Ogiltigt datum');
+  const year = Number(today().slice(0, 4));
+  await sql`INSERT INTO pay_survey_analyses (company_id, year, kind, group_key, objective, cause, action, due_date, created_by) VALUES (${actor.companyId}, ${year}, ${kind}, ${group}, ${objective}, ${cause}, ${action}, ${due}, ${actor.userId})
+    ON CONFLICT (company_id, year, kind, group_key) DO UPDATE SET objective = EXCLUDED.objective, cause = EXCLUDED.cause, action = EXCLUDED.action, due_date = EXCLUDED.due_date, created_by = EXCLUDED.created_by`;
+  await auditBy(sql, actor, 'pay_survey_analysis', 'company', actor.companyId, { kind, objective });
+  return objective;
 }
 
 export async function salaryHistory(companyId: number, employeeId?: number) {

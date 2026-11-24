@@ -7,7 +7,7 @@ import { userActor } from '@/lib/services/actor';
 import * as svc from './service';
 
 async function ctx(cid: number) {
-  const c = await requireCompany(cid);
+  const c = await requireCompany(cid, { perm: 'payroll' });
   if (!(await isModuleEnabled(c.company.id, 'lonerevision'))) throw new Error('Lönerevisionsmodulen är inte aktiverad');
   return userActor(c);
 }
@@ -86,4 +86,17 @@ export async function retro(cid: number, id: number, fd: FormData) {
     msg = `Retroaktiv lön är inlagd för ${r.added} medarbetare i lönekörningen ${r.period}`;
   });
   done(rev(cid, id), msg);
+}
+
+export async function setLevel(cid: number, employeeId: number, fd: FormData) {
+  const actor = await ctx(cid);
+  await attempt(`${base(cid)}/kartlaggning`, () => svc.setLevel(actor, employeeId, Object.fromEntries([...fd.entries()].filter(([, v]) => typeof v === 'string'))));
+  done(`${base(cid)}/kartlaggning`, 'Kravnivån är sparad');
+}
+
+export async function saveAnalysis(cid: number, fd: FormData) {
+  const actor = await ctx(cid);
+  let objective = false;
+  await attempt(`${base(cid)}/kartlaggning`, async () => { objective = await svc.saveAnalysis(actor, Object.fromEntries([...fd.entries()].filter(([, v]) => typeof v === 'string'))); });
+  done(`${base(cid)}/kartlaggning`, objective ? 'Analysen är sparad – skillnaden har en saklig förklaring' : 'Analysen är sparad med åtgärd och tidplan');
 }

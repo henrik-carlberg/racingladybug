@@ -40,7 +40,7 @@ export default async function Gdpr({ params, searchParams }: { params: Promise<{
       </div>
 
       <h2>Register över behandlingar</h2>
-      <p className="small muted">Underlag för ert register enligt art. 30. Komplettera med behandlingar ni gör utanför tjänsten.</p>
+      <p className="small muted">Underlag för ert register enligt art. 30. Komplettera med behandlingar ni gör utanför tjänsten under <Link href={`/c/${company.id}/dataskydd`}>behandlingar och personuppgiftsincidenter</Link>.</p>
       <div className="table-wrap"><table className="small">
         <thead><tr><th>Behandling</th><th>Registrerade</th><th>Uppgifter</th><th>Rättslig grund</th><th>Lagringstid</th></tr></thead>
         <tbody>{RECORD.map((r) => <tr key={r[0]}>{r.map((c, i) => <td key={i}>{c}</td>)}</tr>)}</tbody>
