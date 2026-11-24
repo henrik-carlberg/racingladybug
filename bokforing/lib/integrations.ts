@@ -6,7 +6,7 @@ export interface Integration {
 
 export const INTEGRATIONS: Integration[] = [
   { key: 'mail', name: 'E-post (Resend)', enables: 'Fakturor och påminnelser med e-post, tackmejl, sammandrag, schemalagda rapporter, inbjudningar', vars: ['RESEND_API_KEY', 'MAIL_FROM'], testable: true,
-    steps: ['Skapa ett konto på resend.com och verifiera er domän (DNS-poster för SPF och DKIM).', 'Skapa en API-nyckel med behörighet att skicka.', 'Lägg in RESEND_API_KEY och MAIL_FROM (t.ex. "Bokföring <noreply@er-doman.se>") i Vercel och gör en ny deploy.'] },
+    steps: ['Skapa ett konto på resend.com och verifiera er domän (DNS-poster för SPF och DKIM).', 'Skapa en API-nyckel med behörighet att skicka.', 'Lägg in RESEND_API_KEY och MAIL_FROM (t.ex. "Ordna <noreply@er-doman.se>") i Vercel och gör en ny deploy.'] },
   { key: 'inbox', name: 'Inkorg för leverantörsfakturor', enables: 'Varje bolag får en e-postadress dit leverantörer skickar fakturor', vars: ['INBOX_DOMAIN', 'RESEND_WEBHOOK_SECRET'],
     steps: ['Lägg till en domän för mottagning i Resend (t.ex. inbox.er-doman.se) med MX-post.', 'Skapa en webhook till https://<er-adress>/api/inbound/resend för händelsen email.received och kopiera signeringsnyckeln.', 'Lägg in INBOX_DOMAIN och RESEND_WEBHOOK_SECRET i Vercel.'] },
   { key: 'ai', name: 'Avläsning och assistent (Claude)', enables: 'Fakturor och kvitton läses av, assistenten, förslag på kontering', vars: ['ANTHROPIC_API_KEY'], testable: true,

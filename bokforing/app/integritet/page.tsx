@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { PROVIDER, SUBPROCESSORS } from '@/lib/legal';
+import { APP_NAME } from '@/lib/brand';
 
-export const metadata = { title: 'Integritetspolicy – Bokföring' };
+export const metadata = { title: `Integritetspolicy – ${APP_NAME}` };
 
 export default function Privacy() {
   const p = PROVIDER;

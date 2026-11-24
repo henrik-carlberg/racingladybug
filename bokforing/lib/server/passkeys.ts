@@ -10,10 +10,11 @@ import { sql } from '@/lib/db';
 import { AppError, ValidationError } from '@/lib/errors';
 import { audit } from './audit';
 import type { User } from './auth';
+import { APP_NAME } from '@/lib/brand';
 
 const CHALLENGE_COOKIE = 'bok_webauthn';
 const CHALLENGE_TTL_MS = 5 * 60_000;
-const RP_NAME = 'Bokföring';
+const RP_NAME = APP_NAME;
 
 export class PasskeyError extends AppError {
   status = 400;

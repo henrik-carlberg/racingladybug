@@ -2,6 +2,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import { sql } from '@/lib/db';
 import { sendMail } from './mail';
+import { APP_NAME } from '@/lib/brand';
 
 /** E-postadresser för larm till den som driver tjänsten */
 export const opsEmails = () => (process.env.OPS_ALERT_EMAILS || process.env.OPS_ADMIN_EMAILS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
@@ -35,7 +36,7 @@ export async function recordError(e: { message: string; stack?: string; path?: s
     if (r.alert && opsEmails().length) {
       await sql`UPDATE error_log SET alerted_at = now() WHERE id = ${r.id}`;
       for (const to of opsEmails()) {
-        await sendMail(to, `Fel i Bokföring: ${e.message.slice(0, 80)}`, `${e.message}\n\n${e.method ?? ''} ${e.path ?? ''}\nFörekomster: ${r.count}\n\n${(e.stack ?? '').slice(0, 2000)}\n\nSe driftsidan: /drift`);
+        await sendMail(to, `Fel i ${APP_NAME}: ${e.message.slice(0, 80)}`, `${e.message}\n\n${e.method ?? ''} ${e.path ?? ''}\nFörekomster: ${r.count}\n\n${(e.stack ?? '').slice(0, 2000)}\n\nSe driftsidan: /drift`);
       }
     }
   } catch (err) {

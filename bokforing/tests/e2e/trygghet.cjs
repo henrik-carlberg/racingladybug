@@ -32,7 +32,7 @@ function totp(secret, t = Date.now()) {
 
   // ---------- PWA ----------
   const man = await (await page.request.get(BASE + '/manifest.webmanifest')).json();
-  assert(man.name === 'Bokföring' && man.display === 'standalone' && man.icons.length === 2, 'manifest: ' + JSON.stringify(man));
+  assert(man.name === 'Ordna' && man.display === 'standalone' && man.icons.length === 2, 'manifest: ' + JSON.stringify(man));
   for (const f of ['/sw.js', '/offline.html', '/icon.svg']) assert((await page.request.get(BASE + f)).status() === 200, f);
   log('PWA: manifest, ikon, service worker och offlinesida');
 

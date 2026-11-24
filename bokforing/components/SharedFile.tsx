@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { clearShared, sharedFile } from '@/lib/client/outbox';
+import { APP_NAME } from '@/lib/brand';
 
 /** Förhandsvisning av filen som delades till appen */
 export function SharedPreview() {
@@ -9,7 +10,7 @@ export function SharedPreview() {
     sharedFile().then((s) => setF(s ? { name: s.name, url: URL.createObjectURL(s.file), type: s.file.type } : null)).catch(() => setF(null));
   }, []);
   if (f === undefined) return null;
-  if (!f) return <p className="muted">Ingen delad fil hittades. Dela en bild eller PDF från bildgalleriet eller en annan app och välj Bokföring.</p>;
+  if (!f) return <p className="muted">Ingen delad fil hittades. Dela en bild eller PDF från bildgalleriet eller en annan app och välj {APP_NAME}.</p>;
   return (
     <div className="card shared-preview">
       {f.type.startsWith('image/') ? <img src={f.url} alt={f.name} /> : <div>📄 {f.name}</div>}

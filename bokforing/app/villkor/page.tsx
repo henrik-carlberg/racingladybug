@@ -2,8 +2,9 @@ import Link from 'next/link';
 import { PROVIDER } from '@/lib/legal';
 import { BASE_PRICE, MODULE_PRICE, TRIAL_DAYS } from '@/lib/billing';
 import { kr } from '@/lib/format';
+import { APP_NAME } from '@/lib/brand';
 
-export const metadata = { title: 'Användarvillkor – Bokföring' };
+export const metadata = { title: `Användarvillkor – ${APP_NAME}` };
 
 export default function Terms() {
   return (

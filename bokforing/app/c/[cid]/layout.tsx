@@ -13,6 +13,7 @@ import { CommandPalette, CreateMenu, SideNav, UsageTracker } from '@/components/
 import { usageScores } from '@/lib/services/usage';
 import { UndoProvider } from '@/components/Undo';
 import { ReceiptOutbox } from '@/components/ReceiptOutbox';
+import { APP_NAME } from '@/lib/brand';
 
 export default async function CompanyLayout({ children, params }: { children: ReactNode; params: Promise<{ cid: string }> }) {
   const { cid } = await params;
@@ -27,7 +28,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
     return (
       <div className="shell">
         <aside className="side">
-          <div className="brand"><Link href="/">{t('Bokföring')}</Link></div>
+          <div className="brand"><Link href="/">{APP_NAME}</Link></div>
           <div className="company">{company.name}<br />{user.name} · {t(ROLE_LABEL[role])}</div>
           <input type="checkbox" id="navtoggle" className="navtoggle" aria-label={t('☰ Meny')} />
           <label htmlFor="navtoggle" className="navbtn btn secondary">{t('☰ Meny')}</label>
@@ -60,7 +61,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
   return (
     <div className="shell">
       <aside className="side">
-        <div className="brand"><Link href="/"><span className="logo" aria-hidden="true">B</span>{t('Bokföring')}</Link></div>
+        <div className="brand"><Link href="/"><span className="logo" aria-hidden="true">O</span>{APP_NAME}</Link></div>
         <div className="company"><b>{company.name}</b><span>{user.name} · {t(ROLE_LABEL[role])}</span></div>
         <input type="checkbox" id="navtoggle" className="navtoggle" aria-label={t('☰ Meny')} />
         <label htmlFor="navtoggle" className="navbtn btn secondary">{t('☰ Meny')}</label>

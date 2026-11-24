@@ -4,6 +4,7 @@ import { MODULES } from '@/modules/registry';
 import { CORE_ROUTES } from './routes';
 import { allScopes } from './scopes';
 import type { ApiRoute } from './router';
+import { APP_NAME } from '@/lib/brand';
 
 /** Genererar OpenAPI 3.1 från samma routedefinitioner som API:t använder – kan aldrig glida isär. */
 export function buildOpenApi(baseUrl: string) {
@@ -36,7 +37,7 @@ export function buildOpenApi(baseUrl: string) {
   return {
     openapi: '3.1.0',
     info: {
-      title: 'Bokföring API', version: '1.0.0',
+      title: `${APP_NAME} API`, version: '1.0.0',
       description: [
         'REST-API för bokföring, fakturering, leverantörsbetalningar och lön.',
         '',
