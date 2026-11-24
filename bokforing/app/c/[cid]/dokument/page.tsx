@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
+import { canSeeDocument } from '@/lib/permissions';
 import { Flash, type SP } from '@/components/ui';
 import { createDoc } from './actions';
 
@@ -12,12 +13,13 @@ const STATUS: Record<string, [string, string]> = {
 
 export default async function Documents({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company, user } = await requireCompany(cid);
-  const docs = await sql<{ id: number; title: string; status: string; created: string; signed: number; total: number; source_module: string | null }[]>`
+  const { company, user, role, permissions } = await requireCompany(cid);
+  const all = await sql<{ id: number; title: string; status: string; created: string; signed: number; total: number; source_module: string | null; mine: boolean }[]>`
     SELECT d.id, d.title, d.status, to_char(d.created_at AT TIME ZONE 'Europe/Stockholm','YYYY-MM-DD') AS created, d.source_module,
-      count(s.id) FILTER (WHERE s.status = 'signed')::int AS signed, count(s.id)::int AS total
+      count(s.id) FILTER (WHERE s.status = 'signed')::int AS signed, count(s.id)::int AS total, bool_or(s.user_id = ${user.id}) AS mine
     FROM documents d JOIN document_signers s ON s.document_id = d.id WHERE d.company_id = ${company.id}
     GROUP BY d.id ORDER BY d.id DESC LIMIT 300`;
+  const docs = all.filter((d) => canSeeDocument(role, permissions, d.source_module, !!d.mine));
   const members = await sql<{ id: number; name: string }[]>`SELECT u.id, u.name FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.company_id = ${company.id} ORDER BY u.name`;
   const b = `/c/${company.id}`;
   return (

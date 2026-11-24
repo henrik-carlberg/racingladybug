@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
+import { canSeeDocument } from '@/lib/permissions';
 import { requestOrigin } from '@/lib/server/origin';
 import { getDocument } from '@/lib/services/documents';
 import { NotFoundError } from '@/lib/errors';
@@ -19,8 +20,9 @@ const METHOD: Record<string, string> = { passkey: 'Passkey (biometri/PIN)', pass
 
 export default async function DocumentPage({ params, searchParams }: { params: Promise<{ cid: string; did: string }>; searchParams: SP }) {
   const { cid, did } = await params;
-  const { company, user } = await requireCompany(cid);
+  const { company, user, role, permissions } = await requireCompany(cid);
   const d = await getDocument(company.id, Number(did), await requestOrigin()).catch((e) => { if (e instanceof NotFoundError) notFound(); throw e; });
+  if (!canSeeDocument(role, permissions, d.source_module ?? null, d.signers.some((s) => s.user_id === user.id))) notFound();
   const [{ html }] = await sql<{ html: string | null }[]>`SELECT html FROM documents WHERE id = ${d.id}`;
   const mine = d.signers.find((s) => s.user_id === user.id && s.status === 'pending');
   const [{ n: passkeys }] = await sql<{ n: number }[]>`SELECT count(*)::int AS n FROM passkeys WHERE user_id = ${user.id}`;
