@@ -32,7 +32,7 @@ const pct = (input: Record<string, unknown>, k: string, label: string, opt = fal
 
 export async function add(actor: Actor, input: Record<string, unknown>) {
   const category = String(input.category) as AssetCategory;
-  if (!ASSET_CATEGORIES[category]) throw new ValidationError('Välj kategori');
+  if (!Object.prototype.hasOwnProperty.call(ASSET_CATEGORIES, category)) throw new ValidationError('Välj kategori');
   const life = int(input, 'life_years', 'Livslängd');
   if (life < 1 || life > 50) throw new ValidationError('Livslängden ska vara 1–50 år');
   const rate = pct(input, 'rate_pct', 'kalkylränta')!;
