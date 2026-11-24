@@ -154,6 +154,7 @@ export function buildNav(o: {
       { path: '/revision', label: 'Revision', perm: 'ledger', hint: 'Revisorns stickprov och anmärkningar' },
       { path: '/anlaggningar', label: 'Anläggningsregister' },
       { path: '/it-utrustning', label: 'IT-utrustning', perm: 'ledger', hint: 'Inventarielista med innehavare, garanti, utbytesplan och återlämning vid uppsägning' },
+      { path: '/immateriella-rattigheter', label: 'Immateriella rättigheter', perm: 'ledger', hint: 'Varumärken, patent och domäner med förnyelse och kostnadsföring eller aktivering' },
       { path: '/korjournal', label: 'Körjournal', perm: 'ledger', hint: 'Resor per fordon, privat körning och avdrag för egen bil' },
       { path: '/lantbruk', label: 'Lantbruk', perm: 'ledger', hint: 'EU-stöd som fordran och djurinventering' },
       { path: '/elproduktion', label: 'Egen elproduktion', perm: 'ledger', hint: 'Solceller: producerad och såld el, elcertifikat och skattereduktion' },
