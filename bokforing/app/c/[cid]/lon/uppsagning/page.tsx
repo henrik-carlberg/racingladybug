@@ -27,7 +27,7 @@ export default async function Terminations({ params, searchParams }: { params: P
             <td className="tm-months">{x.notice_months} mån{x.garden_leave ? ' (arbetsbefriad)' : ''}</td><td className="tm-last">{x.last_day}</td>
             <td className="num small">{x.severance ? <>{kr(x.severance)} kr<div>skatt {kr(x.severanceCalc.tax)}, netto <span className="tm-net">{kr(x.severanceCalc.net)}</span></div><div>avgift {kr(x.severanceCalc.fee)} ({x.feeRate.toLocaleString('sv-SE')} %)</div></> : '–'}</td>
             <td className="num tm-obligation">{kr(x.obligation.total)}{x.accrued > 0 && <div className="small">bokförd</div>}</td>
-            <td className="small">{x.status === 'ended' ? 'Avslutad' : 'Under uppsägning'}</td>
+            <td className="small">{x.status === 'ended' ? 'Avslutad' : 'Under uppsägning'}{x.equipment.length > 0 && <div className="tm-equipment">Att lämna tillbaka: {x.equipment.map((g) => g.name + (g.serial ? ` (${g.serial})` : '')).join(', ')} – <Link href={`/c/${id}/it-utrustning`}>återlämningslista</Link></div>}</td>
             <td>{x.status === 'notice' && <div className="stack" style={{ gap: '.25rem' }}>
               {!x.accrued && x.obligation.total > 0 && <form action={accrueAction.bind(null, id, x.id)}><input type="hidden" name="date" value={t} /><button className="link">Bokför skuld</button></form>}
               <form action={endAction.bind(null, id, x.id)}><button className="link">Avsluta anställningen</button></form></div>}</td></tr>))}
