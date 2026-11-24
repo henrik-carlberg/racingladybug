@@ -155,6 +155,7 @@ export function buildNav(o: {
       { path: '/lantbruk', label: 'Lantbruk', perm: 'ledger', hint: 'EU-stöd som fordran och djurinventering' },
       { path: '/elproduktion', label: 'Egen elproduktion', perm: 'ledger', hint: 'Solceller: producerad och såld el, elcertifikat och skattereduktion' },
       { path: '/forsakringsskador', label: 'Försäkringsskador', perm: 'ledger', hint: 'Skadeärenden, självrisk och försäkringsersättning' },
+      { path: '/forsakringar', label: 'Försäkringar', perm: 'ledger', hint: 'Försäkringsöversikt med premier, periodisering och förnyelse' },
       { path: '/periodiseringar', label: 'Periodiseringar' },
       { path: '/bidrag', label: 'Bidrag', perm: 'ledger', hint: 'Offentliga bidrag periodiserade mot kostnaderna, återbetalningsrisk och rapport' },
       { path: '/konton', label: 'Kontoplan' },
