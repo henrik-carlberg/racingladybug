@@ -88,6 +88,9 @@
   .nav ul { list-style: none; display: flex; gap: 28px; margin: 0; padding: 0; }
   .nav ul a { white-space: nowrap; text-decoration: none; color: var(--hero-muted); font-weight: 500; font-size: .95rem; }
   .nav ul a:hover { color: var(--hero-text); }
+  .logo span { white-space: nowrap; }
+  .nav { gap: 20px; }
+  @media (max-width: 1320px) { .nav ul { gap: 18px; } .nav ul a { font-size: .9rem; } }
   .btn {
     display: inline-flex; align-items: center; gap: 8px;
     background: var(--brand); color: var(--brand-ink);
@@ -568,7 +571,7 @@
     .hero { padding-bottom: 110px; }
   }
 
-  @media (max-width: 1000px) {
+  @media (max-width: 1140px) {
     .menu-toggle { display: block; }
     .nav ul, .nav > .btn { display: none; }
     .nav.open ul {
@@ -620,6 +623,7 @@
       <li><a href="#integrationer">Integrationer</a></li>
       <li><a href="#timbank">Timbank</a></li>
       <li><a href="#utbildningar">Utbildningar</a></li>
+      <li><a href="#talentsearch">Talentsearch</a></li>
       <li><a href="#sa-arbetar-vi">Så arbetar vi</a></li>
       <li><a href="#om-oss">Om oss</a></li>
       <li><a href="#fragor">Frågor</a></li>
