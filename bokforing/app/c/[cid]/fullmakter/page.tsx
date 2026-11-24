@@ -10,7 +10,7 @@ const STATUS: Record<string, string> = { valid: 'Giltig', expiring: 'Går snart 
 
 export default async function Authorizations({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const { company, role } = await requireCompany(cid);
+  const { company, role } = await requireCompany(cid, { perm: 'ledger' });
   const id = company.id;
   const o = await overview(id);
   const owner = role === 'owner';

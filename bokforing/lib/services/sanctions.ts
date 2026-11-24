@@ -53,13 +53,20 @@ async function screen(db: Tx | typeof sql, companyId: number, parties: Party[]) 
     // En tidigare bedömning står sig om träffarna är desamma; nya träffar granskas på nytt
     const [prev] = await db<{ status: string; hits: Hit[] }[]>`SELECT status, hits FROM sanction_screenings WHERE company_id = ${companyId} AND party_type = ${p.type} AND party_id = ${p.id}`;
     const same = prev && JSON.stringify(prev.hits.map((h) => h.name).sort()) === JSON.stringify(top.map((h) => h.name).sort());
-    const status = !top.length ? 'clear' : same && (prev.status === 'false_positive' || prev.status === 'confirmed') ? prev.status : 'potential';
+    // En bekräftad träff ligger kvar tills ägaren häver den, även om listan ändras
+    const status = prev?.status === 'confirmed' ? 'confirmed' : !top.length ? 'clear' : same && prev.status === 'false_positive' ? 'false_positive' : 'potential';
     if (status === 'potential') potential++;
     await db`INSERT INTO sanction_screenings (company_id, party_type, party_id, party_name, hits, status) VALUES (${companyId}, ${p.type}, ${p.id}, ${p.name}, ${db.json(top)}, ${status})
       ON CONFLICT (company_id, party_type, party_id) DO UPDATE SET party_name = EXCLUDED.party_name, hits = EXCLUDED.hits, status = EXCLUDED.status, screened_at = now(),
         note = CASE WHEN EXCLUDED.status = sanction_screenings.status THEN sanction_screenings.note ELSE '' END`;
   }
   return potential;
+}
+
+/** En ny eller omdöpt kund eller leverantör kontrolleras direkt om bolaget har en lista */
+export async function screenParty(tx: Tx, companyId: number, type: 'customer' | 'supplier', id: number, name: string) {
+  const [l] = await tx`SELECT 1 FROM sanction_entries WHERE company_id = ${companyId} LIMIT 1`;
+  if (l) await screen(tx, companyId, [{ type, id, name }]);
 }
 
 export async function screenAll(actor: Actor) {
@@ -82,6 +89,7 @@ export async function review(actor: Actor, id: number, input: Record<string, unk
   const [s] = await sql<{ status: string }[]>`SELECT status FROM sanction_screenings WHERE id = ${id} AND company_id = ${actor.companyId}`;
   if (!s) throw new NotFoundError('Kontrollen');
   if (s.status === 'clear') throw new ConflictError('Det finns ingen träff att granska');
+  if (s.status === 'confirmed' && decision !== 'confirmed' && actor.role !== 'owner') throw new ValidationError('Bara ägaren kan häva en bekräftad träff');
   await sql`UPDATE sanction_screenings SET status = ${decision}, note = ${note}, reviewed_by = ${actor.userId}, reviewed_at = now() WHERE id = ${id}`;
   await auditBy(sql, actor, `sanction_${decision}`, 'sanction_screening', id, {});
   return decision;

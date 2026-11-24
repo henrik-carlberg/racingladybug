@@ -60,6 +60,8 @@ export async function decide(actor: Actor, id: number, input: Record<string, unk
   const tax = money(input, 'tax_amount'), surcharge = money(input, 'surcharge'), interest = money(input, 'interest');
   const d = date(input, 'decision_on', 'Beslutsdatum');
   return sql.begin(async (tx) => {
+    const [lock] = await tx<{ status: string }[]>`SELECT status FROM tax_audits WHERE id = ${id} AND company_id = ${actor.companyId} FOR UPDATE`;
+    if (lock?.status !== 'open') throw new ConflictError('Ärendet har redan ett beslut');
     let voucherId: number | null = null;
     const lines = decisionLines(a.subject, tax, surcharge, interest);
     if (lines.length) {
@@ -92,6 +94,8 @@ export async function close(actor: Actor, id: number, input: Record<string, unkn
   const refund = money(input, 'refund');
   if (refund > a.tax_amount + a.surcharge + a.interest) throw new ValidationError('Återbetalningen kan inte vara större än det beslutade beloppet');
   await sql.begin(async (tx) => {
+    const [lock] = await tx<{ status: string }[]>`SELECT status FROM tax_audits WHERE id = ${id} AND company_id = ${actor.companyId} FOR UPDATE`;
+    if (lock?.status !== 'decided' && lock?.status !== 'appealed') throw new ConflictError('Ärendet är redan avslutat');
     if (refund) {
       // Nedsättningen fördelas i ordningen skattetillägg, ränta, skatt
       const s = Math.min(refund, a.surcharge), i = Math.min(refund - s, a.interest), tx_ = refund - s - i;

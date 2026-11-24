@@ -54,6 +54,7 @@ export async function createCustomer(actor: Actor, input: Record<string, unknown
     const [{ id }] = await tx<{ id: number }[]>`INSERT INTO customers ${tx({ ...f, company_id: actor.companyId })} RETURNING id`;
     const [c] = await tx<CustomerOut[]>`SELECT ${COLS()} FROM customers WHERE id = ${id}`;
     await auditBy(tx, actor, 'create', 'customer', id);
+    { const { screenParty } = await import('./sanctions'); await screenParty(tx, actor.companyId, 'customer', c.id, c.name); }
     await emit(tx, actor.companyId, 'customer.created', c);
     return c;
   });
@@ -69,6 +70,7 @@ export async function updateCustomer(actor: Actor, id: number, input: Record<str
     if (Object.keys(f).length) await tx`UPDATE customers SET ${tx(f)} WHERE id = ${id}`;
     const [c] = await tx<CustomerOut[]>`SELECT ${COLS()} FROM customers WHERE id = ${id}`;
     await auditBy(tx, actor, 'update', 'customer', id, { changes: changes(cur as unknown as Record<string, unknown>, f) });
+    { const { screenParty } = await import('./sanctions'); await screenParty(tx, actor.companyId, 'customer', c.id, c.name); }
     await emit(tx, actor.companyId, 'customer.updated', c);
     return c;
   });

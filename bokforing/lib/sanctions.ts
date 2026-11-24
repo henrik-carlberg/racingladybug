@@ -1,7 +1,7 @@
 // Sanktionslistekontroll: namnmatchning som tål felstavning, omvänd ordning och bolagsformer
 const SUFFIX = new Set(['ab', 'aktiebolag', 'hb', 'kb', 'ltd', 'limited', 'llc', 'inc', 'corp', 'co', 'gmbh', 'oy', 'as', 'asa', 'sa', 'srl', 'bv', 'nv', 'plc', 'ooo', 'zao', 'oao', 'pjsc', 'jsc', 'company', 'the']);
 export function normalize(name: string) {
-  const s = name.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+  const s = name.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ');
   const t = s.split(/\s+/).filter(Boolean);
   // Bolagsformer tas bort i slutet av namnet (inte förnamn som Åsa eller ord mitt i namnet)
   while (t.length > 1 && SUFFIX.has(t[t.length - 1])) t.pop();
