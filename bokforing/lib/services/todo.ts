@@ -14,6 +14,7 @@ export async function companyTodos(companyId: number, opts: { modules: string[];
   const [c] = await sql<Record<string, number | boolean>[]>`
     SELECT
       (SELECT count(*)::int FROM supplier_invoices WHERE company_id = ${companyId} AND status = 'booked') AS attest,
+      (SELECT count(*)::int FROM kpi_alert_events e JOIN kpi_alerts a ON a.id = e.alert_id WHERE e.company_id = ${companyId} AND e.cleared_at IS NULL AND a.active) AS kpi_alerts,
       (SELECT count(*)::int FROM invoices WHERE company_id = ${companyId} AND reduction_status = 'to_request') AS rotrut,
       (SELECT count(*)::int FROM client_questions WHERE company_id = ${companyId} AND status = 'open' AND asked_by IS DISTINCT FROM ${opts.userId} AND NOT needs_document) AS questions,
       (SELECT count(*)::int FROM client_questions WHERE company_id = ${companyId} AND status = 'open' AND asked_by IS DISTINCT FROM ${opts.userId} AND needs_document) AS documents,
@@ -40,6 +41,7 @@ export async function companyTodos(companyId: number, opts: { modules: string[];
   const list: (Todo | false)[] = [
     n('integrity') > 0 && { key: 'integrity', title: 'Integritetskontrollen hittade avvikelser i bokföringen', count: n('integrity'), href: `${b}/installningar/integritet`, level: 'danger' },
     deadlines.some((d) => d.status === 'overdue') && { key: 'deadline', title: 'Försenade deadlines', count: deadlines.filter((d) => d.status === 'overdue').length, href: `${b}/deadlines`, level: 'danger' },
+    n('kpi_alerts') > 0 && { key: 'kpi_alerts', title: 'Nyckeltal utanför dina gränser', count: n('kpi_alerts'), href: `${b}/nyckeltal/larm`, level: 'warn' },
     n('overdue') > 0 && { key: 'overdue', title: 'Förfallna kundfakturor', count: n('overdue'), href: has('reskontra') ? `${b}/m/reskontra` : `${b}/fakturor`, level: 'danger' },
     n('deferral_expired') > 0 && { key: 'deferral_expired', title: 'Anstånd med skatt som har gått ut – betala in beloppet', count: n('deferral_expired'), href: `${b}/skattekonto/ranta`, level: 'danger' },
     n('deferral_soon') > 0 && { key: 'deferral_soon', title: 'Anstånd med skatt som går ut inom två veckor', count: n('deferral_soon'), href: `${b}/skattekonto/ranta`, level: 'warn' },
