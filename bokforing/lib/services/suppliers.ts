@@ -58,6 +58,7 @@ export async function createSupplier(actor: Actor, input: Record<string, unknown
     const [{ id }] = await tx<{ id: number }[]>`INSERT INTO suppliers ${tx({ ...f, company_id: actor.companyId })} RETURNING id`;
     const [s] = await tx<SupplierOut[]>`SELECT ${SCOLS()} FROM suppliers WHERE id = ${id}`;
     await auditBy(tx, actor, 'create', 'supplier', id);
+    { const { screenParty } = await import('./sanctions'); await screenParty(tx, actor.companyId, 'supplier', s.id, s.name); }
     await emit(tx, actor.companyId, 'supplier.created', s);
     return s;
   });
@@ -82,6 +83,7 @@ export async function updateSupplier(actor: Actor, id: number, input: Record<str
     if (!r.length) throw new NotFoundError('Leverantören');
     const [s] = await tx<SupplierOut[]>`SELECT ${SCOLS()} FROM suppliers WHERE id = ${id}`;
     await auditBy(tx, actor, 'update', 'supplier', id, Object.keys(f));
+    { const { screenParty } = await import('./sanctions'); await screenParty(tx, actor.companyId, 'supplier', s.id, s.name); }
     await emit(tx, actor.companyId, 'supplier.updated', s);
     return { ...s, pending_bank_change: pending };
   });
@@ -215,6 +217,8 @@ export async function paySupplierInvoices(actor: Actor, ids: number[], input: Re
   if (ids.length === 0) throw new ValidationError('Välj minst en faktura');
   return sql.begin(async (tx) => {
     const out: SupplierInvoiceOut[] = [];
+    const blocked = await blockedInvoices(tx, actor.companyId, ids, { forPayment: true });
+    for (const id of ids) { const b = blocked.get(id); if (b && b.includes('sanktionslista')) throw new ConflictError(`Fakturan kan inte betalas: ${b}`); }
     for (const id of ids) out.push(await paySupplierInvoiceTx(tx, actor, id, input));
     return out;
   });

@@ -82,13 +82,16 @@ export async function checkDuplicate(tx: Tx, companyId: number, invoiceId: numbe
  *  För betalning dessutom: fakturan ligger redan i en utlandsbetalning eller en pågående betalning via banken (skydd mot dubbelbetalning). */
 export async function blockedInvoices(db: Db, companyId: number, ids: number[], opts: { forPayment?: boolean } = { forPayment: true }) {
   if (!ids.length) return new Map<number, string>();
-  const rows = await db<{ id: number; reason: string }[]>`SELECT i.id, CASE WHEN EXISTS (SELECT 1 FROM risk_alerts a WHERE a.company_id = ${companyId} AND a.kind = 'duplicate'
+  const rows = await db<{ id: number; reason: string }[]>`SELECT i.id, CASE WHEN EXISTS (SELECT 1 FROM sanction_screenings ss WHERE ss.company_id = ${companyId} AND ss.party_type = 'supplier' AND ss.party_id = i.supplier_id AND ss.status = 'confirmed')
+        THEN 'leverantören finns på en sanktionslista – betalning är stoppad'
+      WHEN EXISTS (SELECT 1 FROM risk_alerts a WHERE a.company_id = ${companyId} AND a.kind = 'duplicate'
         AND a.entity = 'supplier_invoice' AND a.entity_id = i.id AND a.status <> 'ok') THEN 'kan vara en dubblett – granska varningen först'
       WHEN EXISTS (SELECT 1 FROM foreign_payments f WHERE f.supplier_invoice_id = i.id AND f.status = 'sent') THEN 'ligger redan i en utlandsbetalning som väntar på avräkning'
       WHEN EXISTS (SELECT 1 FROM bank_payment_items bi JOIN bank_payments bp ON bp.id = bi.payment_id WHERE bi.supplier_invoice_id = i.id AND bp.status IN ('authorization','accepted','executed')) THEN 'ligger redan i en betalning via banken'
       ELSE 'leverantörens nya bankuppgifter väntar på godkännande' END AS reason
     FROM supplier_invoices i WHERE i.company_id = ${companyId} AND i.id IN ${db(ids)} AND (
-      EXISTS (SELECT 1 FROM risk_alerts a WHERE a.company_id = ${companyId} AND a.kind = 'duplicate' AND a.entity = 'supplier_invoice' AND a.entity_id = i.id AND a.status <> 'ok')
+      EXISTS (SELECT 1 FROM sanction_screenings ss WHERE ss.company_id = ${companyId} AND ss.party_type = 'supplier' AND ss.party_id = i.supplier_id AND ss.status = 'confirmed')
+      OR EXISTS (SELECT 1 FROM risk_alerts a WHERE a.company_id = ${companyId} AND a.kind = 'duplicate' AND a.entity = 'supplier_invoice' AND a.entity_id = i.id AND a.status <> 'ok')
       OR (${opts.forPayment ?? true} AND (EXISTS (SELECT 1 FROM supplier_bank_changes c WHERE c.supplier_id = i.supplier_id AND c.status = 'pending')
         OR EXISTS (SELECT 1 FROM foreign_payments f WHERE f.supplier_invoice_id = i.id AND f.status = 'sent')
         OR EXISTS (SELECT 1 FROM bank_payment_items bi JOIN bank_payments bp ON bp.id = bi.payment_id WHERE bi.supplier_invoice_id = i.id AND bp.status IN ('authorization','accepted','executed')))))`;
