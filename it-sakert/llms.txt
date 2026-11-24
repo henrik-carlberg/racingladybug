@@ -16,6 +16,10 @@ Grundare: Henrik Carlberg, 30 år inom it, varav över 20 år med informationss�
 - Systemintegration: Integrationsanalys, skräddarsydda integrationer, färdiga kopplingar samt drift och övervakning av integrationer.
 - Timbank: Köp 10, 20 eller 40 timmar i förväg som gäller i 12 månader, för säkerhet, incidenter, integrationer, utbildning och regelefterlevnad.
 
+## Talentsearch
+
+Talentsearch (https://talentsearch.itsakert.se/) är ett verktyg från IT-Säkert för rekryteringsföretag: kravprofil och söksträngar för LinkedIn och Google från en platsannons, bedömning av kandidater krav för krav, intervjufrågor och formulär för arbetsgivarens rollbeskrivning. 490 kr per användare och månad exkl. moms, gratis att prova. Gratis söksträngsgenerator: https://talentsearch.itsakert.se/sokstrang
+
 ## Timbank
 
 - Bas, 10 timmar: för mindre företag som vill ha någon att ringa
