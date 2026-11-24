@@ -12,7 +12,8 @@ const hashCode = (code: string) => createHash('sha256').update(`whistle:${normal
 const ownerOnly = (a: Actor) => { if (a.role !== 'owner') throw new ValidationError('Bara ägaren kan ändra inställningarna för visselblåsarkanalen'); };
 
 export async function isHandler(companyId: number, userId: number) {
-  const [h] = await sql`SELECT 1 FROM whistle_handlers WHERE company_id = ${companyId} AND user_id = ${userId}`;
+  // Handläggaren måste också vara medlem i bolaget (en borttagen medlem behåller aldrig åtkomsten)
+  const [h] = await sql`SELECT 1 FROM whistle_handlers h JOIN memberships m ON m.company_id = h.company_id AND m.user_id = h.user_id WHERE h.company_id = ${companyId} AND h.user_id = ${userId}`;
   return !!h;
 }
 const requireHandler = async (actor: Actor) => { if (!(await isHandler(actor.companyId, actor.userId))) throw new ValidationError('Bara utsedda handläggare har åtkomst till rapporterna'); };
@@ -26,9 +27,10 @@ export async function overview(actor: Actor) {
   await purge(actor.companyId);
   const [s] = await sql<{ token: string; active: boolean }[]>`SELECT token, active FROM whistle_settings WHERE company_id = ${actor.companyId}`;
   const [{ employees }] = await sql<{ employees: number }[]>`SELECT count(*)::int AS employees FROM employees WHERE company_id = ${actor.companyId} AND active`;
-  const handlers = await sql<{ user_id: number; name: string }[]>`SELECT h.user_id, u.name FROM whistle_handlers h JOIN users u ON u.id = h.user_id WHERE h.company_id = ${actor.companyId} ORDER BY u.name`;
+  const handlers = await sql<{ user_id: number; name: string; member: boolean }[]>`SELECT h.user_id, u.name, EXISTS (SELECT 1 FROM memberships m WHERE m.company_id = h.company_id AND m.user_id = h.user_id) AS member
+    FROM whistle_handlers h JOIN users u ON u.id = h.user_id WHERE h.company_id = ${actor.companyId} ORDER BY u.name`;
   const members = actor.role === 'owner' ? await sql<{ id: number; name: string }[]>`SELECT u.id, u.name FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.company_id = ${actor.companyId} ORDER BY u.name` : [];
-  const handler = handlers.some((h) => h.user_id === actor.userId);
+  const handler = handlers.some((h) => h.user_id === actor.userId && h.member);
   const [{ open }] = await sql<{ open: number }[]>`SELECT count(*)::int AS open FROM whistle_reports WHERE company_id = ${actor.companyId} AND status = 'open'`;
   let reports: { id: number; category: string; body: string; contact: string | null; received_at: Date; acknowledged_at: Date | null; feedback_at: Date | null; status: string; closed_at: Date | null; outcome: string | null; messages: { sender: string; body: string; created_at: Date }[]; ackBy: Date; feedbackBy: Date; ackOverdue: boolean; feedbackOverdue: boolean }[] = [];
   if (handler) {
@@ -51,8 +53,7 @@ export async function enable(actor: Actor, active: boolean) {
 
 export async function setHandler(actor: Actor, userId: number, on: boolean) {
   ownerOnly(actor);
-  const [m] = await sql`SELECT 1 FROM memberships WHERE company_id = ${actor.companyId} AND user_id = ${userId}`;
-  if (!m) throw new NotFoundError('Användaren');
+  if (on) { const [m] = await sql`SELECT 1 FROM memberships WHERE company_id = ${actor.companyId} AND user_id = ${userId}`; if (!m) throw new NotFoundError('Användaren'); }
   if (on) await sql`INSERT INTO whistle_handlers (company_id, user_id) VALUES (${actor.companyId}, ${userId}) ON CONFLICT DO NOTHING`;
   else await sql`DELETE FROM whistle_handlers WHERE company_id = ${actor.companyId} AND user_id = ${userId}`;
   await auditBy(sql, actor, on ? 'whistle_handler_added' : 'whistle_handler_removed', 'user', userId, {});
