@@ -23,11 +23,12 @@ export async function overview(companyId: number) {
     FROM terminations t JOIN employees e ON e.id = t.employee_id WHERE t.company_id = ${companyId} ORDER BY t.status, t.last_day`;
   const employees = await sql<{ id: number; name: string; employment_start: string | null }[]>`SELECT e.id, e.first_name || ' ' || e.last_name AS name, to_char(e.employment_start,'YYYY-MM-DD') AS employment_start FROM employees e
     WHERE e.company_id = ${companyId} AND e.active AND NOT EXISTS (SELECT 1 FROM terminations t WHERE t.employee_id = e.id) ORDER BY 2`;
+  const gear = list.length ? await sql<{ employee_id: number; name: string; serial: string }[]>`SELECT employee_id, name, serial FROM it_equipment WHERE company_id = ${companyId} AND status = 'in_use' AND employee_id IN ${sql(list.map((x) => x.employee_id))} ORDER BY name` : [];
   return {
     employees,
     terminations: list.map((x) => {
       const rate = feeRateFor(x.personal_number, x.fee_override, x.last_day);
-      return { ...x, feeRate: rate, severanceCalc: severanceCalc(x.severance, x.severance_tax_pct, rate), obligation: obligation({ monthlySalary: x.monthly_salary, noticeMonths: x.notice_months, gardenLeave: x.garden_leave, severance: x.severance, feeRate: rate }) };
+      return { ...x, equipment: gear.filter((g) => g.employee_id === x.employee_id), feeRate: rate, severanceCalc: severanceCalc(x.severance, x.severance_tax_pct, rate), obligation: obligation({ monthlySalary: x.monthly_salary, noticeMonths: x.notice_months, gardenLeave: x.garden_leave, severance: x.severance, feeRate: rate }) };
     }),
   };
 }
