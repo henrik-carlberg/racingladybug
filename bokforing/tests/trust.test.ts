@@ -29,7 +29,7 @@ describe('TOTP (RFC 6238/4226)', () => {
     expect(new Set(c).size).toBe(10);
     expect(c[0]).toMatch(/^[a-z2-7]{5}-[a-z2-7]{5}$/);
     expect(normalizeBackupCode(c[0].toUpperCase().replace('-', ' '))).toBe(c[0].replace('-', ''));
-    expect(otpauthUri(secret, 'a@b.se')).toBe(`otpauth://totp/Bokf%C3%B6ring:a%40b.se?secret=${secret}&issuer=Bokf%C3%B6ring&algorithm=SHA1&digits=6&period=30`);
+    expect(otpauthUri(secret, 'a@b.se')).toBe(`otpauth://totp/Ordna:a%40b.se?secret=${secret}&issuer=Ordna&algorithm=SHA1&digits=6&period=30`);
   });
 });
 

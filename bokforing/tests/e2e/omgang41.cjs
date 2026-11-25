@@ -1,0 +1,218 @@
+// E2E omgång 41: lönsamhet, momsavstämning, försäljningsprognos, företagsvärdering, kontinuitetsplan
+const { chromium } = require('playwright');
+const http = require('node:http');
+const BASE = process.env.BASE_URL || 'http://localhost:3000';
+const log = (...a) => console.log('✔', ...a);
+const assert = (c, m) => { if (!c) throw new Error(m); };
+const text = async (page) => { await page.waitForLoadState('networkidle').catch(() => {}); const sel = (await page.locator('main').count()) ? 'main' : 'body'; return (await page.locator(sel).first().innerText()).replace(/\s+/g, ' ').replace(/ /g, ' '); };
+const iso = (d) => d.toISOString().slice(0, 10);
+const day = (n) => iso(new Date(Date.now() - n * 864e5));
+const YEAR = new Date().getFullYear();
+const MONTH = new Date().getMonth() + 1;
+
+async function invite(owner, B, email, role) {
+  await owner.goto(B + '/installningar');
+  await owner.fill('form:has(select[name=role]) input[name=email]', email);
+  await owner.selectOption('form:has(select[name=role]) select[name=role]', role);
+  await owner.click('button:has-text("Skapa inbjudan")');
+  await owner.waitForURL(/invite=/);
+  return (await owner.locator('code').textContent()).trim();
+}
+async function accept(browser, link, name, password) {
+  const p = await (await browser.newContext()).newPage();
+  p.setDefaultTimeout(20000);
+  await p.goto(link);
+  await p.fill('input[name=name]', name);
+  await p.fill('input[name=password]', password);
+  await p.click('button:has-text("Acceptera")');
+  await p.waitForURL(BASE + '/');
+  return p;
+}
+async function login(browser, email, password) {
+  const p = await (await browser.newContext()).newPage();
+  p.setDefaultTimeout(20000);
+  await p.goto(BASE + '/login');
+  await p.fill('input[name=email]', email);
+  await p.fill('input[name=password]', password);
+  await p.click('form button:has-text("Logga in")');
+  await p.waitForURL(BASE + '/');
+  return p;
+}
+
+const viesServer = http.createServer((req, res) => {
+  const m = /\/ms\/([A-Z]{2})\/vat\/([0-9A-Z]+)/.exec(req.url || '');
+  const ok = m && m[1] === 'DE' && m[2] === '123456789';
+  res.writeHead(200, { 'content-type': 'application/json' });
+  res.end(JSON.stringify({ isValid: !!ok, name: ok ? 'EU KUND GMBH' : '---', address: ok ? 'Berlin' : '---', userError: ok ? 'VALID' : 'INVALID' }));
+}).listen(3320);
+const mailServer = http.createServer((req, res) => { req.resume(); req.on('end', () => { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"id":"m1"}'); }); }).listen(3303);
+
+const luhn = (s) => { let sum = 0; for (let i = 0; i < s.length; i++) { let v = Number(s[s.length - 1 - i]); if (i % 2 === 1) { v *= 2; if (v > 9) v -= 9; } sum += v; } return sum % 10 === 0; };
+const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix + String(i); if (luhn(s)) return `${s.slice(0, 6)}-${s.slice(6)}`; } };
+
+(async () => {
+  const browser = await chromium.launch();
+  const owner = await login(browser, 'agare@example.com', 'hemligtlosen1');
+  let t;
+  const nb = (s) => s.replace(/[\s  ]/g, '');
+
+  const newCompany = async (name, prefix) => {
+    await owner.goto(BASE + '/');
+    await owner.fill('input[name=name]', name);
+    await owner.selectOption('select[name=company_type]', 'AB');
+    await owner.fill('input[name=orgnr]', orgnrFor(String(prefix + (Date.now() % 900000)).slice(0, 9)));
+    await owner.fill('input[name=fy_start]', `${YEAR}-01-01`); await owner.fill('input[name=fy_end]', `${YEAR}-12-31`);
+    await owner.click('button:has-text("Skapa bolag")');
+    await owner.waitForURL(/kom-igang/);
+    return owner.url().replace(/\/kom-igang.*/, '');
+  };
+  const invoice = async (B, customer, amount, dateStr = day(1)) => {
+    await owner.goto(B + '/fakturor/ny');
+    await owner.selectOption('select[name=customer_id]', { label: customer });
+    await owner.fill('input[name=invoice_date]', dateStr);
+    const r0 = owner.locator('tbody tr').first();
+    await r0.locator('td:nth-child(1) input').fill('Varor'); await r0.locator('td:nth-child(2) input').fill('1');
+    await r0.locator('td:nth-child(3) input').fill('st'); await r0.locator('td:nth-child(4) input').fill(String(amount));
+    await owner.click('button:has-text("Spara utkast")');
+    await owner.waitForURL(/fakturor\/\d+\?ok/);
+    await owner.click('button:has-text("Bokför faktura")');
+    await owner.locator('text=Fakturan är bokförd').waitFor();
+  };
+
+  const voucher = async (B, desc, rows, d = day(1)) => {
+    await owner.goto(B + '/verifikationer/ny');
+    await owner.fill('input[name=date]', d);
+    await owner.fill('input[name=description]', desc);
+    for (let i = 0; i < rows.length; i++) {
+      if (i >= 2) await owner.click('button:has-text("+ Rad")');
+      const r = owner.locator('tbody tr').nth(i);
+      await r.locator('td:nth-child(1) input').fill(String(rows[i][0]));
+      if (rows[i][1] > 0) await r.locator('td:nth-child(3) input').fill(String(rows[i][1]));
+      else await r.locator('td:nth-child(4) input').fill(String(-rows[i][1]));
+    }
+    await owner.click('button:has-text("Bokför")');
+    await owner.waitForURL(/verifikationer\/\d+/).catch(async (e) => { throw new Error('verifikation: ' + (await text(owner)).slice(0, 600)); });
+  };
+
+  const addFy = async (B, y) => {
+    await owner.goto(B + '/installningar');
+    await owner.fill('form:has(button:has-text("Lägg till")) input[name=start]', `${y}-01-01`);
+    await owner.fill('form:has(button:has-text("Lägg till")) input[name=end]', `${y}-12-31`);
+    await owner.click('form:has(input[name=end]) button:has-text("Lägg till")');
+    await owner.locator('text=Räkenskapsåret är tillagt').waitFor();
+  };
+
+  // ── Del 1: kund- och produktlönsamhet ──
+  const num = (s) => Number(nb(s).replace(/[−–]/g, '-').replace(',', '.'));
+  const PR = await newCompany('Lönsamhet AB', '560110000');
+  for (const n of ['Sen Betalare AB', 'Snabb Kund AB']) { await owner.goto(PR + '/kunder'); await owner.fill('input[name=name]', n); await owner.click('button:has-text("Spara kund")'); await owner.waitForURL(/ok=/); }
+  await invoice(PR, 'Sen Betalare AB', 20000, day(200));
+  await invoice(PR, 'Snabb Kund AB', 10000, day(2));
+  await owner.goto(PR + '/lonsamhet');
+  const prRows = owner.locator('tr.pr-row');
+  if ((await prRows.count()) !== 2) throw new Error('lönsamhet: två kunder väntades');
+  if ((await prRows.first().getAttribute('data-name')) !== 'Sen Betalare AB') throw new Error('lönsamhet: rangordning');
+  const lateTb = num(await owner.locator('tr.pr-row[data-name="Sen Betalare AB"] .pr-tb').innerText());
+  if (!(lateTb < 20000 && lateTb > 19000)) throw new Error('lönsamhet: räntekostnad för sen betalning ' + lateTb);
+  if (num(await owner.locator('tr.pr-row[data-name="Snabb Kund AB"] .pr-tb').innerText()) !== 10000) throw new Error('lönsamhet: snabb kund');
+  await owner.fill('input[name=interest_pct]', '50'); await owner.click('button:has-text("Spara antaganden")'); await owner.locator('text=Antagandena är sparade').waitFor();
+  const lateTb2 = num(await owner.locator('tr.pr-row[data-name="Sen Betalare AB"] .pr-tb').innerText());
+  if (!(lateTb2 < lateTb - 3000)) throw new Error('lönsamhet: högre ränta ska ge lägre TB ' + lateTb2);
+  await owner.selectOption('select[name=kund]', { label: 'Snabb Kund AB' }); await owner.fill('input[name=pris]', '10'); await owner.click('button:has-text("Simulera")');
+  await owner.waitForURL(/pris=10/);
+  if (num(await owner.locator('.pr-sim-tb').innerText()) !== 11000) throw new Error('lönsamhet: simulering');
+  log('Del 1: lönsamhet per kund, räntekostnad för sena betalningar och simulering');
+
+  // ── Del 2: momsavstämning ──
+  const VR = await newCompany('Momsavstämning AB', '560120000');
+  await voucher(VR, 'Rätt försäljning', [[1930, 12500], [3001, -10000], [2611, -2500]], day(3));
+  await voucher(VR, 'Fel momssats', [[1930, 11200], [3001, -10000], [2611, -1200]], day(3));
+  await voucher(VR, 'Tjänst till EU med moms', [[1930, 12500], [3308, -10000], [2611, -2500]], day(3));
+  await voucher(VR, 'EU-tjänst köpt utan moms', [[4535, 8000], [1930, -8000]], day(3));
+  await owner.goto(VR + `/rapporter/momsavstamning?from=${day(10)}&to=${day(0)}`);
+  if ((await owner.locator('.vr-count').innerText()).trim() !== '3') throw new Error('momsavstämning: tre avvikelser väntades ' + (await text(owner)).slice(0, 800));
+  const vrKeys = await owner.locator('tr.vr-row').evaluateAll((rs) => rs.map((r) => r.getAttribute('data-keys')).join('|'));
+  for (const k of ['rate', 'exempt_vat', 'rc_out']) if (!vrKeys.includes(k)) throw new Error('momsavstämning: saknar ' + k + ' i ' + vrKeys);
+  if ((await owner.locator('table.vr-eu tr[data-ok="0"]').count()) !== 1) throw new Error('momsavstämning: EU mot periodisk sammanställning');
+  if (!(await owner.locator('.vr-eu-manual').innerText()).includes('A')) throw new Error('momsavstämning: manuell EU-verifikation');
+  await owner.locator('tr.vr-row a').first().click(); await owner.waitForURL(/verifikationer\/\d+/);
+  log('Del 2: momsavstämning per verifikation, omvänd skattskyldighet och EU mot periodisk sammanställning');
+
+  // ── Del 3: försäljningsprognos ──
+  const SF = await newCompany('Prognosbolaget AB', '560130000');
+  for (const m of ['Avtal och abonnemang', 'CRM', 'Likviditet och budget']) {
+    await owner.goto(SF + '/moduler'); await owner.locator(`.card:has(h2:text-is("${m}")) button:has-text("Aktivera")`).click(); await owner.waitForURL(/ok=/);
+  }
+  await owner.goto(SF + '/kunder'); await owner.fill('input[name=name]', 'Avtalskund AB'); await owner.click('button:has-text("Spara kund")'); await owner.waitForURL(/ok=/);
+  await owner.goto(SF + '/m/avtal/nytt');
+  await owner.selectOption('select[name=customer_id]', { label: 'Avtalskund AB' });
+  await owner.fill('input[name=name]', 'Driftavtal'); await owner.fill('input[name=start_date]', day(0));
+  await owner.fill('input[name=d_0]', 'Drift'); await owner.fill('input[name=p_0]', '1000');
+  await owner.click('button:has-text("Skapa avtal")'); await owner.locator('text=Avtalet är skapat').waitFor();
+  const closeDate = day(-60), closeYm = closeDate.slice(0, 7);
+  await owner.goto(SF + '/m/crm/pipeline');
+  await owner.fill('input[name=title]', 'Stor order'); await owner.fill('input[name=prospect_name]', 'Prospekt AB'); await owner.fill('input[name=value]', '100000'); await owner.fill('input[name=expected_close]', closeDate);
+  await owner.click('button:has-text("Skapa affär")'); await owner.locator('text=Affären är skapad').waitFor();
+  await owner.goto(SF + '/forsaljningsprognos');
+  const sfRows = owner.locator('tr.sf-row');
+  if ((await sfRows.count()) !== 12) throw new Error('prognos: 12 månader');
+  for (let i = 0; i < 12; i++) if (num(await sfRows.nth(i).locator('.sf-contracts').innerText()) !== 1000) throw new Error('prognos: avtal varje månad, rad ' + i + ': ' + await sfRows.nth(i).innerText());
+  const deal = owner.locator('table.sf-deals tr[data-title="Stor order"]');
+  const prob = Number((await deal.locator('td').nth(3).innerText()).replace(/[^\d]/g, ''));
+  const exp = 100000 * prob / 100;
+  if (num(await owner.locator(`tr.sf-row[data-month="${closeYm}"] .sf-pipeline`).innerText()) !== exp) throw new Error('prognos: viktad pipeline ' + prob);
+  if (num(await owner.locator('.sf-total').innerText()) !== 12000 + exp) throw new Error('prognos: total');
+  await owner.click('button:has-text("För över till likviditetsprognosen")'); await owner.locator('text=poster är överförda till likviditetsprognosen').waitFor();
+  await owner.goto(SF + '/m/likviditet');
+  if (!(await text(owner)).includes(`Försäljningsprognos: ${closeYm}`)) throw new Error('prognos: överföring till likviditet');
+  log('Del 3: försäljningsprognos från avtal och viktad pipeline, överförd till likviditetsprognosen');
+
+  // ── Del 4: företagsvärdering och ägarskifte ──
+  const BV = await newCompany('Värderingsbolaget AB', '560140000');
+  await voucher(BV, 'Aktiekapital', [[1930, 25000], [2081, -25000]], day(30));
+  await voucher(BV, 'Försäljning', [[1930, 500000], [3001, -400000], [2611, -100000]], day(20));
+  await voucher(BV, 'Kostnader', [[5010, 100000], [1930, -100000]], day(10));
+  await owner.goto(BV + '/agare');
+  await owner.fill('input[name=name]', 'Ägare Ett'); await owner.fill('input[name=share_pct]', '100');
+  await owner.click('button:has-text("Lägg till ägare")'); await owner.locator('text=Ägaren är sparad').waitFor();
+  await owner.goto(BV + '/foretagsvardering');
+  const bv = async (k) => num(await owner.locator(`.bv-value[data-key="${k}"] .value`).innerText());
+  if (num(await owner.locator('.bv-ebit').innerText()) !== 300000) throw new Error('värdering: rörelseresultat');
+  if ((await bv('substance')) !== 325000 || (await bv('earnings')) !== 1588000 || (await bv('multiple')) !== 1925000) throw new Error('värdering: värden ' + (await bv('substance')) + ' ' + (await bv('earnings')) + ' ' + (await bv('multiple')));
+  await owner.selectOption('select[name=owner_id]', { label: 'Ägare Ett (100 %)' }); await owner.fill('input[name=price]', '1000000'); await owner.fill('input[name=recipient]', 'Köpare AB');
+  await owner.click('button:has-text("Spara")'); await owner.locator('text=Värderingen är sparad').waitFor();
+  if (num(await owner.locator('.bv-taxsum').innerText()) !== 403832) throw new Error('ägarskifte: skatt vid försäljning ' + await owner.locator('.bv-transfer').innerText());
+  await owner.selectOption('select[name=transfer_kind]', 'gift'); await owner.fill('input[name=price]', ''); await owner.fill('input[name=recipient]', 'Barnet');
+  await owner.click('button:has-text("Spara")'); await owner.locator('text=Värderingen är sparad').waitFor();
+  await owner.locator('.bv-gift').waitFor();
+  await owner.locator('.bv-checklist li[data-key="deed"] button').click(); await owner.locator('.bv-checklist li[data-key="deed"][data-done="1"]').waitFor();
+  log('Del 4: substans-, avkastnings- och multipelvärde, skatt vid försäljning, gåva och checklista');
+
+  // ── Del 5: kontinuitetsplan ──
+  const CP = await newCompany('Kontinuitet AB', '560150000');
+  await owner.goto(CP + '/fullmakter');
+  await owner.fill('input[name=name]', 'Bankfullmakt'); await owner.fill('input[name=counterparty]', 'Banken'); await owner.fill('input[name=holder]', 'VD');
+  await owner.click('form:has(input[name=counterparty]) button:has-text("Spara")'); await owner.locator('text=Posten är sparad').waitFor();
+  await owner.goto(CP + '/kontinuitetsplan');
+  await owner.click('button:has-text("Lägg till standarduppgifter")'); await owner.locator('text=5 kritiska uppgifter är tillagda').waitFor();
+  if ((await owner.locator('tr.ct-row').count()) !== 5) throw new Error('kontinuitet: fem uppgifter');
+  const payRow = owner.locator('tr.ct-row[data-name="Betala leverantörer och löner"]');
+  if (!(await payRow.getAttribute('data-keys')).includes('no_substitute')) throw new Error('kontinuitet: saknad ersättare');
+  await payRow.locator('select[name=responsible_id]').selectOption({ index: 1 }); await payRow.locator('select[name=substitute_id]').selectOption({ index: 1 });
+  await payRow.locator('button:has-text("Spara")').click(); await owner.locator('text=Uppgiften är sparad').waitFor();
+  if ((await owner.locator('tr.ct-row[data-name="Betala leverantörer och löner"]').getAttribute('data-keys')) !== 'same_person') throw new Error('kontinuitet: samma person som ersättare');
+  if ((await owner.locator('.ct-single li[data-permission]').count()) !== 6) throw new Error('kontinuitet: ensamberoende per behörighet');
+  if (!(await owner.locator('.ct-power[data-counterparty="Banken"]').innerText()).includes('bara VD')) throw new Error('kontinuitet: fullmakt hos en person');
+  await owner.fill('form:has(button:has-text("Lägg till kontakt")) input[name=role]', 'Bank'); await owner.fill('form:has(button:has-text("Lägg till kontakt")) input[name=name]', 'Företagsrådgivaren');
+  await owner.click('button:has-text("Lägg till kontakt")'); await owner.locator('text=Kontakten är sparad').waitFor();
+  await owner.locator('.ct-review-due').waitFor();
+  await owner.fill('textarea[name=crisis_routine]', 'Ring revisorn först.');
+  await owner.click('button:has-text("Spara och markera planen som genomgången")'); await owner.locator('text=Planen är genomgången').waitFor();
+  if (await owner.locator('.ct-review-due').count()) throw new Error('kontinuitet: genomgång');
+  if (!(await owner.locator('textarea[name=crisis_routine]').inputValue()).includes('revisorn')) throw new Error('kontinuitet: krisrutin');
+  log('Del 5: kontinuitetsplan med ersättare, ensamberoenden, fullmakter, kontakter och årlig genomgång');
+
+  //@@NEXT@@
+  await browser.close(); mailServer.close(); viesServer.close();
+  console.log('Omgång 41: alla steg gick igenom');
+})().catch((e) => { console.error(e); process.exit(1); });
