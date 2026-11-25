@@ -4,6 +4,7 @@ import { ConflictError } from '@/lib/errors';
 import { auditBy } from '@/lib/server/audit';
 import { today } from '@/lib/format';
 import { build, nextMonths, seasonality, shiftYm, weighted, ym } from '@/lib/sales-forecast';
+import { isModuleEnabled } from '@/lib/modules/enabled';
 import type { Actor } from './actor';
 
 const exists = async (t: string) => (await sql<{ ok: boolean }[]>`SELECT to_regclass(${t}) IS NOT NULL AS ok`)[0].ok;
@@ -61,7 +62,7 @@ export async function forecast(companyId: number) {
 
 /** Överför pipeline och övrig försäljning till likviditetsprognosen som planerade inbetalningar (avtalen finns redan där). Tidigare överföring ersätts. */
 export async function transfer(actor: Actor, vatPct: number) {
-  if (!(await exists('liq_items'))) throw new ConflictError('Likviditetsprognosen är inte aktiverad');
+  if (!(await exists('liq_items')) || !(await isModuleEnabled(actor.companyId, 'likviditet'))) throw new ConflictError('Likviditetsprognosen är inte aktiverad');
   if (![0, 6, 12, 25].includes(vatPct)) throw new ConflictError('Ogiltig momssats');
   const f = await forecast(actor.companyId);
   const [c] = await sql<{ terms: number }[]>`SELECT invoice_terms AS terms FROM companies WHERE id = ${actor.companyId}`;

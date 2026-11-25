@@ -11,7 +11,7 @@ const label = (m: string) => `${MONTHS[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 
 
 export default async function SalesForecast({ params, searchParams }: { params: Promise<{ cid: string }>; searchParams: SP }) {
   const { cid } = await params;
-  const ctx = await requireCompany(cid, { perm: 'invoicing' });
+  const ctx = await requireCompany(cid, { perm: 'ledger' });
   const f = await forecast(ctx.company.id);
   const b = `/c/${ctx.company.id}`;
   const max = Math.max(1, ...f.rows.map((r) => Math.max(r.total, r.budget ?? 0)));
@@ -36,10 +36,10 @@ export default async function SalesForecast({ params, searchParams }: { params: 
       <h2>Till likviditetsprognosen</h2>
       {f.transferred == null ? <p className="small muted">Aktivera likviditetsmodulen för att föra över prognosen.</p> : <>
         <p className="small">Pipeline och övrig försäljning läggs in som planerade inbetalningar inklusive moms, med betalning efter bolagets betalningsvillkor. Avtalen finns redan med i likviditetsprognosen. En ny överföring ersätter den förra{f.transferred ? ` (${f.transferred} poster finns nu)` : ''}.</p>
-        {ctx.can('ledger') && <form action={transferAction.bind(null, ctx.company.id)} className="row card">
+        <form action={transferAction.bind(null, ctx.company.id)} className="row card">
           <label>Moms<select name="vat" defaultValue="25"><option value="25">25 %</option><option value="12">12 %</option><option value="6">6 %</option><option value="0">Ingen moms</option></select></label>
           <div><button>För över till likviditetsprognosen</button></div>
-        </form>}
+        </form>
         <p className="small"><Link href={`${b}/m/likviditet`}>Till likviditetsprognosen</Link></p></>}
     </div>
   );

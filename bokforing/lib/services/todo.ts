@@ -42,7 +42,7 @@ export async function companyTodos(companyId: number, opts: { modules: string[];
   const list: (Todo | false)[] = [
     n('integrity') > 0 && { key: 'integrity', title: 'Integritetskontrollen hittade avvikelser i bokföringen', count: n('integrity'), href: `${b}/installningar/integritet`, level: 'danger' },
     deadlines.some((d) => d.status === 'overdue') && { key: 'deadline', title: 'Försenade deadlines', count: deadlines.filter((d) => d.status === 'overdue').length, href: `${b}/deadlines`, level: 'danger' },
-    n('continuity') > 0 && { key: 'continuity', title: 'Kontinuitetsplanen behöver gås igenom (mer än ett år sedan)', count: 1, href: `${b}/kontinuitetsplan`, level: 'warn' },
+    opts.owner && n('continuity') > 0 && { key: 'continuity', title: 'Kontinuitetsplanen behöver gås igenom (mer än ett år sedan)', count: 1, href: `${b}/kontinuitetsplan`, level: 'warn' },
     n('kpi_alerts') > 0 && { key: 'kpi_alerts', title: 'Nyckeltal utanför dina gränser', count: n('kpi_alerts'), href: `${b}/nyckeltal/larm`, level: 'warn' },
     n('overdue') > 0 && { key: 'overdue', title: 'Förfallna kundfakturor', count: n('overdue'), href: has('reskontra') ? `${b}/m/reskontra` : `${b}/fakturor`, level: 'danger' },
     n('deferral_expired') > 0 && { key: 'deferral_expired', title: 'Anstånd med skatt som har gått ut – betala in beloppet', count: n('deferral_expired'), href: `${b}/skattekonto/ranta`, level: 'danger' },
