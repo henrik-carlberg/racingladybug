@@ -47,3 +47,21 @@ describe('Momsavstämning', () => {
     expect(euCompare({ goods: 0, services: 1500000 }, { goods: 0, services: 5000 })[1]).toMatchObject({ ok: false, diff: 10000 });
   });
 });
+
+import { build, nextMonths, seasonality, shiftYm, weighted } from '@/lib/sales-forecast';
+describe('Försäljningsprognos', () => {
+  it('månader, viktning och säsong', () => {
+    expect(nextMonths('2026-11', 3)).toEqual(['2026-11', '2026-12', '2027-01']);
+    expect(shiftYm('2026-01', -12)).toBe('2025-01');
+    expect(weighted(100000, 40)).toBe(40000);
+    const h = new Map<string, number>(); for (let m = 1; m <= 12; m++) h.set(`2025-${String(m).padStart(2, '0')}`, m === 12 ? 300 : 100);
+    const s = seasonality(h);
+    expect(s[11]).toBeCloseTo(2.57, 2); expect(s[0]).toBeCloseTo(0.86, 2);
+    expect(seasonality(new Map([['2025-01', 100]]))).toEqual(Array(12).fill(1));
+  });
+  it('prognos mot budget', () => {
+    const rows = build({ months: ['2026-12', '2027-01'], contracts: new Map([['2026-12', 1000]]), pipeline: new Map([['2027-01', 500]]), baselineMonthly: 200, season: Array(12).fill(1), budget: new Map([['2026-12', 1500]]) });
+    expect(rows[0]).toMatchObject({ total: 1200, budget: 1500, diff: -300 });
+    expect(rows[1]).toMatchObject({ total: 700, budget: null, diff: null });
+  });
+});

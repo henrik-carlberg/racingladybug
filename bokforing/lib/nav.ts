@@ -49,6 +49,7 @@ export function buildNav(o: {
       { path: '/peppol', label: 'E-faktura (Peppol)', perm: 'invoicing', hint: 'Skickade och mottagna e-fakturor' },
       { path: '/kundrisk', label: 'Kundrisk och kreditkontroll', perm: 'invoicing', hint: 'Kreditupplysning, kreditgräns, bevakning och riskklass' },
       { path: '/lonsamhet', label: 'Kund- och produktlönsamhet', perm: 'invoicing', hint: 'Täckningsbidrag per kund och artikel efter tid, kundförluster och sena betalningar' },
+      { path: '/forsaljningsprognos', label: 'Försäljningsprognos', perm: 'invoicing', hint: 'Tolv månader från avtal, viktad pipeline och säsong, mot budget' },
       { path: '/fastighet', label: 'Fastighet och uthyrning', perm: 'ledger', hint: 'Lokaler, hyresavier med index, moms per lokal och depositioner' },
       { path: '/autogiro', label: 'Autogiro', perm: 'invoicing', hint: 'Dra betalningen från kundens konto' },
       { path: '/tid', label: '⏱ Tidrapportering' },

@@ -138,6 +138,35 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   await owner.locator('tr.vr-row a').first().click(); await owner.waitForURL(/verifikationer\/\d+/);
   log('Del 2: momsavstämning per verifikation, omvänd skattskyldighet och EU mot periodisk sammanställning');
 
+  // ── Del 3: försäljningsprognos ──
+  const SF = await newCompany('Prognosbolaget AB', '560130000');
+  for (const m of ['Avtal och abonnemang', 'CRM', 'Likviditet och budget']) {
+    await owner.goto(SF + '/moduler'); await owner.locator(`.card:has(h2:text-is("${m}")) button:has-text("Aktivera")`).click(); await owner.waitForURL(/ok=/);
+  }
+  await owner.goto(SF + '/kunder'); await owner.fill('input[name=name]', 'Avtalskund AB'); await owner.click('button:has-text("Spara kund")'); await owner.waitForURL(/ok=/);
+  await owner.goto(SF + '/m/avtal/nytt');
+  await owner.selectOption('select[name=customer_id]', { label: 'Avtalskund AB' });
+  await owner.fill('input[name=name]', 'Driftavtal'); await owner.fill('input[name=start_date]', day(0));
+  await owner.fill('input[name=d_0]', 'Drift'); await owner.fill('input[name=p_0]', '1000');
+  await owner.click('button:has-text("Skapa avtal")'); await owner.locator('text=Avtalet är skapat').waitFor();
+  const closeDate = day(-60), closeYm = closeDate.slice(0, 7);
+  await owner.goto(SF + '/m/crm/pipeline');
+  await owner.fill('input[name=title]', 'Stor order'); await owner.fill('input[name=prospect_name]', 'Prospekt AB'); await owner.fill('input[name=value]', '100000'); await owner.fill('input[name=expected_close]', closeDate);
+  await owner.click('button:has-text("Skapa affär")'); await owner.locator('text=Affären är skapad').waitFor();
+  await owner.goto(SF + '/forsaljningsprognos');
+  const sfRows = owner.locator('tr.sf-row');
+  if ((await sfRows.count()) !== 12) throw new Error('prognos: 12 månader');
+  for (let i = 0; i < 12; i++) if (num(await sfRows.nth(i).locator('.sf-contracts').innerText()) !== 1000) throw new Error('prognos: avtal varje månad, rad ' + i + ': ' + await sfRows.nth(i).innerText());
+  const deal = owner.locator('table.sf-deals tr[data-title="Stor order"]');
+  const prob = Number((await deal.locator('td').nth(3).innerText()).replace(/[^\d]/g, ''));
+  const exp = 100000 * prob / 100;
+  if (num(await owner.locator(`tr.sf-row[data-month="${closeYm}"] .sf-pipeline`).innerText()) !== exp) throw new Error('prognos: viktad pipeline ' + prob);
+  if (num(await owner.locator('.sf-total').innerText()) !== 12000 + exp) throw new Error('prognos: total');
+  await owner.click('button:has-text("För över till likviditetsprognosen")'); await owner.locator('text=poster är överförda till likviditetsprognosen').waitFor();
+  await owner.goto(SF + '/m/likviditet');
+  if (!(await text(owner)).includes(`Försäljningsprognos: ${closeYm}`)) throw new Error('prognos: överföring till likviditet');
+  log('Del 3: försäljningsprognos från avtal och viktad pipeline, överförd till likviditetsprognosen');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 41: alla steg gick igenom');
