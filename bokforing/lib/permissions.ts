@@ -29,3 +29,8 @@ export function parsePermissions(v: unknown): Permission[] | null {
   const arr = Array.isArray(v) ? v : [v];
   return ALL_PERMISSIONS.filter((p) => arr.includes(p));
 }
+
+/** Dokument från styrelsearbetet innehåller bokföringsuppgifter och visas bara för den med läsbehörighet till bokföringen (eller som ska signera) */
+export const LEDGER_DOCUMENT_SOURCES = ['styrelsepaket', 'styrelsemoten', 'aktiebok'];
+export const canSeeDocument = (role: string, perms: string[] | null | undefined, sourceModule: string | null, isSigner: boolean) =>
+  isSigner || !sourceModule || !LEDGER_DOCUMENT_SOURCES.includes(sourceModule) || canView(role, perms, 'ledger');

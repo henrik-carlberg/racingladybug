@@ -75,3 +75,15 @@ describe('Inköpsanalys', () => {
   });
 });
 
+
+import { canSeeDocument } from '@/lib/permissions';
+describe('Styrelsedokument', () => {
+  it('kräver läsbehörighet till bokföringen eller att man signerar', () => {
+    expect(canSeeDocument('accountant', ['payroll'], 'styrelsepaket', false)).toBe(false);
+    expect(canSeeDocument('accountant', ['payroll'], 'styrelsepaket', true)).toBe(true);
+    expect(canSeeDocument('accountant', ['ledger'], 'styrelsemoten', false)).toBe(true);
+    expect(canSeeDocument('accountant', ['payroll'], null, false)).toBe(true);
+    expect(canSeeDocument('owner', [], 'aktiebok', false)).toBe(true);
+    expect(canSeeDocument('auditor', null, 'styrelsepaket', false)).toBe(true);
+  });
+});

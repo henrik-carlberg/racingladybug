@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { sql } from '@/lib/db';
 import { requireCompany } from '@/lib/server/auth';
+import { canSeeDocument } from '@/lib/permissions';
 import { getDocument } from '@/lib/services/documents';
 import { NotFoundError } from '@/lib/errors';
 import { DocumentBody } from '@/components/DocumentBody';
@@ -12,8 +13,9 @@ const METHOD: Record<string, string> = { passkey: 'Passkey (biometri/PIN, WebAut
 /** Signerat dokument med verifieringsbilaga – skriv ut eller spara som PDF */
 export default async function Print({ params }: { params: Promise<{ cid: string; did: string }> }) {
   const { cid, did } = await params;
-  const { company } = await requireCompany(cid);
+  const { company, user, role, permissions } = await requireCompany(cid);
   const d = await getDocument(company.id, Number(did)).catch((e) => { if (e instanceof NotFoundError) notFound(); throw e; });
+  if (!canSeeDocument(role, permissions, d.source_module ?? null, d.signers.some((s) => s.user_id === user.id))) notFound();
   const [{ html }] = await sql<{ html: string | null }[]>`SELECT html FROM documents WHERE id = ${d.id}`;
   return (
     <>
