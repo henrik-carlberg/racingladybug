@@ -155,6 +155,7 @@ export function buildNav(o: {
       { path: '/rapporter/budget', label: 'Budget' },
       { path: '/scenarier', label: 'Scenarioplanering', perm: 'ledger', hint: 'Tänk om-scenarier för resultat och kassa' },
       { path: '/rapporter/moms', label: 'Moms', hint: 'Momsdeklarationen' },
+      { path: '/rapporter/momsavstamning', label: 'Momsavstämning', perm: 'ledger', hint: 'Moms per verifikation, omvänd skattskyldighet och EU-försäljning mot periodisk sammanställning' },
       { path: '/punktskatter', label: 'Punktskatter', perm: 'ledger', hint: 'Energiskatt, kemikalieskatt och andra punktskatter' },
       { path: '/rapporter/moms/avancerat', label: 'Blandad verksamhet och jämkning', perm: 'ledger', hint: 'Proportionering av ingående moms och jämkning av investeringsvaror' },
       { path: '/rapporter/eu', label: 'EU-handel' },

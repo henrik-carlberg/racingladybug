@@ -123,6 +123,21 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   if (num(await owner.locator('.pr-sim-tb').innerText()) !== 11000) throw new Error('lönsamhet: simulering');
   log('Del 1: lönsamhet per kund, räntekostnad för sena betalningar och simulering');
 
+  // ── Del 2: momsavstämning ──
+  const VR = await newCompany('Momsavstämning AB', '560120000');
+  await voucher(VR, 'Rätt försäljning', [[1930, 12500], [3001, -10000], [2611, -2500]], day(3));
+  await voucher(VR, 'Fel momssats', [[1930, 11200], [3001, -10000], [2611, -1200]], day(3));
+  await voucher(VR, 'Tjänst till EU med moms', [[1930, 12500], [3308, -10000], [2611, -2500]], day(3));
+  await voucher(VR, 'EU-tjänst köpt utan moms', [[4535, 8000], [1930, -8000]], day(3));
+  await owner.goto(VR + `/rapporter/momsavstamning?from=${day(10)}&to=${day(0)}`);
+  if ((await owner.locator('.vr-count').innerText()).trim() !== '3') throw new Error('momsavstämning: tre avvikelser väntades ' + (await text(owner)).slice(0, 800));
+  const vrKeys = await owner.locator('tr.vr-row').evaluateAll((rs) => rs.map((r) => r.getAttribute('data-keys')).join('|'));
+  for (const k of ['rate', 'exempt_vat', 'rc_out']) if (!vrKeys.includes(k)) throw new Error('momsavstämning: saknar ' + k + ' i ' + vrKeys);
+  if ((await owner.locator('table.vr-eu tr[data-ok="0"]').count()) !== 1) throw new Error('momsavstämning: EU mot periodisk sammanställning');
+  if (!(await owner.locator('.vr-eu-manual').innerText()).includes('A')) throw new Error('momsavstämning: manuell EU-verifikation');
+  await owner.locator('tr.vr-row a').first().click(); await owner.waitForURL(/verifikationer\/\d+/);
+  log('Del 2: momsavstämning per verifikation, omvänd skattskyldighet och EU mot periodisk sammanställning');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 41: alla steg gick igenom');
