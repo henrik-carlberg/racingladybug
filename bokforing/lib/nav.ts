@@ -123,6 +123,7 @@ export function buildNav(o: {
       { path: '/styrelsepaket', label: 'Styrelsepaket', perm: 'ledger', hint: 'Resultat mot budget, kassa, nyckeltal, öppna beslut och internkontroll till styrelsen' },
       { path: '/visselblasning', label: 'Visselblåsarkanal', hint: 'Anonym rapportering med ärendekod, frister och åtkomst bara för utsedda handläggare' },
       { path: '/fullmakter', label: 'Fullmakter och tillstånd', hint: 'Ombud och fullmakter, tillstånd och certifikat med giltighet och påminnelse' },
+      { path: '/kontinuitetsplan', label: 'Kontinuitetsplan', hint: 'Ansvarig och ersättare för kritiska uppgifter, ensamberoenden, krisrutin och kontakter' },
       { path: '/sanktionslistor', label: 'Sanktionslistekontroll', perm: 'ledger', hint: 'Kunder och leverantörer mot EU:s och FN:s sanktionslistor, granskning och stopp' },
       { path: '/internkontroll', label: 'Internkontroll', perm: 'ledger', hint: 'Riskregister med riskmatris, kontroller med frekvens och logg över utförda kontroller' },
       { path: '/aktiebok/instrument', label: 'Konvertibler och optioner', perm: 'ledger', hint: 'Konvertibla lån och teckningsoptioner med utspädning' },

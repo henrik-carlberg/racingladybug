@@ -188,6 +188,30 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   await owner.locator('.bv-checklist li[data-key="deed"] button').click(); await owner.locator('.bv-checklist li[data-key="deed"][data-done="1"]').waitFor();
   log('Del 4: substans-, avkastnings- och multipelvärde, skatt vid försäljning, gåva och checklista');
 
+  // ── Del 5: kontinuitetsplan ──
+  const CP = await newCompany('Kontinuitet AB', '560150000');
+  await owner.goto(CP + '/fullmakter');
+  await owner.fill('input[name=name]', 'Bankfullmakt'); await owner.fill('input[name=counterparty]', 'Banken'); await owner.fill('input[name=holder]', 'VD');
+  await owner.click('form:has(input[name=counterparty]) button:has-text("Spara")'); await owner.locator('text=Posten är sparad').waitFor();
+  await owner.goto(CP + '/kontinuitetsplan');
+  await owner.click('button:has-text("Lägg till standarduppgifter")'); await owner.locator('text=5 kritiska uppgifter är tillagda').waitFor();
+  if ((await owner.locator('tr.ct-row').count()) !== 5) throw new Error('kontinuitet: fem uppgifter');
+  const payRow = owner.locator('tr.ct-row[data-name="Betala leverantörer och löner"]');
+  if (!(await payRow.getAttribute('data-keys')).includes('no_substitute')) throw new Error('kontinuitet: saknad ersättare');
+  await payRow.locator('select[name=responsible_id]').selectOption({ index: 1 }); await payRow.locator('select[name=substitute_id]').selectOption({ index: 1 });
+  await payRow.locator('button:has-text("Spara")').click(); await owner.locator('text=Uppgiften är sparad').waitFor();
+  if ((await owner.locator('tr.ct-row[data-name="Betala leverantörer och löner"]').getAttribute('data-keys')) !== 'same_person') throw new Error('kontinuitet: samma person som ersättare');
+  if ((await owner.locator('.ct-single li[data-permission]').count()) !== 6) throw new Error('kontinuitet: ensamberoende per behörighet');
+  if (!(await owner.locator('.ct-power[data-counterparty="Banken"]').innerText()).includes('bara VD')) throw new Error('kontinuitet: fullmakt hos en person');
+  await owner.fill('form:has(button:has-text("Lägg till kontakt")) input[name=role]', 'Bank'); await owner.fill('form:has(button:has-text("Lägg till kontakt")) input[name=name]', 'Företagsrådgivaren');
+  await owner.click('button:has-text("Lägg till kontakt")'); await owner.locator('text=Kontakten är sparad').waitFor();
+  await owner.locator('.ct-review-due').waitFor();
+  await owner.fill('textarea[name=crisis_routine]', 'Ring revisorn först.');
+  await owner.click('button:has-text("Spara och markera planen som genomgången")'); await owner.locator('text=Planen är genomgången').waitFor();
+  if (await owner.locator('.ct-review-due').count()) throw new Error('kontinuitet: genomgång');
+  if (!(await owner.locator('textarea[name=crisis_routine]').inputValue()).includes('revisorn')) throw new Error('kontinuitet: krisrutin');
+  log('Del 5: kontinuitetsplan med ersättare, ensamberoenden, fullmakter, kontakter och årlig genomgång');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 41: alla steg gick igenom');

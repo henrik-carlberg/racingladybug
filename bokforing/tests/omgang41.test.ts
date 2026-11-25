@@ -83,3 +83,24 @@ describe('Företagsvärdering och ägarskifte', () => {
     expect(isGift(2500000, 2500000)).toBe(true); expect(isGift(2500001, 2500000)).toBe(false);
   });
 });
+
+import { analyse, reviewDue } from '@/lib/continuity';
+describe('Kontinuitetsplan', () => {
+  const members = [{ id: 1, name: 'Ägaren', role: 'owner', permissions: null }, { id: 2, name: 'Konsulten', role: 'accountant', permissions: ['ledger'] }, { id: 3, name: 'Revisorn', role: 'auditor', permissions: null }];
+  it('ersättare, behörigheter och ensamberoenden', () => {
+    const r = analyse(members, [
+      { id: 1, name: 'Betala', permission: 'payments', responsible_id: 1, substitute_id: 2 },
+      { id: 2, name: 'Bokföra', permission: 'ledger', responsible_id: 2, substitute_id: 1 },
+      { id: 3, name: 'Lön', permission: 'payroll', responsible_id: 1, substitute_id: null },
+      { id: 4, name: 'Gammal', permission: null, responsible_id: 9, substitute_id: 1 },
+    ], [{ name: 'Bankfullmakt', counterparty: 'Banken', holder: 'Ägaren' }, { name: 'Skatteverket', counterparty: 'Skatteverket', holder: 'Ägaren' }, { name: 'Skatteverket 2', counterparty: 'skatteverket', holder: 'Konsulten' }]);
+    expect(r.tasks.map((t) => t.findings.map((f) => f.key))).toEqual([['substitute_perm'], [], ['no_substitute'], ['no_responsible']]);
+    expect(r.single.map((s) => s.permission).sort()).toEqual(['attest', 'invoicing', 'payments', 'payroll', 'purchasing']);
+    expect(r.powerSingles.map((p) => p.counterparty)).toEqual(['Banken']);
+  });
+  it('årlig genomgång', () => {
+    expect(reviewDue(null, '2026-11-25')).toBe(true);
+    expect(reviewDue('2026-01-10', '2026-11-25')).toBe(false);
+    expect(reviewDue('2025-11-01', '2026-11-25')).toBe(true);
+  });
+});
