@@ -117,6 +117,7 @@ export function buildNav(o: {
       { path: '/lon/styrelsearvoden', label: 'Styrelsearvoden', perm: 'payroll', hint: 'Arvoden som lön eller mot faktura med F-skattekontroll' },
       { path: '/lon/sarskild-skatt', label: 'Expertskatt och SINK', perm: 'payroll', hint: 'Skattefri fjärdedel för experter och särskild inkomstskatt för utomlands bosatta' },
       { path: '/agare', label: 'Ägare och utdelning', perm: 'ledger', hint: 'K10, gränsbelopp och lön eller utdelning' },
+      { path: '/foretagsvardering', label: 'Företagsvärdering och ägarskifte', perm: 'ledger', hint: 'Substans-, avkastnings- och multipelvärde, skatt vid försäljning eller gåva och checklista' },
       { path: '/aktiebok', label: 'Aktiebok', perm: 'ledger', hint: 'Aktieägare, överlåtelser, nyemission och styrelseprotokoll' },
       { path: '/styrelsemoten', label: 'Styrelsemöten', perm: 'ledger', hint: 'Dagordning, beslut med uppföljning, beslutförhet och protokoll för justering' },
       { path: '/styrelsepaket', label: 'Styrelsepaket', perm: 'ledger', hint: 'Resultat mot budget, kassa, nyckeltal, öppna beslut och internkontroll till styrelsen' },

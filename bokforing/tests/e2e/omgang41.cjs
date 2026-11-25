@@ -167,6 +167,27 @@ const orgnrFor = (prefix) => { for (let i = 0; i < 10; i++) { const s = prefix +
   if (!(await text(owner)).includes(`Försäljningsprognos: ${closeYm}`)) throw new Error('prognos: överföring till likviditet');
   log('Del 3: försäljningsprognos från avtal och viktad pipeline, överförd till likviditetsprognosen');
 
+  // ── Del 4: företagsvärdering och ägarskifte ──
+  const BV = await newCompany('Värderingsbolaget AB', '560140000');
+  await voucher(BV, 'Aktiekapital', [[1930, 25000], [2081, -25000]], day(30));
+  await voucher(BV, 'Försäljning', [[1930, 500000], [3001, -400000], [2611, -100000]], day(20));
+  await voucher(BV, 'Kostnader', [[5010, 100000], [1930, -100000]], day(10));
+  await owner.goto(BV + '/agare');
+  await owner.fill('input[name=name]', 'Ägare Ett'); await owner.fill('input[name=share_pct]', '100');
+  await owner.click('button:has-text("Lägg till ägare")'); await owner.locator('text=Ägaren är sparad').waitFor();
+  await owner.goto(BV + '/foretagsvardering');
+  const bv = async (k) => num(await owner.locator(`.bv-value[data-key="${k}"] .value`).innerText());
+  if (num(await owner.locator('.bv-ebit').innerText()) !== 300000) throw new Error('värdering: rörelseresultat');
+  if ((await bv('substance')) !== 325000 || (await bv('earnings')) !== 1588000 || (await bv('multiple')) !== 1925000) throw new Error('värdering: värden ' + (await bv('substance')) + ' ' + (await bv('earnings')) + ' ' + (await bv('multiple')));
+  await owner.selectOption('select[name=owner_id]', { label: 'Ägare Ett (100 %)' }); await owner.fill('input[name=price]', '1000000'); await owner.fill('input[name=recipient]', 'Köpare AB');
+  await owner.click('button:has-text("Spara")'); await owner.locator('text=Värderingen är sparad').waitFor();
+  if (num(await owner.locator('.bv-taxsum').innerText()) !== 403832) throw new Error('ägarskifte: skatt vid försäljning ' + await owner.locator('.bv-transfer').innerText());
+  await owner.selectOption('select[name=transfer_kind]', 'gift'); await owner.fill('input[name=price]', ''); await owner.fill('input[name=recipient]', 'Barnet');
+  await owner.click('button:has-text("Spara")'); await owner.locator('text=Värderingen är sparad').waitFor();
+  await owner.locator('.bv-gift').waitFor();
+  await owner.locator('.bv-checklist li[data-key="deed"] button').click(); await owner.locator('.bv-checklist li[data-key="deed"][data-done="1"]').waitFor();
+  log('Del 4: substans-, avkastnings- och multipelvärde, skatt vid försäljning, gåva och checklista');
+
   //@@NEXT@@
   await browser.close(); mailServer.close(); viesServer.close();
   console.log('Omgång 41: alla steg gick igenom');

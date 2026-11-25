@@ -65,3 +65,21 @@ describe('Försäljningsprognos', () => {
     expect(rows[1]).toMatchObject({ total: 700, budget: null, diff: null });
   });
 });
+
+import { earningsValue, isGift, multipleValue, saleTax, substanceValue } from '@/lib/valuation';
+describe('Företagsvärdering och ägarskifte', () => {
+  it('tre värderingsmetoder', () => {
+    expect(substanceValue({ equity: 1000000, untaxedReserves: 1000000, surplus: 0 })).toBe(1794000);
+    expect(earningsValue(30000000, 15)).toBe(158800000);
+    expect(earningsValue(-100, 15)).toBe(0);
+    expect(multipleValue(30000000, 5, 42500000)).toBe(192500000);
+  });
+  it('skatt vid försäljning av kvalificerade andelar och gåva', () => {
+    const t = saleTax({ price: 100000000, costBasis: 2500000, limit: 32240000, ibb: 80600, qualified: true });
+    expect(t).toMatchObject({ gain: 97500000, within: 32240000, service: 65260000, above: 0, tax: 40383200 });
+    const big = saleTax({ price: 2000000000, costBasis: 0, limit: 0, ibb: 80600, qualified: true });
+    expect(big.service).toBe(806000000); expect(big.above).toBe(2000000000 - 806000000);
+    expect(saleTax({ price: 1000000, costBasis: 0, limit: 0, ibb: 80600, qualified: false }).tax).toBe(250000);
+    expect(isGift(2500000, 2500000)).toBe(true); expect(isGift(2500001, 2500000)).toBe(false);
+  });
+});
