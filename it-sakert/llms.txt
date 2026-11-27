@@ -2,7 +2,7 @@
 
 > IT-säkerhetsföretag i Kungsbacka som hjälper små och medelstora företag att skydda sina system, sin data och sina medarbetare. Fokus på förebyggande säkerhet, regelefterlevnad (cybersäkerhetslagen/NIS2, GDPR, ISO 27001), incidenthjälp dygnet runt och systemintegration. Personlig kontakt med en egen ansvarig konsult, raka besked på ren svenska.
 
-Grundare: Henrik Carlberg, 30 år inom it, varav över 20 år med informationssäkerhet och GRC, tidigare CIO. Kontakt: hello@itsakert.se, 070-514 72 83 (dygnet runt vid akuta incidenter). Kungsbacka, verksamt i hela Sverige.
+Grundare: Henrik Carlberg, 30 år inom it, varav över 20 år med informationssäkerhet och GRC, tidigare CIO. Kontakt: hello@itsakert.se (dygnet runt vid akuta incidenter). Kungsbacka, verksamt i hela Sverige.
 
 ## Tjänster
 
@@ -35,7 +35,7 @@ Kostnadsfritt möte, nulägesanalys, åtgärdsplan och löpande skydd. Boka en k
 
 - Vad kostar en säkerhetskoll? Det första mötet och säkerhetskollen är kostnadsfria och helt utan förpliktelser. Vi går igenom hur ni arbetar i dag och vad som är viktigast att åtgärda. Vill ni gå vidare får ni en offert med fast pris eller en timbank, så att ni vet vad det kostar innan arbetet börjar.
 - Omfattas vi av cybersäkerhetslagen (NIS2)? Lagen gäller främst medelstora och stora verksamheter – från 50 anställda, eller med en omsättning och balansomslutning över 10 miljoner euro – inom vissa sektorer, till exempel energi, transport, hälso- och sjukvård, digital infrastruktur, livsmedel och tillverkning. Vissa verksamheter omfattas oavsett storlek. Även om ni inte omfattas själva kan era kunder ställa samma krav på er som leverantör. Vi hjälper er att reda ut om och hur lagen gäller er.
-- Vad ska vi göra om vi drabbas av ransomware? Koppla bort drabbade datorer från nätverket men stäng inte av dem, eftersom spåren kan behövas för att utreda vad som hänt. Betala inte lösensumman. Ring oss på 070-514 72 83 – vi svarar dygnet runt vid akuta incidenter. Om personuppgifter kan ha påverkats ska det i regel anmälas till IMY inom 72 timmar, och vi hjälper er med anmälan och med en polisanmälan.
+- Vad ska vi göra om vi drabbas av ransomware? Koppla bort drabbade datorer från nätverket men stäng inte av dem, eftersom spåren kan behövas för att utreda vad som hänt. Betala inte lösensumman. Kontakta oss på hello@itsakert.se med ämnet AKUT – vi svarar dygnet runt vid akuta incidenter. Om personuppgifter kan ha påverkats ska det i regel anmälas till IMY inom 72 timmar, och vi hjälper er med anmälan och med en polisanmälan.
 - Vilka företag hjälper ni? Främst små och medelstora företag, från några få anställda till flera hundra, som vill ha god IT-säkerhet utan att anställa en egen säkerhetsavdelning. Vi anpassar upplägget efter er storlek, bransch och budget.
 - Hur fungerar timbanken? Ni köper 10, 20 eller 40 timmar i förväg och använder dem till det ni behöver: säkerhet, incidenter, integrationer, utbildning och regelefterlevnad. Timmarna gäller i 12 månader. Ni slipper ta in en ny offert för varje fråga, och budgeten blir förutsägbar.
 - Vad räknas som jourtid? Arbete vardagar före 07.00 och efter 18.00 samt på helger och helgdagar. Jourtid räknas med påslag 2,0, så en timme på jourtid drar två timmar från timbanken.
